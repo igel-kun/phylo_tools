@@ -48,7 +48,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif()
 
 set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -Wall -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -std=c++11")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -msahf -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
 
 if((${STATISTICS} EQUAL 1) OR (${STATISTICS} STREQUAL ON))
   MESSAGE("adding support for collecting statistics...")
