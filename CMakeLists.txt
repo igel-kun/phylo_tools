@@ -42,10 +42,11 @@ if(${STATIC} STREQUAL ON)
   SET(CMAKE_EXE_LINKER_FLAGS "-static")
 endif(${STATIC} STREQUAL ON)
 
+# suppress clangs silly "unused parameter" warnings...
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Qunused-arguments -Wno-unknown-warning")
+endif()
 
-# ==================== REQUIRED PACKAGES ===================
-
-set(CMAKE_CXX_COMPILER "g++")
 set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -Wall -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -std=c++11")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -msahf -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
 
