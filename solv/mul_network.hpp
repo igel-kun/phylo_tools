@@ -1,17 +1,18 @@
 
-
 #pragma once
 
 #include "utils/utils.hpp"
 #include "utils/types.hpp"
+#include "utils/network.hpp"
+#include "utils/label_map.hpp"
 #include "mapper.hpp"
 
 namespace TC{
 
   template<class _Network>
-  class NetworkMapper: public Mapper<_Network, LabelMap>
+  class MULNetworkMapper: public Mapper<_Network, MULabelMap>
   {
-    using Parent = Mapper<_Network, LabelMap>;
+    using Parent = Mapper<_Network, MULabelMap>;
     using Parent::N;
     using Parent::T;
     using Parent::labelmap;
@@ -28,26 +29,14 @@ namespace TC{
     //NOTE: result will be sorted
     void get_displaying_vertices_binary(const uint32_t child1, const uint32_t child2, IndexVec& result)
     {
-      const IndexVec& displaying1 = who_displays(child1);
-      std::cout << "we know that "<<child1<<" is displayed at "<<displaying1<<std::endl;
-      if(displaying1.empty()) return;
-
-      const IndexVec& displaying2 = who_displays(child2);
-      std::cout << "we know that "<<child2<<" is displayed at "<<displaying2<<std::endl;
-      if(displaying2.empty()) return;
-
-      assert(false);
     }
+
+    void initialize() {}
 
     const IndexVec& emplace_leaf_entry_hint(const DisplayMap::iterator& hint, const uint32_t v_idx, const LabelType& displaying)
     {
-      return display_map.emplace_hint(hint, PWC, std::make_tuple(v_idx), std::make_tuple(1, displaying))->second;
     }
-
   public:
 
   };
-
-
 }
-

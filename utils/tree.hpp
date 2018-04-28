@@ -201,6 +201,16 @@ namespace TC{
       return is_preordered(root, counter);
     }
 
+    bool is_multi_labeled() const
+    {
+      std::unordered_set<std::string> seen;
+      for(const uint32_t u_idx: leaves){
+        const std::string& _name = names[u_idx];
+        if(contains(seen, _name)) return true;
+      }
+      return false;
+    }
+
     //! O(log n)-time edge lookup
     bool is_edge_bin_search(const uint32_t u_idx, const uint32_t v_idx) const 
     {
