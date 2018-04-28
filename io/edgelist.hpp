@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "../utils/types.hpp"
+#include "utils/types.hpp"
 #include <unordered_map>
 
 struct MalformedEdgelist : public std::exception 

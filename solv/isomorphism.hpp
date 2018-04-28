@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include "../utils/utils.hpp"
-#include "../utils/network.hpp"
-#include "../utils/vector2d.hpp"
-#include "../utils/iter_bitset.hpp"
+#include "utils/utils.hpp"
+#include "utils/network.hpp"
+#include "utils/vector2d.hpp"
+#include "utils/iter_bitset.hpp"
 
 namespace TC{
   struct NoPoss : public std::exception
@@ -57,7 +57,7 @@ namespace TC{
     // check if mapping is now an isomorphism
     bool check_mapping() const
     {
-      DEBUG3(std::cout << "checking the mapping" << std::end);
+      DEBUG3(std::cout << "checking the mapping" <<std::endl);
       for(uint32_t u_idx = 0; u_idx < size_N; ++u_idx){
         assert(mapping[u_idx].count() == 1);
         const uint32_t u2_idx = mapping[u_idx].front();

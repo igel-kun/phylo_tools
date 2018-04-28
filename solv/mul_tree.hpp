@@ -1,10 +1,10 @@
 
 #pragma once
 
-#include "../utils/utils.hpp"
-#include "../utils/types.hpp"
-#include "../utils/network.hpp"
-#include "../utils/label_map.hpp"
+#include "utils/utils.hpp"
+#include "utils/types.hpp"
+#include "utils/network.hpp"
+#include "utils/label_map.hpp"
 #include "mapper.hpp"
 
 #include <algorithm>

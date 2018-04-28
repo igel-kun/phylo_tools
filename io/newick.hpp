@@ -2,7 +2,7 @@
 #pragma once
 
 #include <vector>
-#include "../utils/types.hpp"
+#include "utils/types.hpp"
 
 //! an exception for the case that a graph property is read that is not up to date
 struct MalformedNewick : public std::exception 
