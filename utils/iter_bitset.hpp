@@ -94,7 +94,7 @@ namespace std {
           storage[i++] ^= BITSET_FULL_BUCKET;
           bits -= BITSET_BUCKET_SIZE_BIT;
         }
-        storage[i] ^= (1 << bits) - 1;
+        storage[i] ^= BITSET_FULL_BUCKET >> (BITSET_BUCKET_SIZE_BIT - bits);
       }
       uint64_t size() const
       {
