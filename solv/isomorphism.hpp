@@ -92,9 +92,12 @@ namespace TC{
           if(mapping[i_idx].count() > 1){
             const std::string& i_name = N1.get_name(i_idx);
             const uint32_t i2_idx = lmap.at(i_name).second;
-            mapping[i_idx].clear_all();
-            mapping[i_idx].set(i2_idx);
-            updated.set(i_idx);
+            // if the label doesn't exist in N1, i2_idx will be NO_LABEL
+            if(i2_idx != NO_LABEL) {
+              mapping[i_idx].clear_all();
+              mapping[i_idx].set(i2_idx);
+              updated.set(i_idx);
+            } else throw NoPoss(i_name + '[' + std::to_string(i_idx) + ']');
           }
         }
         updated.set(update_someone);
@@ -138,6 +141,12 @@ namespace TC{
       } catch(const NoPoss& np){
         DEBUG3(std::cout << np.msg << std::endl);
         return false;
+      } catch(const std::out_of_range& oor){
+        DEBUG3(std::cout << "unable to map a leaf of N0 to N1: "<< oor.what() << std::endl);
+        return false;
+      } catch(const std::exception& err){
+        std::cout << "unhandled exception: "<<err.what()<<std::endl;
+        exit(EXIT_FAILURE);
       }
     }
 
@@ -149,9 +158,8 @@ namespace TC{
       std::unordered_map<uint64_t, std::iterable_bitset> degree_to_bitset;
       for(uint32_t u_idx = 0; u_idx < size_N; ++u_idx){
         const Network::Vertex& u(N2.get_vertex(u_idx));
-        uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
-
-        auto deg_it = degree_to_bitset.find(u_deg);
+        const uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
+        const auto deg_it = degree_to_bitset.find(u_deg);
         if(deg_it == degree_to_bitset.end())
           degree_to_bitset.emplace_hint(deg_it, u_deg, size_N)->second.set(u_idx);
         else
@@ -159,9 +167,8 @@ namespace TC{
       }
       for(uint32_t u_idx = 0; u_idx < size_N; ++u_idx){
         const Network::Vertex& u(N1.get_vertex(u_idx));
-        uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
-
-        auto deg_it = degree_to_bitset.find(u_deg);
+        const uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
+        const auto deg_it = degree_to_bitset.find(u_deg);
         if(deg_it == degree_to_bitset.end())
           throw NoPoss(N1.get_name(u_idx) + '[' + std::to_string(u_idx) + ']');
 
