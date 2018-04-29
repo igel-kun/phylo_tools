@@ -9,6 +9,8 @@
 
 namespace TC {
 
+#define NO_LABEL UINT32_MAX
+
   // the last parameter is only to differentiate the different build_labelmap functions
   template<class _Network = Network, class _Tree = Tree>
   MULabelMap* build_labelmap(const _Network& N, const _Tree& T, const MULabelMap* sentinel = nullptr)
@@ -32,7 +34,7 @@ namespace TC {
     LabelMap* result = new LabelMap();
 
     for(const LabeledVertex& p: N.get_leaves_labeled()){
-      (*result)[p.second] = {p.first, UINT32_MAX};
+      (*result)[p.second] = {p.first, NO_LABEL};
     }
     for(const LabeledVertex& p: T.get_leaves_labeled())
       (*result)[p.second].second = p.first;
