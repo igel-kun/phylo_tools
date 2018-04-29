@@ -172,9 +172,10 @@ namespace TC{
 
     void remove_from_everyone_except(const uint32_t idx, const uint32_t except)
     {
+      DEBUG5(std::cout << "removing "<<idx<<" from everyone except "<<except<<std::endl);
       for(uint32_t u = 0; u < size_N; ++u)
-        if((u != idx) && (mapping[u].test(except))){
-          mapping[u].clear(except);
+        if((u != except) && (mapping[u].test(idx))){
+          mapping[u].clear(idx);
           updated.set(u);
         }
     }
