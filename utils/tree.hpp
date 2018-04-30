@@ -4,12 +4,15 @@
 #include <vector>
 #include "utils.hpp"
 #include "types.hpp"
-#include "leaf_iter.hpp"
+#include "label_iter.hpp"
 #include "except.hpp"
 
 namespace TC{
 
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
+
+#define NODE_TYPE_LEAF 0x00
+#define NODE_TYPE_TREE 0x01
 
   struct NeighborList{
     uint32_t* start;
@@ -43,6 +46,10 @@ namespace TC{
     bool is_leaf() const
     {
       return (succ.count == 0);
+    }
+    unsigned char get_type() const
+    {
+      return is_leaf() ? NODE_TYPE_LEAF : NODE_TYPE_TREE;
     }
     bool is_bifurcating() const
     {
@@ -119,9 +126,13 @@ namespace TC{
     uint32_t get_num_vertices() const {return num_vertices;}
     uint32_t get_num_edges() const {return num_edges; }
 
-    TreeLeafIterFactory get_leaves_labeled() const
+    LabeledNodeIterFactory<> get_leaves_labeled() const
     {
-      return TreeLeafIterFactory(leaves, names);
+      return LabeledNodeIterFactory<>(names, leaves.begin(), leaves.end());
+    }
+    LabeledNodeIterFactory<uint32_t> get_nodes_labeled() const
+    {
+      return LabeledNodeIterFactory<uint32_t>(names, 0, num_vertices);
     }
 
 

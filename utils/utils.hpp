@@ -16,6 +16,25 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#define NUM_BYTES_IN_INT (sizeof(unsigned int))
+#define NUM_BITS_IN_INT (CHAR_BIT * NUM_BYTES_IN_INT)
+#define NUM_BYTES_IN_LONG (sizeof(unsigned long))
+#define NUM_BITS_IN_LONG (CHAR_BIT * NUM_BYTES_IN_LONG)
+
+#define NUM_LEADING_ZEROS(x) __builtin_clz(x)
+#define NUM_LEADING_ZEROSL(x) __builtin_clzl(x)
+#define NUM_TRAILING_ZEROS(x) __builtin_ctz(x)
+#define NUM_TRAILING_ZEROSL(x) __builtin_ctzl(x)
+#define NUM_ONES_IN(x) __builtin_popcount(x)
+#define NUM_ONES_INL(x) __builtin_popcountl(x)
+#define NUM_ZEROS_IN(x) (NUM_BITS_IN_INT - NUM_ONES_IN(x))
+#define NUM_ZEROS_INL(x) (NUM_BITS_IN_LONG - NUM_ONES_INL(x))
+#define NUM_ONES_IN_LOWEST_K_BITL(k,x) (NUM_ONES_INL( (x) << (NUM_BITS_IN_LONG - (k)) ))
+#define NUM_ZEROS_IN_LOWEST_K_BITL(k,x) ((k) - NUM_ONES_IN_LOWEST_K_BITL(k, x))
+
+// rounded down logarithm base 2
+#define INT_LOG(x) (NUM_BITS_IN_LONG - NUM_LEADING_ZEROSL((unsigned long)x))
+
 #define PWC std::piecewise_construct
 #define byte unsigned char
 #define SIZE_T_BITS ((unsigned)(CHAR_BIT*sizeof(size_t)))

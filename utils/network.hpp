@@ -8,6 +8,9 @@
 
 namespace TC{
 
+#define NODE_TYPE_RETI 0x02
+#define NODE_TYPE_ISOL 0x03
+
   struct NetworkVertex: public AnyVertex{
     NeighborList pred;
 
@@ -31,7 +34,13 @@ namespace TC{
     {
       return (succ.count == 0) && (pred.count > 0);
     }
-
+    unsigned char get_type() const
+    {
+      if(succ.count == 0)
+        return (pred.count == 0) ? NODE_TYPE_ISOL : NODE_TYPE_LEAF;
+      else
+        return (pred.count <= 1) ? NODE_TYPE_TREE : NODE_TYPE_RETI;
+    }
   };
 
   // a network consists of a list of vertices, each having out- and in-neighbors

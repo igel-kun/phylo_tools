@@ -32,9 +32,10 @@ bool read_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>&
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
     read_newick_from_stream(in, el, names);
   } catch(const MalformedNewick& err){
+    std::cout << "reading Newick failed: "<<err.what()<<std::endl;
+    DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
     try{
       in.seekg(0);
-      DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
       read_edgelist_from_stream(in, el, names);
     } catch(const MalformedEdgelist& err){
       return false;
@@ -49,8 +50,19 @@ void parse_options(const int argc, const char** argv)
 {
   OptionDesc description;
   description["-v"] = {0,0};
+  description["-mr"] = {0,0};
+  description["-mt"] = {0,0};
+  description["-il"] = {0,0};
+  description["-ma"] = {0,0};
   description[""] = {1,2};
-  const std::string help_message(std::string(argv[0]) + " <file1> [file2]\n\tfile1 and file2 describe two networks (either file1 contains 2 lines of extended newick or both file1 and file2 describe a network in extended newick or edgelist format)");
+  const std::string help_message(std::string(argv[0]) + " <file1> [file2]\n\
+      \tfile1 and file2 describe two networks (either file1 contains 2 lines of extended newick or both file1 and file2 describe a network in extended newick or edgelist format)\n\
+      FLAGS:\n\
+      \t-v\tverbose output, prints networks\n\
+      \t-mr\tlabels of reticulations have to match\n\
+      \t-mt\tlabels of non-leaf tree vertices have to match\n\
+      \t-ma\tlabels of all vertices have to match (shortcut for -mr -mt (-ma overrides -il))\n\
+      \t-il\tlabels of leaves do NOT have to match\n");
 
   parse_options(argc, argv, description, help_message, options);
 
@@ -96,10 +108,14 @@ int main(const int argc, const char** argv)
 
   if(contains(options, "-v"))
     std::cout << N0 << std::endl << N1 << std::endl;
+  const unsigned char iso_flags = ((!contains(options, "-il")) ? FLAG_MATCHING_LEAF_LABELS : 0) |
+                                  ((contains(options, "-mt")) ? FLAG_MATCHING_TREE_LABELS : 0) |
+                                  ((contains(options, "-mr")) ? FLAG_MATCHING_RETI_LABELS : 0) |
+                                  ((contains(options, "-ma")) ? FLAG_MATCHING_ALL_LABELS : 0);
 
   LabelMap *lmap = nullptr;
   lmap = build_labelmap(N0, N1, lmap);
-  IsomorphismMapper M(N0, N1, *lmap);
+  IsomorphismMapper M(N0, N1, *lmap, iso_flags);
   if(M.check_isomorph())
     std::cout << "isomorph!" << std::endl;
   else

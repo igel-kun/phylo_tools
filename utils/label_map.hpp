@@ -28,18 +28,33 @@ namespace TC {
     return result;
   }
 
-  template<class _Network = Network, class _Tree = Tree>
-  LabelMap* build_labelmap(const _Network& N, const _Tree& T, const LabelMap* sentinel = nullptr)
+  //! build a mapping between the labeled nodes stewed out by the LabeledNodeIterFactories
+  template<class IterType = IndexVec::const_iterator>
+  LabelMap* build_labelmap(const LabeledNodeIterFactory<IterType>& Nfac,
+                           const LabeledNodeIterFactory<IterType>& Tfac,
+                           const LabelMap* sentinel = nullptr)
   {
     LabelMap* result = new LabelMap();
 
-    for(const LabeledVertex& p: N.get_leaves_labeled()){
+    for(const LabeledVertex& p: Nfac){
       (*result)[p.second] = {p.first, NO_LABEL};
     }
-    for(const LabeledVertex& p: T.get_leaves_labeled())
+    for(const LabeledVertex& p: Tfac)
       (*result)[p.second].second = p.first;
 
     return result;
+  }
+
+  template<class _Network = Network, class _Tree = Tree>
+  LabelMap* build_labelmap(const _Network& N, const _Tree& T, const LabelMap* sentinel = nullptr)
+  {
+    return build_labelmap(N.get_nodes_labeled(), T.get_nodes_labeled(), sentinel);
+  }
+
+  template<class _Network = Network, class _Tree = Tree>
+  LabelMap* build_leaf_labelmap(const _Network& N, const _Tree& T, const LabelMap* sentinel = nullptr)
+  {
+    return build_labelmap(N.get_leaves_labeled(), T.get_leaves_labeled(), sentinel);
   }
 
 }

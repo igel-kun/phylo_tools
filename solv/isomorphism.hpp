@@ -7,6 +7,11 @@
 #include "utils/vector2d.hpp"
 #include "utils/iter_bitset.hpp"
 
+#define FLAG_MATCHING_LEAF_LABELS 0x01
+#define FLAG_MATCHING_TREE_LABELS 0x02
+#define FLAG_MATCHING_RETI_LABELS 0x04
+#define FLAG_MATCHING_ALL_LABELS 0x07
+
 namespace TC{
   struct NoPoss : public std::exception
   {
@@ -31,14 +36,17 @@ namespace TC{
 
     const uint32_t size_N;
 
+
     MappingPossibility mapping;
 
     std::iterable_bitset updated;
+    
+    const unsigned char flags;
 
   public:
 
-    IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap):
-      N1(_N1), N2(_N2), lmap(_lmap), size_N(_N1.get_num_vertices()), mapping(), updated(size_N)
+    IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap, const unsigned char _flags):
+      N1(_N1), N2(_N2), lmap(_lmap), size_N(_N1.get_num_vertices()), mapping(), updated(size_N), flags(_flags)
     {
       mapping.reserve(size_N);
       for(uint32_t i = 0; i < size_N; ++i){
@@ -47,8 +55,8 @@ namespace TC{
       }
     }
 
-    IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap, const MappingPossibility& _mapping):
-      N1(_N1), N2(_N2), lmap(_lmap), size_N(_N1.get_num_vertices()), mapping(_mapping), updated(size_N)
+    IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap, const MappingPossibility& _mapping, const unsigned char _flags):
+      N1(_N1), N2(_N2), lmap(_lmap), size_N(_N1.get_num_vertices()), mapping(_mapping), updated(size_N), flags(_flags)
     {
       assert(mapping.size() == size_N);
       assert((size_N == 0) || (mapping[0].size() >= size_N));
@@ -87,19 +95,11 @@ namespace TC{
           }
         } else restrict_degrees();
 
-        const IndexVec& N1leaves(N1.get_leaves());
-        for(uint32_t i_idx : N1leaves){
-          if(mapping[i_idx].count() > 1){
-            const std::string& i_name = N1.get_name(i_idx);
-            const uint32_t i2_idx = lmap.at(i_name).second;
-            // if the label doesn't exist in N1, i2_idx will be NO_LABEL
-            if(i2_idx != NO_LABEL) {
-              mapping[i_idx].clear_all();
-              mapping[i_idx].set(i2_idx);
-              updated.set(i_idx);
-            } else throw NoPoss(i_name + '[' + std::to_string(i_idx) + ']');
-          }
-        }
+        if(flags == FLAG_MATCHING_LEAF_LABELS)
+          mapping_from_labels(N1.get_leaves_labeled());
+        else
+          mapping_from_labels(N1.get_nodes_labeled());
+        
         updated.set(update_someone);
 
         while(!updated.is_empty()){
@@ -128,7 +128,7 @@ namespace TC{
           DEBUG4(std::cout << "branching on vertex "<<min_idx<<std::endl);
           // spawn a new checker for each possibility
           for(uint32_t min2_idx : mapping[min_idx]){
-            IsomorphismMapper child_im(N1, N2, lmap, mapping);
+            IsomorphismMapper child_im(N1, N2, lmap, mapping, flags);
             child_im.mapping[min_idx].clear_all();
             child_im.mapping[min_idx].set(min2_idx);
             if(child_im.check_isomorph(min_idx, false)) return true;
@@ -151,6 +151,39 @@ namespace TC{
     }
 
   protected:
+
+    bool node_is_interesting(const Network::Vertex& v) const
+    {
+      switch(v.get_type()){
+        case NODE_TYPE_LEAF:
+          return (flags & FLAG_MATCHING_LEAF_LABELS);
+        case NODE_TYPE_TREE:
+          return (flags & FLAG_MATCHING_TREE_LABELS);
+        case NODE_TYPE_RETI:
+          return (flags & FLAG_MATCHING_RETI_LABELS);
+        default:
+          return true;
+      }
+    }
+
+    template<class NodeFactory>
+    void mapping_from_labels(const NodeFactory& fac){
+      DEBUG3(std::cout << "updating from labels"<<std::endl);
+      for(const LabeledVertex& lv: fac){
+        const uint32_t i_idx = lv.first;
+        const std::string& name = lv.second;
+        if((name != "") && ((flags == FLAG_MATCHING_ALL_LABELS) || node_is_interesting(N1.get_vertex(i_idx)))){
+          const uint32_t i2_idx = lmap.at(name).second;
+          DEBUG4(std::cout << "treating "<<i_idx<<" with label "<<name<<" - it's counter part is "<<i2_idx<<std::endl);
+          // if the label doesn't exist in N1, i2_idx will be NO_LABEL
+          if(i2_idx != NO_LABEL) {
+            if(update_poss(i_idx, i2_idx))
+              updated.set(i_idx);
+          } else throw NoPoss(name + '[' + std::to_string(i_idx) + ']');
+        }
+      }
+    }
+
 
     void restrict_degrees()
     {
@@ -217,7 +250,7 @@ namespace TC{
     // update possibilities, return whether the number of possibilities changed
     bool update_poss(const uint32_t x, const std::iterable_bitset& new_poss)
     {
-      DEBUG5(std::cout << "updating possibilities of "<< x<<" from\n "<<mapping[x]<<" to\n "<<new_poss<<std::endl);
+      DEBUG5(std::cout << "updating possibilities of "<< x<<" to\n "<<mapping[x]<<" &\n "<<new_poss<<std::endl);
       const uint32_t old_count = mapping[x].count();
       mapping[x] &= new_poss;
       const uint32_t new_count = mapping[x].count();
@@ -229,6 +262,19 @@ namespace TC{
           remove_from_everyone_except(mapping[x].front(), x);
         return true;
       } else return false;
+    }
+    // fix mapping of x to y, return whether the number of possibilities changed
+    bool update_poss(const uint32_t x, const uint32_t y)
+    {
+      DEBUG5(std::cout << "fixing "<< x<<" to "<< y <<std::endl);
+      if(mapping[x].test(y)){
+        if(mapping[x].count() > 1){
+          mapping[x].clear_all();
+          mapping[x].set(y);
+          remove_from_everyone_except(y, x);
+          return true;
+        } else return false;
+      } throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
     }
 
   };
