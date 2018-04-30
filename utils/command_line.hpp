@@ -20,21 +20,26 @@ namespace TC{
 
     for(int i=1; i < argc; ++i){
       const std::string current_arg(argv[i]);
-      if(current_arg[0] == '-'){
-        const OptionDesc::const_iterator mm_iter = description.find(current_arg);
-        if(mm_iter != description.end()){
-          current_option_vec = &(options[current_arg]);
-          current_max = mm_iter->second.second;
-        } else {
-          std::cerr << "unrecognized option: "<<current_arg;
-          std::cerr << help_message << std::endl;
-          exit(EXIT_FAILURE);
-        }
+      if((current_arg == "-h") || (current_arg == "--help")){
+        std::cout << help_message << std::endl;
+        exit(EXIT_SUCCESS);
       } else {
-        // if the current option has already gotten all its parameters, add the next parameter to the global list
-        if(current_option_vec->size() == current_max)
-          current_option_vec = &(options[""]);
-        current_option_vec->push_back(current_arg);
+        if(current_arg[0] == '-'){
+          const OptionDesc::const_iterator mm_iter = description.find(current_arg);
+          if(mm_iter != description.end()){
+            current_option_vec = &(options[current_arg]);
+            current_max = mm_iter->second.second;
+          } else {
+            std::cerr << "unrecognized option: "<<current_arg<<std::endl;
+            std::cerr << help_message << std::endl;
+            exit(EXIT_FAILURE);
+          }
+        } else {
+          // if the current option has already gotten all its parameters, add the next parameter to the global list
+          if(current_option_vec->size() == current_max)
+            current_option_vec = &(options[""]);
+          current_option_vec->push_back(current_arg);
+        }
       }
     }
     // finally, check if everyone has its minimum number of parameters
