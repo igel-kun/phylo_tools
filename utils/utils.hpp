@@ -109,6 +109,7 @@
 #endif
 
 
+namespace std{
 //! output list of things
 template<typename Element>
 std::ostream& operator<<(std::ostream& os, const std::list<Element>& lst)
@@ -118,6 +119,7 @@ std::ostream& operator<<(std::ostream& os, const std::list<Element>& lst)
   os << "]";
   return os;
 }
+
 //! output vector of things
 template<typename Element>
 std::ostream& operator<<(std::ostream& os, const std::vector<Element>& lst)
@@ -138,6 +140,11 @@ std::ostream& operator<<(std::ostream& os, const std::unordered_map<Element1, El
   return os;
 }
 
+template <typename A, typename B>
+std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p)
+{
+	return os << "("<<p.first<<", "<<p.second<<")";
+}
 
 //! a hash computation for an unordered set, XORing its members
 template<typename T>
@@ -149,6 +156,17 @@ size_t hash_value(const std::unordered_set<T>& S)
   return result;
 }
 
+//! add two pairs of things
+template <typename A, typename B>
+std::pair<A,B> operator+(const std::pair<A,B>& l, const std::pair<A,B>& r)
+{
+	return {l.first + r.first, l.second + r.second};
+}
+
+
+}
+
+
 //! testing whether a file exists by trying to open it
 #define file_exists(x) (std::ifstream(x).good())
 
@@ -159,18 +177,6 @@ inline std::pair<B,A> reverse(const std::pair<A,B>& p)
   return {p.second, p.first};
 }
 
-//! add two pairs of things
-template <typename A, typename B>
-std::pair<A,B> operator+(const std::pair<A,B>& l, const std::pair<A,B>& r)
-{
-	return {l.first + r.first, l.second + r.second};
-}
-
-template <typename A, typename B>
-std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p)
-{
-	return os << "("<<p.first<<", "<<p.second<<")";
-}
 
 template<typename Container>
 uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower_bound, uint32_t upper_bound)
@@ -187,6 +193,54 @@ uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower
   return UINT32_MAX;
 }
 
+//! merge two sorted vectors of things (the second into the first)
+//NOTE: in-place, linear time, but might copy-construct each element 2 times and call operator= once
+//NOTE: STL can merge in-place with overlapping input & output only if source & target are consecutive
+template<typename Element>
+void merge_sorted_vectors(std::vector<Element>& target, const std::vector<Element>& source)
+{
+  std::vector<Element> tmp;
+  tmp.reserve(target.size());
+  target.reserve(target.size() + source.size());
+  size_t idx1 = 0;
+  size_t idx2 = 0;
+  size_t idxt = 0;
+  bool target_end = target.empty();
+  bool source_end = source.empty();
+  bool tmp_end = true;
+  while(!tmp_end || !source_end){
+    if(source_end || (!tmp_end && (tmp[idxt] < source[idx2]))){
+      // if source is already eaten up, or its item is larger than tmp's item, feed from tmp
+      if(!target_end){
+        if(tmp[idxt] < target[idx1]){
+          tmp.push_back(target[idx1]);
+          target[idx1++] = tmp[idxt++];
+        } else ++idx1;
+        target_end = (idx1 == target.size());
+      } else {
+        // source end and target end
+        target.push_back(tmp[idxt++]);
+        tmp_end = (idxt == tmp.size());
+      }
+    } else {
+      // source's item is smaller than tmp's item, so feed from source
+      if(tmp_end){
+        if(!target_end){
+          if(source[idx2] < target[idx1]){
+            tmp.push_back(target[idx1]);
+            target[idx1++] = source[idx2++];
+            source_end = (idx2 == source.size());
+          } else ++idx1;
+          target_end = (idx1 == target.size());
+        } else {
+          // tmp end and target end
+          target.push_back(source[idx2++]);
+          source_end = (idx2 == source.size());
+        }
+      }
+    }
+  }
+}
 
 class Tokenizer
 {
