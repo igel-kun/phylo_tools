@@ -1,7 +1,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string.h>
+#include "utils/utils.hpp"
 
 
 #define BITSET_FULL_BUCKET ULONG_MAX
@@ -87,13 +89,26 @@ namespace std {
         }
         storage[i] = BITSET_FULL_BUCKET >> (BITSET_BITS_IN_BUCKET - bits);
       }
-      //! set the k'th unset bit (k = 0 corresponding to the first unset bit)
-      void set_kth_unset(uint64_t k)
+      //! set the k'th unset bit (k = 0 corresponding to the first unset bit), and return its index
+      uint64_t set_kth_unset(uint64_t k)
+      {
+        uint64_t result= get_index_of_kth_zero(k);
+        set(result);
+        return result;
+        
+      }
+      uint64_t clear_kth_set(uint64_t k)
+      {
+        uint64_t result= get_index_of_kth_one(k);
+        clear(result);
+        return result;
+      }
+      uint64_t get_index_of_kth_zero(uint64_t k) const
       {
         uint64_t i = 0;
         uint64_t z;
         while(1){
-          if(i < num_buckets()) throw std::out_of_range("not enough unset bits");
+          if(i == num_buckets()) throw std::out_of_range("not enough unset bits");
           z = NUM_ZEROS_INL(storage[i]);
           if(k >= z){
             k -= z;
@@ -110,8 +125,33 @@ namespace std {
         }
         // j might still be off by one in the end
         if(NUM_ZEROS_IN_LOWEST_K_BITL(j, buffer) > k) --j;
-        buffer |= (1ul << j);
+        return BITSET_BITS_IN_BUCKET * i + j;
       }
+      uint64_t get_index_of_kth_one(uint64_t k) const
+      {
+        uint64_t i = 0;
+        uint64_t z;
+        while(1){
+          if(i == num_buckets()) throw std::out_of_range("not enough set bits");
+          z = NUM_ONES_INL(storage[i]);
+          if(k >= z){
+            k -= z;
+            ++i;
+          } else break;
+        }
+        BITSET_BUCKET_TYPE& buffer = storage[i];
+        uint32_t width = BITSET_BITS_IN_BUCKET / 2;
+        uint32_t j = width;
+        // using binary seach, find the index j such that the k'th unset bit is at position j
+        while(width > 1){
+          width /= 2;
+          j = (NUM_ONES_IN_LOWEST_K_BITL(j, buffer) > k) ? j - width : j + width;
+        }
+        // j might still be off by one in the end
+        if(NUM_ONES_IN_LOWEST_K_BITL(j, buffer) > k) --j;
+        return BITSET_BITS_IN_BUCKET * i + j;
+      }
+
       void clear_all()
       {
         for(uint64_t i = 0; i < num_buckets(); ++i)
@@ -126,6 +166,10 @@ namespace std {
           bits -= BITSET_BITS_IN_BUCKET;
         }
         storage[i] ^= BITSET_FULL_BUCKET >> (BITSET_BITS_IN_BUCKET - bits);
+      }
+      void invert()
+      {
+        flip_all();
       }
       uint64_t size() const
       {
