@@ -71,7 +71,6 @@ public:
       read_subtree(el);
     }
     parsed = true;
-    std::cout << "done reading newick string"<<std::endl;
   }
 
 private:
@@ -98,7 +97,6 @@ private:
 
     // find if root is a hybrid and, if so, it's number
     const auto hyb_info = get_hybrid_info(names.back());
-    std::cout << "read name "<<names.back()<<" with hybrid num "<<hyb_info.second<<" now at position "<<back<<" ('"<<s.at(back)<<"')"<<std::endl;
 
     // if root is a known hybrid, then remove its name from 'names' and lookup its index in 'hybrids', else register it in 'hybrids'
     if(hyb_info.second != UINT32_MAX){
@@ -124,7 +122,6 @@ private:
   template<typename EL = TC::Edgelist>
   void read_internal(EL& el, const IndexPair& root)
   {
-    std::cout << "starting to read internal node at pos "<<back<<" ('"<<s.at(back)<<"')"<<std::endl;
     if(s.at(back) == ')') --back; else throw MalformedNewick(back, std::string("expected ')' but got '")+(char)(s.at(back))+"'");
     read_branchset(el, root);
     if(s.at(back) == '(') --back; else throw MalformedNewick(back, std::string("expected '(' but got '")+(char)s.at(back)+"'");
