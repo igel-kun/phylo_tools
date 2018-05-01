@@ -31,13 +31,13 @@ bool read_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>&
   try{
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
     read_newick_from_stream(in, el, names);
-  } catch(const MalformedNewick& err){
-    std::cout << "reading Newick failed: "<<err.what()<<std::endl;
+  } catch(const MalformedNewick& nw_err){
     DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
     try{
       in.seekg(0);
       read_edgelist_from_stream(in, el, names);
-    } catch(const MalformedEdgelist& err){
+    } catch(const MalformedEdgelist& el_err){
+      std::cout << "reading Newick failed: "<<nw_err.what()<<std::endl;
       return false;
     }
   }
@@ -86,6 +86,8 @@ int main(const int argc, const char** argv)
     std::cerr << "could not read any network from "<<options[""][0]<<std::endl;
     exit(EXIT_FAILURE);
   } else {
+    // for some reason, EOF is not detected unless we peek
+    in.peek();
     if((in.bad() || in.eof() || !read_from_stream(in, el[1], names[1]))){
       if(options[""].size() > 1){
         in.close();
