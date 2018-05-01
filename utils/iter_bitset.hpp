@@ -151,7 +151,10 @@ namespace std {
         if(NUM_ONES_IN_LOWEST_K_BITL(j, buffer) > k) --j;
         return BITSET_BITS_IN_BUCKET * i + j;
       }
-
+      void clear()
+      {
+        clear_all();
+      }
       void clear_all()
       {
         for(uint64_t i = 0; i < num_buckets(); ++i)
@@ -171,9 +174,13 @@ namespace std {
       {
         flip_all();
       }
-      uint64_t size() const
+      uint64_t capacity() const
       {
         return num_bits;
+      }
+      uint64_t size() const
+      {
+        return count();
       }
       uint64_t count() const
       {
@@ -284,8 +291,8 @@ namespace std {
 
   std::ostream& operator<<(std::ostream& os, const iterable_bitset& bs)
   {
-    for(uint64_t i = bs.size(); i != 0;) std::cout << (bs.test(--i) ? '1' : '0');
-    return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.size()<<" bits)";
+    for(uint64_t i = bs.capacity(); i != 0;) std::cout << (bs.test(--i) ? '1' : '0');
+    return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits)";
   }
 
 
