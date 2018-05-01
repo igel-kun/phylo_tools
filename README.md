@@ -4,7 +4,7 @@ Library to work with phylogenetic networks aiming at pure performance
 # Preliminaries
 
 `extended Newick` refers to [this format](https://www.ncbi.nlm.nih.gov/pubmed/19077301)  
-`edgelist` refers to a list of pairs of integers (one pair per line) separated by any positive number of whitespaces where each integer is smaller than the total number of integers used
+`edgelist` refers to a list of pairs of non-negative integers (one pair per line) separated by any positive number of whitespaces where each integer is smaller than the total number of integers used
 
 # Examples
 
