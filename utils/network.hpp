@@ -59,9 +59,6 @@ namespace TC{
     using Parent::root;
     using Parent::leaves;
     using Parent::max_outdeg;
-    using Parent::is_sorted;
-    using Parent::has_cycle;
-    using Parent::operator[];
 
     uint32_t* rev_edges;    // < tails of all edges
     uint32_t max_indeg;
@@ -83,7 +80,10 @@ namespace TC{
     }
 
   public:
- 
+    using Parent::operator[];
+    using Parent::is_sorted;
+    using Parent::has_cycle;
+
     // =================== information query ==============
 
     bool is_bicombining() const {
@@ -254,7 +254,6 @@ namespace TC{
       if(inited_seen) delete seen;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const NetworkT<>& N);
     friend class TreeComponentInfo;
   };
 
@@ -265,9 +264,9 @@ namespace TC{
 
   std::ostream& operator<<(std::ostream& os, const Network& N)
   {
-    if(N.num_vertices){
+    if(!N.empty()){
       std::string prefix = "";
-      N.print_subtree(os, N.root, prefix);
+      N.print_subtree(os, N.get_root(), prefix);
     }
     return os;
   }

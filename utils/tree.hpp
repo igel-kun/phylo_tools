@@ -148,6 +148,11 @@ namespace TC{
       return is_bifurcating();
     }
 
+    bool empty() const
+    {
+      return num_vertices == 0;
+    }
+
     void update_max_degrees()
     {
       max_outdeg = 0;
@@ -369,19 +374,16 @@ namespace TC{
       }
     }
     
-    friend std::ostream& operator<<(std::ostream& os, const TreeT<>& T);
   };
 
- 
   
   typedef TreeT<> Tree;
 
   std::ostream& operator<<(std::ostream& os, const TreeT<>& T)
   {
-    std::cerr << "tree with "<<T.num_vertices<<" vertices\n";
-    if(T.num_vertices){
+    if(!T.empty()){
       std::string prefix = "";
-      T.print_subtree(os, T.root, prefix);
+      T.print_subtree(os, T.get_root(), prefix);
     }
     return os;
   }
