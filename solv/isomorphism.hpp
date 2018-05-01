@@ -135,7 +135,11 @@ namespace TC{
           }
           // if none of the branches led to an isomorphism, then there is none
           return false;
-        } else return check_mapping();
+        } else
+          return true;
+          //return check_mapping();
+          //NOTE: check_mapping() is unneccessary since forall x, deg(x) == deg(mapping[x]) & each child of x is mapped to a child of mapping[x]
+          
           
 
       } catch(const NoPoss& np){
