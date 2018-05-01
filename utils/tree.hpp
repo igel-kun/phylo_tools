@@ -23,6 +23,10 @@ namespace TC{
     uint32_t& operator[](const uint32_t i) { return start[i]; }
     const uint32_t& operator[](const uint32_t i) const { return start[i]; }
 
+    inline uint32_t get_unique_item() const
+    {
+      return (count == 1) ? *start : UINT32_MAX;
+    }
     /* for now, we assume that the neighborlists are sorted, so removal or addition is not supported
     // removing an item from the neighbor list
     bool remove_vertex(const uint32_t vertex){
