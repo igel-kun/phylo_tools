@@ -2,7 +2,9 @@
 #pragma once
 
 #include <vector>
+#include "utils/iter_bitset.hpp"
 #include "utils/types.hpp"
+#include "utils/network.hpp"
 
 //! an exception for the case that a graph property is read that is not up to date
 struct MalformedNewick : public std::exception 
@@ -18,7 +20,33 @@ struct MalformedNewick : public std::exception
   }
 };
 
-typedef std::pair<uint32_t, uint32_t> IndexPair;
+
+std::string get_extended_newick(const TC::Network& N, const uint32_t sub_root, std::iterable_bitset& retis_seen)
+{
+  const TC::Network::Vertex& v = N[sub_root];
+  std::string accu = "";
+  if(!v.is_reti() || !retis_seen.test(sub_root)){
+    accu += "(";
+    for(uint32_t i = 0; i < v.succ.count; ++i)
+      accu += get_extended_newick(N, v.succ[i], retis_seen) + ",";
+    // remove last "," (or the "(" for leaves)
+    accu.pop_back();
+    if(!v.is_leaf()) accu += ")";
+  }
+  accu += N.get_name(sub_root);
+  if(v.is_reti()) {
+    accu += "#H" + std::to_string(sub_root);
+    retis_seen.set(sub_root);
+  }
+  return accu;
+}
+
+std::string get_extended_newick(const TC::Network& N)
+{
+  std::iterable_bitset retis_seen(N.get_num_vertices());
+  return get_extended_newick(N, N.get_root(), retis_seen) + ";";
+}
+
 
 //! a newick parser
 //NOTE: we parse newick from the back to the front since the node names are _appended_ to the node instead of _prepended_
@@ -77,17 +105,17 @@ private:
 
   void skip_whitespaces()
   {
-    while((back > 0) && (s.at(back) == ' ' || s.at(back) == '\t')) --back;
+    while((back > 0) && std::isspace(s.at(back))) --back;
   }
 
-  inline bool is_reticulation(const IndexPair& root) const
+  inline bool is_reticulation(const TC::IndexPair& root) const
   {
     return root.second != UINT32_MAX;
   }
 
   // a subtree is a leaf or an internal vertex
   template<typename EL = TC::Edgelist>
-  IndexPair read_subtree(EL& el)
+  TC::IndexPair read_subtree(EL& el)
   {
     skip_whitespaces();
 
@@ -109,7 +137,7 @@ private:
         hybrids.emplace_hint(hyb_it, hyb_info.second, root);
       }
     }
-    IndexPair result = {root, hyb_info.second};
+    TC::IndexPair result = {root, hyb_info.second};
 
     // if the subtree dangling from root is non-empty, recurse
     if((back > 0) && s.at(back) == ')') read_internal(el, result);
@@ -120,7 +148,7 @@ private:
 
   // an internal vertex is ( + branchlist + )
   template<typename EL = TC::Edgelist>
-  void read_internal(EL& el, const IndexPair& root)
+  void read_internal(EL& el, const TC::IndexPair& root)
   {
     if(s.at(back) == ')') --back; else throw MalformedNewick(back, std::string("expected ')' but got '")+(char)(s.at(back))+"'");
     read_branchset(el, root);
@@ -129,7 +157,7 @@ private:
 
   // a branchset is a comma-separated list of branches
   template<typename EL = TC::Edgelist>
-  void read_branchset(EL& el, const IndexPair& root)
+  void read_branchset(EL& el, const TC::IndexPair& root)
   {
     read_branch(el, root);
     while(s.at(back) == ',') {
@@ -142,10 +170,10 @@ private:
 
   // a branch is a subtree + a length
   template<typename EL = TC::Edgelist>
-  void read_branch(EL& el, const IndexPair& root)
+  void read_branch(EL& el, const TC::IndexPair& root)
   {
     const float len = read_length();
-    const IndexPair child = read_subtree(el);
+    const TC::IndexPair child = read_subtree(el);
     put_branch_in_edgelist(el, {root.first, child.first}, len);
   }
 
