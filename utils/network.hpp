@@ -222,11 +222,13 @@ namespace TC{
       if(inited_seen) seen = new std::iterable_bitset(num_vertices);
 
       std::string name = names[u_idx];
+      const Vertex& u = vertices[u_idx];
+      
+      if(name == "") name = (u.is_reti()) ? std::string("(R" + std::to_string(u_idx) + ")") : std::string("+");
       DEBUG3(name += "[" + std::to_string(u_idx) + "]");
-      if(name == "") name = "+";
+
       os << '-' << name;
       
-      const Vertex& u = vertices[u_idx];
       if(!u.is_reti() || !seen->test(u_idx)){
         if(u.is_reti()) seen->insert(u_idx);
         switch(u.succ.count){
