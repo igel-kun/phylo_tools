@@ -5,18 +5,8 @@
 #include "utils/utils.hpp"
 #include "utils/types.hpp"
 
+
 namespace TC{
-
-#warning TODO: find out why g++ refuses to use the one provided in ../utils/utils.hpp
-  std::ostream& operator<<(std::ostream& os, const std::vector<uint32_t>& lst)
-  {
-    os << "[";
-    for(auto i : lst) os << i << "  ";
-    os << "]";
-    return os;
-  }
-
-
 
   template<class _Network, class _LabelMap>
   class Mapper
