@@ -29,31 +29,32 @@ class NewickParser
   std::unordered_map<uint32_t, uint32_t> hybrids;
   ssize_t back;
 
-  // indicate whether we are going to contract edges between reticulations
-  const bool contract_retis;
+  bool parsed = false;
 
   // forbid default construction by skipping its implementation
   NewickParser();
 public:
 
-  NewickParser(const std::string& _newick_string, std::vector<std::string>& _names, const bool _contract_retis = false):
-    s(_newick_string), names(_names), back(_newick_string.length() - 1), contract_retis(_contract_retis)
+  NewickParser(const std::string& _newick_string, std::vector<std::string>& _names):
+    s(_newick_string), names(_names), back(_newick_string.length() - 1)
   {
-    DEBUG5(std::cout << "parsing " << _newick_string << std::endl);
   }
 
   bool is_tree() const
   {
+    if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
     return hybrids.empty();
   }
 
   const size_t num_vertices() const
   {
+    if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
     return names.size();
   }
 
   const TC::NameVec& get_names() const
   {
+    if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
     return names;
   }
 
@@ -63,9 +64,14 @@ public:
   void read_tree(EL& el)
   {
     skip_whitespaces();
-    if(s.at(back) == ';') --back; else throw MalformedNewick(back, "expected ';' but got \"" + s.substr(back) + "\"\n");
-    skip_whitespaces();
-    read_subtree(el);
+    if(s != "") {
+      if(s.at(back) == ';') --back; else throw MalformedNewick(back, "expected ';' but got \"" + s.substr(back) + "\"\n");
+      skip_whitespaces();
+      DEBUG5(std::cout << "parsing \"" << s << "\""<<std::endl);
+      read_subtree(el);
+    }
+    parsed = true;
+    std::cout << "done reading newick string"<<std::endl;
   }
 
 private:
@@ -75,6 +81,10 @@ private:
     while((back > 0) && (s.at(back) == ' ' || s.at(back) == '\t')) --back;
   }
 
+  inline bool is_reticulation(const IndexPair& root) const
+  {
+    return root.second != UINT32_MAX;
+  }
 
   // a subtree is a leaf or an internal vertex
   template<typename EL = TC::Edgelist>
@@ -87,17 +97,21 @@ private:
     names.push_back(read_name());
 
     // find if root is a hybrid and, if so, it's number
-    const uint32_t root_hnum = get_hybrid_number(names.back());
+    const auto hyb_info = get_hybrid_info(names.back());
+    std::cout << "read name "<<names.back()<<" with hybrid num "<<hyb_info.second<<" now at position "<<back<<" ('"<<s.at(back)<<"')"<<std::endl;
 
     // if root is a known hybrid, then remove its name from 'names' and lookup its index in 'hybrids', else register it in 'hybrids'
-    if(root_hnum != UINT32_MAX){
-      const auto hyb_it = hybrids.find(root_hnum);
+    if(hyb_info.second != UINT32_MAX){
+      const auto hyb_it = hybrids.find(hyb_info.second);
       if(hyb_it != hybrids.end()){
         names.pop_back();
         root = hyb_it->second;
-      } else hybrids.emplace_hint(hyb_it, root_hnum, root);
+      } else {
+        names.back() = hyb_info.first;
+        hybrids.emplace_hint(hyb_it, hyb_info.second, root);
+      }
     }
-    IndexPair result = {root, root_hnum};
+    IndexPair result = {root, hyb_info.second};
 
     // if the subtree dangling from root is non-empty, recurse
     if((back > 0) && s.at(back) == ')') read_internal(el, result);
@@ -110,6 +124,7 @@ private:
   template<typename EL = TC::Edgelist>
   void read_internal(EL& el, const IndexPair& root)
   {
+    std::cout << "starting to read internal node at pos "<<back<<" ('"<<s.at(back)<<"')"<<std::endl;
     if(s.at(back) == ')') --back; else throw MalformedNewick(back, std::string("expected ')' but got '")+(char)(s.at(back))+"'");
     read_branchset(el, root);
     if(s.at(back) == '(') --back; else throw MalformedNewick(back, std::string("expected '(' but got '")+(char)s.at(back)+"'");
@@ -121,6 +136,8 @@ private:
   {
     read_branch(el, root);
     while(s.at(back) == ',') {
+//      if(is_reticulation(root))
+//        throw MalformedNewick(back, "reticulations may not have multiple children");
       --back;
       read_branch(el, root);
     }
@@ -135,27 +152,27 @@ private:
     put_branch_in_edgelist(el, {root.first, child.first}, len);
   }
 
-  void put_branch_in_edgelist(TC::Edgelist& el, const TC::Edge& e, const float& len)
+  inline void put_branch_in_edgelist(TC::Edgelist& el, const TC::Edge& e, const float& len) const
   {
     el.emplace_back(e);
   }
-  void put_branch_in_edgelist(TC::WEdgelist& el, const TC::Edge& e, const float& len)
+  inline void put_branch_in_edgelist(TC::WEdgelist& el, const TC::Edge& e, const float& len) const
   {
     el.emplace_back(e, len);
   }
 
-  // check if this is a hybrid
-  uint32_t get_hybrid_number(const std::string& name)
+  // check if this is a hybrid and return name and hybrid number
+  std::pair<std::string, uint32_t> get_hybrid_info(const std::string& name)
   {
     const size_t sharp = name.rfind('#');
     if(sharp != std::string::npos){
-      const std::string hybrid_name = name.substr(0, sharp);
+      std::pair<std::string, uint32_t> result(name.substr(0, sharp), UINT32_MAX);
       const size_t hybrid_num_start = name.find_first_of("0123456789", sharp);
       if(hybrid_num_start == std::string::npos) throw MalformedNewick(back, "found '#' but no hybrid number: \"" + name + "\"\n");
-
-      const std::string hybrid_type = name.substr(sharp + 1, hybrid_num_start - sharp - 1);
-      return std::atoi(name.c_str() + hybrid_num_start);
-    } else return UINT32_MAX;
+      result.second = std::atoi(name.c_str() + hybrid_num_start);
+      //const std::string hybrid_type = name.substr(sharp + 1, hybrid_num_start - sharp - 1);
+      return result;
+    } else return {"", UINT32_MAX};
   }
 
   // read a branch-length
