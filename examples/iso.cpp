@@ -117,7 +117,7 @@ int main(const int argc, const char** argv)
 
   LabelMap *lmap = nullptr;
   lmap = build_labelmap(N0, N1, lmap);
-  IsomorphismMapper M(N0, N1, *lmap, iso_flags);
+  IsomorphismMapper<> M(N0, N1, *lmap, iso_flags);
   if(M.check_isomorph())
     std::cout << "isomorph!" << std::endl;
   else
