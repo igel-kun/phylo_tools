@@ -16,11 +16,11 @@ namespace TC{
 
     bool is_reti() const
     {
-      return (pred.count > 1) && (succ.count == 1);
+      return pred.count > 1;
     }
     bool is_root() const
     {
-      return pred.count == 0;
+      return (pred.count == 0) && (succ.count > 0);
     }
     bool is_inner_tree() const
     {
@@ -60,6 +60,7 @@ namespace TC{
     using Parent::leaves;
     using Parent::max_outdeg;
     using Parent::is_sorted;
+    using Parent::has_cycle;
     using Parent::operator[];
 
     uint32_t* rev_edges;    // < tails of all edges
@@ -134,8 +135,6 @@ namespace TC{
       }
     }
 
-
-
     // =================== modification ====================
 
     void remove_leaf(const uint32_t u_idx)
@@ -157,7 +156,7 @@ namespace TC{
     //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_vertices
     // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
     //       This is the case for inputs in newick format
-    NetworkT(const Edgelist& edgelist, const NameVec& _names):
+    NetworkT(const Edgelist& edgelist, const NameVec& _names, const bool check_cyclic = true):
       Parent(_names, edgelist.size()),
       rev_edges((uint32_t*)malloc(num_edges * sizeof(uint32_t)))
     {
@@ -201,6 +200,8 @@ namespace TC{
      
       // actually read the edgelist
       for(const auto &edge : edgelist) add_edge(edge.first, edge.second);
+      // finally, if requested, check if N is acyclic
+      if(check_cyclic && has_cycle()) throw std::logic_error("network contains a cycle");
     }
  
     // =================== destruction ====================
@@ -215,19 +216,18 @@ namespace TC{
 
     // =================== i/o ======================
     
-    void print_subtree(std::ostream& os, const uint32_t u_idx, std::string prefix, IndexSet* seen = nullptr) const
+    void print_subtree(std::ostream& os, const uint32_t u_idx, std::string prefix, std::iterable_bitset* seen = nullptr) const
     {
       const bool inited_seen = (seen == nullptr);
-      if(inited_seen) seen = new IndexSet();
+      if(inited_seen) seen = new std::iterable_bitset(num_vertices);
 
       std::string name = names[u_idx];
       DEBUG3(name += "[" + std::to_string(u_idx) + "]");
       if(name == "") name = "+";
+      os << '-' << name;
       
       const Vertex& u = vertices[u_idx];
-      os << '-' << name;
-
-      if(!u.is_reti() || !contains(*seen, u_idx)){
+      if(!u.is_reti() || !seen->test(u_idx)){
         if(u.is_reti()) seen->insert(u_idx);
         switch(u.succ.count){
           case 0:
@@ -263,21 +263,12 @@ namespace TC{
 
   std::ostream& operator<<(std::ostream& os, const Network& N)
   {
-    std::string prefix = "";
-    N.print_subtree(os, N.root, prefix);
-    return os;
-  }
-
-  /*
-  std::ostream& operator<<(std::ostream& os, const Network& N)
-  {
-    for(uint32_t i = 0; i < N.num_vertices; ++i){
-      const Network::Vertex& u = N.vertices[i];
-      for(uint32_t j = 0; j < u.succ.count; ++j)
-        os << i << " " << u.succ[j] << std::endl;
+    if(N.num_vertices){
+      std::string prefix = "";
+      N.print_subtree(os, N.root, prefix);
     }
     return os;
   }
-*/
+
 
 }

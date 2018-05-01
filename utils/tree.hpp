@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "utils.hpp"
+#include "iter_bitset.hpp"
 #include "types.hpp"
 #include "label_iter.hpp"
 #include "except.hpp"
@@ -91,7 +92,6 @@ namespace TC{
       Vertex& u = vertices[u_idx];
       Vertex& v = vertices[v_idx];
 
-      std::cout << "adding edge "<<u_idx<<"->"<<v_idx<<" (previous successor: "<< (int)(u.succ.count ? u.succ[u.succ.count-1] : -1) <<")"<<std::endl;
       if(u.succ.count && (u.succ[u.succ.count-1] > v_idx)) is_sorted = false; // insert edges in sorted order
       u.succ[u.succ.count++] = v_idx;
       v.pred = u_idx;
@@ -248,6 +248,25 @@ namespace TC{
         return is_edge_linear(u_idx, v_idx);
     }
 
+    //! for sanity checks: test if there is a cycle in the data structure (more useful for networks, but definable for trees too)
+    bool has_cycle() const
+    {
+      if(num_vertices){
+        std::iterable_bitset seen(num_vertices);
+        return has_cycle(root, seen);
+      } else return false;
+    }
+    bool has_cycle(const uint32_t sub_root, std::iterable_bitset& seen) const
+    {
+      if(!seen.test(sub_root)){
+        seen.set(sub_root);
+        const Vertex& v = vertices[sub_root];
+        for(uint32_t i = 0; i < v.succ.count; ++i)
+          if(has_cycle(v.succ[i], seen)) return true;
+        seen.clear(sub_root);
+        return false;
+      } else return true;
+    }
 
     // =================== modification ====================
 
@@ -326,10 +345,9 @@ namespace TC{
       std::string name = names[u_idx];
       DEBUG3(name += "[" + std::to_string(u_idx) + "]");
       if(name == "") name = "+";
-      
+      os << '-' << name;
 
       const Vertex& u = vertices[u_idx];
-      os << '-' << name;
       switch(u.succ.count){
         case 0:
           os << std::endl;
@@ -360,8 +378,11 @@ namespace TC{
 
   std::ostream& operator<<(std::ostream& os, const TreeT<>& T)
   {
-    std::string prefix = "";
-    T.print_subtree(os, T.root, prefix);
+    std::cerr << "tree with "<<T.num_vertices<<" vertices\n";
+    if(T.num_vertices){
+      std::string prefix = "";
+      T.print_subtree(os, T.root, prefix);
+    }
     return os;
   }
 
