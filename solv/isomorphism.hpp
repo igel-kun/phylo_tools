@@ -6,6 +6,7 @@
 #include "utils/network.hpp"
 #include "utils/vector2d.hpp"
 #include "utils/iter_bitset.hpp"
+#include "utils/set_interface.hpp"
 #include <unordered_set>
 
 #define FLAG_MATCHING_LEAF_LABELS 0x01
@@ -31,7 +32,7 @@ namespace TC{
   template<class PossSet = std::iterable_bitset>
   class IsomorphismMapper
   {
-    typedef std::vector<PossSet> MappingPossibility;
+    typedef PossSet** MappingPossibility;
 
     const Network& N1;
     const Network& N2;
@@ -41,8 +42,8 @@ namespace TC{
 
 
     MappingPossibility mapping;
-    std::vector<uint32_t> sizes;
-    std::vector<uint32_t> unique_poss;
+    uint32_t* sizes;
+    uint32_t *unique_poss;
 
     std::iterable_bitset updated;
     
@@ -54,14 +55,6 @@ namespace TC{
     // degree distributions don't match
     bool initial_fail; 
 
-    inline bool test(const std::iterable_bitset& _set, const uint32_t index) const
-    {
-      return _set.test(index);
-    }
-    inline bool test(const std::unordered_set<uint32_t>& _set, const uint32_t index) const
-    {
-      return contains(_set, index);
-    }
     inline std::iterable_bitset* make_new_possset(const std::iterable_bitset* sentinel) const
     {
       return new std::iterable_bitset(size_N);
@@ -70,35 +63,35 @@ namespace TC{
     {
       return new std::unordered_set<uint32_t>();
     }
-    inline void intersect(std::iterable_bitset& target, const std::iterable_bitset& source)
+
+    void print_mapping(const uint32_t x) const
     {
-      target &= source;
-    }
-    inline void intersect(std::unordered_set<uint32_t>& target, const std::unordered_set<uint32_t>& source)
-    {
-      for(auto target_it = target.begin(); target_it != target.end();)
-        if(!contains(source, *target_it))
-          target_it = target.erase(target_it); 
-        else ++target_it;
-    }
-    inline uint32_t front(const std::iterable_bitset& _set) const
-    {
-      return _set.front();
-    }
-    inline uint32_t front(const std::unordered_set<uint32_t>& _set) const
-    {
-      return *_set.begin();
+      if(sizes[x] == 1) std::cout << unique_poss[x]; else std::cout << *mapping[x];
     }
 
   public:
 
+    IsomorphismMapper(const Network& _N1,
+                      const Network& _N2,
+                      const uint32_t& _size_N,
+                      const LabelMap& _lmap,
+                      const unsigned char _flags):
+      N1(_N1),
+      N2(_N2),
+      lmap(_lmap),
+      size_N(_size_N),
+      mapping((PossSet**)calloc(size_N, sizeof(PossSet*))),
+      sizes((uint32_t*)calloc(size_N, sizeof(uint32_t))),
+      unique_poss((uint32_t*)malloc(size_N * sizeof(uint32_t))),
+      updated(size_N), // <--- be aware that updated is cleared on copy-construct!!!
+      flags(_flags),
+      initial_fail(false)
+    {}                
+
     IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap, const unsigned char _flags):
-      N1(_N1), N2(_N2), lmap(_lmap), size_N(_N1.get_num_vertices()), mapping(), sizes(), unique_poss(), updated(size_N), flags(_flags), initial_fail(false)
+      IsomorphismMapper(_N1, _N2, _N1.get_num_vertices(), _lmap, _flags)
     {
       if((N1.get_num_vertices() == N2.get_num_vertices()) && (N1.get_num_edges() == N2.get_num_edges())){
-        mapping.reserve(size_N);
-        sizes.reserve(size_N);
-        unique_poss.reserve(size_N);
         try{
           initial_restrict();
           updated.set_all();
@@ -113,76 +106,147 @@ namespace TC{
     }
 
     IsomorphismMapper(const IsomorphismMapper& _mapper):
-      N1(_mapper.N1),
-      N2(_mapper.N2),
-      lmap(_mapper.lmap),
-      size_N(_mapper.size_N),
-      mapping(_mapper.mapping),
-      sizes(_mapper.sizes),
-      unique_poss(_mapper.unique_poss),
-      updated(size_N),
-      flags(_mapper.flags)
+      IsomorphismMapper(_mapper.N1, _mapper.N2, _mapper.size_N, _mapper.lmap, _mapper.flags)
     {
-      assert(mapping.size() == size_N);
-      assert((size_N == 0) || (mapping[0].size() >= size_N));
+      memcpy(sizes, _mapper.sizes, size_N*sizeof(uint32_t));
+      memcpy(unique_poss, _mapper.unique_poss, size_N*sizeof(uint32_t));
+      for(uint32_t i = 0; i < size_N; ++i)
+        if(_mapper.mapping[i]) mapping[i] = new PossSet(*_mapper.mapping[i]);
+    }
+
+    ~IsomorphismMapper()
+    {
+      free(sizes);
+      free(unique_poss);
+      for(uint32_t i = 0; i < size_N; ++i)
+        if(mapping[i]) delete mapping[i];
+      free(mapping);
+    }
+
+    bool node_is_interesting(const Network::Vertex& v) const
+    {
+      switch(v.get_type()){
+        case NODE_TYPE_LEAF:
+          return (flags & FLAG_MATCHING_LEAF_LABELS);
+        case NODE_TYPE_TREE:
+          return (flags & FLAG_MATCHING_TREE_LABELS);
+        case NODE_TYPE_RETI:
+          return (flags & FLAG_MATCHING_RETI_LABELS);
+        default:
+          return true;
+      }
+    }
+
+    // update unique possibilities to the parent recursively
+    void update_rising(const uint32_t i, const uint32_t i2, std::iterable_bitset& unfixed_N1, std::iterable_bitset& unfixed_N2)
+    {
+      sizes[i] = 1;
+      unique_poss[i] = i2;
+      unfixed_N1.erase(i);
+      unfixed_N2.erase(i2);
+      
+      const Network::Vertex& u = N1[i];
+      const uint32_t parent = u.pred.get_unique_item();
+      if((parent != UINT32_MAX) && test(unfixed_N1, parent)){
+        const Network::Vertex& u2 = N2[i2];
+        const uint32_t parent2 = u2.pred.get_unique_item();
+        if(parent2 != UINT32_MAX)
+          update_rising(parent, parent2, unfixed_N1, unfixed_N2);
+        else 
+          throw NoPoss(N1.get_name(i) + '[' + std::to_string(i) + ']');
+      }
+
+    }
+    // NOTE: this assumes to be called before any deduction about the mapping is made!
+    template<class NodeFactory>
+    void mapping_from_labels(const NodeFactory& fac, std::iterable_bitset& unfixed_N1, std::iterable_bitset& unfixed_N2)
+    {
+      for(const LabeledVertex& lv: fac){
+        const uint32_t i_idx = lv.first;
+        const std::string& name = lv.second;
+        if((name != "") && ((flags == FLAG_MATCHING_ALL_LABELS) || node_is_interesting(N1.get_vertex(i_idx)))){
+          const uint32_t i2_idx = lmap.at(name).second;
+          DEBUG4(std::cout << "treating "<<i_idx<<" with label "<<name<<" - it's counter part is "<<i2_idx<<std::endl);
+          // if the label doesn't exist in N1, i2_idx will be NO_LABEL
+          if(i2_idx != NO_LABEL)
+            update_rising(i_idx, i2_idx, unfixed_N1, unfixed_N2);
+          else
+            throw NoPoss(name + '[' + std::to_string(i_idx) + ']');
+        }
+      }
     }
 
     void initial_restrict()
     {
-      DEBUG3(std::cout << "restricting degrees..."<<std::endl);
-      std::unordered_map<uint64_t, PossSet> degree_to_possibilities;
-      std::unordered_map<uint64_t, uint32_t> degree_distribution_N2;
-      for(uint32_t u_idx = 0; u_idx < size_N; ++u_idx){
-        const Network::Vertex& u(N2.get_vertex(u_idx));
-        const uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
-        const auto deg_it = degree_to_possibilities.find(u_deg);
-        if(deg_it == degree_to_possibilities.end())
-          degree_to_possibilities.emplace_hint(deg_it, u_deg, size_N)->second.insert(u_idx);
-        else
-          deg_it->second.insert(u_idx);
-        degree_distribution_N2[u_deg]++;
-      }
-      for(uint32_t u_idx = 0; u_idx < size_N; ++u_idx){
-        const Network::Vertex& u(N1.get_vertex(u_idx));
-        const uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
-        // find the set of vertices in N2 with this degree
-        const auto deg_it = degree_to_possibilities.find(u_deg);
-        if(deg_it == degree_to_possibilities.end())
-          throw NoPoss(N1.get_name(u_idx) + '[' + std::to_string(u_idx) + ']');
-        // set the mapping and its size
-        mapping.emplace_back(deg_it->second);
-        sizes.push_back(deg_it->second.size());
-        unique_poss.push_back((sizes.back() == 1) ? front(deg_it->second) : 0);
-        // decrement the count of vertices in N2 with this degree and fail if this would go below 0
-        uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
-        if(u_deg_in_N2 == 0)
-          throw NoPoss("<vertices of indeg " + std::to_string(u.pred.count) + " & outdeg " + std::to_string(u.succ.count) + ">");
-      }
-
+      DEBUG3(std::cout << "mapping from labels..."<<std::endl);
+      // save which nodes we didn't treat in N2
+      std::iterable_bitset unfixed_N2(size_N);
+      std::iterable_bitset unfixed_N1(size_N);
+      unfixed_N1.set_all();
+      unfixed_N2.set_all();
       if(flags == FLAG_MATCHING_LEAF_LABELS)
-        mapping_from_labels(N1.get_leaves_labeled());
+        mapping_from_labels(N1.get_leaves_labeled(), unfixed_N1, unfixed_N2);
       else
-        mapping_from_labels(N1.get_nodes_labeled());
+        mapping_from_labels(N1.get_nodes_labeled(), unfixed_N1, unfixed_N2);
 
+      if(!unfixed_N1.empty()){
+        DEBUG3(std::cout << "restricting degrees..."<<std::endl);
+        std::unordered_map<uint64_t, PossSet> degree_to_possibilities;
+        std::unordered_map<uint64_t, uint32_t> degree_distribution_N2;
+        for(uint32_t i: unfixed_N2){
+          const Network::Vertex& u2(N2.get_vertex(i));
+          const uint64_t u2_deg = (((uint64_t)u2.pred.count) << 32) | u2.succ.count;
+          const auto deg_it = degree_to_possibilities.find(u2_deg);
+          if(deg_it == degree_to_possibilities.end())
+            degree_to_possibilities.emplace_hint(deg_it, u2_deg, size_N)->second.insert(i);
+          else
+            deg_it->second.insert(i);
+          degree_distribution_N2[u2_deg]++;
+        }
+        for(uint32_t i: unfixed_N1){
+          const Network::Vertex& u(N1.get_vertex(i));
+          const uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
+          // find the set of vertices in N2 with this degree
+          const auto deg_it = degree_to_possibilities.find(u_deg);
+          if(deg_it == degree_to_possibilities.end())
+            throw NoPoss(N1.get_name(i) + '[' + std::to_string(i) + ']');
+          // set the mapping and its size
+          sizes[i] = deg_it->second.size();
+          if(sizes[i] == 1)
+            unique_poss[i] = front(deg_it->second);
+          else
+            mapping[i] = new PossSet(deg_it->second);
+          
+          // decrement the count of vertices in N2 with this degree and fail if this would go below 0
+          uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
+          if(u_deg_in_N2 == 0)
+            throw NoPoss("<vertices of indeg " + std::to_string(u.pred.count) + " & outdeg " + std::to_string(u.succ.count) + ">");
+          else
+            --u_deg_in_N2;
+        }
+      }
+      DEBUG3(std::cout << "done initializing, now working on the updates..."<<std::endl);
+      updated.set_all();
     }
 
-
+/*
     // check if mapping is now an isomorphism
     bool check_mapping() const
     {
       DEBUG3(std::cout << "checking the mapping" <<std::endl);
       for(uint32_t u_idx = 0; u_idx < size_N; ++u_idx){
-        assert(mapping[u_idx].size() == 1);
-        const uint32_t u2_idx = front(mapping[u_idx]);
+        assert(sizes[u_idx] == 1);
+        const uint32_t u2_idx = unique_poss[u_idx];
         
         const Network::Vertex& u(N1.get_vertex(u_idx));
         for(uint32_t j = 0; j < u.succ.count; ++j){
-          if(!N2.is_edge(u2_idx, front(mapping[u.succ[j]])))
+          if(!N2.is_edge(u2_idx, unique_poss[u.succ[j]]))
             return false;
         }
       }
       return true;
     }
+*/
 
     bool check_isomorph()
     {
@@ -190,22 +254,22 @@ namespace TC{
       if(initial_fail) return false;
 
       try{
-        while(!updated.is_empty()){
+        while(!updated.empty()){
           DEBUG4(std::cout << "updates pending:\n" << updated<<std::endl);
           update_neighbors(updated.front());
         }
 
-        DEBUG3(
-            std::cout << "no more pending updated, possibilities are:" << std::endl;
-            for(uint32_t u = 0; u < size_N; ++u)
-              std::cout << u << "\t"<<mapping[u]<<std::endl;
-            )
+        DEBUG3(std::cout << "no more pending updated"<<std::endl);
+        DEBUG5(std::cout << "possibilities are:" << std::endl;
+            for(uint32_t u = 0; u < size_N; ++u){
+              std::cout << u << "\t"; print_mapping(u); std::cout<<std::endl;
+            })
 
         // find a vertex to branch on (minimum # possibilities)
         uint32_t min_idx = 0;
         uint32_t min_poss = UINT32_MAX;
         for(uint32_t i = 0; i < size_N; ++i){
-          const uint32_t num_poss = mapping[i].size();
+          const uint32_t num_poss = sizes[i];
           if((num_poss > 1) && (num_poss < min_poss)){
             min_poss = num_poss;
             min_idx = i;
@@ -215,10 +279,8 @@ namespace TC{
         if(min_poss != UINT32_MAX) {
           DEBUG4(std::cout << "branching on vertex "<<min_idx<<std::endl);
           // spawn a new checker for each possibility
-          for(uint32_t min2_idx : mapping[min_idx]){
+          for(uint32_t min2_idx : *mapping[min_idx]){
             IsomorphismMapper child_im(*this);
-            child_im.mapping[min_idx].clear();
-            child_im.mapping[min_idx].insert(min2_idx);
             child_im.sizes[min_idx] = 1;
             child_im.unique_poss[min_idx] = min2_idx;
             child_im.updated.insert(min_idx);
@@ -245,145 +307,132 @@ namespace TC{
 
   protected:
 
-    bool node_is_interesting(const Network::Vertex& v) const
-    {
-      switch(v.get_type()){
-        case NODE_TYPE_LEAF:
-          return (flags & FLAG_MATCHING_LEAF_LABELS);
-        case NODE_TYPE_TREE:
-          return (flags & FLAG_MATCHING_TREE_LABELS);
-        case NODE_TYPE_RETI:
-          return (flags & FLAG_MATCHING_RETI_LABELS);
-        default:
-          return true;
-      }
-    }
-
-    template<class NodeFactory>
-    void mapping_from_labels(const NodeFactory& fac)
-    {
-      DEBUG3(std::cout << "updating from labels"<<std::endl);
-      for(const LabeledVertex& lv: fac){
-        const uint32_t i_idx = lv.first;
-        const std::string& name = lv.second;
-        if((name != "") && ((flags == FLAG_MATCHING_ALL_LABELS) || node_is_interesting(N1.get_vertex(i_idx)))){
-          const uint32_t i2_idx = lmap.at(name).second;
-          DEBUG4(std::cout << "treating "<<i_idx<<" with label "<<name<<" - it's counter part is "<<i2_idx<<std::endl);
-          // if the label doesn't exist in N1, i2_idx will be NO_LABEL
-          if(i2_idx != NO_LABEL) {
-            update_poss(i_idx, i2_idx);
-          } else throw NoPoss(name + '[' + std::to_string(i_idx) + ']');
-        }
-      }
-    }
-
+    /*
     void remove_from_everyone_except(const uint32_t idx, const uint32_t except)
     {
       DEBUG5(std::cout << "removing "<<idx<<" from everyone except "<<except<<std::endl);
       for(uint32_t u = 0; u < size_N; ++u)
-        if((u != except) && (test(mapping[u], idx))){
-          mapping[u].clear(idx);
-          --sizes[u];
-          updated.insert(u);
+        if(u != except){
+          if(sizes[u] == 1){
+            if(unique_poss[u] == idx) throw NoPoss(N1.get_name(u) + '[' + std::to_string(u) + ']');
+          } else if(test(mapping[u], idx)){
+            mapping[u].clear(idx);
+            --sizes[u];
+            updated.insert(u);
+          }
         }
     }
+    */
 
-    // most of the time, we expect to find only a handful of possible parents/children
-    // so it might be faster to do this with a couple of uint32_t's
-    void update_neighbors_fixed(const uint32_t x_idx)
+    void update_children_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
     {
-      const uint32_t x2_idx = unique_poss[x_idx];
-      const Network::Vertex& x(N1.get_vertex(x_idx));
-      const Network::Vertex& x2(N2.get_vertex(x2_idx));
-      // if we have a single child, then it should map to the single child of x2
-      if(x.succ.count == 1){
-        update_poss(x.succ[0], x2.succ[0]);
-      } else {
+      const uint32_t y_idx = x.succ.get_unique_item();
+      if(y_idx == UINT32_MAX){
+        // update children
+        if(possible_nodes) possible_nodes->clear(); else possible_nodes = make_new_possset((PossSet*)nullptr);
+
+        uint32_t p2_idx = unique_poss[x_idx];
+        const Network::Vertex& p2(N2.get_vertex(p2_idx));
+        for(uint32_t i = 0; i < p2.succ.count; ++i)
+          possible_nodes->insert(p2.succ[i]);
+        for(uint32_t i = 0; i < x.succ.count; ++i)
+          update_poss(x.succ[i], *possible_nodes);
+      } else update_poss(y_idx, N2[unique_poss[x_idx]].succ[0]);
+    }
+
+    void update_children_non_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    {
+      for(uint32_t p2_idx : *mapping[x_idx]){
+        const Network::Vertex& p2(N2.get_vertex(p2_idx));
+        for(uint32_t i = 0; i < p2.succ.count; ++i)
+          possible_nodes->insert(p2.succ[i]);
       }
+      for(uint32_t j = 0; j < x.succ.count; ++j)
+        update_poss(x.succ[j], *possible_nodes);
+    }
+
+    // TODO: the following functions are the same as the ones before, except that they are using "pred" instead of "succ" - AVOID THIS CODE DOUBLING
+    void update_parents_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    {
+      const uint32_t y_idx = x.pred.get_unique_item();
+      if(y_idx == UINT32_MAX){
+        if(possible_nodes) possible_nodes->clear(); else possible_nodes = make_new_possset((PossSet*)nullptr);
+
+        uint32_t p2_idx = unique_poss[x_idx];
+        const Network::Vertex& p2(N2.get_vertex(p2_idx));
+        for(uint32_t i = 0; i < p2.pred.count; ++i)
+          possible_nodes->insert(p2.pred[i]);
+        for(uint32_t i = 0; i < x.pred.count; ++i)
+          update_poss(x.pred[i], *possible_nodes);
+      } else update_poss(y_idx, N2[unique_poss[x_idx]].pred[0]);
+    }
+
+    void update_parents_non_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    {
+      for(uint32_t p2_idx : *mapping[x_idx]){
+        const Network::Vertex& p2(N2.get_vertex(p2_idx));
+        for(uint32_t i = 0; i < p2.pred.count; ++i)
+          possible_nodes->insert(p2.pred[i]);
+      }
+      for(uint32_t j = 0; j < x.pred.count; ++j)
+        update_poss(x.pred[j], *possible_nodes);
     }
 
     void update_neighbors(const uint32_t x_idx)
     {
-      DEBUG5(std::cout << "updating "<<x_idx<<" whose mapping is:\n"<<mapping[x_idx]<<std::endl);
+      DEBUG5(std::cout << "updating "<<x_idx<<" whose mapping is: "; print_mapping(x_idx); std::cout << std::endl);
       updated.clear(x_idx);
 
       PossSet* possible_nodes = nullptr;
       const Network::Vertex& x(N1.get_vertex(x_idx));
-      uint32_t y_idx;
 
       // TODO: use a functor to stop code duplication!
-      if(x.succ.count > 0){
+      if(sizes[x_idx] == 1){
         // if x_idx maps uniquely and has a unique child, then we can use the cheaper version of update_poss()
-        if((sizes[x_idx] == 1) && ((y_idx = x.succ.get_unique_item()) != UINT32_MAX)){
-          update_poss(y_idx, N2[unique_poss[x_idx]].succ[0]);
-        } else {
-          // update children
-          possible_nodes = make_new_possset((PossSet*)nullptr);
-
-          for(uint32_t p2_idx : mapping[x_idx]){
-            const Network::Vertex& p2(N2.get_vertex(p2_idx));
-            for(uint32_t i = 0; i < p2.succ.count; ++i)
-              possible_nodes->insert(p2.succ[i]);
-          }
-          for(uint32_t j = 0; j < x.succ.count; ++j)
-            update_poss(x.succ[j], *possible_nodes);
-        }
-      }
-
-      // if x_idx maps uniquely and has a unique parent, then we can use the cheaper version of update_poss()
-      if((sizes[x_idx] == 1) && ((y_idx = x.pred.get_unique_item()) != UINT32_MAX)){
-        update_poss(y_idx, N2[unique_poss[x_idx]].pred[0]);
+        if(x.succ.count > 0) update_children_fixed(x_idx, x, possible_nodes);
+        update_parents_fixed(x_idx, x, possible_nodes);
+        if(possible_nodes) delete possible_nodes;
       } else {
-        if(possible_nodes == nullptr) {
-          possible_nodes = make_new_possset((PossSet*)nullptr);
-        } else possible_nodes->clear();
-
-        for(uint32_t p2_idx : mapping[x_idx]){
-          const Network::Vertex& p2(N2.get_vertex(p2_idx));     
-          for(uint32_t i = 0; i < p2.pred.count; ++i)
-            possible_nodes->insert(p2.pred[i]);
-        }
-        for(uint32_t j = 0; j < x.pred.count; ++j)
-          update_poss(x.pred[j], *possible_nodes);
+        possible_nodes = make_new_possset((PossSet*)nullptr);
+        if(x.succ.count > 0) update_children_non_fixed(x_idx, x, possible_nodes);
+        update_parents_non_fixed(x_idx, x, possible_nodes);
         delete possible_nodes;
       }
     }
+
     // update possibilities, return whether the number of possibilities changed
     void update_poss(const uint32_t x, const PossSet& new_poss)
     {
-      DEBUG5(std::cout << "updating possibilities of "<< x<<" to\n "<<mapping[x]<<" &\n "<<new_poss<<std::endl);
+      DEBUG5(std::cout << "updating possibilities of "<< x<<" to\n "; print_mapping(x); std::cout <<" &\n "<<new_poss<<std::endl);
       const uint32_t old_count = sizes[x];
-      intersect(mapping[x], new_poss);
-      const uint32_t new_count = mapping[x].size();
-      // if something changed, update all parents and children
-      if(new_count == 0) throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
-      if(new_count != old_count){
-        sizes[x] = new_count;
-        if(new_count == 1) unique_poss[x] = front(mapping[x]);
-        // if we just fixed x, remove x from everyone else
-// NOTE: this might be too expensive without a mapping of N2 -> N1
-//        if(new_count == 1)
-//          remove_from_everyone_except(front(mapping[x]), x);
-        updated.insert(x);
-      }
+      if(old_count > 1){
+        intersect(*mapping[x], new_poss);
+        const uint32_t new_count = mapping[x]->size();
+        // if something changed, update all parents and children
+        if(new_count == 0) throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
+        if(new_count != old_count){
+          sizes[x] = new_count;
+          if(new_count == 1) unique_poss[x] = front(*mapping[x]);
+          // if we just fixed x, remove x from everyone else
+  // NOTE: this might be too expensive without a mapping of N2 -> N1
+  //        if(new_count == 1)
+  //          remove_from_everyone_except(front(mapping[x]), x);
+          updated.insert(x);
+        }
+      } else if(!test(new_poss, unique_poss[x])) throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
     }
     // fix mapping of x to y, return whether the number of possibilities changed
     void update_poss(const uint32_t x, const uint32_t y)
     {
       DEBUG5(std::cout << "fixing "<< x<<" to "<< y <<std::endl);
-      if(sizes[x] == 1){
-        if(unique_poss[x] == y) return;
-        else throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
-      } else {
-        if(test(mapping[x], y)){
+      if(sizes[x] > 1){
+        if(test(*mapping[x], y)){
           sizes[x] = 1;
           unique_poss[x] = y;
-          mapping[x].clear();
-          mapping[x].insert(y);
 //          remove_from_everyone_except(y, x);
           updated.insert(x);
         } else throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
-      }
+      } else if(unique_poss[x] != y) throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
     }
 
   };
