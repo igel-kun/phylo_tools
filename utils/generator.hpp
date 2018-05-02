@@ -63,6 +63,9 @@ namespace TC{
   {
 #warning implement multi-labels
     assert(multilabel_density >= 0   && multilabel_density < 1);
+
+    if(num_leaves == 0) throw std::logic_error("cannot construct network without leaves");
+    if(num_tree_nodes == 0) throw std::logic_error("cannot construct network without tree nodes");
     
     const uint32_t num_internal = num_tree_nodes + num_retis;
     const uint32_t num_nodes = num_internal + num_leaves;
@@ -78,7 +81,6 @@ namespace TC{
     // initialize with a root node
     dangling[0] = 2;
     for(uint32_t i = 1; i < num_internal; ++i){
-      
       const uint32_t num_unsatisfied = dangling.size();
       const auto parent_it = get_random_iterator(dangling);
       el.push_back({parent_it->first, i});
