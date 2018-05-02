@@ -261,20 +261,22 @@ namespace TC{
     bool has_cycle() const
     {
       if(num_vertices){
-        std::iterable_bitset seen(num_vertices);
-        return has_cycle(root, seen);
+        uint32_t* depth_at = (uint32_t*)calloc(num_vertices, sizeof(uint32_t));
+        const bool result = has_cycle(root, depth_at, 1);
+        free(depth_at);
+        return result;
       } else return false;
     }
-    bool has_cycle(const uint32_t sub_root, std::iterable_bitset& seen) const
+    bool has_cycle(const uint32_t sub_root, uint32_t* depth_at, const uint32_t depth) const
     {
-      if(!seen.test(sub_root)){
-        seen.set(sub_root);
+      if(depth_at[sub_root] == 0){
+        depth_at[sub_root] = depth;
         const Vertex& v = vertices[sub_root];
         for(uint32_t i = 0; i < v.succ.count; ++i)
-          if(has_cycle(v.succ[i], seen)) return true;
-        seen.clear(sub_root);
+          if(has_cycle(v.succ[i], depth_at, depth + 1)) return true;
+        depth_at[sub_root] = UINT32_MAX; // mark as seen and not cyclic
         return false;
-      } else return true;
+      } else return (depth_at[sub_root] < depth);
     }
 
     // =================== modification ====================
