@@ -82,6 +82,7 @@ int main(const int argc, const char** argv)
   Edgelist el[2];
   std::vector<std::string> names[2];
 
+  std::cout << "reading networks..."<<std::endl;
   if(!read_from_stream(in, el[0], names[0])){
     std::cerr << "could not read any network from "<<options[""][0]<<std::endl;
     exit(EXIT_FAILURE);
@@ -117,6 +118,7 @@ int main(const int argc, const char** argv)
 
   LabelMap *lmap = nullptr;
   lmap = build_labelmap(N0, N1, lmap);
+  std::cout << "checking isomorphism..."<<std::endl;
   IsomorphismMapper<> M(N0, N1, *lmap, iso_flags);
   if(M.check_isomorph())
     std::cout << "isomorph!" << std::endl;
