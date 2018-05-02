@@ -215,7 +215,7 @@ namespace std {
         } else return count();
       }
 
-      bool is_empty() const
+      bool empty() const
       {
         for(uint64_t i = 0; i < num_buckets(); ++i)
           if(storage[i] != 0) return false;
@@ -306,7 +306,8 @@ namespace std {
   public:
     bitset_iterator(const iterable_bitset& _target, const uint64_t _index = 0):
       target(_target), index(_index), buffer(_target.storage[_index])
-    {}
+    {
+    }
 
     bool is_valid() const
     {
@@ -345,6 +346,7 @@ namespace std {
 
   bitset_iterator iterable_bitset::begin() const
   {
+    assert(!empty());
     return bitset_iterator(*this);
   }
 
