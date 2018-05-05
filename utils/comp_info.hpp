@@ -3,7 +3,7 @@
 
 #include "network.hpp"
 
-namespace TC{
+namespace PT{
 
   class TreeComponentInfo{
     const Network& N;
@@ -21,7 +21,7 @@ namespace TC{
 
     void compute_comp_roots()
     {
-      for(uint32_t u_idx = 0; u_idx < N.num_vertices; ++u_idx){
+      for(uint32_t u_idx = 0; u_idx < N.num_nodes; ++u_idx){
         const Vertex& u = N.vertices[u_idx];
         // if we are a tree vertex, we can 
         if(!u.is_reti()){
@@ -40,7 +40,7 @@ namespace TC{
         const Vertex& r = N.vertices[r_idx];
         uint32_t root_accu = my_root[r.pred[0]];
         if(root_accu != UINT32_MAX){
-          for(uint32_t i = 1; i < r.pred.count; ++i){
+          for(uint32_t i = 1; i < r.pred.size(); ++i){
             if(my_root[r.pred[i]] != root_accu){
               root_accu = UINT32_MAX;
               break;
@@ -55,12 +55,12 @@ namespace TC{
     // note: this will not do lots of effort, but it will be accurate for the lowest tree components
     void compute_stability()
     {
-      for(uint32_t u_idx = N.num_vertices; u_idx-- > 0;){
+      for(uint32_t u_idx = N.num_nodes; u_idx-- > 0;){
         const Vertex& u = N.vertices[u_idx];
         uint32_t& u_stability;
         if(!u.is_leaf()){
           // if any non-reticulate child of u is stable, so is u
-          for(uint32_t i = 0; i < u.succ.count; ++i){
+          for(uint32_t i = 0; i < u.succ.size(); ++i){
             const uint32_t child_idx = succ[i];
             const Vertex& child = N.vertices[child_idx];
             if(!child.is_reti()){
@@ -83,8 +83,8 @@ namespace TC{
 
     TreeComponentInfo(const Network& _N):
       N(_N),
-      my_root((uint32_t*)malloc(_N.num_vertices * sizeof(uint32_t)),
-      stability((uint32_t*)calloc(_N.num_vertices, sizeof(uint32_t)),
+      my_root((uint32_t*)malloc(_N.num_nodes * sizeof(uint32_t)),
+      stability((uint32_t*)calloc(_N.num_nodes, sizeof(uint32_t)),
     {
       assert(N.is_preordered());
       compute_comp_roots();

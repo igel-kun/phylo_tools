@@ -7,7 +7,7 @@
 #include "tree.hpp"
 #include "network.hpp"
 
-namespace TC {
+namespace PT {
 
 #define NO_LABEL UINT32_MAX
 
@@ -17,12 +17,12 @@ namespace TC {
   {
     MULabelMap* result = new MULabelMap();
 
-    for(const LabeledVertex& p: N.get_leaves_labeled()){
+    for(const LabeledNode& p: N.get_leaves_labeled()){
       auto& leaf_correspondance = (*result)[p.second];
       leaf_correspondance.first.push_back(p.first);
       leaf_correspondance.second = UINT32_MAX;
     }
-    for(const LabeledVertex& p: T.get_leaves_labeled())
+    for(const LabeledNode& p: T.get_leaves_labeled())
       (*result)[p.second].second = p.first;
 
     return result;
@@ -36,10 +36,10 @@ namespace TC {
   {
     LabelMap* result = new LabelMap();
 
-    for(const LabeledVertex& p: Nfac){
+    for(const LabeledNode& p: Nfac){
       (*result)[p.second] = {p.first, NO_LABEL};
     }
-    for(const LabeledVertex& p: Tfac)
+    for(const LabeledNode& p: Tfac)
       (*result)[p.second].second = p.first;
 
     return result;

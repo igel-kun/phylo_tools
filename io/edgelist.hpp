@@ -5,7 +5,7 @@
 #include "utils/types.hpp"
 #include <unordered_map>
 
-struct MalformedEdgelist : public std::exception 
+struct MalformedEdgeVec : public std::exception 
 {
 
   const char* what() const throw() {
@@ -14,17 +14,17 @@ struct MalformedEdgelist : public std::exception
 };
 
 
-class EdgelistParser
+class EdgeVecParser
 {
   std::ifstream& edgestream;
   std::vector<std::string>& names;
 
   std::unordered_map<std::string, uint32_t> name_to_id;
 
-  EdgelistParser();
+  EdgeVecParser();
 public:
 
-  EdgelistParser(std::ifstream& _edgestream, std::vector<std::string>& _names):
+  EdgeVecParser(std::ifstream& _edgestream, std::vector<std::string>& _names):
     edgestream(_edgestream), names(_names)
   {
     names.clear();
@@ -40,18 +40,18 @@ public:
     } else return name_it->second;
   }
 
-  void read_tree(TC::Edgelist& el)
+  void read_tree(PT::EdgeVec& el)
   {
-    TC::Edge e;
+    PT::Edge e;
     while(!edgestream.eof()){
       std::string name;
       edgestream >> name;
       e.first = get_id(name);
-      if(edgestream.bad() || edgestream.eof() || edgestream.fail()) throw MalformedEdgelist();
+      if(edgestream.bad() || edgestream.eof() || edgestream.fail()) throw MalformedEdgeVec();
       edgestream >> name;
       e.second = get_id(name);
-      if(edgestream.bad()) throw MalformedEdgelist();
-      if(!edgestream.eof() && edgestream.fail()) throw MalformedEdgelist();
+      if(edgestream.bad()) throw MalformedEdgeVec();
+      if(!edgestream.eof() && edgestream.fail()) throw MalformedEdgeVec();
       
       el.push_back(e);
       while(edgestream.peek() == 10) edgestream.get();

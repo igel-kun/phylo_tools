@@ -4,7 +4,7 @@
 #include "utils.hpp"
 #include "types.hpp"
 
-namespace TC {
+namespace PT {
 
   std::ostream& operator<<(std::ostream& os, const IndexVec::const_iterator& it){
     return os << "<iter>"<<std::endl;
@@ -30,7 +30,7 @@ namespace TC {
     uint32_t deref_iter(const IndexVec::iterator& x) const {return *x; }
     
     // dereference
-    LabeledVertex operator*() const
+    LabeledNode operator*() const
     {
       const uint32_t x = deref_iter(leaf_it);
       return {x, names.at(x)};

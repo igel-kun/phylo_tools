@@ -21,9 +21,9 @@ struct MalformedNewick : public std::exception
 };
 
 
-std::string get_extended_newick(const TC::Network& N, const uint32_t sub_root, std::iterable_bitset& retis_seen)
+std::string get_extended_newick(const PT::Network& N, const uint32_t sub_root, std::iterable_bitset& retis_seen)
 {
-  const TC::Network::Vertex& v = N[sub_root];
+  const PT::Network::Node& v = N[sub_root];
   std::string accu = "";
   if(!v.is_reti() || !retis_seen.test(sub_root)){
     accu += "(";
@@ -41,9 +41,9 @@ std::string get_extended_newick(const TC::Network& N, const uint32_t sub_root, s
   return accu;
 }
 
-std::string get_extended_newick(const TC::Network& N)
+std::string get_extended_newick(const PT::Network& N)
 {
-  std::iterable_bitset retis_seen(N.get_num_vertices());
+  std::iterable_bitset retis_seen(N.get_num_nodes());
   return get_extended_newick(N, N.get_root(), retis_seen) + ";";
 }
 
@@ -74,21 +74,21 @@ public:
     return hybrids.empty();
   }
 
-  const size_t num_vertices() const
+  const size_t num_nodes() const
   {
     if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
     return names.size();
   }
 
-  const TC::NameVec& get_names() const
+  const PT::NameVec& get_names() const
   {
     if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
     return names;
   }
 
   // a tree is a branch followed by a semicolon
-  // EL can be an Edgelist or a WEdgelist if we are interested in branch-lengths
-  template<typename EL = TC::Edgelist>
+  // EL can be an EdgeList or a WEdgeList if we are interested in branch-lengths
+  template<typename EL = PT::EdgeList>
   void read_tree(EL& el)
   {
     skip_whitespaces();
@@ -108,14 +108,14 @@ private:
     while((back > 0) && std::isspace(s.at(back))) --back;
   }
 
-  inline bool is_reticulation(const TC::IndexPair& root) const
+  inline bool is_reticulation(const PT::IndexPair& root) const
   {
     return root.second != UINT32_MAX;
   }
 
   // a subtree is a leaf or an internal vertex
-  template<typename EL = TC::Edgelist>
-  TC::IndexPair read_subtree(EL& el)
+  template<typename EL = PT::EdgeList>
+  PT::IndexPair read_subtree(EL& el)
   {
     skip_whitespaces();
 
@@ -137,7 +137,7 @@ private:
         hybrids.emplace_hint(hyb_it, hyb_info.second, root);
       }
     }
-    TC::IndexPair result = {root, hyb_info.second};
+    PT::IndexPair result = {root, hyb_info.second};
 
     // if the subtree dangling from root is non-empty, recurse
     if((back > 0) && s.at(back) == ')') read_internal(el, result);
@@ -147,8 +147,8 @@ private:
   }
 
   // an internal vertex is ( + branchlist + )
-  template<typename EL = TC::Edgelist>
-  void read_internal(EL& el, const TC::IndexPair& root)
+  template<typename EL = PT::EdgeList>
+  void read_internal(EL& el, const PT::IndexPair& root)
   {
     if(s.at(back) == ')') --back; else throw MalformedNewick(back, std::string("expected ')' but got '")+(char)(s.at(back))+"'");
     read_branchset(el, root);
@@ -156,8 +156,8 @@ private:
   }
 
   // a branchset is a comma-separated list of branches
-  template<typename EL = TC::Edgelist>
-  void read_branchset(EL& el, const TC::IndexPair& root)
+  template<typename EL = PT::EdgeList>
+  void read_branchset(EL& el, const PT::IndexPair& root)
   {
     read_branch(el, root);
     while(s.at(back) == ',') {
@@ -169,19 +169,27 @@ private:
   }
 
   // a branch is a subtree + a length
-  template<typename EL = TC::Edgelist>
-  void read_branch(EL& el, const TC::IndexPair& root)
+  template<typename EL = PT::EdgeList>
+  void read_branch(EL& el, const PT::IndexPair& root)
   {
     const float len = read_length();
-    const TC::IndexPair child = read_subtree(el);
+    const PT::IndexPair child = read_subtree(el);
     put_branch_in_edgelist(el, {root.first, child.first}, len);
   }
 
-  inline void put_branch_in_edgelist(TC::Edgelist& el, const TC::Edge& e, const float& len) const
+  inline void put_branch_in_edgelist(PT::EdgeList& el, const PT::Edge& e, const float& len) const
   {
     el.emplace_back(e);
   }
-  inline void put_branch_in_edgelist(TC::WEdgelist& el, const TC::Edge& e, const float& len) const
+  inline void put_branch_in_edgelist(PT::EdgeVec& el, const PT::Edge& e, const float& len) const
+  {
+    el.emplace_back(e);
+  }
+  inline void put_branch_in_edgelist(PT::WEdgeList& el, const PT::Edge& e, const float& len) const
+  {
+    el.emplace_back(e, len);
+  }
+  inline void put_branch_in_edgelist(PT::WEdgeVec& el, const PT::Edge& e, const float& len) const
   {
     el.emplace_back(e, len);
   }

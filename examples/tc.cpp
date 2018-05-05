@@ -8,10 +8,10 @@
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
 
-using namespace TC;
+using namespace PT;
 
 // read a network from an input stream 
-void read_newick_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>& names)
+void read_newick_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
   std::string in_line;
   std::getline(in, in_line);
@@ -20,13 +20,13 @@ void read_newick_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::s
   parser.read_tree(el);
 }
 
-void read_edgelist_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>& names)
+void read_edgelist_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
-  EdgelistParser parser(in, names);
+  EdgeVecParser parser(in, names);
   parser.read_tree(el);
 }
 
-bool read_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>& names)
+bool read_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
   try{
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
@@ -36,7 +36,7 @@ bool read_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>&
       in.seekg(0);
       DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
       read_edgelist_from_stream(in, el, names);
-    } catch(const MalformedEdgelist& err){
+    } catch(const MalformedEdgeVec& err){
       return false;
     }
   }
@@ -82,7 +82,7 @@ int main(const int argc, const char** argv)
   parse_options(argc, argv);
   std::ifstream in(options[""][0]);
 
-  Edgelist el[2];
+  EdgeVec el[2];
   std::vector<std::string> names[2];
 
   if(!read_from_stream(in, el[0], names[0])){

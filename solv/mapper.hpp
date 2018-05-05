@@ -6,7 +6,7 @@
 #include "utils/types.hpp"
 
 
-namespace TC{
+namespace PT{
 
   template<class _Network, class _LabelMap>
   class Mapper
@@ -51,8 +51,8 @@ namespace TC{
     {
       auto display_iter = display_map.find(v_idx);
       if(display_iter == display_map.end()){
-        const Tree::Vertex& v = T[v_idx];
-        switch(v.succ.count){
+        const Tree::Node& v = T[v_idx];
+        switch(v.succ.size()){
           case 0:
             std::cout << "leaf "<<v_idx<<" is displayed by " << labelmap.at(T.get_name(v_idx)).first << std::endl;
             return emplace_leaf_entry_hint(display_iter, v_idx, labelmap.at(T.get_name(v_idx)).first);
@@ -67,11 +67,12 @@ namespace TC{
               return result;
             }
           default: {
-              std::cout << "vertex "<<v_idx<<" has "<<v.succ.count<<" successors"<<std::endl;
+              std::cout << "vertex "<<v_idx<<" has "<<v.succ.size()<<" successors"<<std::endl;
               assert(false);
               // save the result for future reference
               IndexVec& result = display_map.emplace_hint(display_iter, PWC, std::tuple<uint32_t>(v_idx), std::tuple<uint32_t>())->second;
-              for(uint32_t i = 0; i < v.succ.count; ++i){
+              for(uint32_t i = 0; i < v.succ.size(); ++i){
+#warning continue here
               }
               return result;
             }

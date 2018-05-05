@@ -6,7 +6,7 @@
 #include "utils/types.hpp"
 #include "mapper.hpp"
 
-namespace TC{
+namespace PT{
 
   template<class _Network>
   class NetworkMapper: public Mapper<_Network, LabelMap>

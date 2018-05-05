@@ -6,53 +6,18 @@
 #include "types.hpp"
 #include "tree.hpp"
 
-namespace TC{
+namespace PT{
 
-#define NODE_TYPE_RETI 0x02
-#define NODE_TYPE_ISOL 0x03
-
-  struct NetworkVertex: public AnyVertex{
-    NeighborList pred;
-
-    bool is_reti() const
-    {
-      return pred.count > 1;
-    }
-    bool is_root() const
-    {
-      return (pred.count == 0) && (succ.count > 0);
-    }
-    bool is_inner_tree() const
-    {
-      return (pred.count == 1) && (succ.count > 0);
-    }
-    bool is_isolated() const
-    {
-      return (succ.count == 0) && (pred.count == 0);
-    }
-    bool is_leaf() const
-    {
-      return (succ.count == 0) && (pred.count > 0);
-    }
-    unsigned char get_type() const
-    {
-      if(succ.count == 0)
-        return (pred.count == 0) ? NODE_TYPE_ISOL : NODE_TYPE_LEAF;
-      else
-        return (pred.count <= 1) ? NODE_TYPE_TREE : NODE_TYPE_RETI;
-    }
-  };
-
-  // a network consists of a list of vertices, each having out- and in-neighbors
+  // a network consists of a list of nodes, each having out- and in-neighbors
   // the out- and in- neighbor lists are represented by pointers into an out- and an in- neighbor list that is handled by the network
-  template<typename VertexT = NetworkVertex>
-  class NetworkT : public TreeT<VertexT> {
+  template<typename NodeT = NetworkNode<SortedFixNeighborList, SortedFixNeighborList>>
+  class NetworkT : public TreeT<NodeT> 
+  {
   public:
-    typedef VertexT Vertex;
+    typedef NodeT Node;
   protected:
-    using Parent = TreeT<Vertex>;
-    using Parent::vertices;
-    using Parent::num_vertices;
+    using Parent = TreeT<Node>;
+    using Parent::nodes;
     using Parent::edges;
     using Parent::num_edges;
     using Parent::names;
@@ -66,22 +31,18 @@ namespace TC{
     //! add an edge
     void add_edge(const uint32_t u_idx, const uint32_t v_idx)
     {
-      assert(u_idx < num_vertices);
-      assert(v_idx < num_vertices);
+      assert(u_idx < nodes.size());
+      assert(v_idx < nodes.size());
 
-      Vertex& u = vertices[u_idx];
-      Vertex& v = vertices[v_idx];
+      Node& u = nodes[u_idx];
+      Node& v = nodes[v_idx];
       
-      if(!v.pred.count && (u_idx > v_idx)) is_sorted = false;  // we want all non-reticulation edges to be monotone for algorithmic pleasure
-      if(u.succ.count && (u.succ[u.succ.count-1] > v_idx)) is_sorted = false; // insert edges in sorted order
       u.succ[u.succ.count++] = v_idx;
-      if(v.pred.count && (v.pred[v.pred.count-1] > u_idx)) is_sorted = false; // insert edges in sorted order
       v.pred[v.pred.count++] = u_idx;
     }
 
   public:
     using Parent::operator[];
-    using Parent::is_sorted;
     using Parent::has_cycle;
 
     // =================== information query ==============
@@ -97,22 +58,21 @@ namespace TC{
     {
       max_outdeg = 0;
       max_indeg = 0;
-      for(uint32_t u_idx = 0; u_idx < num_vertices; ++u_idx){
-        Vertex& u = vertices[u_idx];
-        if(u.succ.count > max_outdeg) max_outdeg = u.succ.count;
-        if(u.pred.count > max_indeg)  max_indeg = u.pred.count;
+      for(Node& u: nodes){
+        if(u.succ.size() > max_outdeg) max_outdeg = u.succ.size();
+        if(u.pred.size() > max_indeg)  max_indeg = u.pred.size();
       }
     }
 
     //! return whether the tree indices are in pre-order (modulo gaps) (they should always be) 
     bool is_preordered(const uint32_t sub_root, uint32_t& counter) const
     {
-      const Vertex& u = vertices[sub_root];
+      const Node& u = nodes[sub_root];
       if(u.is_reti()) return true; // edges to reticualtions don't need to abide by the pre-order condition
       if(sub_root < counter) return false;
       counter = sub_root;
-      for(uint32_t i = 0; i < u.succ.count; ++i)
-        if(!is_preordered(u.succ[i], counter)) return false;
+      for(uint32_t v: u.succ)
+        if(!is_preordered(v, counter)) return false;
       return true;
     }
     bool is_preordered() const
@@ -122,14 +82,12 @@ namespace TC{
     }
 
     //! get a list of component roots in preorder
-    void get_comp_roots_ordered(IndexVec& comp_roots) const
+    void get_comp_roots(IndexVec& comp_roots) const
     {
-      if(!is_sorted()) throw NeedSorted("get_comp_roots_ordered");
-      for(uint32_t r_idx = 0; r_idx < num_vertices; ++r_idx){
-        const Vertex& r = vertices[r_idx];
+      for(Node& r: nodes){
         if(r.is_inner_tree()){
           const uint32_t v_idx = r.pred[0];
-          const Vertex& v = vertices[v_idx];
+          const Node& v = nodes[v_idx];
           if(v.is_reti()) comp_roots.push_back(v_idx);
         }
       }
@@ -137,50 +95,53 @@ namespace TC{
 
     // =================== modification ====================
 
-    void remove_leaf(const uint32_t u_idx)
+    void remove_node(const uint32_t u_idx)
     {
-      assert(u_idx < num_vertices);
-      Vertex& u = vertices[u_idx];
-      assert(u.succ.count == 0);
+      assert(u_idx < nodes.size());
+      Node& u = nodes[u_idx];
 
       // remove u from leaves
-      leaves.erase(u_idx);
+      if(u.is_leaf()) leaves.erase(u_idx);
       // remove edges incoming to u
-      for(uint32_t i = 0; i < u.pred.count; ++i)
-        vertices[i].succ.remove_vertex(u_idx);
+      for(uint32_t v: u.pred)
+        nodes[v].succ.remove(u_idx);
+      for(uint32_t v: u.succ)
+        nodes[v].pred.remove(u_idx);
     }
 
 
     // ================== construction =====================
 
-    //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_vertices
+    //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
     // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
     //       This is the case for inputs in newick format
-    NetworkT(const Edgelist& edgelist, const NameVec& _names, const bool check_cyclic = true):
+    template<class EdgeContainer = EdgeVec>
+    NetworkT(const EdgeContainer& edgelist, const NameVec& _names, const uint32_t num_nodes, const bool check_cyclic = true):
       Parent(_names, edgelist.size()),
       rev_edges((uint32_t*)malloc(num_edges * sizeof(uint32_t)))
     {
       // get memory & initialize class variables
       DEBUG3(std::cout << "constructing network from "<<num_edges<<" edges" << std::endl);
-      assert(num_vertices <= num_edges + 1);
+      assert(num_nodes <= num_edges + 1);
 
       // compute out-degrees
-      uint32_t* out_deg = (uint32_t*)calloc(num_vertices, sizeof(uint32_t));
-      uint32_t*  in_deg = (uint32_t*)calloc(num_vertices, sizeof(uint32_t));
+      uint32_t* out_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));
+      uint32_t*  in_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));
       for(const auto &edge : edgelist){
         const uint32_t u_idx = edge.first;
         const uint32_t v_idx = edge.second;
-        assert(u_idx < num_vertices);
-        assert(v_idx < num_vertices);
+        assert(u_idx < num_nodes);
+        assert(v_idx < num_nodes);
         ++out_deg[u_idx];
         ++in_deg[v_idx];
       }
       // compute start points in the edge list
       uint32_t* e_start = edges;
       uint32_t* r_start = rev_edges;
-      for(uint32_t u_idx = 0; u_idx < num_vertices; ++u_idx){
-        Vertex& u = vertices[u_idx];
+      for(uint32_t u_idx = 0; u_idx < num_nodes; ++u_idx){
         const uint32_t u_out_deg = out_deg[u_idx];
+        nodes.emplace_back();
+        Node& u = nodes[u_idx];
 
         u.succ.start = e_start;
         e_start += u_out_deg;
@@ -192,7 +153,7 @@ namespace TC{
         u.pred.start = r_start;
         r_start += u_in_deg;
         if(u_in_deg > 0){
-          if(u_in_deg > max_indeg) max_indeg = u.pred.count;
+          if(u_in_deg > max_indeg) max_indeg = u.pred.size();
         } else root = u_idx;
       }
       free(in_deg);
@@ -203,14 +164,16 @@ namespace TC{
       // finally, if requested, check if N is acyclic
       if(check_cyclic && has_cycle()) throw std::logic_error("network contains a cycle");
     }
- 
+    template<class EdgeContainer = EdgeVec>
+    NetworkT(const EdgeContainer& edgelist, const NameVec& _names):
+      NetworkT(edgelist, _names, _names.size())
+    {}
+
     // =================== destruction ====================
     //! destructor frees everything
     ~NetworkT()
     {
-      if(vertices != nullptr){
-        free(rev_edges);
-      }
+      if(rev_edges) free(rev_edges);
     }
 
 
@@ -219,10 +182,10 @@ namespace TC{
     void print_subtree(std::ostream& os, const uint32_t u_idx, std::string prefix, std::iterable_bitset* seen = nullptr) const
     {
       const bool inited_seen = (seen == nullptr);
-      if(inited_seen) seen = new std::iterable_bitset(num_vertices);
+      if(inited_seen) seen = new std::iterable_bitset(nodes.size());
 
       std::string name = names[u_idx];
-      const Vertex& u = vertices[u_idx];
+      const Node& u = nodes[u_idx];
       
       if(name == "") name = (u.is_reti()) ? std::string("(R" + std::to_string(u_idx) + ")") : std::string("+");
       DEBUG3(name += "[" + std::to_string(u_idx) + "]");
@@ -231,7 +194,7 @@ namespace TC{
       
       if(!u.is_reti() || !seen->test(u_idx)){
         if(u.is_reti()) seen->insert(u_idx);
-        switch(u.succ.count){
+        switch(u.succ.size()){
           case 0:
             os << std::endl;
             break;
@@ -242,9 +205,9 @@ namespace TC{
             prefix += std::string(name.length(), ' ') + '|';
             
             print_subtree(os, u.succ[0], prefix, seen);
-            for(uint32_t i = 1; i < u.succ.count; ++i){
+            for(uint32_t i = 1; i < u.succ.size(); ++i){
               os << prefix;
-              if(i == u.succ.count - 1)
+              if(i + 1 == u.succ.size())
                 prefix.back() = ' ';
               
               print_subtree(os, u.succ[i], prefix, seen);

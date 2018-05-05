@@ -34,5 +34,4 @@ namespace std {
   {
     return *_set.begin();
   }
-
 }

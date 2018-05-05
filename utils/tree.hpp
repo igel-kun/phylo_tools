@@ -7,96 +7,40 @@
 #include "types.hpp"
 #include "label_iter.hpp"
 #include "except.hpp"
+#include "node.hpp"
 
-namespace TC{
+namespace PT{
 
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
-#define NODE_TYPE_LEAF 0x00
-#define NODE_TYPE_TREE 0x01
-
-  struct NeighborList{
-    uint32_t* start;
-    uint32_t count;
-
-    // convenience functions to not have to write .start[] all the time
-    uint32_t& operator[](const uint32_t i) { return start[i]; }
-    const uint32_t& operator[](const uint32_t i) const { return start[i]; }
-
-    inline uint32_t get_unique_item() const
-    {
-      return (count == 1) ? *start : UINT32_MAX;
-    }
-    /* for now, we assume that the neighborlists are sorted, so removal or addition is not supported
-    // removing an item from the neighbor list
-    bool remove_vertex(const uint32_t vertex){
-      for(uint32_t i = 0; i < count; ++i)
-        if(start[i] == vertex) {
-          remove_index(i);
-          return true;
-        }
-      return false;
-    }
-    void remove_index(const uint32_t index){
-      assert(index < count);
-      --count;
-      start[index] = start[count];
-    }
-    */
-  };
-
-  struct AnyVertex{
-    NeighborList succ;
-
-    bool is_leaf() const
-    {
-      return (succ.count == 0);
-    }
-    unsigned char get_type() const
-    {
-      return is_leaf() ? NODE_TYPE_LEAF : NODE_TYPE_TREE;
-    }
-    bool is_bifurcating() const
-    {
-      return succ.count == 2;
-    }
-  };
-
-  struct TreeVertex: public AnyVertex{
-    uint32_t pred;
-  };
-
-  // a tree consists of a list of vertices, each having out--neighbors and one in-neighbor
+  // a tree consists of a list of nodes, each having out--neighbors and one in-neighbor
   // the out-neighbor list are represented by a pointer into an out-neighbor list that is handled by the network
-  template<typename VertexT = TreeVertex>
-  class TreeT {
+  template<typename NodeT = TreeNode<SortedFixNeighborList>>
+  class TreeT 
+  {
   public:
-    typedef VertexT Vertex;
+    typedef NodeT Node;
   protected:
     const NameVec& names;
-    Vertex* vertices = nullptr;
+    std::vector<Node> nodes;
     uint32_t* const edges;        // < heads of all edges
-    uint32_t num_vertices;
     uint32_t num_edges;
 
     uint32_t root;
     IndexVec leaves;
 
-    bool is_sorted;
     uint32_t max_outdeg;
 
     //! add an edge
     //NOTE: edges are supposed to be added in sorted order
     void add_edge(const uint32_t u_idx, const uint32_t v_idx)
     {
-      assert(u_idx < num_vertices);
-      assert(v_idx < num_vertices);
-      if(u_idx > v_idx) is_sorted = false;
+      assert(u_idx < nodes.size());
+      assert(v_idx < nodes.size());
 
-      Vertex& u = vertices[u_idx];
-      Vertex& v = vertices[v_idx];
+      Node& u = nodes[u_idx];
+      Node& v = nodes[v_idx];
 
-      if(u.succ.count && (u.succ[u.succ.count-1] > v_idx)) is_sorted = false; // insert edges in sorted order
       u.succ[u.succ.count++] = v_idx;
       v.pred = u_idx;
     }
@@ -109,25 +53,31 @@ namespace TC{
     {
       return leaves;
     }
-    const Vertex& get_vertex(const uint32_t u_idx) const
+    const IndexVec& get_nodes() const
     {
-      assert(u_idx < num_vertices);
-      return vertices[u_idx];
+      return nodes;
     }
-    const Vertex& operator[](const uint32_t u_idx) const
+    const Node& get_node(const uint32_t u_idx) const
     {
-      assert(u_idx < num_vertices);
-      return vertices[u_idx];
+      return nodes.at(u_idx);
+    }
+    const Node& operator[](const uint32_t u_idx) const
+    {
+      return nodes.at(u_idx);
+    }
+    Node& operator[](const uint32_t u_idx)
+    {
+      assert(u_idx < nodes.size());
+      return nodes[u_idx];
     }
 
     const std::string& get_name(const uint32_t u) const
     {
-      assert(u < num_vertices);
       return names.at(u);
     }
 
     uint32_t get_root() const { return root; }
-    uint32_t get_num_vertices() const {return num_vertices;}
+    uint32_t get_num_nodes() const {return nodes.size();}
     uint32_t get_num_edges() const {return num_edges; }
 
     LabeledNodeIterFactory<> get_leaves_labeled() const
@@ -136,7 +86,7 @@ namespace TC{
     }
     LabeledNodeIterFactory<uint32_t> get_nodes_labeled() const
     {
-      return LabeledNodeIterFactory<uint32_t>(names, 0, num_vertices);
+      return LabeledNodeIterFactory<uint32_t>(names, 0, nodes.size());
     }
 
 
@@ -154,28 +104,26 @@ namespace TC{
 
     bool empty() const
     {
-      return num_vertices == 0;
+      return nodes.empty();
     }
 
     void update_max_degrees()
     {
       max_outdeg = 0;
-      for(uint32_t u_idx = 0; u_idx < num_vertices; ++u_idx){
-        Vertex& u = vertices[u_idx];
-        if(u.succ.count > max_outdeg) max_outdeg = u.succ.count;
-      }
+      for(const Node& u : nodes)
+        max_outdeg = std::max(max_outdeg, u.succ.size());
     }
     
     uint32_t naiveLCA(uint32_t x, uint32_t y) const
     {
       assert(is_preordered());
-      assert(x < num_vertices);
-      assert(y < num_vertices);
+      assert(x < nodes.size());
+      assert(y < nodes.size());
       while(x != y){
         if(x > y) 
-          x = vertices[x].pred;
+          x = nodes[x].pred;
         else
-          y = vertices[y].pred;
+          y = nodes[y].pred;
       }
       return x;
     }
@@ -207,12 +155,12 @@ namespace TC{
     //! return whether the tree indices are in pre-order (modulo gaps) (they should always be) 
     bool is_preordered(const uint32_t sub_root, uint32_t& counter) const
     {
-      if(sub_root < counter) return false;
-      counter = sub_root;
-      const Vertex& u = vertices[sub_root];
-      for(uint32_t i = 0; i < u.succ.count; ++i)
-        if(!is_preordered(u.succ[i], counter)) return false;
-      return true;
+      if(sub_root >= counter) {
+        counter = sub_root;
+        for(uint32_t v: nodes[sub_root].succ)
+          if(!is_preordered(v, counter)) return false;
+        return true;
+      } else return false;
     }
 
     bool is_preordered() const
@@ -231,37 +179,17 @@ namespace TC{
       return false;
     }
 
-    //! O(log n)-time edge lookup
-    bool is_edge_bin_search(const uint32_t u_idx, const uint32_t v_idx) const 
+    bool is_edge(const uint32_t u, const uint32_t v) const 
     {
-      if(!is_sorted) throw NeedSorted("is_edge_bin_search");
-      const Vertex& u(vertices[u_idx]);
-      return binary_search(u.succ, v_idx, 0, u.succ.count) != UINT32_MAX;
-    }
-
-    //! O(n)-time edge lookup
-    bool is_edge_linear(const uint32_t u_idx, const uint32_t v_idx) const 
-    {
-      const Vertex& u(vertices[u_idx]);
-      for(uint32_t x = 0; x < u.succ.count; ++x) 
-        if(u.succ[x] == v_idx)
-          return true;
-      return false;
-    }
-
-    bool is_edge(const uint32_t u_idx, const uint32_t v_idx) const 
-    {
-      if(is_sorted)
-        return is_edge_bin_search(u_idx, v_idx);
-      else
-        return is_edge_linear(u_idx, v_idx);
+      return contains(nodes[u].succ, v);
     }
 
     //! for sanity checks: test if there is a cycle in the data structure (more useful for networks, but definable for trees too)
     bool has_cycle() const
     {
-      if(num_vertices){
-        uint32_t* depth_at = (uint32_t*)calloc(num_vertices, sizeof(uint32_t));
+      if(!empty()){
+        //need 0-initialized array
+        uint32_t* depth_at = (uint32_t*)calloc(nodes.size(), sizeof(uint32_t));
         const bool result = has_cycle(root, depth_at, 1);
         free(depth_at);
         return result;
@@ -271,9 +199,8 @@ namespace TC{
     {
       if(depth_at[sub_root] == 0){
         depth_at[sub_root] = depth;
-        const Vertex& v = vertices[sub_root];
-        for(uint32_t i = 0; i < v.succ.count; ++i)
-          if(has_cycle(v.succ[i], depth_at, depth + 1)) return true;
+        for(uint32_t w: nodes[sub_root].succ)
+          if(has_cycle(w, depth_at, depth + 1)) return true;
         depth_at[sub_root] = UINT32_MAX; // mark as seen and not cyclic
         return false;
       } else return (depth_at[sub_root] < depth);
@@ -288,65 +215,66 @@ namespace TC{
 
     TreeT(const NameVec& _names, const uint32_t _num_edges):
       names(_names),
-      vertices((Vertex*)calloc(_names.size(), sizeof(Vertex))),
+      nodes(),
       edges((uint32_t*)malloc(_num_edges * sizeof(uint32_t))),
-      num_vertices(names.size()),
-      num_edges(_num_edges),
-      is_sorted(true)
-    {
-    }
+      num_edges(_num_edges)
+    {}
 
-    //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_vertices
+    //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
     // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
     //       This is the case for inputs in newick format
-    TreeT(const Edgelist& edgelist, const NameVec& _names):
+    template<class EdgeContainer = EdgeVec>
+    TreeT(const EdgeContainer& edgelist, const NameVec& _names, const uint32_t num_nodes):
       TreeT(_names, edgelist.size())
     {
       // get memory & initialize class variables
       DEBUG3(std::cout << "constructing tree from "<<num_edges<<" edges" << std::endl);
-      assert(num_vertices == num_edges + 1);
+      assert(num_nodes == num_edges + 1);
+      nodes.reserve(num_nodes);
 
-      // compute out-degrees
-      uint32_t* out_deg = (uint32_t*)calloc(num_vertices, sizeof(uint32_t));
-      for(const auto &edge : edgelist){
-        const uint32_t u_idx = edge.first;
-        assert(u_idx < num_vertices);
-        ++out_deg[u_idx];
+      // compute out-degrees and the root
+      std::iterable_bitset root_poss(num_nodes);
+      root_poss.set_all();
+      uint32_t* out_deg = (uint32_t*)calloc(nodes.size(), sizeof(uint32_t));
+      for(const auto &edge: edgelist){
+        assert(edge.first < nodes.size());
+        ++out_deg[edge.first];
+        root_poss.clear(edge.second);
       }
       // compute start points in the edge list
       uint32_t* e_start = edges;
-      for(uint32_t u_idx = 0; u_idx < num_vertices; ++u_idx){
-        const uint32_t u_out_deg = out_deg[u_idx];
-        Vertex& u = vertices[u_idx];
+      for(uint32_t u_idx = 0; u_idx < nodes.size(); ++u_idx){
+        const uint32_t u_outdeg = out_deg[u_idx];
+        nodes.emplace_back();
+        Node& u = nodes.back();
 
         u.succ.start = e_start;
-        e_start += u_out_deg;
-        if(u_out_deg > 0){
-          if(u_out_deg > max_outdeg) max_outdeg = u_out_deg;
+        e_start += u_outdeg;
+        if(u_outdeg > 0){
+          max_outdeg = std::max(max_outdeg, u_outdeg);
         } else leaves.push_back(u_idx);
-        u.pred = UINT32_MAX;
+        u.pred = u_idx;
       }
       free(out_deg);
      
       // actually read the edgelist
-      for(const auto &edge : edgelist) add_edge(edge.first, edge.second);
+      for(const auto &edge: edgelist) add_edge(edge.first, edge.second);
 
-      // finally, find the root
-      for(uint32_t u_idx = 0; u_idx < num_vertices; ++u_idx)
-        if(vertices[u_idx].pred == UINT32_MAX){
-          root = u_idx;
-          break;
-        }
+      // finally, set the root
+      if(root_poss.size() != 1) throw std::logic_error("cannot create tree with "+std::to_string(root_poss.size())+" roots");
+      root = front(root_poss);
     }
- 
+    // for some reason gcc wont let me put _names.size() as default value for the last argument, so I have to duplicate code...
+    template<class EdgeContainer = EdgeVec>
+    TreeT(const EdgeContainer& edgelist, const NameVec& _names):
+      TreeT(edgelist, _names, _names.size())
+    {}
+
     // =================== destruction ====================
     //! destructor frees everything
     ~TreeT()
     {
-      if(vertices != nullptr){
-        free(vertices);
-        free(edges);
-      }
+      if(edges) free(edges);
     }
 
     // =================== i/o ======================
@@ -358,8 +286,8 @@ namespace TC{
       if(name == "") name = "+";
       os << '-' << name;
 
-      const Vertex& u = vertices[u_idx];
-      switch(u.succ.count){
+      const Node& u = nodes[u_idx];
+      switch(u.succ.size()){
         case 0:
           os << std::endl;
           break;
@@ -370,9 +298,9 @@ namespace TC{
           prefix += std::string(name.length(), ' ') + '|';
           
           print_subtree(os, u.succ[0], prefix);
-          for(uint32_t i = 1; i < u.succ.count; ++i){
+          for(uint32_t i = 1; i < u.succ.size(); ++i){
             os << prefix;
-            if(i == u.succ.count - 1)
+            if(i == u.succ.size() - 1)
               prefix.back() = ' ';
             
             print_subtree(os, u.succ[i], prefix);

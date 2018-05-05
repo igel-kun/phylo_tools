@@ -9,12 +9,12 @@
 #include "utils/set_interface.hpp"
 #include <unordered_set>
 
-#define FLAG_MATCHING_LEAF_LABELS 0x01
-#define FLAG_MATCHING_TREE_LABELS 0x02
-#define FLAG_MATCHING_RETI_LABELS 0x04
-#define FLAG_MATCHING_ALL_LABELS 0x07
+#define FLAG_MAPTHING_LEAF_LABELS 0x01
+#define FLAG_MAPTHING_TREE_LABELS 0x02
+#define FLAG_MAPTHING_RETI_LABELS 0x04
+#define FLAG_MAPTHING_ALL_LABELS 0x07
 
-namespace TC{
+namespace PT{
   struct NoPoss : public std::exception
   {
     const std::string msg;
@@ -89,9 +89,9 @@ namespace TC{
     {}                
 
     IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap, const unsigned char _flags):
-      IsomorphismMapper(_N1, _N2, _N1.get_num_vertices(), _lmap, _flags)
+      IsomorphismMapper(_N1, _N2, _N1.get_num_nodes(), _lmap, _flags)
     {
-      if((N1.get_num_vertices() == N2.get_num_vertices()) && (N1.get_num_edges() == N2.get_num_edges())){
+      if((N1.get_num_nodes() == N2.get_num_nodes()) && (N1.get_num_edges() == N2.get_num_edges())){
         try{
           initial_restrict();
           updated.set_all();
@@ -123,15 +123,15 @@ namespace TC{
       free(mapping);
     }
 
-    bool node_is_interesting(const Network::Vertex& v) const
+    bool node_is_interesting(const Network::Node& v) const
     {
       switch(v.get_type()){
         case NODE_TYPE_LEAF:
-          return (flags & FLAG_MATCHING_LEAF_LABELS);
+          return (flags & FLAG_MAPTHING_LEAF_LABELS);
         case NODE_TYPE_TREE:
-          return (flags & FLAG_MATCHING_TREE_LABELS);
+          return (flags & FLAG_MAPTHING_TREE_LABELS);
         case NODE_TYPE_RETI:
-          return (flags & FLAG_MATCHING_RETI_LABELS);
+          return (flags & FLAG_MAPTHING_RETI_LABELS);
         default:
           return true;
       }
@@ -145,10 +145,10 @@ namespace TC{
       unfixed_N1.erase(i);
       unfixed_N2.erase(i2);
       
-      const Network::Vertex& u = N1[i];
+      const Network::Node& u = N1[i];
       const uint32_t parent = u.pred.get_unique_item();
       if((parent != UINT32_MAX) && test(unfixed_N1, parent)){
-        const Network::Vertex& u2 = N2[i2];
+        const Network::Node& u2 = N2[i2];
         const uint32_t parent2 = u2.pred.get_unique_item();
         if(parent2 != UINT32_MAX)
           update_rising(parent, parent2, unfixed_N1, unfixed_N2);
@@ -161,10 +161,10 @@ namespace TC{
     template<class NodeFactory>
     void mapping_from_labels(const NodeFactory& fac, std::iterable_bitset& unfixed_N1, std::iterable_bitset& unfixed_N2)
     {
-      for(const LabeledVertex& lv: fac){
+      for(const LabeledNode& lv: fac){
         const uint32_t i_idx = lv.first;
         const std::string& name = lv.second;
-        if((name != "") && ((flags == FLAG_MATCHING_ALL_LABELS) || node_is_interesting(N1.get_vertex(i_idx)))){
+        if((name != "") && ((flags == FLAG_MAPTHING_ALL_LABELS) || node_is_interesting(N1[i_idx]))){
           const uint32_t i2_idx = lmap.at(name).second;
           DEBUG4(std::cout << "treating "<<i_idx<<" with label "<<name<<" - it's counter part is "<<i2_idx<<std::endl);
           // if the label doesn't exist in N1, i2_idx will be NO_LABEL
@@ -184,7 +184,7 @@ namespace TC{
       std::iterable_bitset unfixed_N1(size_N);
       unfixed_N1.set_all();
       unfixed_N2.set_all();
-      if(flags == FLAG_MATCHING_LEAF_LABELS)
+      if(flags == FLAG_MAPTHING_LEAF_LABELS)
         mapping_from_labels(N1.get_leaves_labeled(), unfixed_N1, unfixed_N2);
       else
         mapping_from_labels(N1.get_nodes_labeled(), unfixed_N1, unfixed_N2);
@@ -194,8 +194,8 @@ namespace TC{
         std::unordered_map<uint64_t, PossSet> degree_to_possibilities;
         std::unordered_map<uint64_t, uint32_t> degree_distribution_N2;
         for(uint32_t i: unfixed_N2){
-          const Network::Vertex& u2(N2.get_vertex(i));
-          const uint64_t u2_deg = (((uint64_t)u2.pred.count) << 32) | u2.succ.count;
+          const Network::Node& u2(N2[i]);
+          const uint64_t u2_deg = (((uint64_t)u2.pred.size()) << 32) | u2.succ.size();
           const auto deg_it = degree_to_possibilities.find(u2_deg);
           if(deg_it == degree_to_possibilities.end())
             degree_to_possibilities.emplace_hint(deg_it, u2_deg, size_N)->second.insert(i);
@@ -204,8 +204,8 @@ namespace TC{
           degree_distribution_N2[u2_deg]++;
         }
         for(uint32_t i: unfixed_N1){
-          const Network::Vertex& u(N1.get_vertex(i));
-          const uint64_t u_deg = (((uint64_t)u.pred.count) << 32) | u.succ.count;
+          const Network::Node& u(N1[i]);
+          const uint64_t u_deg = (((uint64_t)u.pred.size()) << 32) | u.succ.size();
           // find the set of vertices in N2 with this degree
           const auto deg_it = degree_to_possibilities.find(u_deg);
           if(deg_it == degree_to_possibilities.end())
@@ -220,7 +220,7 @@ namespace TC{
           // decrement the count of vertices in N2 with this degree and fail if this would go below 0
           uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
           if(u_deg_in_N2 == 0)
-            throw NoPoss("<vertices of indeg " + std::to_string(u.pred.count) + " & outdeg " + std::to_string(u.succ.count) + ">");
+            throw NoPoss("<vertices of indeg " + std::to_string(u.pred.size()) + " & outdeg " + std::to_string(u.succ.size()) + ">");
           else
             --u_deg_in_N2;
         }
@@ -238,8 +238,8 @@ namespace TC{
         assert(sizes[u_idx] == 1);
         const uint32_t u2_idx = unique_poss[u_idx];
         
-        const Network::Vertex& u(N1.get_vertex(u_idx));
-        for(uint32_t j = 0; j < u.succ.count; ++j){
+        const Network::Node& u(N1.get_vertex(u_idx));
+        for(uint32_t j = 0; j < u.succ.size(); ++j){
           if(!N2.is_edge(u2_idx, unique_poss[u.succ[j]]))
             return false;
         }
@@ -324,58 +324,52 @@ namespace TC{
     }
     */
 
-    void update_children_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    void update_children_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
       const uint32_t y_idx = x.succ.get_unique_item();
       if(y_idx == UINT32_MAX){
         // update children
         if(possible_nodes) possible_nodes->clear(); else possible_nodes = make_new_possset((PossSet*)nullptr);
 
-        uint32_t p2_idx = unique_poss[x_idx];
-        const Network::Vertex& p2(N2.get_vertex(p2_idx));
-        for(uint32_t i = 0; i < p2.succ.count; ++i)
-          possible_nodes->insert(p2.succ[i]);
-        for(uint32_t i = 0; i < x.succ.count; ++i)
-          update_poss(x.succ[i], *possible_nodes);
+        for(uint32_t i: N2[unique_poss[x_idx]].succ)
+          possible_nodes->insert(i);
+        for(uint32_t i: x.succ)
+          update_poss(i, *possible_nodes);
       } else update_poss(y_idx, N2[unique_poss[x_idx]].succ[0]);
     }
 
-    void update_children_non_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    void update_children_non_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
-      for(uint32_t p2_idx : *mapping[x_idx]){
-        const Network::Vertex& p2(N2.get_vertex(p2_idx));
-        for(uint32_t i = 0; i < p2.succ.count; ++i)
-          possible_nodes->insert(p2.succ[i]);
+      for(uint32_t p2 : *mapping[x_idx]){
+        for(uint32_t i: N2[p2].succ)
+          possible_nodes->insert(i);
       }
-      for(uint32_t j = 0; j < x.succ.count; ++j)
-        update_poss(x.succ[j], *possible_nodes);
+      for(uint32_t i: x.succ)
+        update_poss(i, *possible_nodes);
     }
 
     // TODO: the following functions are the same as the ones before, except that they are using "pred" instead of "succ" - AVOID THIS CODE DOUBLING
-    void update_parents_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    void update_parents_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
       const uint32_t y_idx = x.pred.get_unique_item();
       if(y_idx == UINT32_MAX){
         if(possible_nodes) possible_nodes->clear(); else possible_nodes = make_new_possset((PossSet*)nullptr);
 
-        uint32_t p2_idx = unique_poss[x_idx];
-        const Network::Vertex& p2(N2.get_vertex(p2_idx));
-        for(uint32_t i = 0; i < p2.pred.count; ++i)
-          possible_nodes->insert(p2.pred[i]);
-        for(uint32_t i = 0; i < x.pred.count; ++i)
-          update_poss(x.pred[i], *possible_nodes);
+        for(uint32_t i: N2[unique_poss[x_idx]].pred)
+          possible_nodes->insert(i);
+        for(uint32_t i: x.pred)
+          update_poss(i, *possible_nodes);
       } else update_poss(y_idx, N2[unique_poss[x_idx]].pred[0]);
     }
 
-    void update_parents_non_fixed(const uint32_t x_idx, const Network::Vertex& x, PossSet*& possible_nodes)
+    void update_parents_non_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
-      for(uint32_t p2_idx : *mapping[x_idx]){
-        const Network::Vertex& p2(N2.get_vertex(p2_idx));
-        for(uint32_t i = 0; i < p2.pred.count; ++i)
-          possible_nodes->insert(p2.pred[i]);
+      for(uint32_t p2: *mapping[x_idx]){
+        for(uint32_t i: N2[p2].pred)
+          possible_nodes->insert(i);
       }
-      for(uint32_t j = 0; j < x.pred.count; ++j)
-        update_poss(x.pred[j], *possible_nodes);
+      for(uint32_t i: x.pred)
+        update_poss(i, *possible_nodes);
     }
 
     void update_neighbors(const uint32_t x_idx)
@@ -384,17 +378,17 @@ namespace TC{
       updated.clear(x_idx);
 
       PossSet* possible_nodes = nullptr;
-      const Network::Vertex& x(N1.get_vertex(x_idx));
+      const Network::Node& x(N1[x_idx]);
 
       // TODO: use a functor to stop code duplication!
       if(sizes[x_idx] == 1){
         // if x_idx maps uniquely and has a unique child, then we can use the cheaper version of update_poss()
-        if(x.succ.count > 0) update_children_fixed(x_idx, x, possible_nodes);
+        if(!x.succ.empty()) update_children_fixed(x_idx, x, possible_nodes);
         update_parents_fixed(x_idx, x, possible_nodes);
         if(possible_nodes) delete possible_nodes;
       } else {
         possible_nodes = make_new_possset((PossSet*)nullptr);
-        if(x.succ.count > 0) update_children_non_fixed(x_idx, x, possible_nodes);
+        if(!x.succ.empty()) update_children_non_fixed(x_idx, x, possible_nodes);
         update_parents_non_fixed(x_idx, x, possible_nodes);
         delete possible_nodes;
       }

@@ -3,34 +3,30 @@
 
 #include "utils/utils.hpp"
 #include "utils/types.hpp"
-#include "utils/iter_bitset.hpp"
+#include "utils/random.hpp"
 
-namespace TC{
+namespace PT{
 
-  //! return the result of a coin flip whose 1-side has probability 'probability' of coming up
-  inline bool toss_coin(const double probability = 0.5)
+  //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
+
+  uint32_t l_from_nr(const uint32_t n, const uint32_t r)
   {
-    return ((double)rand() / RAND_MAX) <= probability;
+    if(n % 2 == 0) throw std::logic_error("binary networks must have an odd number of vertices");
+    if(n < 2*r + 1) throw std::logic_error("need at least "+std::to_string(2*r+1)+" nodes (vs "+std::to_string(n)+" given) in a binary network with "+std::to_string(r)+" reticulations/leaves");
+    return (n - 2*r + 1) / 2;
   }
-  //! return the result of throwing a die with 'sides' sides [0,sides-1]
-  inline uint32_t throw_die(const uint32_t sides = 6)
+
+  uint32_t n_from_rl(const uint32_t r, const uint32_t l)
   {
-    return rand() % sides; // yadda yadda, it's not 100% uniform
+    if(l == 0) throw std::logic_error("networks should have leaves");
+    return 2*r + 2*l - 1;
   }
-  //! return the result of a 0/1-die with 'good_sides' good sides among its 'sides' sides
-  inline bool throw_bw_die(const uint32_t good_sides, const uint32_t sides)
+
+  uint32_t r_from_nl(const uint32_t n, const uint32_t l)
   {
-    return throw_die(sides) < good_sides;
+    return l_from_nr(n,l);
   }
-  //! draw k integers from [0,n-1]
-  std::iterable_bitset draw(uint32_t k, const uint32_t n)
-  {
-    assert(k <= n);
-    std::iterable_bitset result(n);
-    while(k > 0)
-      result.set_kth_unset(throw_die(k--));
-    return result;
-  }
+
 
   std::string sequential_taxon_name(const uint32_t x)
   {
@@ -40,26 +36,15 @@ namespace TC{
       return std::string("") + (char)('a' + x);
   }
 
-  template<class Container>
-  typename Container::iterator get_random_iterator(Container& c)
-  {
-    typename Container::iterator i = c.begin();
-    for(uint32_t k = throw_die(c.size()); k > 0; --k) ++i;
-    return i;
-  }
-  template<class Container>
-  void decrease_or_remove(Container& c, const typename Container::iterator& it)
-  {
-    if(it->second == 1) c.erase(it); else --it->second;
-  }
 
-  //! generate a random network
-  void generate_random_binary_edgelist(Edgelist& el,
-                                       NameVec& names,
-                                       const uint32_t num_tree_nodes,
-                                       const uint32_t num_retis,
-                                       const uint32_t num_leaves,
-                                       const float multilabel_density)
+  //! generate a random network from number of: tree nodes, retis, and leaves
+  template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
+  void generate_random_binary_edgelist_trl(EdgeContainer& el,
+                                           NameContainer& names,
+                                           const uint32_t num_tree_nodes,
+                                           const uint32_t num_retis,
+                                           const uint32_t num_leaves,
+                                           const float multilabel_density = 0.0f)
   {
 #warning implement multi-labels
     assert(multilabel_density >= 0   && multilabel_density < 1);
@@ -71,7 +56,7 @@ namespace TC{
     const uint32_t num_nodes = num_internal + num_leaves;
     //const uint32_t num_edges = (num_leaves + 3 * num_internal - 1) / 2;
     //const uint32_t reti_edges = num_retis * 2;
-    assert(num_internal >= num_leaves - 1);
+    if(num_internal < num_leaves - 1) throw std::logic_error("there is no network with "+std::to_string(num_tree_nodes)+" tree nodes, "+std::to_string(num_retis)+" reticulations, and "+std::to_string(num_leaves)+" leaves");
     
     std::unordered_map<uint32_t, unsigned char> dangling;
 
@@ -108,23 +93,61 @@ namespace TC{
     }
     // satisfy all using the leaves
     for(uint32_t i = num_internal; i < num_nodes; ++i){
-      const uint32_t parent = dangling.begin()->first;
       // WTF stl, why is there no front() / pop_front() for unordered_maps??? (see https://stackoverflow.com/questions/16981600/why-no-front-method-on-stdmap-and-other-associative-containers-from-the-stl)
-      el.push_front({parent, i});
+      const uint32_t parent = dangling.begin()->first;
+      
+      el.push_back({parent, i});
       decrease_or_remove(dangling, dangling.begin());
       names[i] = sequential_taxon_name(i - num_internal);
     }
   }
 
+  //! generate a random network from number of: nodes, and retis
+  template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
+  void generate_random_binary_edgelist_nr(EdgeContainer& el,
+                                          NameContainer& names,
+                                          const uint32_t num_nodes,
+                                          const uint32_t num_retis,
+                                          const float multilabel_density = 0.0f)
+  {
+    const uint32_t num_leaves = l_from_nr(num_nodes, num_retis);
+    const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
+    return generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, multilabel_density);
+  }
+
+  //! generate a random network from number of: nodes, and leaves
+  template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
+  void generate_random_binary_edgelist_nl(EdgeContainer& el,
+                                          NameContainer& names,
+                                          const uint32_t num_nodes,
+                                          const uint32_t num_leaves,
+                                          const float multilabel_density = 0.0f)
+  {
+    return generate_random_binary_edgelist_nr(el, names, num_nodes, num_leaves, multilabel_density);
+  }
+  //! generate a random network from number of: retis, and leaves
+  template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
+  void generate_random_binary_edgelist_rl(EdgeContainer& el,
+                                          NameContainer& names,
+                                          const uint32_t num_retis,
+                                          const uint32_t num_leaves,
+                                          const float multilabel_density = 0.0f)
+  {
+    const uint32_t num_nodes = n_from_rl(num_retis, num_leaves);
+    const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
+    return generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, multilabel_density);
+  }
+
+
   //! simulate reticulate species evolution
   template<class _Network>
-  void simulate_species_evolution(Edgelist& el, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
+  void simulate_species_evolution(EdgeVec& el, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
   {
   }
 
   //! simulate reticulate gene evolution
   template<class _Network>
-  void simulate_gene_evolution(Edgelist& el, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
+  void simulate_gene_evolution(EdgeVec& el, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
   {
   }
 

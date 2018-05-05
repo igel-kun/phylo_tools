@@ -2,28 +2,28 @@
 #pragma once
 
 
-namespace TC{
+namespace PT{
 
   // the fake mul tree keeps a network and a root (any vertex inside the network) around and minicks a MUL tree
   class FakeMULTree{
-    typedef Network::Vertex Vertex;
+    typedef Network::Node Node;
 
     const Network& N;
     const uint32_t root;
     const uint32_t N_vertices;
     
     // new virtual leaves with their virtual label (a virtual child has an index >= N_vertices)
-    LVertexVec fake_leaves;
+    LNodeVec fake_leaves;
     // the parent of each virtual leaf
     IndexVec fake_parents;
 
 
     // get the unique label below a reticulation
-    const std::string& get_label_below(const Vertex& reti) const
+    const std::string& get_label_below(const Node& reti) const
     {
-      assert(reti.succ.count == 1);
+      assert(reti.succ.size() == 1);
       cont uint32_t child_idx = reti.succ[0];
-      const Vertex& child = N.get_vertex(child_idx);
+      const Node& child = N.get_vertex(child_idx);
       
       if(child.is_leaf())
         return N.get_name(child_idx);
@@ -32,11 +32,11 @@ namespace TC{
     }
 
     // fill the vector of virtual leaves and their virtual parents
-    void construct_fake_leaves(const Vertex& sub_root)
+    void construct_fake_leaves(const Node& sub_root)
     {
-      for(uint32_t i = 0; i < sub_root.pred.count; ++i){
+      for(uint32_t i = 0; i < sub_root.pred.size(); ++i){
         const uint32_t child_idx = sub_root.pred[i];
-        const Vertex& child = N.get_vertex(child_idx);
+        const Node& child = N.get_vertex(child_idx);
         
         if(child.is_reti()){
           // if this child is a reticulation, construct a new virtual child with the unique label below the reticulation
@@ -68,7 +68,7 @@ namespace TC{
         );
     }
 
-    const LVertexVec& get_leaves_labeled() const
+    const LNodeVec& get_leaves_labeled() const
     {
       return fake_leaves;
     }

@@ -7,7 +7,7 @@
 #include "utils/label_map.hpp"
 #include "mapper.hpp"
 
-namespace TC{
+namespace PT{
 
   template<class _Network>
   class MULNetworkMapper: public Mapper<_Network, MULabelMap>

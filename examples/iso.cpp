@@ -7,11 +7,11 @@
 #include "utils/label_map.hpp"
 #include "solv/isomorphism.hpp"
 
-using namespace TC;
+using namespace PT;
   
 
 // read a network from an input stream 
-void read_newick_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>& names)
+void read_newick_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
   std::string in_line;
   std::getline(in, in_line);
@@ -20,13 +20,13 @@ void read_newick_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::s
   parser.read_tree(el);
 }
 
-void read_edgelist_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>& names)
+void read_edgelist_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
-  EdgelistParser parser(in, names);
+  EdgeVecParser parser(in, names);
   parser.read_tree(el);
 }
 
-bool read_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>& names)
+bool read_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
   try{
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
@@ -36,7 +36,7 @@ bool read_from_stream(std::ifstream& in, Edgelist& el, std::vector<std::string>&
     try{
       in.seekg(0);
       read_edgelist_from_stream(in, el, names);
-    } catch(const MalformedEdgelist& el_err){
+    } catch(const MalformedEdgeVec& el_err){
       std::cout << "reading Newick failed: "<<nw_err.what()<<std::endl;
       return false;
     }
@@ -79,7 +79,7 @@ int main(const int argc, const char** argv)
 
   std::ifstream in(options[""][0]);
 
-  Edgelist el[2];
+  EdgeVec el[2];
   std::vector<std::string> names[2];
 
   std::cout << "reading networks..."<<std::endl;
@@ -111,10 +111,10 @@ int main(const int argc, const char** argv)
 
   if(contains(options, "-v"))
     std::cout << N0 << std::endl << N1 << std::endl;
-  const unsigned char iso_flags = ((!contains(options, "-il")) ? FLAG_MATCHING_LEAF_LABELS : 0) |
-                                  ((contains(options, "-mt")) ? FLAG_MATCHING_TREE_LABELS : 0) |
-                                  ((contains(options, "-mr")) ? FLAG_MATCHING_RETI_LABELS : 0) |
-                                  ((contains(options, "-ma")) ? FLAG_MATCHING_ALL_LABELS : 0);
+  const unsigned char iso_flags = ((!contains(options, "-il")) ? FLAG_MAPTHING_LEAF_LABELS : 0) |
+                                  ((contains(options, "-mt")) ? FLAG_MAPTHING_TREE_LABELS : 0) |
+                                  ((contains(options, "-mr")) ? FLAG_MAPTHING_RETI_LABELS : 0) |
+                                  ((contains(options, "-ma")) ? FLAG_MAPTHING_ALL_LABELS : 0);
 
   LabelMap *lmap = nullptr;
   lmap = build_labelmap(N0, N1, lmap);

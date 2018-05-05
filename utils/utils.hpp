@@ -178,6 +178,8 @@ inline std::pair<B,A> reverse(const std::pair<A,B>& p)
 }
 
 
+//! find a number in a sorted list of numbers between lower_bound and upper_bound
+//if target is not in c, then return the index of the next larger item in c (or upper_bound if there is no larger item)
 template<typename Container>
 uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower_bound, uint32_t upper_bound)
 {
@@ -190,7 +192,14 @@ uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower
     else 
       upper_bound = middle;
   }
-  return UINT32_MAX;
+  assert(c[lower_bound] >= target);
+  return lower_bound;
+}
+//! one-bound version of binary search: if only one bound is given, it is interpreted as lower bound
+template<typename Container>
+uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower_bound = 0)
+{
+  return binary_search(c, target, lower_bound, c.size());
 }
 
 //! merge two sorted vectors of things (the second into the first)
@@ -242,54 +251,12 @@ void merge_sorted_vectors(std::vector<Element>& target, const std::vector<Elemen
   }
 }
 
-class Tokenizer
+//! decrease a value in a map, pointed to by an iterator
+template<class Map, long threshold = 1>
+void decrease_or_remove(Map& m, const typename Map::iterator& it)
 {
-  const std::string& s;
-  const char delim;
-  size_t front, next;
-public:
-  Tokenizer(const std::string& input_string, const char delimeter, const size_t _front = 0, const size_t _next = 0):
-    s(input_string), delim(delimeter), front(_front), next(_next == 0 ? input_string.find(delimeter) : _next)
-  {}
+  if(it->second == threshold) m.erase(it); else --it->second;
+}
 
-  ~Tokenizer() {}
 
-  bool is_valid() const
-  {
-    return next != std::string::npos;
-  }
-
-  operator bool() const
-  {
-    return is_valid();
-  }
-
-  std::string operator*() const
-  {
-    return s.substr(front, next - front + 1);
-  }
-
-  //! increment operator
-  Tokenizer& operator++()
-  {
-    front = next + 1;
-    next = s.find(delim, front);
-    return *this;
-  }
-
-  //! post-increment
-  Tokenizer operator++(int)
-  {
-    const size_t old_front = front;
-    const size_t old_next = next;
-    ++(*this);
-    return Tokenizer(s, delim, old_front, old_next);
-  }
-
-  std::pair<size_t,size_t> current_indices() const 
-  {
-    return {front, next};
-  }
-
-};
 
