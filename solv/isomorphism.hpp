@@ -89,9 +89,9 @@ namespace PT{
     {}                
 
     IsomorphismMapper(const Network& _N1, const Network& _N2, const LabelMap& _lmap, const unsigned char _flags):
-      IsomorphismMapper(_N1, _N2, _N1.get_num_nodes(), _lmap, _flags)
+      IsomorphismMapper(_N1, _N2, _N1.num_nodes(), _lmap, _flags)
     {
-      if((N1.get_num_nodes() == N2.get_num_nodes()) && (N1.get_num_edges() == N2.get_num_edges())){
+      if((N1.num_nodes() == N2.num_nodes()) && (N1.num_edges() == N2.num_edges())){
         try{
           initial_restrict();
           updated.set_all();

@@ -19,7 +19,7 @@ namespace PT{
     using Parent = TreeT<Node>;
     using Parent::nodes;
     using Parent::edges;
-    using Parent::num_edges;
+    using Parent::_num_edges;
     using Parent::names;
     using Parent::root;
     using Parent::leaves;
@@ -118,11 +118,11 @@ namespace PT{
     template<class EdgeContainer = EdgeVec>
     NetworkT(const EdgeContainer& edgelist, const NameVec& _names, const uint32_t num_nodes, const bool check_cyclic = true):
       Parent(_names, edgelist.size()),
-      rev_edges((uint32_t*)malloc(num_edges * sizeof(uint32_t)))
+      rev_edges((uint32_t*)malloc(_num_edges * sizeof(uint32_t)))
     {
       // get memory & initialize class variables
-      DEBUG3(std::cout << "constructing network from "<<num_edges<<" edges" << std::endl);
-      assert(num_nodes <= num_edges + 1);
+      DEBUG3(std::cout << "constructing network from "<<_num_edges<<" edges" << std::endl);
+      assert(num_nodes <= _num_edges + 1);
 
       // compute out-degrees
       uint32_t* out_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));

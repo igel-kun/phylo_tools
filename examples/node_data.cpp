@@ -59,7 +59,12 @@ int main(const int argc, const char** argv)
   }
   
   // let's see who got what sequence
-//  for(
+  for(uint32_t i = 0; i < N2.num_nodes(); ++i)
+    if(N2[i].data)
+      std::cout << "node "<<i<<" has sequence: "<<N2[i].data->seq<<" with "<<N2[i].data->num_Ns<<" N's"<<std::endl;
+    else
+      std::cout << "node "<<i<<" has no sequence" <<std::endl;
+    
 
 }
 

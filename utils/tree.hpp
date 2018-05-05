@@ -15,16 +15,16 @@ namespace PT{
 
   // a tree consists of a list of nodes, each having out--neighbors and one in-neighbor
   // the out-neighbor list are represented by a pointer into an out-neighbor list that is handled by the network
-  template<typename NodeT = TreeNode<SortedFixNeighborList>>
+  template<typename NodeT = TreeNode<SortedFixNeighborList>, class _NodeList = std::vector<NodeT>>
   class TreeT 
   {
   public:
     typedef NodeT Node;
   protected:
     const NameVec& names;
-    std::vector<Node> nodes;
+    _NodeList nodes;
     uint32_t* const edges;        // < heads of all edges
-    uint32_t num_edges;
+    uint32_t _num_edges;
 
     uint32_t root;
     IndexVec leaves;
@@ -70,6 +70,10 @@ namespace PT{
       assert(u_idx < nodes.size());
       return nodes[u_idx];
     }
+    typename _NodeList::const_iterator begin() const { return nodes.begin(); }
+    typename _NodeList::const_iterator end() const { return nodes.end(); }
+    typename _NodeList::iterator begin() { return nodes.begin(); }
+    typename _NodeList::iterator end() { return nodes.end(); }
 
     const std::string& get_name(const uint32_t u) const
     {
@@ -77,8 +81,8 @@ namespace PT{
     }
 
     uint32_t get_root() const { return root; }
-    uint32_t get_num_nodes() const {return nodes.size();}
-    uint32_t get_num_edges() const {return num_edges; }
+    uint32_t num_nodes() const {return nodes.size();}
+    uint32_t num_edges() const {return _num_edges; }
 
     LabeledNodeIterFactory<> get_leaves_labeled() const
     {
@@ -213,11 +217,11 @@ namespace PT{
 
     // ================== construction =====================
 
-    TreeT(const NameVec& _names, const uint32_t _num_edges):
+    TreeT(const NameVec& _names, const uint32_t edgenum):
       names(_names),
       nodes(),
-      edges((uint32_t*)malloc(_num_edges * sizeof(uint32_t))),
-      num_edges(_num_edges)
+      edges((uint32_t*)malloc(edgenum * sizeof(uint32_t))),
+      _num_edges(edgenum)
     {}
 
     //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
@@ -228,8 +232,8 @@ namespace PT{
       TreeT(_names, edgelist.size())
     {
       // get memory & initialize class variables
-      DEBUG3(std::cout << "constructing tree from "<<num_edges<<" edges" << std::endl);
-      assert(num_nodes == num_edges + 1);
+      DEBUG3(std::cout << "constructing tree from "<<_num_edges<<" edges" << std::endl);
+      assert(num_nodes == _num_edges + 1);
       nodes.reserve(num_nodes);
 
       // compute out-degrees and the root

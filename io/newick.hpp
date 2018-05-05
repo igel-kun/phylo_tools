@@ -43,7 +43,7 @@ std::string get_extended_newick(const PT::Network& N, const uint32_t sub_root, s
 
 std::string get_extended_newick(const PT::Network& N)
 {
-  std::iterable_bitset retis_seen(N.get_num_nodes());
+  std::iterable_bitset retis_seen(N.num_nodes());
   return get_extended_newick(N, N.get_root(), retis_seen) + ";";
 }
 
