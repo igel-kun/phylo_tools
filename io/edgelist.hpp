@@ -13,6 +13,7 @@ struct MalformedEdgeVec : public std::exception
   }
 };
 
+#warning TODO: teach it to parse weighted edges
 
 class EdgeVecParser
 {
@@ -40,20 +41,22 @@ public:
     } else return name_it->second;
   }
 
-  void read_tree(PT::EdgeVec& el)
+  void read_tree(PT::EdgeVec& edges)
   {
     PT::Edge e;
     while(!edgestream.eof()){
       std::string name;
+      
       edgestream >> name;
-      e.first = get_id(name);
+      e.tail() = get_id(name);
       if(edgestream.bad() || edgestream.eof() || edgestream.fail()) throw MalformedEdgeVec();
+
       edgestream >> name;
-      e.second = get_id(name);
+      e.head() = get_id(name);
       if(edgestream.bad()) throw MalformedEdgeVec();
       if(!edgestream.eof() && edgestream.fail()) throw MalformedEdgeVec();
       
-      el.push_back(e);
+      edges.push_back(e);
       while(edgestream.peek() == 10) edgestream.get();
     }
   }

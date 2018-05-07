@@ -6,14 +6,20 @@
 
 namespace PT{
 
-  template<class _NList = SortedFixNeighborList>
-  struct AnyNode
+#define NODE_TYPE_LEAF 0x00
+#define NODE_TYPE_TREE 0x01
+#define NODE_TYPE_RETI 0x02
+#define NODE_TYPE_ISOL 0x03
+
+
+  template<class _SuccList = SortedConsecutiveEdges<Edge>>
+  struct AnyNodeT
   {
-    _NList succ;
+    _SuccList out;
 
     bool is_leaf() const
     {
-      return succ.empty();
+      return out.empty();
     }
     unsigned char get_type() const
     {
@@ -21,64 +27,118 @@ namespace PT{
     }
     bool is_bifurcating() const
     {
-      return succ.size() == 2;
+      return out.size() == 2;
+    }
+  
+    const uint32_t& child(const uint32_t i) const
+    {
+      return head(out[i]);
+    }
+    uint32_t& child(const uint32_t i)
+    {
+      return head(out[i]);
+    }
+
+    HeadConstFactory<_SuccList> children() const
+    {
+      return HeadConstFactory<_SuccList>(out);
+    }
+    HeadFactory<_SuccList> children()
+    {
+      return HeadFactory<_SuccList>(out);
+    }
+
+  };
+
+  template<class _Edge = Edge, class _SuccList = SortedConsecutiveEdges<_Edge>, typename _RevEdge = _Edge*>
+  struct TreeNodeT: public AnyNodeT<_SuccList>
+  {
+    using Parent = AnyNodeT<_SuccList>;
+    using Parent::AnyNodeT;
+    typedef _SuccList SuccList;
+    typedef _RevEdge RevEdge;
+
+    _RevEdge in;
+
+    // all parents of this node are the same
+    uint32_t parent(const uint32_t i) const
+    {
+      return in->tail();
     }
   };
 
-  template<class _NList = SortedFixNeighborList>
-  struct TreeNode: public AnyNode<_NList>
+  template<class _Edge = Edge, class _SuccList = SortedConsecutiveEdges<_Edge>, class _PredList = SortedNonConsecutiveEdges<_Edge>>
+  struct NetworkNodeT: public AnyNodeT<_SuccList>
   {
-    uint32_t pred;
-  };
+    using Parent = AnyNodeT<_SuccList>;
+    using Parent::out;
+    typedef _SuccList SuccList;
+    typedef _PredList PredList;
 
-  template<class _PredList = SortedFixNeighborList, class _SuccList = SortedFixNeighborList>
-  struct NetworkNode: public AnyNode<_SuccList>
-  {
-    using Parent = AnyNode<_SuccList>;
-    using Parent::succ;
-
-    _PredList pred;
+    _PredList in;
 
     bool is_reti() const
     {
-      return pred.size() > 1;
+      return in.size() > 1;
     }
     bool is_root() const
     {
-      return pred.empty() && !succ.empty();
+      return in.empty() && !out.empty();
     }
     bool is_inner_tree() const
     {
-      return (pred.size() == 1) && !succ.empty();
+      return (in.size() == 1) && !out.empty();
     }
     bool is_isolated() const
     {
-      return succ.empty() && pred.empty();
+      return out.empty() && in.empty();
     }
     bool is_leaf() const
     {
-      return succ.empty() && !pred.empty();
+      return out.empty() && !in.empty();
     }
     unsigned char get_type() const
     {
-      if(succ.empty())
-        return pred.empty() ? NODE_TYPE_ISOL : NODE_TYPE_LEAF;
+      if(out.empty())
+        return in.empty() ? NODE_TYPE_ISOL : NODE_TYPE_LEAF;
       else
-        return (pred.size() <= 1) ? NODE_TYPE_TREE : NODE_TYPE_RETI;
+        return (in.size() <= 1) ? NODE_TYPE_TREE : NODE_TYPE_RETI;
     }
+
+    const uint32_t& parent(const uint32_t i) const
+    {
+      return tail(in[i]);
+    }
+    uint32_t& parent(const uint32_t i)
+    {
+      return tail(in[i]);
+    }
+    TailConstFactory<_PredList> parents() const
+    {
+      return TailConstFactory<_PredList>(in);
+    }
+    TailFactory<_PredList> parents()
+    {
+      return TailFactory<_PredList>(in);
+    }
+
   };
 
-  template<class _Data, class _NList = SortedFixNeighborList>
-  struct TreeNodeWithData: public TreeNode<_NList>
+  template<typename _Node, class _Data>
+  struct NodeWithDataT: public _Node
   {
     _Data data;
   };
 
-  template<class _Data, class _PredList = SortedFixNeighborList, class _SuccList = SortedFixNeighborList>
-  struct NetworkNodeWithData: public NetworkNode<_PredList, _SuccList>
-  {
-    _Data data;
-  };
+
+  typedef TreeNodeT<> TreeNode;
+  typedef NetworkNodeT<> NetworkNode;
+
+  template<typename _Data>
+  using TreeNodeWithData = NodeWithDataT<TreeNode, _Data>;
+
+  template<typename _Data>
+  using NetworkNodeWithData = NodeWithDataT<NetworkNode, _Data>;
 
 }
 

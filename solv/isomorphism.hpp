@@ -14,6 +14,7 @@
 #define FLAG_MAPTHING_RETI_LABELS 0x04
 #define FLAG_MAPTHING_ALL_LABELS 0x07
 
+
 namespace PT{
   struct NoPoss : public std::exception
   {
@@ -27,9 +28,19 @@ namespace PT{
     }
   };
 
+  template<class NHList>
+  inline uint32_t get_unique_head(const NHList& nh)
+  {
+    return nh.size() == 1 ? head(nh[0]) : UINT32_MAX;
+  }
+  template<class NHList>
+  inline uint32_t get_unique_tail(const NHList& nh)
+  {
+    return nh.size() == 1 ? tail(nh[0]) : UINT32_MAX;
+  }
 
 
-  template<class PossSet = std::iterable_bitset>
+  template<class _Network = Network, class PossSet = std::iterable_bitset>
   class IsomorphismMapper
   {
     typedef PossSet** MappingPossibility;
@@ -146,10 +157,10 @@ namespace PT{
       unfixed_N2.erase(i2);
       
       const Network::Node& u = N1[i];
-      const uint32_t parent = u.pred.get_unique_item();
+      const uint32_t parent = get_unique_tail(u.in);
       if((parent != UINT32_MAX) && test(unfixed_N1, parent)){
         const Network::Node& u2 = N2[i2];
-        const uint32_t parent2 = u2.pred.get_unique_item();
+        const uint32_t parent2 = get_unique_tail(u2.in);
         if(parent2 != UINT32_MAX)
           update_rising(parent, parent2, unfixed_N1, unfixed_N2);
         else 
@@ -195,7 +206,7 @@ namespace PT{
         std::unordered_map<uint64_t, uint32_t> degree_distribution_N2;
         for(uint32_t i: unfixed_N2){
           const Network::Node& u2(N2[i]);
-          const uint64_t u2_deg = (((uint64_t)u2.pred.size()) << 32) | u2.succ.size();
+          const uint64_t u2_deg = (((uint64_t)u2.in.size()) << 32) | u2.out.size();
           const auto deg_it = degree_to_possibilities.find(u2_deg);
           if(deg_it == degree_to_possibilities.end())
             degree_to_possibilities.emplace_hint(deg_it, u2_deg, size_N)->second.insert(i);
@@ -205,7 +216,7 @@ namespace PT{
         }
         for(uint32_t i: unfixed_N1){
           const Network::Node& u(N1[i]);
-          const uint64_t u_deg = (((uint64_t)u.pred.size()) << 32) | u.succ.size();
+          const uint64_t u_deg = (((uint64_t)u.in.size()) << 32) | u.out.size();
           // find the set of vertices in N2 with this degree
           const auto deg_it = degree_to_possibilities.find(u_deg);
           if(deg_it == degree_to_possibilities.end())
@@ -220,7 +231,7 @@ namespace PT{
           // decrement the count of vertices in N2 with this degree and fail if this would go below 0
           uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
           if(u_deg_in_N2 == 0)
-            throw NoPoss("<vertices of indeg " + std::to_string(u.pred.size()) + " & outdeg " + std::to_string(u.succ.size()) + ">");
+            throw NoPoss("<vertices of indeg " + std::to_string(u.in.size()) + " & outdeg " + std::to_string(u.out.size()) + ">");
           else
             --u_deg_in_N2;
         }
@@ -239,8 +250,8 @@ namespace PT{
         const uint32_t u2_idx = unique_poss[u_idx];
         
         const Network::Node& u(N1.get_vertex(u_idx));
-        for(uint32_t j = 0; j < u.succ.size(); ++j){
-          if(!N2.is_edge(u2_idx, unique_poss[u.succ[j]]))
+        for(uint32_t j = 0; j < u.out.size(); ++j){
+          if(!N2.is_edge(u2_idx, unique_poss[u.out[j]]))
             return false;
         }
       }
@@ -326,49 +337,53 @@ namespace PT{
 
     void update_children_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
-      const uint32_t y_idx = x.succ.get_unique_item();
+      const uint32_t y_idx = get_unique_head(x.out);
       if(y_idx == UINT32_MAX){
         // update children
         if(possible_nodes) possible_nodes->clear(); else possible_nodes = make_new_possset((PossSet*)nullptr);
 
-        for(uint32_t i: N2[unique_poss[x_idx]].succ)
+        for(uint32_t i: N2[unique_poss[x_idx]].children())
           possible_nodes->insert(i);
-        for(uint32_t i: x.succ)
+        for(uint32_t i: x.children())
           update_poss(i, *possible_nodes);
-      } else update_poss(y_idx, N2[unique_poss[x_idx]].succ[0]);
+      } else update_poss(y_idx, N2[unique_poss[x_idx]].out[0].head());
     }
 
     void update_children_non_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
       for(uint32_t p2 : *mapping[x_idx]){
-        for(uint32_t i: N2[p2].succ)
+        for(uint32_t i: N2[p2].children())
           possible_nodes->insert(i);
       }
-      for(uint32_t i: x.succ)
+      for(uint32_t i: x.children())
         update_poss(i, *possible_nodes);
     }
 
-    // TODO: the following functions are the same as the ones before, except that they are using "pred" instead of "succ" - AVOID THIS CODE DOUBLING
+    // TODO: the following functions are the same as the ones before, except that they are using "in" instead of "out" - AVOID THIS CODE DOUBLING
     void update_parents_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
-      const uint32_t y_idx = x.pred.get_unique_item();
+      const uint32_t y_idx = get_unique_tail(x.in);
       if(y_idx == UINT32_MAX){
         if(possible_nodes) possible_nodes->clear(); else possible_nodes = make_new_possset((PossSet*)nullptr);
 
-        for(uint32_t i: N2[unique_poss[x_idx]].pred)
+        for(uint32_t i: N2[unique_poss[x_idx]].parents())
           possible_nodes->insert(i);
-        for(uint32_t i: x.pred)
+        for(uint32_t i: x.parents())
           update_poss(i, *possible_nodes);
-      } else update_poss(y_idx, N2[unique_poss[x_idx]].pred[0]);
+      } else {
+        const Network::Node& x2 = N2[unique_poss[x_idx]];
+        const uint32_t only_parent = tail(x2.in[0]);
+        update_poss(y_idx, only_parent);
+      }
     }
 
     void update_parents_non_fixed(const uint32_t x_idx, const Network::Node& x, PossSet*& possible_nodes)
     {
       for(uint32_t p2: *mapping[x_idx]){
-        for(uint32_t i: N2[p2].pred)
+        for(uint32_t i: N2[p2].parents())
           possible_nodes->insert(i);
       }
-      for(uint32_t i: x.pred)
+      for(uint32_t i: x.parents())
         update_poss(i, *possible_nodes);
     }
 
@@ -383,12 +398,12 @@ namespace PT{
       // TODO: use a functor to stop code duplication!
       if(sizes[x_idx] == 1){
         // if x_idx maps uniquely and has a unique child, then we can use the cheaper version of update_poss()
-        if(!x.succ.empty()) update_children_fixed(x_idx, x, possible_nodes);
+        if(!x.out.empty()) update_children_fixed(x_idx, x, possible_nodes);
         update_parents_fixed(x_idx, x, possible_nodes);
         if(possible_nodes) delete possible_nodes;
       } else {
         possible_nodes = make_new_possset((PossSet*)nullptr);
-        if(!x.succ.empty()) update_children_non_fixed(x_idx, x, possible_nodes);
+        if(!x.out.empty()) update_children_non_fixed(x_idx, x, possible_nodes);
         update_parents_non_fixed(x_idx, x, possible_nodes);
         delete possible_nodes;
       }

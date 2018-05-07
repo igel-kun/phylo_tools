@@ -8,6 +8,8 @@
 #include "label_iter.hpp"
 #include "except.hpp"
 #include "node.hpp"
+#include "edge.hpp"
+#include "set_interface.hpp"
 
 namespace PT{
 
@@ -15,15 +17,23 @@ namespace PT{
 
   // a tree consists of a list of nodes, each having out--neighbors and one in-neighbor
   // the out-neighbor list are represented by a pointer into an out-neighbor list that is handled by the network
-  template<typename NodeT = TreeNode<SortedFixNeighborList>, class _NodeList = std::vector<NodeT>>
+  //NOTE: the first template argument of the TreeNode must be compatible with _Edge because it will point into a list of _Edge's!
+  template<class _Edge = Edge,
+           class _Node = TreeNodeT<_Edge>,
+           class _NodeList = std::vector<_Node>>
   class TreeT 
   {
   public:
-    typedef NodeT Node;
+    typedef _Node Node;
+    typedef _Edge Edge;
+    typedef typename _Node::SuccList SuccList;
+    typedef typename SuccList::iterator EdgeIter;
+
   protected:
+
     const NameVec& names;
     _NodeList nodes;
-    uint32_t* const edges;        // < heads of all edges
+    Edge* edges;
     uint32_t _num_edges;
 
     uint32_t root;
@@ -32,19 +42,17 @@ namespace PT{
     uint32_t max_outdeg;
 
     //! add an edge
-    //NOTE: edges are supposed to be added in sorted order
-    void add_edge(const uint32_t u_idx, const uint32_t v_idx)
+    void add_edge(const Edge& e)
     {
-      assert(u_idx < nodes.size());
-      assert(v_idx < nodes.size());
+      assert(e.head() < nodes.size());
+      assert(e.tail() < nodes.size());
 
-      Node& u = nodes[u_idx];
-      Node& v = nodes[v_idx];
+      _Node& u = nodes[e.tail()];
+      _Node& v = nodes[e.head()];
 
-      u.succ[u.succ.count++] = v_idx;
-      v.pred = u_idx;
+      const typename _Node::SuccList::iterator it = u.out.emplace_back(e);
+      v.in = it;
     }
-
 
   public:
  
@@ -53,19 +61,15 @@ namespace PT{
     {
       return leaves;
     }
-    const IndexVec& get_nodes() const
-    {
-      return nodes;
-    }
-    const Node& get_node(const uint32_t u_idx) const
+    const _Node& get_node(const uint32_t u_idx) const
     {
       return nodes.at(u_idx);
     }
-    const Node& operator[](const uint32_t u_idx) const
+    const _Node& operator[](const uint32_t u_idx) const
     {
       return nodes.at(u_idx);
     }
-    Node& operator[](const uint32_t u_idx)
+    _Node& operator[](const uint32_t u_idx)
     {
       assert(u_idx < nodes.size());
       return nodes[u_idx];
@@ -114,20 +118,33 @@ namespace PT{
     void update_max_degrees()
     {
       max_outdeg = 0;
-      for(const Node& u : nodes)
-        max_outdeg = std::max(max_outdeg, u.succ.size());
+      for(const _Node& u : nodes)
+        max_outdeg = std::max(max_outdeg, u.out.size());
     }
     
-    uint32_t naiveLCA(uint32_t x, uint32_t y) const
+    uint32_t naiveLCA_preordered(uint32_t x, uint32_t y) const
     {
       assert(is_preordered());
       assert(x < nodes.size());
       assert(y < nodes.size());
       while(x != y){
         if(x > y) 
-          x = nodes[x].pred;
+          x = nodes[x].parent();
         else
-          y = nodes[y].pred;
+          y = nodes[y].parent();
+      }
+      return x;
+    }
+    uint32_t naiveLCA(uint32_t x, uint32_t y) const
+    {
+      assert(x < nodes.size());
+      assert(y < nodes.size());
+      std::iterable_bitset seen(num_nodes());
+      while(1){
+        seen.insert(x);
+        seen.insert(y);
+        if(nodes[x].in) x = nodes[x].parent();;
+        if(nodes[y].in) y = nodes[y].parent();
       }
       return x;
     }
@@ -161,7 +178,7 @@ namespace PT{
     {
       if(sub_root >= counter) {
         counter = sub_root;
-        for(uint32_t v: nodes[sub_root].succ)
+        for(uint32_t v: nodes[sub_root].children())
           if(!is_preordered(v, counter)) return false;
         return true;
       } else return false;
@@ -185,7 +202,7 @@ namespace PT{
 
     bool is_edge(const uint32_t u, const uint32_t v) const 
     {
-      return contains(nodes[u].succ, v);
+      return contains(nodes[u].out, v);
     }
 
     //! for sanity checks: test if there is a cycle in the data structure (more useful for networks, but definable for trees too)
@@ -203,7 +220,7 @@ namespace PT{
     {
       if(depth_at[sub_root] == 0){
         depth_at[sub_root] = depth;
-        for(uint32_t w: nodes[sub_root].succ)
+        for(uint32_t w: nodes[sub_root].children())
           if(has_cycle(w, depth_at, depth + 1)) return true;
         depth_at[sub_root] = UINT32_MAX; // mark as seen and not cyclic
         return false;
@@ -220,58 +237,67 @@ namespace PT{
     TreeT(const NameVec& _names, const uint32_t edgenum):
       names(_names),
       nodes(),
-      edges((uint32_t*)malloc(edgenum * sizeof(uint32_t))),
+      edges((Edge*)malloc(edgenum * sizeof(Edge))),
       _num_edges(edgenum)
     {}
+
+    // read all nodes and prepare the edge storage to receive edges; return the root
+    template<class EdgeContainer = std::vector<Edge>>
+    uint32_t read_nodes_and_prepare_edge_storage(const EdgeContainer& given_edges, const uint32_t num_nodes)
+    {
+      nodes.reserve(num_nodes);
+      // compute out-degrees and the root
+      std::iterable_bitset root_poss(num_nodes);
+      root_poss.set_all();
+      uint32_t* out_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));
+      for(const auto &edge: given_edges){
+        assert(edge.tail() < num_nodes);
+        assert(edge.head() < num_nodes);
+        ++out_deg[edge.tail()];
+        root_poss.clear(edge.head());
+        DEBUG5(std::cout << "treated edge "<<edge<<", root poss: "<<root_poss<<std::endl);
+      }
+      // compute start points in the edge list
+      EdgeIter e_start = edges;
+      for(uint32_t u_idx = 0; u_idx < num_nodes; ++u_idx){
+        const uint32_t u_outdeg = out_deg[u_idx];
+        // emplace a tree node without parent whose outessors start at e_start
+        nodes.emplace_back();
+        _Node& u = nodes.back();
+
+        u.out.start = e_start;
+        std::advance(e_start, u_outdeg);
+        if(u_outdeg > 0){
+          max_outdeg = std::max(max_outdeg, u_outdeg);
+        } else leaves.push_back(u_idx);
+      }
+      free(out_deg);
+
+      // finally, set the root
+      if(root_poss.size() != 1) throw std::logic_error("cannot create tree with "+std::to_string(root_poss.size())+" roots");
+      return front(root_poss);
+    }
 
     //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
     // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
     //       This is the case for inputs in newick format
-    template<class EdgeContainer = EdgeVec>
-    TreeT(const EdgeContainer& edgelist, const NameVec& _names, const uint32_t num_nodes):
-      TreeT(_names, edgelist.size())
+    template<class EdgeContainer = std::vector<Edge>>
+    TreeT(const EdgeContainer& given_edges, const NameVec& _names, const uint32_t num_nodes):
+      TreeT(_names, given_edges.size())
     {
       // get memory & initialize class variables
       DEBUG3(std::cout << "constructing tree from "<<_num_edges<<" edges" << std::endl);
       assert(num_nodes == _num_edges + 1);
-      nodes.reserve(num_nodes);
 
-      // compute out-degrees and the root
-      std::iterable_bitset root_poss(num_nodes);
-      root_poss.set_all();
-      uint32_t* out_deg = (uint32_t*)calloc(nodes.size(), sizeof(uint32_t));
-      for(const auto &edge: edgelist){
-        assert(edge.first < nodes.size());
-        ++out_deg[edge.first];
-        root_poss.clear(edge.second);
-      }
-      // compute start points in the edge list
-      uint32_t* e_start = edges;
-      for(uint32_t u_idx = 0; u_idx < nodes.size(); ++u_idx){
-        const uint32_t u_outdeg = out_deg[u_idx];
-        nodes.emplace_back();
-        Node& u = nodes.back();
-
-        u.succ.start = e_start;
-        e_start += u_outdeg;
-        if(u_outdeg > 0){
-          max_outdeg = std::max(max_outdeg, u_outdeg);
-        } else leaves.push_back(u_idx);
-        u.pred = u_idx;
-      }
-      free(out_deg);
-     
-      // actually read the edgelist
-      for(const auto &edge: edgelist) add_edge(edge.first, edge.second);
-
-      // finally, set the root
-      if(root_poss.size() != 1) throw std::logic_error("cannot create tree with "+std::to_string(root_poss.size())+" roots");
-      root = front(root_poss);
+      root = read_nodes_and_prepare_edge_storage(given_edges, num_nodes);
+      // actually read the edges
+      for(const auto &e: given_edges) add_edge(e);
     }
+
     // for some reason gcc wont let me put _names.size() as default value for the last argument, so I have to duplicate code...
     template<class EdgeContainer = EdgeVec>
-    TreeT(const EdgeContainer& edgelist, const NameVec& _names):
-      TreeT(edgelist, _names, _names.size())
+    TreeT(const EdgeContainer& given_edges, const NameVec& _names):
+      TreeT(given_edges, _names, _names.size())
     {}
 
     // =================== destruction ====================
@@ -290,24 +316,24 @@ namespace PT{
       if(name == "") name = "+";
       os << '-' << name;
 
-      const Node& u = nodes[u_idx];
-      switch(u.succ.size()){
+      const _Node& u = nodes[u_idx];
+      switch(u.out.size()){
         case 0:
           os << std::endl;
           break;
         case 1:
-          print_subtree(os, u.succ[0], prefix + std::string(name.length() + 1, ' '));
+          print_subtree(os, u.out[0].head(), prefix + std::string(name.length() + 1, ' '));
           break;
         default:
           prefix += std::string(name.length(), ' ') + '|';
           
-          print_subtree(os, u.succ[0], prefix);
-          for(uint32_t i = 1; i < u.succ.size(); ++i){
+          print_subtree(os, u.out[0].head(), prefix);
+          for(uint32_t i = 1; i < u.out.size(); ++i){
             os << prefix;
-            if(i == u.succ.size() - 1)
+            if(i == u.out.size() - 1)
               prefix.back() = ' ';
             
-            print_subtree(os, u.succ[i], prefix);
+            print_subtree(os, u.out[i].head(), prefix);
           }
       }
     }

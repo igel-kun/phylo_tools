@@ -192,7 +192,7 @@ uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower
     else 
       upper_bound = middle;
   }
-  assert(c[lower_bound] >= target);
+  assert(target <= c[lower_bound]);
   return lower_bound;
 }
 //! one-bound version of binary search: if only one bound is given, it is interpreted as lower bound

@@ -67,6 +67,7 @@ ADD_EXECUTABLE( iso examples/iso.cpp )
 ADD_EXECUTABLE( tc examples/tc.cpp )
 ADD_EXECUTABLE( gen examples/gen.cpp )
 ADD_EXECUTABLE( node_data examples/node_data.cpp )
+ADD_EXECUTABLE( branch_len examples/branch_len.cpp )
 
 
 

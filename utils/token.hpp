@@ -53,5 +53,5 @@ namespace std{
     {
       return {front, next};
     }
-
+  };
 }

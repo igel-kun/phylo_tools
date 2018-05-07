@@ -1,5 +1,6 @@
 
 #include <string>
+#include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
 #include "utils/generator.hpp"
 
@@ -7,14 +8,14 @@
 using namespace PT;
 
 typedef NetworkNodeWithData<uint32_t> NodeWithNumber;
-typedef NetworkT<NodeWithNumber> NumberNetwork;
+typedef NetworkT<Edge, NodeWithNumber> NumberNetwork;
 
 void assign_DFS_numbers(NumberNetwork& N, const uint32_t root, uint32_t& current_num)
 {
   NumberNetwork::Node& v = N[root];
   v.data = current_num++;
-  for(uint32_t i = 0; i < v.succ.size(); ++i)
-    assign_DFS_numbers(N, v.succ[i], current_num);
+  for(uint32_t w: v.children())
+    assign_DFS_numbers(N, w, current_num);
 }
 
 // a toy struct to demonstrate attaching more complex data (that cannot even be default constructed) to nodes using pointers
@@ -31,21 +32,21 @@ struct InformedSequence
 };
 
 typedef NetworkNodeWithData<InformedSequence*> NodeWithISeq;
-typedef NetworkT<NodeWithISeq> ISeqNetwork;
+typedef NetworkT<Edge, NodeWithISeq> ISeqNetwork;
 
 int main(const int argc, const char** argv)
 {
-  EdgeQueue el;
+  EdgeQueue edges;
   std::vector<std::string> names;
-  generate_random_binary_edgelist_nr(el, names, 1001, 25);
+  generate_random_binary_edgelist_nr(edges, names, 51, 10);
 
   // play with numbered nodes: this gives each node the number in which it occurs in a DFS search (starting at 0)
-  NumberNetwork N(el, names);
+  NumberNetwork N(edges, names);
   uint32_t DFS_counter = 0;
   assign_DFS_numbers(N, N.get_root(), DFS_counter);
 
   // play with nodes that have a string attached: each leaf gets a random sequence of NACGT (length between 5 and 20)
-  ISeqNetwork N2(el, names);
+  ISeqNetwork N2(edges, names);
   std::unordered_map<uint32_t, InformedSequence> sequences;
   const char* bases = "NACGT";
 

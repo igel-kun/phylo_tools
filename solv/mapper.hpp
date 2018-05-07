@@ -52,26 +52,26 @@ namespace PT{
       auto display_iter = display_map.find(v_idx);
       if(display_iter == display_map.end()){
         const Tree::Node& v = T[v_idx];
-        switch(v.succ.size()){
+        switch(v.out.size()){
           case 0:
             std::cout << "leaf "<<v_idx<<" is displayed by " << labelmap.at(T.get_name(v_idx)).first << std::endl;
             return emplace_leaf_entry_hint(display_iter, v_idx, labelmap.at(T.get_name(v_idx)).first);
           case 1:
-            return who_displays(v.succ[0]);
+            return who_displays(v.out[0].head());
           case 2: {
               // save the result for future reference
-              std::cout << "finding vertex displaying the cherry ("<<v.succ[0]<<","<<v.succ[1]<<")\n";
+              std::cout << "finding vertex displaying the cherry ("<<v.out[0]<<","<<v.out[1]<<")\n";
               IndexVec& result = display_map.emplace_hint(display_iter, PWC, std::tuple<uint32_t>(v_idx), std::tuple<uint32_t>())->second;
-              get_displaying_vertices_binary(v.succ[0], v.succ[1], result);
+              get_displaying_vertices_binary(v.out[0].head(), v.out[1].head(), result);
               std::cout << "found that "<<v_idx<<" is displayed by "<<result<<std::endl;
               return result;
             }
           default: {
-              std::cout << "vertex "<<v_idx<<" has "<<v.succ.size()<<" successors"<<std::endl;
+              std::cout << "vertex "<<v_idx<<" has "<<v.out.size()<<" outessors"<<std::endl;
               assert(false);
               // save the result for future reference
               IndexVec& result = display_map.emplace_hint(display_iter, PWC, std::tuple<uint32_t>(v_idx), std::tuple<uint32_t>())->second;
-              for(uint32_t i = 0; i < v.succ.size(); ++i){
+              for(uint32_t i = 0; i < v.out.size(); ++i){
 #warning continue here
               }
               return result;

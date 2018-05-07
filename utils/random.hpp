@@ -35,9 +35,7 @@ namespace PT{
   template<class Container>
   typename Container::iterator get_random_iterator(Container& c)
   {
-    typename Container::iterator i = c.begin();
-    std::advance(i, throw_die(c.size()));
-    return i;
+    return std::next(c.begin(), throw_die(c.size()));
   }
 
 

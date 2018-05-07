@@ -2,32 +2,29 @@
 #pragma once
 
 #include <vector>
+#include <functional>
 #include <algorithm>
 #include "string.h"
 #include "utils.hpp"
-#include "set_interface.hpp"
+#include "edge.hpp"
 
 namespace PT{
 
-#define NODE_TYPE_LEAF 0x00
-#define NODE_TYPE_TREE 0x01
-#define NODE_TYPE_RETI 0x02
-#define NODE_TYPE_ISOL 0x03
-
-  //! note: this should not be a std::vector because we want to be able to point it into a consecutive block of vertices
-  class FixNeighborList{
+  //note: this should not be a std::vector because we want to be able to point it into a consecutive block of Edges
+  template<typename _Edge = Edge>
+  class ConsecutiveEdges{
   public:
-    uint32_t* start;
-    uint32_t count;
+    typedef _Edge value_type;
+    typedef _Edge* iterator;
+    typedef const _Edge* const_iterator;
+
+    _Edge* start;
+    uint32_t count = 0;
 
     // convenience functions to not have to write .start[] all the time
-    uint32_t& operator[](const uint32_t i) { return start[i]; }
-    const uint32_t& operator[](const uint32_t i) const { return start[i]; }
+    _Edge& operator[](const uint32_t i) { return start[i]; }
+    const _Edge& operator[](const uint32_t i) const { return start[i]; }
 
-    inline uint32_t get_unique_item() const
-    {
-      return (count == 1) ? *start : UINT32_MAX;
-    }
     inline uint32_t size() const
     {
       return count;
@@ -36,73 +33,112 @@ namespace PT{
     {
       return count == 0;
     }
-    uint32_t* begin() const
+    iterator begin() const
     {
       return start;
     }
-    uint32_t* end() const
+    iterator end() const
     {
       return start + count;
     }
-    uint32_t& back()
+    _Edge& back()
     {
       return *(start + count - 1);
     }
-    const uint32_t& back() const
+    const _Edge& back() const
     {
       return *(start + count - 1);
+    }
+    iterator emplace_back(const _Edge& e)
+    {
+      iterator space = start + count++;
+      new(space) _Edge(e);
+      return space;
     }
   };
 
+  template<typename _Edge = Edge>
+  using NonConsecutiveEdges = std::vector<std::reference_wrapper<_Edge>>;
+
+
+
+  // move items from overlapping ranges
+  template<class _Edge = Edge>
+  void move_items(const _Edge* dest, const _Edge* source, const uint32_t num_items)
+  {
+    memmove(dest, source, num_items * sizeof(_Edge));
+  }
+  template<class _Edge = uint32_t>
+  void move_items(const typename std::vector<_Edge>::iterator& dest,
+                  const typename std::vector<_Edge>::iterator& source,
+                  const uint32_t num_items)
+  {
+    if(std::distance(source, dest) > 0)
+      std::move(source, std::next(source, num_items), dest);
+    else
+      std::move_backward(source, std::next(source, num_items), std::next(dest, num_items));
+  }
+
   //! a sorted neighbor list can be searched in O(log n) time, but replace() and delete() might take Omega(n) time
   //NOTE: insert and delete are done via the _extremely_fast_ memmove() function
-  class SortedFixNeighborList: public FixNeighborList{
+  //note: _Edge should provide:
+  //        operator==(uint32_t) for find(),
+  //        operator=(const _Edge&)
+  //        operator<(const _Edge&) for is_sorted() and sort()
+  template<class _Edges>
+  class SortedEdgesT: public _Edges
+  {
   public:
-    uint32_t* find(const uint32_t node) const
+    using typename _Edges::iterator;
+    typedef typename _Edges::value_type _Edge;
+
+    iterator find(const uint32_t node) const
     {
       const uint32_t nh_index = binary_search(*this, node);
-      return start[nh_index] == node ? start + nh_index : end();
+      return (*this)[nh_index] == node ? std::next(this->begin(), nh_index) : this->end();
     }
     //! try to replace a node with another node
-    // return true on success, otherwise (old_index was not in the list or new_index was already in the list) return false
+    // return true on outess, otherwise (new_edge was already in the list) return false
     //NOTE: this function replaces insert(), since we have to make sure that the data structure does not grow
-    bool replace(uint32_t old_node, uint32_t new_node)
+    bool replace(const typename _Edges::iterator& old_it, const _Edge& new_edge)
     {
       assert(is_sorted());
 
-      const uint32_t old_nh_index = binary_search(*this, old_node);
-      if(start[old_nh_index] != old_node) return false;
+      const iterator new_it = std::next(this->begin(), binary_search(*this, new_edge));
+      if(*new_it == new_edge) return false;
 
-      const uint32_t new_nh_index = binary_search(*this, new_node);
-      if(start[new_nh_index] == new_node) return false;
-
-      // move everything between the new and old index by one uint32_t
-      if(old_nh_index < new_nh_index - 1){
-        memmove(start + old_nh_index, start + old_nh_index + 1, (new_nh_index - old_nh_index - 1) * sizeof(uint32_t));
-      } else if(new_nh_index < old_nh_index){
-        memmove(start + new_nh_index + 1, start + new_nh_index, (old_nh_index - new_nh_index - 1) * sizeof(uint32_t));
-        // finally write the new node index in its cell
-        start[new_nh_index] = new_node;
-      } else start[old_nh_index] = new_node; // just replace the old node by the new one
+      // move everything between the new and old index by one _Edge
+      if(std::next(old_it) < new_it){
+        move_items(old_it, std::next(old_it), std::distance(old_it, new_it) - 1);
+      } else if(new_it < old_it){
+        move_items(std::next(new_it), new_it, std::distance(new_it, old_it) - 1);
+        // finally write the new node index in its cell using placement new
+        new_it->~_Edge();
+        new(new_it) _Edge(new_edge);
+      } else {
+        old_it->~_Edge();
+        new(old_it) _Edge(new_edge); // just replace the old node by the new one
+      }
       return true;
     }
     bool is_sorted() const
     {
-      for(uint32_t i = 1; i < count; ++i)
-        if(start[i] > start[i-1]) throw std::logic_error("sorted neighbor list is not sorted");
+      if(!std::is_sorted(this->begin(), this->end()))
+        throw std::logic_error("sorted neighbor list is not sorted");
+      return true;
     }
     void sort()
     {
-      std::sort(start, start + count);
+      std::sort(this->begin(), this->end());
     }
   };
 
-  template<class Container = std::vector<uint32_t>>
-  class VariableNeighborList: public Container{
-    inline uint32_t get_unique_item() const
-    {
-      return (this->size() == 1) ? front(*this) : UINT32_MAX;
-    }
-  };
+
+  template<typename _Edge = Edge>
+  using SortedConsecutiveEdges = SortedEdgesT<ConsecutiveEdges<_Edge>>;
+
+  template<typename _Edge = Edge>
+  using SortedNonConsecutiveEdges = SortedEdgesT<NonConsecutiveEdges<_Edge>>;
+
 
 }

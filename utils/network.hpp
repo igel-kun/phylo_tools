@@ -2,21 +2,22 @@
 #pragma once
 
 #include <vector>
-#include "utils.hpp"
-#include "types.hpp"
 #include "tree.hpp"
 
 namespace PT{
 
   // a network consists of a list of nodes, each having out- and in-neighbors
   // the out- and in- neighbor lists are represented by pointers into an out- and an in- neighbor list that is handled by the network
-  template<typename NodeT = NetworkNode<SortedFixNeighborList, SortedFixNeighborList>>
-  class NetworkT : public TreeT<NodeT> 
+  template<class _Edge = Edge,
+           class _Node = NetworkNodeT<_Edge>,
+           class _NodeList = std::vector<_Node>>
+  class NetworkT : public TreeT<_Edge, _Node, _NodeList> 
   {
   public:
-    typedef NodeT Node;
+    typedef _Node Node;
+    typedef _Edge Edge;
   protected:
-    using Parent = TreeT<Node>;
+    using Parent = TreeT<_Edge, _Node, _NodeList>;
     using Parent::nodes;
     using Parent::edges;
     using Parent::_num_edges;
@@ -25,21 +26,21 @@ namespace PT{
     using Parent::leaves;
     using Parent::max_outdeg;
 
-    uint32_t* rev_edges;    // < tails of all edges
     uint32_t max_indeg;
 
     //! add an edge
-    void add_edge(const uint32_t u_idx, const uint32_t v_idx)
+    void add_edge(const _Edge& e)
     {
-      assert(u_idx < nodes.size());
-      assert(v_idx < nodes.size());
+      assert(e.head() < nodes.size());
+      assert(e.tail() < nodes.size());
 
-      Node& u = nodes[u_idx];
-      Node& v = nodes[v_idx];
-      
-      u.succ[u.succ.count++] = v_idx;
-      v.pred[v.pred.count++] = u_idx;
+      _Node& u = nodes[e.tail()];
+      _Node& v = nodes[e.head()];
+
+      const typename _Node::SuccList::iterator it = u.out.emplace_back(e);
+      v.in.emplace_back(*it);
     }
+
 
   public:
     using Parent::operator[];
@@ -58,20 +59,20 @@ namespace PT{
     {
       max_outdeg = 0;
       max_indeg = 0;
-      for(Node& u: nodes){
-        if(u.succ.size() > max_outdeg) max_outdeg = u.succ.size();
-        if(u.pred.size() > max_indeg)  max_indeg = u.pred.size();
+      for(_Node& u: nodes){
+        if(u.out.size() > max_outdeg) max_outdeg = u.out.size();
+        if(u.in.size() > max_indeg)  max_indeg = u.in.size();
       }
     }
 
     //! return whether the tree indices are in pre-order (modulo gaps) (they should always be) 
     bool is_preordered(const uint32_t sub_root, uint32_t& counter) const
     {
-      const Node& u = nodes[sub_root];
+      const _Node& u = nodes[sub_root];
       if(u.is_reti()) return true; // edges to reticualtions don't need to abide by the pre-order condition
       if(sub_root < counter) return false;
       counter = sub_root;
-      for(uint32_t v: u.succ)
+      for(uint32_t v: u.out)
         if(!is_preordered(v, counter)) return false;
       return true;
     }
@@ -84,10 +85,10 @@ namespace PT{
     //! get a list of component roots in preorder
     void get_comp_roots(IndexVec& comp_roots) const
     {
-      for(Node& r: nodes){
+      for(_Node& r: nodes){
         if(r.is_inner_tree()){
-          const uint32_t v_idx = r.pred[0];
-          const Node& v = nodes[v_idx];
+          const uint32_t v_idx = r.in[0];
+          const _Node& v = nodes[v_idx];
           if(v.is_reti()) comp_roots.push_back(v_idx);
         }
       }
@@ -98,15 +99,15 @@ namespace PT{
     void remove_node(const uint32_t u_idx)
     {
       assert(u_idx < nodes.size());
-      Node& u = nodes[u_idx];
+      _Node& u = nodes[u_idx];
 
       // remove u from leaves
       if(u.is_leaf()) leaves.erase(u_idx);
       // remove edges incoming to u
-      for(uint32_t v: u.pred)
-        nodes[v].succ.remove(u_idx);
-      for(uint32_t v: u.succ)
-        nodes[v].pred.remove(u_idx);
+      for(uint32_t v: u.in)
+        nodes[v].out.remove(u_idx);
+      for(uint32_t v: u.out)
+        nodes[v].in.remove(u_idx);
     }
 
 
@@ -116,66 +117,22 @@ namespace PT{
     // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
     //       This is the case for inputs in newick format
     template<class EdgeContainer = EdgeVec>
-    NetworkT(const EdgeContainer& edgelist, const NameVec& _names, const uint32_t num_nodes, const bool check_cyclic = true):
-      Parent(_names, edgelist.size()),
-      rev_edges((uint32_t*)malloc(_num_edges * sizeof(uint32_t)))
+    NetworkT(const EdgeContainer& given_edges, const NameVec& _names, const uint32_t num_nodes, const bool check_cyclic = true):
+      Parent(_names, given_edges.size())
     {
-      // get memory & initialize class variables
       DEBUG3(std::cout << "constructing network from "<<_num_edges<<" edges" << std::endl);
       assert(num_nodes <= _num_edges + 1);
-
-      // compute out-degrees
-      uint32_t* out_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));
-      uint32_t*  in_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));
-      for(const auto &edge : edgelist){
-        const uint32_t u_idx = edge.first;
-        const uint32_t v_idx = edge.second;
-        assert(u_idx < num_nodes);
-        assert(v_idx < num_nodes);
-        ++out_deg[u_idx];
-        ++in_deg[v_idx];
-      }
-      // compute start points in the edge list
-      uint32_t* e_start = edges;
-      uint32_t* r_start = rev_edges;
-      for(uint32_t u_idx = 0; u_idx < num_nodes; ++u_idx){
-        const uint32_t u_out_deg = out_deg[u_idx];
-        nodes.emplace_back();
-        Node& u = nodes[u_idx];
-
-        u.succ.start = e_start;
-        e_start += u_out_deg;
-        if(u_out_deg > 0){
-          if(u_out_deg > max_outdeg) max_outdeg = u_out_deg;
-        } else leaves.push_back(u_idx);
-
-        const uint32_t u_in_deg = in_deg[u_idx];
-        u.pred.start = r_start;
-        r_start += u_in_deg;
-        if(u_in_deg > 0){
-          if(u_in_deg > max_indeg) max_indeg = u.pred.size();
-        } else root = u_idx;
-      }
-      free(in_deg);
-      free(out_deg);
-     
-      // actually read the edgelist
-      for(const auto &edge : edgelist) add_edge(edge.first, edge.second);
+   
+      root = Parent::read_nodes_and_prepare_edge_storage(given_edges, num_nodes);
+      // actually read the edges
+      for(const auto &e: given_edges) add_edge(e);
       // finally, if requested, check if N is acyclic
       if(check_cyclic && has_cycle()) throw std::logic_error("network contains a cycle");
     }
     template<class EdgeContainer = EdgeVec>
-    NetworkT(const EdgeContainer& edgelist, const NameVec& _names):
-      NetworkT(edgelist, _names, _names.size())
+    NetworkT(const EdgeContainer& given_edges, const NameVec& _names):
+      NetworkT(given_edges, _names, _names.size())
     {}
-
-    // =================== destruction ====================
-    //! destructor frees everything
-    ~NetworkT()
-    {
-      if(rev_edges) free(rev_edges);
-    }
-
 
     // =================== i/o ======================
     
@@ -185,7 +142,7 @@ namespace PT{
       if(inited_seen) seen = new std::iterable_bitset(nodes.size());
 
       std::string name = names[u_idx];
-      const Node& u = nodes[u_idx];
+      const _Node& u = nodes[u_idx];
       
       if(name == "") name = (u.is_reti()) ? std::string("(R" + std::to_string(u_idx) + ")") : std::string("+");
       DEBUG3(name += "[" + std::to_string(u_idx) + "]");
@@ -194,23 +151,23 @@ namespace PT{
       
       if(!u.is_reti() || !seen->test(u_idx)){
         if(u.is_reti()) seen->insert(u_idx);
-        switch(u.succ.size()){
+        switch(u.out.size()){
           case 0:
             os << std::endl;
             break;
           case 1:
-            print_subtree(os, u.succ[0], prefix + std::string(name.length() + 1, ' '), seen);
+            print_subtree(os, u.out[0].head(), prefix + std::string(name.length() + 1, ' '), seen);
             break;
           default:
             prefix += std::string(name.length(), ' ') + '|';
             
-            print_subtree(os, u.succ[0], prefix, seen);
-            for(uint32_t i = 1; i < u.succ.size(); ++i){
+            print_subtree(os, u.out[0].head(), prefix, seen);
+            for(uint32_t i = 1; i < u.out.size(); ++i){
               os << prefix;
-              if(i + 1 == u.succ.size())
+              if(i + 1 == u.out.size())
                 prefix.back() = ' ';
               
-              print_subtree(os, u.succ[i], prefix, seen);
+              print_subtree(os, u.out[i].head(), prefix, seen);
             }
         }
       } else os << std::endl;
@@ -224,8 +181,10 @@ namespace PT{
   
   typedef NetworkT<> Network;
 
-
-  std::ostream& operator<<(std::ostream& os, const Network& N)
+  template<class _Edge = Edge,
+           class _Node = NetworkNodeT<_Edge>,
+           class _NodeList = std::vector<_Node>>
+  std::ostream& operator<<(std::ostream& os, const NetworkT<_Edge, _Node, _NodeList>& N)
   {
     if(!N.empty()){
       std::string prefix = "";

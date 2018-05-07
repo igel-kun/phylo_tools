@@ -39,7 +39,7 @@ namespace PT{
 
   //! generate a random network from number of: tree nodes, retis, and leaves
   template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
-  void generate_random_binary_edgelist_trl(EdgeContainer& el,
+  void generate_random_binary_edgelist_trl(EdgeContainer& edges,
                                            NameContainer& names,
                                            const uint32_t num_tree_nodes,
                                            const uint32_t num_retis,
@@ -68,10 +68,10 @@ namespace PT{
     for(uint32_t i = 1; i < num_internal; ++i){
       const uint32_t num_unsatisfied = dangling.size();
       const auto parent_it = get_random_iterator(dangling);
-      el.push_back({parent_it->first, i});
+      edges.emplace_back(parent_it->first, i);
       decrease_or_remove(dangling, parent_it);
       DEBUG5(std::cout << " node #"<<i<<"\t- "<<reti_count <<" retis & "<<tree_count<<" tree nodes - ");
-      DEBUG4(std::cout << "adding edge "<<el.back()<<std::endl);
+      DEBUG4(std::cout << "adding edge "<<edges.back()<<std::endl);
       
       // the new node i might be a reticulation if there are at least 2 unsatisfied nodes
       if((reti_count < num_retis) &&
@@ -80,7 +80,7 @@ namespace PT{
         // node i is a reticulation
         // the second incoming edge is from a random unsatisfied node (except last_node)
         const auto dang_it = get_random_iterator(dangling);
-        el.push_back({dang_it->first, i});
+        edges.emplace_back(dang_it->first, i);
         decrease_or_remove(dangling, dang_it);
         dangling[i] = 1;
         ++reti_count;
@@ -93,18 +93,21 @@ namespace PT{
     }
     // satisfy all using the leaves
     for(uint32_t i = num_internal; i < num_nodes; ++i){
+
       // WTF stl, why is there no front() / pop_front() for unordered_maps??? (see https://stackoverflow.com/questions/16981600/why-no-front-method-on-stdmap-and-other-associative-containers-from-the-stl)
       const uint32_t parent = dangling.begin()->first;
       
-      el.push_back({parent, i});
+      edges.emplace_back(parent, i);
       decrease_or_remove(dangling, dangling.begin());
       names[i] = sequential_taxon_name(i - num_internal);
+      
+      DEBUG5(std::cout << " node #"<<i<<" is a leaf with name "<<names[i]<<" - adding edge "<<edges.back()<<std::endl);
     }
   }
 
   //! generate a random network from number of: nodes, and retis
   template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
-  void generate_random_binary_edgelist_nr(EdgeContainer& el,
+  void generate_random_binary_edgelist_nr(EdgeContainer& edges,
                                           NameContainer& names,
                                           const uint32_t num_nodes,
                                           const uint32_t num_retis,
@@ -112,22 +115,22 @@ namespace PT{
   {
     const uint32_t num_leaves = l_from_nr(num_nodes, num_retis);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, multilabel_density);
+    return generate_random_binary_edgelist_trl(edges, names, num_tree_nodes, num_retis, num_leaves, multilabel_density);
   }
 
   //! generate a random network from number of: nodes, and leaves
   template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
-  void generate_random_binary_edgelist_nl(EdgeContainer& el,
+  void generate_random_binary_edgelist_nl(EdgeContainer& edges,
                                           NameContainer& names,
                                           const uint32_t num_nodes,
                                           const uint32_t num_leaves,
                                           const float multilabel_density = 0.0f)
   {
-    return generate_random_binary_edgelist_nr(el, names, num_nodes, num_leaves, multilabel_density);
+    return generate_random_binary_edgelist_nr(edges, names, num_nodes, num_leaves, multilabel_density);
   }
   //! generate a random network from number of: retis, and leaves
   template<class EdgeContainer = EdgeVec, class NameContainer = NameVec>
-  void generate_random_binary_edgelist_rl(EdgeContainer& el,
+  void generate_random_binary_edgelist_rl(EdgeContainer& edges,
                                           NameContainer& names,
                                           const uint32_t num_retis,
                                           const uint32_t num_leaves,
@@ -135,19 +138,19 @@ namespace PT{
   {
     const uint32_t num_nodes = n_from_rl(num_retis, num_leaves);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, multilabel_density);
+    return generate_random_binary_edgelist_trl(edges, names, num_tree_nodes, num_retis, num_leaves, multilabel_density);
   }
 
 
   //! simulate reticulate species evolution
   template<class _Network>
-  void simulate_species_evolution(EdgeVec& el, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
+  void simulate_species_evolution(EdgeVec& edges, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
   {
   }
 
   //! simulate reticulate gene evolution
   template<class _Network>
-  void simulate_gene_evolution(EdgeVec& el, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
+  void simulate_gene_evolution(EdgeVec& edges, NameVec& names, const uint32_t number_taxa, const float recombination_rate)
   {
   }
 
