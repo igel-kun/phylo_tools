@@ -28,7 +28,7 @@ namespace PT {
     return result;
   }
 
-  //! build a mapping between the labeled nodes stewed out by the LabeledNodeIterFactories
+  //! build a mapping between the labeled nodes produced by the LabeledNodeIterFactories
   template<class IterType = IndexVec::const_iterator>
   LabelMap* build_labelmap(const LabeledNodeIterFactory<IterType>& Nfac,
                            const LabeledNodeIterFactory<IterType>& Tfac,
