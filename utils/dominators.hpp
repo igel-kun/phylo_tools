@@ -35,7 +35,7 @@ namespace PT{
       for(uint32_t succ: N[v].children())
         if(semi_dominator[succ] != 0){
           DFS_parent[succ] = v;
-          initial_DFS(succ);
+          initial_DFS(succ, dfs_num);
         }
     }
 
@@ -44,10 +44,10 @@ namespace PT{
       uint32_t s = w;
       while(semi_dominator[best_ancestor[w]] < semi_dominator[best_ancestor[child[s]]]){
         if(size[s] + size[child[child[s]]] >= 2 * size[child[s]]){
-          DFS_parend[child[s]] = s;
+          DFS_parent[child[s]] = s;
           child[s] = child[child[s]];
         } else {
-          shize[child[s]] = size[s];
+          size[child[s]] = size[s];
           s = DFS_parent[s] = child[s];
         }
         best_ancestor[s] = best_ancestor[w];
@@ -74,7 +74,7 @@ namespace PT{
     }
 
     // this is called "EVAL" in LT'79
-    uint32_t ancestor_with_min_semi_dominator(const uint32_t v) const
+    uint32_t ancestor_with_min_semi_dominator(const uint32_t v)
     {
       if(ancestor[v] != 0){
         compress(v);
@@ -85,14 +85,14 @@ namespace PT{
       } else return best_ancestor[v];
     }
 
-    void compute_semi_dominators()
+    void compute_semi_dominator()
     {
       for(uint32_t i = N.num_nodes(); i != 0; --i){
         // step 2
         const uint32_t w = DFS_vertex[i];
         uint32_t& semi_dom_w = semi_dominator[w];
         for(uint32_t parent: N[w].parents()){
-          const uint32_t u = semi_dominators[ancestor_with_min_semi_dominator(parent)];
+          const uint32_t u = semi_dominator[ancestor_with_min_semi_dominator(parent)];
           semi_dom_w = std::min(semi_dom_w, u);
         }
         bucket[DFS_vertex[semi_dom_w]].push_back(w);
@@ -101,7 +101,7 @@ namespace PT{
         // step 3
         std::vector<uint32_t>& parent_bucket = bucket[DFS_parent[w]];
         for(uint32_t v: parent_bucket){
-          const uin32_t u = ancestor_with_min_semi_dominator(v);
+          const uint32_t u = ancestor_with_min_semi_dominator(v);
           dominator[v] = (semi_dominator[u] < semi_dominator[v]) ? u : DFS_parent[w];
         }
         parent_bucket.clear();        
@@ -139,7 +139,7 @@ namespace PT{
       assert(dfs_num == N.num_nodes());
       // step 2: compute semi-dominators
       // step 3: indicate (implicitly) dominators
-      compute_semi_dominators();
+      compute_semi_dominator();
       // step 4: compute dominators (explicitly)
       size[0] = 0;
       compute_dominators();

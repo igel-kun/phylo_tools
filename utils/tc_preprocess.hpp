@@ -15,7 +15,7 @@ namespace PT {
     // compute the leaf_stability mapping by scanning the LSA tree bottom-up
     void compute_leaf_stability()
     {
-      std::queuek<uint32_t> next_lsa;
+      std::queue<uint32_t> next_lsa;
       // add dominators of all leaves
       for(const uint32_t& l: N.get_leaves()){
         const uint32_t l_dom = lsa[l];
@@ -38,10 +38,10 @@ namespace PT {
 
   public:
     
-    TC_Preprocessor(Network& _N, LSATree& _lsa, ComponentRoots& _croots):
+    TC_Preprocessor(Network& _N, LSATree& _lsa, ComponentRootInfo& _cr_info):
       N(_N),
       lsa(_lsa),
-      croots(_croots),
+      cr_info(_cr_info)
     {
       compute_leaf_stability();
     }

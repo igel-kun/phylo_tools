@@ -9,7 +9,7 @@ namespace PT{
 
   class ComponentRootInfo{
   public:
-    typedef CompRootDAG Network;
+    typedef Network CompRootDAG;
 
   protected:
     const Network& N;
@@ -60,14 +60,14 @@ namespace PT{
 
     ComponentRootInfo(const Network& _N):
       N(_N),
-      my_root((uint32_t*)malloc(_N.num_nodes * sizeof(uint32_t)))
+      my_root((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t)))
     {
       // step 1: compute the vector of component roots
       compute_comp_roots(N.get_root());
       // step 2: compute predecessors and successors of component roots
       for(uint32_t i = comp_roots.size() - 1; i != 0; --i){
         assert(N[comp_roots[i]].out.size() == 1);
-        compute_cr_pred(comp_roots[i], N[comp_roots[i]].out[0]);
+        compute_cr_pred(comp_roots[i], N[comp_roots[i]].out[0].tail());
       }
     }
 
