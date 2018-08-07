@@ -4,7 +4,7 @@
 #include <vector>
 #include "utils/iter_bitset.hpp"
 #include "utils/edge_iter.hpp"
-#include "utils/network.hpp"
+#include "utils/ro_network.hpp"
 
 namespace PT{
 

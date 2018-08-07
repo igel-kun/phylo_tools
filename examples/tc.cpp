@@ -6,7 +6,6 @@
 #include "solv/mul_network.hpp"
 #include "solv/network.hpp"
 #include "utils/command_line.hpp"
-#include "utils/network.hpp"
 
 using namespace PT;
 

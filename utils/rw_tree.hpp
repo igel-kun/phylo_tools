@@ -15,11 +15,11 @@ namespace PT{
 
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
-  // this is a virtual prototype for a tree that can be made mutable or immutable
+  // a tree consists of a list of nodes, each having out-neighbors and one in-neighbor
   template<class _Edge = Edge,
            class _Node = TreeNodeT<_Edge>,
            class _NodeList = std::vector<_Node>>
-  class ProtoTreeT 
+  class MutableTreeT 
   {
   public:
     typedef _Node Node;
@@ -31,7 +31,7 @@ namespace PT{
 
     const NameVec& names;
     _NodeList nodes;
-    uint32_t _num_edges;
+    std::list<Edge> edges;
 
     uint32_t root;
     IndexVec leaves;
@@ -39,7 +39,17 @@ namespace PT{
     uint32_t max_outdeg;
 
     //! add an edge
-    virtual void add_edge(const Edge& e) = 0;
+    void add_edge(const Edge& e)
+    {
+      assert(e.head() < nodes.size());
+      assert(e.tail() < nodes.size());
+
+      _Node& u = nodes[e.tail()];
+      _Node& v = nodes[e.head()];
+
+      const typename _Node::SuccList::iterator it = u.out.emplace_back(e);
+      v.in = it;
+    }
 
   public:
  
@@ -235,11 +245,78 @@ namespace PT{
 
     // ================== construction =====================
 
-    ProtoTreeT(const NameVec& _names, const uint32_t edgenum):
+    TreeT(const NameVec& _names, const uint32_t edgenum):
       names(_names),
       nodes(),
+      edges((Edge*)malloc(edgenum * sizeof(Edge))),
       _num_edges(edgenum)
     {}
+
+    // read all nodes and prepare the edge storage to receive edges; return the root
+    template<class EdgeContainer = std::vector<Edge>>
+    uint32_t read_nodes_and_prepare_edge_storage(const EdgeContainer& given_edges, const uint32_t num_nodes)
+    {
+      nodes.reserve(num_nodes);
+      // compute out-degrees and the root
+      std::iterable_bitset root_poss(num_nodes);
+      root_poss.set_all();
+      uint32_t* out_deg = (uint32_t*)calloc(num_nodes, sizeof(uint32_t));
+      for(const auto &edge: given_edges){
+        assert(edge.tail() < num_nodes);
+        assert(edge.head() < num_nodes);
+        ++out_deg[edge.tail()];
+        root_poss.clear(edge.head());
+        DEBUG5(std::cout << "treated edge "<<edge<<", root poss: "<<root_poss<<std::endl);
+      }
+      // compute start points in the edge list
+      EdgeIter e_start = edges;
+      for(uint32_t u_idx = 0; u_idx < num_nodes; ++u_idx){
+        const uint32_t u_outdeg = out_deg[u_idx];
+        // emplace a tree node without parent whose outessors start at e_start
+        nodes.emplace_back();
+        _Node& u = nodes.back();
+
+        u.out.start = e_start;
+        std::advance(e_start, u_outdeg);
+        if(u_outdeg > 0){
+          max_outdeg = std::max(max_outdeg, u_outdeg);
+        } else leaves.push_back(u_idx);
+      }
+      free(out_deg);
+
+      // finally, set the root
+      if(root_poss.size() != 1) throw std::logic_error("cannot create tree with "+std::to_string(root_poss.size())+" roots");
+      return front(root_poss);
+    }
+
+    //! read a tree from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
+    // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
+    //       This is the case for inputs in newick format
+    template<class EdgeContainer = std::vector<Edge>>
+    TreeT(const EdgeContainer& given_edges, const NameVec& _names, const uint32_t num_nodes):
+      TreeT(_names, given_edges.size())
+    {
+      // get memory & initialize class variables
+      DEBUG3(std::cout << "constructing tree from "<<_num_edges<<" edges" << std::endl);
+      assert(num_nodes == _num_edges + 1);
+
+      root = read_nodes_and_prepare_edge_storage(given_edges, num_nodes);
+      // actually read the edges
+      for(const auto &e: given_edges) add_edge(e);
+    }
+
+    // for some reason gcc wont let me put _names.size() as default value for the last argument, so I have to duplicate code...
+    template<class EdgeContainer = EdgeVec>
+    TreeT(const EdgeContainer& given_edges, const NameVec& _names):
+      TreeT(given_edges, _names, _names.size())
+    {}
+
+    // =================== destruction ====================
+    //! destructor frees everything
+    ~TreeT()
+    {
+      if(edges) free(edges);
+    }
 
     // =================== i/o ======================
     
@@ -275,7 +352,9 @@ namespace PT{
   };
 
   
-  std::ostream& operator<<(std::ostream& os, const ProtoTreeT<>& T)
+  typedef TreeT<> Tree;
+
+  std::ostream& operator<<(std::ostream& os, const TreeT<>& T)
   {
     if(!T.empty()){
       std::string prefix = "";

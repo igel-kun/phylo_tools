@@ -1,8 +1,7 @@
 
 #pragma once
 
-#include <vector>
-#include "tree.hpp"
+#include "ro_tree.hpp"
 
 namespace PT{
 
@@ -11,40 +10,53 @@ namespace PT{
   template<class _Edge = Edge,
            class _Node = NetworkNodeT<_Edge>,
            class _NodeList = std::vector<_Node>>
-  class NetworkT : public TreeT<_Edge, _Node, _NodeList> 
+  class ROProtoNetworkT : public ROProtoTreeT<_Edge, _Node, _NodeList> 
   {
+    using Parent = ROProtoTreeT<_Edge, _Node, _NodeList>;
   public:
-    typedef _Node Node;
-    typedef _Edge Edge;
+    using typename Parent::Node;
+    using typename Parent::Edge;
+    using typename Parent::SuccList;
+    using typename Parent::EdgeIter;
   protected:
-    using Parent = TreeT<_Edge, _Node, _NodeList>;
-    using Parent::nodes;
-    using Parent::edges;
-    using Parent::_num_edges;
     using Parent::names;
+    using Parent::nodes;
+    using Parent::_num_edges;
     using Parent::root;
     using Parent::leaves;
     using Parent::max_outdeg;
+  public:
+    using Parent::get_leaves;
+    using Parent::get_nodes;
+    using Parent::get_node;
+    using Parent::get_names;
+    using Parent::operator[];
+    using Parent::get_name;
+    using Parent::begin;
+    using Parent::end;
+    using Parent::get_root;
+    using Parent::num_nodes;
+    using Parent::num_edges;
+    using Parent::get_leaves_labeled;
+    using Parent::get_nodes_labeled;
+    using Parent::is_bifurcating;
+    using Parent::is_binary;
+    using Parent::empty;
+    using Parent::update_max_degrees;
+    using Parent::LCA;
+    using Parent::has_path;
+    using Parent::get_minimum;
+    using Parent::is_preordered;
+    using Parent::is_multi_labeled;
+    using Parent::is_edge;
+    using Parent::has_cycle;
+    using Parent::print_subtree;
 
+  protected:
     uint32_t max_indeg;
-
-    //! add an edge
-    void add_edge(const _Edge& e)
-    {
-      assert(e.head() < nodes.size());
-      assert(e.tail() < nodes.size());
-
-      _Node& u = nodes[e.tail()];
-      _Node& v = nodes[e.head()];
-
-      const typename _Node::SuccList::iterator it = u.out.emplace_back(e);
-      v.in.emplace_back(*it);
-    }
 
 
   public:
-    using Parent::operator[];
-    using Parent::has_cycle;
 
     // =================== information query ==============
 
@@ -113,25 +125,8 @@ namespace PT{
 
     // ================== construction =====================
 
-    //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
-    // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
-    //       This is the case for inputs in newick format
-    template<class EdgeContainer = EdgeVec>
-    NetworkT(const EdgeContainer& given_edges, const NameVec& _names, const uint32_t num_nodes, const bool check_cyclic = true):
-      Parent(_names, given_edges.size())
-    {
-      DEBUG3(std::cout << "constructing network from "<<_num_edges<<" edges" << std::endl);
-      assert(num_nodes <= _num_edges + 1);
-   
-      root = Parent::read_nodes_and_prepare_edge_storage(given_edges, num_nodes);
-      // actually read the edges
-      for(const auto &e: given_edges) add_edge(e);
-      // finally, if requested, check if N is acyclic
-      if(check_cyclic && has_cycle()) throw std::logic_error("network contains a cycle");
-    }
-    template<class EdgeContainer = EdgeVec>
-    NetworkT(const EdgeContainer& given_edges, const NameVec& _names):
-      NetworkT(given_edges, _names, _names.size())
+    ROProtoNetworkT(const NameVec& _names, const uint32_t _num_nodes):
+      Parent(_names, _num_nodes)
     {}
 
     // =================== i/o ======================
@@ -178,8 +173,63 @@ namespace PT{
   };
 
 
-  
+
+  template<class _Edge = Edge,
+           class _Node = NetworkNodeT<_Edge>,
+           class _NodeList = std::vector<_Node>>
+  class NetworkT : public ROProtoNetworkT<_Edge, _Node, _NodeList>
+  {
+  protected:
+    using Parent = ROProtoNetworkT<_Edge, _Node, _NodeList>;
+    using typename Parent::EdgeIter;
+    using Parent::nodes;
+    using Parent::ROProtoNetworkT;
+    using Parent::root;
+    using Parent::has_cycle;
+    using Parent::_num_edges;
+
+    //! add an edge
+    void add_edge(const _Edge& e)
+    {
+      assert(e.head() < nodes.size());
+      assert(e.tail() < nodes.size());
+
+      _Node& u = nodes[e.tail()];
+      _Node& v = nodes[e.head()];
+
+      const typename _Node::SuccList::iterator it = u.out.emplace_back(e);
+      v.in.emplace_back(*it);
+    }
+
+  public:
+    //! read a network from a (not neccessarily sorted) list of pairs of uint32_t (aka edges) in which each vertex is less than num_nodes
+    // if check_cyclic is set, check the input for cycles after reading it
+    // NOTE: make sure that the indices of the leaves are increasing from left to right (that is, leaves are ordered)!
+    //       This is the case for inputs in newick format
+    template<class EdgeContainer = EdgeVec>
+    NetworkT(const EdgeContainer& given_edges, const NameVec& _names, const uint32_t num_nodes, const bool check_cyclic = true):
+      Parent::ROProtoNetworkT(_names, given_edges.size())
+    {
+      DEBUG3(std::cout << "constructing network from "<<_num_edges<<" edges" << std::endl);
+      assert(num_nodes <= _num_edges + 1);
+   
+      root = Parent::read_nodes_and_prepare_edge_storage(given_edges, num_nodes);
+      // actually read the edges
+      for(const auto &e: given_edges) add_edge(e);
+      // finally, if requested, check if N is acyclic
+      if(check_cyclic && has_cycle()) throw std::logic_error("network contains a cycle");
+    }
+
+    template<class EdgeContainer = EdgeVec>
+    NetworkT(const EdgeContainer& given_edges, const NameVec& names):
+      NetworkT(given_edges, names, names.size())
+    {}
+
+  };
+
+
   typedef NetworkT<> Network;
+
 
   template<class _Edge = Edge,
            class _Node = NetworkNodeT<_Edge>,

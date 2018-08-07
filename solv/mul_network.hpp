@@ -3,7 +3,7 @@
 
 #include "utils/utils.hpp"
 #include "utils/types.hpp"
-#include "utils/network.hpp"
+#include "utils/ro_network.hpp"
 #include "utils/label_map.hpp"
 #include "mapper.hpp"
 
@@ -25,9 +25,9 @@ namespace PT{
     using Parent::verify_display;
 
   protected:
-    // get subtrees of N displaying the subtree of T rooted at the binary parent of child1 and child2
+    // get subtrees of N displaying the subtree of T rooted at v
     //NOTE: result will be sorted
-    void get_displaying_vertices_binary(const uint32_t child1, const uint32_t child2, IndexVec& result)
+    void get_displaying_vertices_binary(const Tree::Node& v, IndexVec& result)
     {
     }
 

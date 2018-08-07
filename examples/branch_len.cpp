@@ -2,7 +2,7 @@
 #include "io/newick.hpp"
 
 #include "utils/command_line.hpp"
-#include "utils/network.hpp"
+#include "utils/ro_network.hpp"
 #include "utils/label_map.hpp"
 #include "solv/isomorphism.hpp"
 

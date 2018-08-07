@@ -3,7 +3,7 @@
 #pragma once
 
 #include "utils/utils.hpp"
-#include "utils/network.hpp"
+#include "utils/ro_network.hpp"
 #include "utils/vector2d.hpp"
 #include "utils/iter_bitset.hpp"
 #include "utils/set_interface.hpp"

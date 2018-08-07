@@ -14,8 +14,11 @@ namespace PT{
   protected:
     const _Network& N;
     const Tree& T;
+
+    // a mapping of leaf labels of N to leaf-labels of T
     const _LabelMap* const my_own_labelmap;
     const _LabelMap& labelmap;
+    
     // a node in T can be displayed by many nodes of N
     DisplayMap display_map;
 
@@ -62,12 +65,12 @@ namespace PT{
               // save the result for future reference
               std::cout << "finding vertex displaying the cherry ("<<v.out[0]<<","<<v.out[1]<<")\n";
               IndexVec& result = display_map.emplace_hint(display_iter, PWC, std::tuple<uint32_t>(v_idx), std::tuple<uint32_t>())->second;
-              get_displaying_vertices_binary(v.out[0].head(), v.out[1].head(), result);
+              get_displaying_vertices_binary(v, result);
               std::cout << "found that "<<v_idx<<" is displayed by "<<result<<std::endl;
               return result;
             }
           default: {
-              std::cout << "vertex "<<v_idx<<" has "<<v.out.size()<<" outessors"<<std::endl;
+              std::cout << "vertex "<<v_idx<<" has "<<v.out.size()<<" successors"<<std::endl;
               assert(false);
               // save the result for future reference
               IndexVec& result = display_map.emplace_hint(display_iter, PWC, std::tuple<uint32_t>(v_idx), std::tuple<uint32_t>())->second;
@@ -80,14 +83,16 @@ namespace PT{
       } return display_iter->second;
     }
 
+    // return whether N displays T
     bool verify_display()
     {
       return !who_displays(T.get_root()).empty();
     }
 
-
+    // construct an entry for a leaf in the displaymap using a hint
     virtual const IndexVec& emplace_leaf_entry_hint(const DisplayMap::iterator& hint, const uint32_t v_idx, const LabelType& displaying) = 0;
-    virtual void get_displaying_vertices_binary(const uint32_t child1, const uint32_t child2, IndexVec& result) = 0;
+    // fill an IndexVec with vertices of N that display v
+    virtual void get_displaying_vertices_binary(const Tree::Node& v, IndexVec& result) = 0;
     
     virtual void initialize(){
     }

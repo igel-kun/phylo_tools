@@ -89,13 +89,17 @@ namespace PT{
     {
       return (in.size() == 1) && !out.empty();
     }
+    bool is_non_leaf_tree() const
+    {
+      return get_type() == NODE_TYPE_TREE;
+    }
     bool is_isolated() const
     {
-      return out.empty() && in.empty();
+      return get_type() == NODE_TYPE_ISOL;
     }
     bool is_leaf() const
     {
-      return out.empty() && !in.empty();
+      return get_type() == NODE_TYPE_LEAF;
     }
     unsigned char get_type() const
     {

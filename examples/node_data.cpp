@@ -1,7 +1,7 @@
 
 #include <string>
 #include "utils/edge_iter.hpp"
-#include "utils/network.hpp"
+#include "utils/ro_network.hpp"
 #include "utils/generator.hpp"
 
 

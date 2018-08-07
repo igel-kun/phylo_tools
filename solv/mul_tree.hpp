@@ -3,7 +3,7 @@
 
 #include "utils/utils.hpp"
 #include "utils/types.hpp"
-#include "utils/network.hpp"
+#include "utils/ro_network.hpp"
 #include "utils/label_map.hpp"
 #include "mapper.hpp"
 
@@ -29,16 +29,19 @@ namespace PT{
     using Parent::verify_display;
 
   protected:
-    // get subtrees of N displaying the subtree of T rooted at the binary parent of child1 and child2
+    // get subtrees of N displaying the subtree of T rooted at v
     //NOTE: result will be sorted
-    void get_displaying_vertices_binary(const uint32_t child1, const uint32_t child2, IndexVec& result)
+    void get_displaying_vertices_binary(const Tree::Node& v, IndexVec& result)
     {
-      const IndexVec& displaying1 = who_displays(child1);
-      std::cout << "we know that "<<child1<<" is displayed at "<<displaying1<<std::endl;
+      const uint32_t child0 = v.out[0].head();
+      const uint32_t child1 = v.out[1].head();
+
+      const IndexVec& displaying1 = who_displays(child0);
+      std::cout << "we know that "<<child0<<" is displayed at "<<displaying1<<std::endl;
       if(displaying1.empty()) return;
 
-      const IndexVec& displaying2 = who_displays(child2);
-      std::cout << "we know that "<<child2<<" is displayed at "<<displaying2<<std::endl;
+      const IndexVec& displaying2 = who_displays(child1);
+      std::cout << "we know that "<<child1<<" is displayed at "<<displaying2<<std::endl;
       if(displaying2.empty()) return;
 
       for(uint32_t id1 = 0, id2 = 0;;){
