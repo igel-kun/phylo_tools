@@ -5,7 +5,8 @@
 
 namespace PT{
 
-  // spew out all heads in a list of edges
+  // spew out all heads/tails in a list of edges
+
   template<class EdgeContainer = EdgeVec, class _Iterator = typename EdgeContainer::iterator>
   class EdgeIterator
   {
@@ -20,6 +21,11 @@ namespace PT{
     EdgeIterator(const _Iterator& _it):
       edge_it(_it)
     {}
+
+    typename EdgeContainer::value_type& operator*() const
+    {
+      return *edge_it;
+    }
 
     //! increment operator
     EdgeIterator& operator++()

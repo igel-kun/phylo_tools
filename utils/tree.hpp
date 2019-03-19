@@ -10,6 +10,7 @@
 #include "node.hpp"
 #include "edge.hpp"
 #include "set_interface.hpp"
+#include "edge_storage.hpp"
 
 namespace PT{
 
@@ -18,7 +19,8 @@ namespace PT{
   // this is a virtual prototype for a tree that can be made mutable or immutable
   template<class _Edge = Edge,
            class _Node = TreeNodeT<_Edge>,
-           class _NodeList = std::vector<_Node>>
+           class _NodeList = std::vector<_Node>,
+           class _EdgeStorage>
   class ProtoTreeT 
   {
   public:
@@ -130,15 +132,7 @@ namespace PT{
       }
       return x;
     }
-    // helper function for the LCA
-    bool update_for_LCA(std::iterable_bitset& seen, uint32_t& z) const
-    {
-      if((z != root) && !test(seen,z)){
-        seen.insert(z);
-        z = nodes[z].parent();;
-        return test(seen,z);
-      } else return false;
-    }
+    //! the naive LCA just walks up from x and y one step at a time until we find a node that has been seen by both walks
     uint32_t naiveLCA(uint32_t x, uint32_t y) const
     {
       assert(x < nodes.size());
@@ -149,6 +143,17 @@ namespace PT{
         if(update_for_LCA(seen, y)) return y;
       }
     }
+  protected:
+    // helper function for the LCA
+    bool update_for_LCA(std::iterable_bitset& seen, uint32_t& z) const
+    {
+      if((z != root) && !test(seen,z)){
+        seen.insert(z);
+        z = nodes[z].parent();;
+        return test(seen,z);
+      } else return false;
+    }
+  public:
 
     uint32_t LCA(const uint32_t x, const uint32_t y) const
     {
@@ -156,12 +161,15 @@ namespace PT{
       return naiveLCA(x,y);
     }
 
-    //! return if there is a directed path from x to y in the tree
-    bool has_path(const uint32_t x, const uint32_t y) const
+    //! return if there is a directed path from x to y in the tree; requires the tree to be pre-ordered
+    bool has_path(uint32_t x, const uint32_t y) const
     {
       if(x < y) return false;
-      if(x == y) return true;
-      return LCA(x,y) == x;
+      while(1){
+        if(x == y) return true;
+        if(x == root) return false;
+        x = nodes[x].parent();
+      } 
     }
 
     // return the descendant among x and y unless they are incomparable; return UINT32_MAX in this case
@@ -203,10 +211,10 @@ namespace PT{
 
     bool is_edge(const uint32_t u, const uint32_t v) const 
     {
-      return contains(nodes[u].out, v);
+      return test(nodes[u].out, v);
     }
 
-    //! for sanity checks: test if there is a cycle in the data structure (more useful for networks, but definable for trees too)
+    //! for sanity checks: test if there is a directed cycle in the data structure (more useful for networks, but definable for trees too)
     bool has_cycle() const
     {
       if(!empty()){
@@ -217,6 +225,8 @@ namespace PT{
         return result;
       } else return false;
     }
+
+  protected:
     bool has_cycle(const uint32_t sub_root, uint32_t* depth_at, const uint32_t depth) const
     {
       if(depth_at[sub_root] == 0){
@@ -225,9 +235,9 @@ namespace PT{
           if(has_cycle(w, depth_at, depth + 1)) return true;
         depth_at[sub_root] = UINT32_MAX; // mark as seen and not cyclic
         return false;
-      } else return (depth_at[sub_root] < depth);
+      } else return (depth_at[sub_root] <= depth);
     }
-
+  public:
     // =================== modification ====================
 
 

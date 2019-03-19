@@ -3,13 +3,14 @@
 
 #include <cstdint>
 #include <string.h>
-#include "utils/utils.hpp"
+#include "utils.hpp"
 
 
 #define BITSET_FULL_BUCKET ULONG_MAX
 #define BITSET_BUCKET_TYPE unsigned long
 #define BITSET_BYTES_IN_BUCKET (sizeof(BITSET_BUCKET_TYPE))
 #define BITSET_BITS_IN_BUCKET (CHAR_BIT * BITSET_BYTES_IN_BUCKET)
+#define BUCKET_OF(x) (x / BITSET_BITS_IN_BUCKET)
 
 namespace std {
       
@@ -25,13 +26,13 @@ namespace std {
 
     inline uint64_t num_buckets() const
     {
-      return 1ul + num_bits / BITSET_BITS_IN_BUCKET;
+      return 1ul + BUCKET_OF(num_bits);
     }
 
     public:
       iterable_bitset(const iterable_bitset& bs):
         num_bits(bs.num_bits),
-        storage(num_bits ? (storage_type*)calloc(num_buckets(), BITSET_BYTES_IN_BUCKET) : nullptr)
+        storage(num_bits ? (storage_type*)malloc(num_buckets() * BITSET_BYTES_IN_BUCKET) : nullptr)
       {
         if(storage) memcpy(storage, bs.storage, num_buckets() * BITSET_BYTES_IN_BUCKET);
       }
@@ -51,34 +52,41 @@ namespace std {
       {
         set(x);
       }
+
       void erase(const uint64_t x)
       {
         clear(x);
       }
+
       bool test(const uint64_t x) const
       {
         assert(x < num_bits);
-        return (storage[x / BITSET_BITS_IN_BUCKET] >> (x % BITSET_BITS_IN_BUCKET)) & 1;
+        return (storage[BUCKET_OF(x)] >> (x % BITSET_BITS_IN_BUCKET)) & 1;
       }
+
       void set(const uint64_t x, const bool value)
       {
         if(value) set(x); else clear(x);
       }
+
       void set(const uint64_t x)
       {
         assert(x < num_bits);
-        storage[x / BITSET_BITS_IN_BUCKET] |= (1ul << (x % BITSET_BITS_IN_BUCKET));
+        storage[BUCKET_OF(x)] |= (1ul << (x % BITSET_BITS_IN_BUCKET));
       }
+
       void clear(const uint64_t x)
       {
         assert(x < num_bits);
-        storage[x / BITSET_BITS_IN_BUCKET] &= ~(1ul << (x % BITSET_BITS_IN_BUCKET));
+        storage[BUCKET_OF(x)] &= ~(1ul << (x % BITSET_BITS_IN_BUCKET));
       }
+
       void flip(const uint64_t x)
       {
         assert(x < num_bits);
-        storage[x / BITSET_BITS_IN_BUCKET] ^= (1ul << (x % BITSET_BITS_IN_BUCKET));
+        storage[BUCKET_OF(x)] ^= (1ul << (x % BITSET_BITS_IN_BUCKET));
       }
+
       void set_all()
       {
         uint64_t bits = num_bits;
@@ -89,6 +97,7 @@ namespace std {
         }
         storage[i] = BITSET_FULL_BUCKET >> (BITSET_BITS_IN_BUCKET - bits);
       }
+
       //! set the k'th unset bit (k = 0 corresponding to the first unset bit), and return its index
       uint64_t set_kth_unset(uint64_t k)
       {
@@ -97,12 +106,14 @@ namespace std {
         return result;
         
       }
+
       uint64_t clear_kth_set(uint64_t k)
       {
         uint64_t result= get_index_of_kth_one(k);
         clear(result);
         return result;
       }
+      
       uint64_t get_index_of_kth_zero(uint64_t k) const
       {
         uint64_t i = 0;
@@ -127,6 +138,7 @@ namespace std {
         if(NUM_ZEROS_IN_LOWEST_K_BITL(j, buffer) > k) --j;
         return BITSET_BITS_IN_BUCKET * i + j;
       }
+      
       uint64_t get_index_of_kth_one(uint64_t k) const
       {
         uint64_t i = 0;
@@ -151,15 +163,17 @@ namespace std {
         if(NUM_ONES_IN_LOWEST_K_BITL(j, buffer) > k) --j;
         return BITSET_BITS_IN_BUCKET * i + j;
       }
+      
       void clear()
       {
         clear_all();
       }
+      
       void clear_all()
       {
-        for(uint64_t i = 0; i < num_buckets(); ++i)
-          storage[i] = 0;
+        explicit_bzero(storage, num_buckets() * BITSET_BYTES_IN_BUCKET);
       }
+      
       void flip_all()
       {
         uint64_t bits = num_bits;
@@ -170,18 +184,22 @@ namespace std {
         }
         storage[i] ^= BITSET_FULL_BUCKET >> (BITSET_BITS_IN_BUCKET - bits);
       }
+      
       void invert()
       {
         flip_all();
       }
+      
       uint64_t capacity() const
       {
         return num_bits;
       }
+      
       uint64_t size() const
       {
         return count();
       }
+      
       uint64_t count() const
       {
         uint64_t accu = 0;
@@ -189,11 +207,12 @@ namespace std {
           accu += NUM_ONES_INL(storage[i]);
         return accu;
       }
+      
       //! count the items whose value is at least x
       uint64_t count_larger(const uint64_t x) const
       {
         if(x <= num_bits){
-          const uint64_t first_bucket = x / BITSET_BITS_IN_BUCKET;
+          const uint64_t first_bucket = BUCKET_OF(x);
           const uint64_t first_offset = x % BITSET_BITS_IN_BUCKET;
           uint64_t accu = NUM_ONES_INL(storage[first_bucket] >> first_offset);
           for(uint64_t i = first_bucket + 1; i < num_buckets(); ++i)
@@ -201,11 +220,12 @@ namespace std {
           return accu;
         } else return 0;
       }
+      
       //! count the items whose value is at most x
       uint64_t count_smaller(const uint64_t x) const
       {
         if(x < num_bits){
-          const uint64_t last_bucket = x / BITSET_BITS_IN_BUCKET;
+          const uint64_t last_bucket = BUCKET_OF(x);
           const uint64_t bits_in_last_bucket = x % BITSET_BITS_IN_BUCKET;
           uint64_t accu = 0;
           for(uint64_t i = 0; i < last_bucket; ++i)
@@ -221,6 +241,7 @@ namespace std {
           if(storage[i] != 0) return false;
         return true;
       }
+      
       uint64_t front() const
       {
         uint64_t result = 0;
@@ -243,6 +264,7 @@ namespace std {
           storage[i] = bs.storage[i];
         return *this;
       }
+      
       bool operator==(const iterable_bitset& bs)
       {
         const uint64_t min_buckets = std::min(num_buckets(), bs.num_buckets());
@@ -254,6 +276,7 @@ namespace std {
           if(bs.storage[i] != 0) return false;
         return true;
       }
+      
       iterable_bitset& operator|=(const iterable_bitset& bs)
       {
         const uint64_t min_buckets = std::min(num_buckets(), bs.num_buckets());
@@ -261,6 +284,7 @@ namespace std {
           storage[i] |= bs.storage[i];
         return *this;
       }
+      
       iterable_bitset& operator&=(const iterable_bitset& bs)
       {
         const uint64_t min_buckets = std::min(num_buckets(), bs.num_buckets());
@@ -270,6 +294,7 @@ namespace std {
           storage[i] = 0;
         return *this;
       }
+      
       iterable_bitset& operator^=(const iterable_bitset& bs)
       {
         const uint64_t min_buckets = std::min(num_buckets(), bs.num_buckets());
@@ -313,14 +338,17 @@ namespace std {
     {
       return index < target.num_buckets();
     }
+
     operator bool() const
     {
       return is_valid();
     }
+
     uint64_t operator*() const
     {
       return index * BITSET_BITS_IN_BUCKET + NUM_TRAILING_ZEROSL(buffer);
     }
+
     bitset_iterator& operator++()
     {
       buffer ^= (1ul << NUM_TRAILING_ZEROSL(buffer));
@@ -328,12 +356,14 @@ namespace std {
         buffer = target.storage[++index];
       return *this;
     }
+
     bitset_iterator operator++(int)
     {
       bitset_iterator result(*this);
       ++(*this);
       return result;
     }
+
     bool operator==(const bitset_iterator& it) const
     {
       const bool we_at_end = !is_valid();

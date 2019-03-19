@@ -37,7 +37,7 @@ void parse_options(const int argc, const char** argv)
 void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves)
 {
   //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
-  const int total_input = contains(options, "-n") + contains(options, "-r") + contains(options, "-");
+  const int total_input = contains(options, "-n") + contains(options, "-r") + contains(options, "-l");
   try{
     if(total_input == 0){
       num_nodes = 99;

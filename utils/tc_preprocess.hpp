@@ -1,6 +1,9 @@
 
 #pragma once
 
+#include<stack>
+
+
 namespace PT {
   class TC_Preprocessor
   {
@@ -28,7 +31,7 @@ namespace PT {
         next_lsa.pop();
 
         // if u_dom is not already stable on a leaf, register his stability on the leaf that u is stable on
-        const auto emplace_result = leaf_stability.emplace(u_dom);
+        const auto emplace_result = leaf_stability.emplace(u_dom, leaf_stability.at(u));
         if(emplace_result.second){
           emplace_result.first->second = leaf_stability[u];
           next_lsa.push(u_dom);
@@ -50,11 +53,17 @@ namespace PT {
     {
       // step 1: get the component roots in the order of processing
       std::stack<uint32_t> to_process;
-      for(const uint32_t& u: croots.get_comp_roots_preordered())
-        to_process.push(u);
+      for(const auto& cr: cr_info.get_comp_roots_preordered())
+        to_process.push(cr);
+
+      while(!to_process.empty()){
+        std::cout << to_process.top() << " ";
+        to_process.pop();
+      }
+      std::cout << std::endl;
 
       // step 2: for each component root, check if it is stable on a leaf and, if so,
-      assert(false); <-- CONTINUE HERE     
+      assert(false);
     }
   };
 }

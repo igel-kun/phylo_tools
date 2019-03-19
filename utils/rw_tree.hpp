@@ -351,16 +351,5 @@ namespace PT{
     
   };
 
-  
-  typedef TreeT<> Tree;
-
-  std::ostream& operator<<(std::ostream& os, const TreeT<>& T)
-  {
-    if(!T.empty()){
-      std::string prefix = "";
-      T.print_subtree(os, T.get_root(), prefix);
-    }
-    return os;
-  }
 
 }

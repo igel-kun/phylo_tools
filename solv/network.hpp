@@ -23,7 +23,7 @@ namespace PT{
     using typename Parent::LabelType;
 
     LSATree lsa;
-    ComponentRoots croots;
+    ComponentRootInfo cr_info;
 
   public:
     using Parent::who_displays;
@@ -56,6 +56,9 @@ namespace PT{
     // run the reduction rules and simple (1,1) branching of stable reticulations
     void preprocess()
     {
+      TC_Preprocessor prep(N, lsa, cr_info);
+      prep.apply();
+
       assert(false);
     }
 
@@ -64,7 +67,7 @@ namespace PT{
     NetworkMapper(const _Network& _N, const Tree& _T):
       Parent(_N, _T),
       lsa(_N),
-      croots(_N)
+      cr_info(_N)
     {
       preprocess();
     }

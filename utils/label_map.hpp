@@ -12,17 +12,19 @@ namespace PT {
 #define NO_LABEL UINT32_MAX
 
   // the last parameter is only to differentiate the different build_labelmap functions
-  template<class _Network = Network, class _Tree = Tree>
-  MULabelMap* build_labelmap(const _Network& N, const _Tree& T, const MULabelMap* sentinel = nullptr)
+  template<class IterType = IndexVec::const_iterator>
+  MULabelMap* build_labelmap(const LabeledNodeIterFactory<IterType>& Nfac,
+                             const LabeledNodeIterFactory<IterType>& Tfac,
+                             const MULabelMap* sentinel = nullptr)
   {
     MULabelMap* result = new MULabelMap();
 
-    for(const LabeledNode& p: N.get_leaves_labeled()){
+    for(const LabeledNode& p: Nfac){
       auto& leaf_correspondance = (*result)[p.second];
       leaf_correspondance.first.push_back(p.first);
-      leaf_correspondance.second = UINT32_MAX;
+      leaf_correspondance.second = NO_LABEL;
     }
-    for(const LabeledNode& p: T.get_leaves_labeled())
+    for(const LabeledNode& p: Tfac)
       (*result)[p.second].second = p.first;
 
     return result;
@@ -36,23 +38,24 @@ namespace PT {
   {
     LabelMap* result = new LabelMap();
 
-    for(const LabeledNode& p: Nfac){
-      (*result)[p.second] = {p.first, NO_LABEL};
-    }
+    for(const LabeledNode& p: Nfac)
+      if(!p.second.empty())
+        (*result)[p.second] = {p.first, NO_LABEL};
     for(const LabeledNode& p: Tfac)
-      (*result)[p.second].second = p.first;
+      if(!p.second.empty())
+        (*result)[p.second].second = p.first;
 
     return result;
   }
 
-  template<class _Network = Network, class _Tree = Tree>
-  LabelMap* build_labelmap(const _Network& N, const _Tree& T, const LabelMap* sentinel = nullptr)
+  template<class _Network = Network, class _Tree = Tree, class _LMap>
+  _LMap* build_labelmap(const _Network& N, const _Tree& T, const _LMap* sentinel = nullptr)
   {
     return build_labelmap(N.get_nodes_labeled(), T.get_nodes_labeled(), sentinel);
   }
 
-  template<class _Network = Network, class _Tree = Tree>
-  LabelMap* build_leaf_labelmap(const _Network& N, const _Tree& T, const LabelMap* sentinel = nullptr)
+  template<class _Network = Network, class _Tree = Tree, class _LMap>
+  _LMap* build_leaf_labelmap(const _Network& N, const _Tree& T, const _LMap* sentinel = nullptr)
   {
     return build_labelmap(N.get_leaves_labeled(), T.get_leaves_labeled(), sentinel);
   }

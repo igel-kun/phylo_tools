@@ -33,7 +33,7 @@ namespace PT{
       semi_dominator[v] = dfs_num;
       DFS_vertex[dfs_num++] = v;
       for(uint32_t succ: N[v].children())
-        if(semi_dominator[succ] != 0){
+        if(semi_dominator[succ] == 0){
           DFS_parent[succ] = v;
           initial_DFS(succ, dfs_num);
         }
@@ -134,7 +134,7 @@ namespace PT{
       for(uint32_t v = 0; v < N.num_nodes(); ++v) size[v] = 1;
       for(uint32_t v = 0; v < N.num_nodes(); ++v) best_ancestor[v] = v;
       // step 1: DFS
-      uint32_t dfs_num = (uint32_t)-1;
+      uint32_t dfs_num = 0;
       initial_DFS(N.get_root(), dfs_num);
       assert(dfs_num == N.num_nodes());
       // step 2: compute semi-dominators

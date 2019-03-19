@@ -50,7 +50,6 @@ namespace PT{
     return get_extended_newick(N, N.get_root(), retis_seen) + ";";
   }
 
-
   //! a newick parser
   //NOTE: we parse newick from the back to the front since the node names are _appended_ to the node instead of _prepended_
   class NewickParser

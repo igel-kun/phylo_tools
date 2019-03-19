@@ -47,10 +47,12 @@ bool read_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& 
 bool check_display(Network& N, Tree& T)
 {
   if(N.is_multi_labeled()){
+    std::cout << "running MUL-mapper"<<std::endl;
     MULNetworkMapper<Network> mapper(N, T);
     std::cout << "constructed mapper, now doing the hard work" << std::endl;
     return mapper.verify_display();
   } else {
+    std::cout << "running network mapper"<<std::endl;
     NetworkMapper<Network> mapper(N, T);
     std::cout << "constructed mapper, now doing the hard work" << std::endl;
     return mapper.verify_display();

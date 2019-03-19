@@ -12,6 +12,7 @@ namespace PT{
   class Mapper
   {
   protected:
+#error TODO: we need to make a copy of N here, in order to apply preprocessing rules!
     const _Network& N;
     const Tree& T;
 
@@ -34,11 +35,11 @@ namespace PT{
 
     // build our own labelmap instead of receiving it
     Mapper(const _Network& _N, const Tree& _T):
-      N(_N), T(_T), my_own_labelmap(build_labelmap(_N, _T, my_own_labelmap)), labelmap(*my_own_labelmap)
+      N(_N), T(_T), my_own_labelmap(build_leaf_labelmap(_N, _T, my_own_labelmap)), labelmap(*my_own_labelmap)
     {
       assert(T.is_preordered());
       DEBUG3(std::cout << "label map:\n");
-      for(auto x : labelmap) std::cout << x.first << "->("<<x.second.first<<","<<x.second.second<<")"<<std::endl;
+      for(const auto& x : labelmap) std::cout << x.first << "->("<<x.second.first<<","<<x.second.second<<")"<<std::endl;
       initialize();
     }
 

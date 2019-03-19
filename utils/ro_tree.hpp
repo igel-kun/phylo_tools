@@ -98,13 +98,13 @@ namespace PT{
       EdgeIter e_start = edges;
       for(uint32_t u_idx = 0; u_idx < num_nodes; ++u_idx){
         const uint32_t u_outdeg = out_deg[u_idx];
-        // emplace a tree node without parent whose outessors start at e_start
+        // emplace a tree node without parent whose successors start at e_start
         nodes.emplace_back();
         _Node& u = nodes.back();
 
         u.out.start = e_start;
-        std::advance(e_start, u_outdeg);
         if(u_outdeg > 0){
+          std::advance(e_start, u_outdeg);
           max_outdeg = std::max(max_outdeg, u_outdeg);
         } else leaves.push_back(u_idx);
       }
