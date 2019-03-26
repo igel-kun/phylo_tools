@@ -37,9 +37,14 @@ namespace std {
         if(storage) memcpy(storage, bs.storage, num_buckets() * BITSET_BYTES_IN_BUCKET);
       }
 
-      iterable_bitset(const uint64_t _num_bits = 0):
+      iterable_bitset(const uint64_t _num_bits, const bool _set_all):
         num_bits(_num_bits),
         storage(num_bits ? (storage_type*)calloc(num_buckets(), BITSET_BYTES_IN_BUCKET) : nullptr)
+      {
+        if(_set_all) set_all();
+      }
+      iterable_bitset(const uint64_t _num_bits = 0):
+        iterable_bitset(_num_bits, 0)
       {
       }
 
@@ -312,6 +317,7 @@ namespace std {
 
       bitset_iterator begin() const;
       bitset_iterator end() const;
+      bitset_iterator find(const uint64_t x) const;
   };
 
   std::ostream& operator<<(std::ostream& os, const iterable_bitset& bs)
@@ -322,7 +328,11 @@ namespace std {
 
 
 
-  class bitset_iterator
+  // NOTE: we do not correspond to the official standard since we do not abide by the following condition:
+  // "if a and b compare equal then either they are both non-dereferenceable or *a and *b are references bound to the same object"
+  // since our *-operation does not return a reference, but an integer
+  // however, iteration a la "for(auto i: my_set)" works very well...
+  class bitset_iterator: public std::iterator<std::forward_iterator_tag, uint64_t>
   {
     const iterable_bitset& target;
     uint64_t index;
@@ -332,6 +342,12 @@ namespace std {
     bitset_iterator(const iterable_bitset& _target, const uint64_t _index = 0):
       target(_target), index(_index), buffer(_target.storage[_index])
     {
+    }
+    // create an iterator at a specific bit inside target[index]
+    bitset_iterator(const iterable_bitset& _target, const uint64_t _index, const char sub_index):
+      target(_target), index(_index), buffer(_target.storage[_index])
+    {
+      buffer &= (BITSET_FULL_BUCKET << sub_index);
     }
 
     bool is_valid() const
@@ -372,6 +388,11 @@ namespace std {
       if(we_at_end && they_at_end) return true;
       return (index == it.index) && (buffer == it.buffer);
     }
+
+    bool operator!=(const bitset_iterator& it) const
+    {
+      return !this->operator==(it);
+    }
   };
 
   bitset_iterator iterable_bitset::begin() const
@@ -383,6 +404,11 @@ namespace std {
   bitset_iterator iterable_bitset::end() const
   {
     return bitset_iterator(*this, num_buckets());
+  }
+
+  bitset_iterator iterable_bitset::find(const uint64_t x) const
+  {
+    return test(x) ? bitset_iterator(*this, x / BITSET_BITS_IN_BUCKET, x % BITSET_BITS_IN_BUCKET) : end();
   }
 
 }
