@@ -3,7 +3,7 @@
 #include "io/edgelist.hpp"
 
 #include "utils/command_line.hpp"
-#include "utils/ro_network.hpp"
+#include "utils/network.hpp"
 #include "utils/label_map.hpp"
 #include "solv/isomorphism.hpp"
 
@@ -16,14 +16,14 @@ void read_newick_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::st
   std::string in_line;
   std::getline(in, in_line);
 
-  NewickParser parser(in_line, names);
-  parser.read_tree(el);
+  NewickParser<EdgeVec> parser(in_line, names, el);
+  parser.read_tree();
 }
 
 void read_edgelist_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
 {
-  EdgeVecParser parser(in, names);
-  parser.read_tree(el);
+  EdgeVecParser<> parser(in, names, el);
+  parser.read_tree();
 }
 
 bool read_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
@@ -104,22 +104,24 @@ int main(const int argc, const char** argv)
     }
   }
 
-  DEBUG5(std::cout << "building N0 from "<<el[0]<< std::endl << "building N1 from "<<el[1]<<std::endl);
-
-  Network N0(el[0], names[0]);
-  Network N1(el[1], names[1]);
+  DEBUG5(std::cout << "building N0 ("<<names[0].size()<<" nodes) from edges: "<<el[0]<< std::endl);
+  Network<NonGrowingNetworkAdjacencyStorage<>> N0(el[0], names[0]);
+  DEBUG5(std::cout << "building N1 ("<<names[1].size()<<" nodes) from edgess: "<<el[1]<< std::endl);
+  Network<> N1(el[1], names[1]);
 
   if(contains(options, "-v"))
-    std::cout << N0 << std::endl << N1 << std::endl;
-  const unsigned char iso_flags = ((!contains(options, "-il")) ? FLAG_MAPTHING_LEAF_LABELS : 0) |
-                                  ((contains(options, "-mt")) ? FLAG_MAPTHING_TREE_LABELS : 0) |
-                                  ((contains(options, "-mr")) ? FLAG_MAPTHING_RETI_LABELS : 0) |
-                                  ((contains(options, "-ma")) ? FLAG_MAPTHING_ALL_LABELS : 0);
+    std::cout << "N0: " << std::endl << N0 << std::endl << "N1:" <<std::endl << N1 << std::endl;
+  const unsigned char iso_flags = ((!contains(options, "-il")) ? FLAG_MAP_LEAF_LABELS : 0) |
+                                  ((contains(options, "-mt")) ? FLAG_MAP_TREE_LABELS : 0) |
+                                  ((contains(options, "-mr")) ? FLAG_MAP_RETI_LABELS : 0) |
+                                  ((contains(options, "-ma")) ? FLAG_MAP_ALL_LABELS : 0);
 
   LabelMap *lmap = nullptr;
   lmap = build_labelmap(N0, N1, lmap);
+  DEBUG3(std::cout << "label mapping: "<<*lmap<<std::endl);
+
   std::cout << "checking isomorphism..."<<std::endl;
-  IsomorphismMapper<> M(N0, N1, *lmap, iso_flags);
+  auto M = make_iso_mapper(N0, N1, *lmap, iso_flags);
   if(M.check_isomorph())
     std::cout << "isomorph!" << std::endl;
   else

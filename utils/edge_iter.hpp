@@ -5,137 +5,161 @@
 
 namespace PT{
 
-  // spew out all heads/tails in a list of edges
 
-  template<class EdgeContainer = EdgeVec, class _Iterator = typename EdgeContainer::iterator>
-  class EdgeIterator
+  // make an edge container from a tail and a list of heads
+  template<class _Edge = Edge<>,
+           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
+           class _Iterator = typename _NodeContainer::iterator>
+  class InOutEdgeIterator
   {
+  public:
+    using AdjRef = typename std::iterator_traits<_Iterator>::reference;
+    using iterator = _Iterator;
+    using Edge = _Edge;
+    using Node = typename _Edge::Node;
   protected:
-    _Iterator edge_it;
+    Node u;
+    _Iterator node_it;
   public:
 
-    EdgeIterator(const EdgeIterator& _it):
-      edge_it(_it.edge_it)
+     InOutEdgeIterator(const Node _u, const _Iterator& _node_it):
+      u(_u),
+      node_it(_node_it)
     {}
-
-    EdgeIterator(const _Iterator& _it):
-      edge_it(_it)
+    InOutEdgeIterator(const Node _u, const _NodeContainer& _node_c):
+      InOutEdgeIterator(_u, _node_c.begin())
     {}
-
-    typename EdgeContainer::value_type& operator*() const
-    {
-      return *edge_it;
-    }
 
     //! increment operator
-    EdgeIterator& operator++()
+    InOutEdgeIterator& operator++()
     {
-      ++edge_it;
+      ++node_it;
       return *this;
     }
 
     //! post-increment
-    EdgeIterator operator++(int)
+    InOutEdgeIterator operator++(int)
     {
-      EdgeIterator tmp(*this);
+      InOutEdgeIterator tmp(*this);
       ++(*this);
       return tmp;
     }
 
-    bool operator==(const EdgeIterator& it) const
+    // I don't know why C++ forces me to declare this, it should be declared implicitly...
+    InOutEdgeIterator& operator=(const InOutEdgeIterator& op)
     {
-      return edge_it == it.edge_it;
+      u = op.u;
+      node_it = op.node_it;
+      return *this;
     }
-    bool operator!=(const EdgeIterator& it) const
-    {
-      return !operator==(it);
-    }
+
+    bool operator==(const _Iterator& _node_it) const { return node_it == _node_it;}
+    bool operator!=(const _Iterator& _node_it) const { return node_it != _node_it;}
+
+    bool operator==(const InOutEdgeIterator& _it) const { return node_it == _it.node_it;}
+    bool operator!=(const InOutEdgeIterator& _it) const { return node_it != _it.node_it;}
   };
 
-  template<class EdgeContainer = EdgeVec, class _Iterator = typename EdgeContainer::iterator>
-  class TailIterator: public EdgeIterator<EdgeContainer, _Iterator>
+  // make an edge container from a head and a list of tails
+  template<class _Edge = Edge<>,
+           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
+           class _Iterator = typename _NodeContainer::iterator>
+  class InEdgeIterator : public InOutEdgeIterator<_Edge, _NodeContainer, _Iterator>
   {
-    using Parent = EdgeIterator<EdgeContainer, _Iterator>;
-    using Parent::edge_it;
+    using Parent = InOutEdgeIterator<_Edge, _NodeContainer, _Iterator>;
+    using Parent::u;
+    using Parent::node_it;
   public:
-    using Parent::EdgeIterator;
+    using Parent::Parent;
 
-    uint32_t operator*() const
-    {
-      return tail(*edge_it);
-    }
+    _Edge operator*() const { return {*node_it, u}; }
   };
 
-  template<class EdgeContainer = EdgeVec, class _Iterator = typename EdgeContainer::iterator>
-  class HeadIterator: public EdgeIterator<EdgeContainer, _Iterator>
+  // make an edge container from a head and a list of tails
+  template<class _Edge = Edge<>,
+           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
+           class _Iterator = typename _NodeContainer::iterator>
+  class OutEdgeIterator : public InOutEdgeIterator<_Edge, _NodeContainer, _Iterator>
   {
-    using Parent = EdgeIterator<EdgeContainer, _Iterator>;
-    using Parent::edge_it;
+    using Parent = InOutEdgeIterator<_Edge, _NodeContainer, _Iterator>;
+    using Parent::u;
+    using Parent::node_it;
   public:
-    using Parent::EdgeIterator;
+    using Parent::Parent;
 
-    uint32_t operator*() const
-    {
-      return head(*edge_it);
-    }
+    _Edge operator*() const { return {u, *node_it}; }
   };
 
-  template<class EdgeContainer = EdgeVec>
-  using HeadConstIterator = HeadIterator<EdgeContainer, typename EdgeContainer::const_iterator>;
-  template<class EdgeContainer = EdgeVec>
-  using TailConstIterator = TailIterator<EdgeContainer, typename EdgeContainer::const_iterator>;
+  template<class _Edge = Edge<>,
+           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
+           class _Iterator = typename _NodeContainer::const_iterator>
+  using InEdgeConstIterator = InEdgeIterator<_Edge, const _NodeContainer, _Iterator>;
+  
+  template<class _Edge = Edge<>,
+           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
+           class _Iterator = typename _NodeContainer::const_iterator>
+  using OutEdgeConstIterator = OutEdgeIterator<_Edge, const _NodeContainer, _Iterator>;
 
-
-  template<class _Iterator, class EdgeContainer = EdgeVec>
-  class IteratorFactory
+  template<class _Container,
+           class _Iterator,
+           class _ConstIterator = _Iterator>
+  class EdgeIterFactory
   {
+  public:
+    using Node = typename _Container::value_type;
+    using iterator = _Iterator;
+    using const_iterator = _ConstIterator;
   protected:
-    EdgeContainer& edges;
+    const bool copy_container;
+    const Node u;
+    _Container* c;
 
   public:
-    IteratorFactory(EdgeContainer& _edges):
-      edges(_edges)
+
+    EdgeIterFactory(const Node _u, _Container& _c, const bool _copy_container = false):
+      copy_container(_copy_container),
+      u(_u),
+      // if _copy_container is true, then make a copy of the given container (to use with temporary containers)
+      c(_copy_container ? new _Container(_c) : &_c)
     {}
-    _Iterator begin()
+    
+    // construct empty factory
+    EdgeIterFactory():
+      copy_container(true),
+      u(),
+      c(new _Container())
+    {}
+
+    ~EdgeIterFactory()
     {
-      return edges.begin();
+      // if we allocated our own copy of the container, then delete it when we're done
+      if(copy_container) delete c;
     }
-    _Iterator end()
-    {
-      return edges.end();
-    }
+
+    iterator begin() { return {u, c->begin()}; }
+    iterator end() { return {u, c->end()}; }
+    const_iterator begin() const { return {u, c->begin()}; }
+    const_iterator end() const { return {u, c->end()}; }
   };
 
 
-  template<class EdgeContainer = EdgeVec>
-  using HeadFactory = IteratorFactory<HeadIterator<EdgeContainer>, EdgeContainer>;
-  template<class EdgeContainer = EdgeVec>
-  using TailFactory = IteratorFactory<TailIterator<EdgeContainer>, EdgeContainer>;
-  template<class EdgeContainer = EdgeVec>
-  using HeadConstFactory = IteratorFactory<HeadConstIterator<const EdgeContainer>, const EdgeContainer>;
-  template<class EdgeContainer = EdgeVec>
-  using TailConstFactory = IteratorFactory<TailConstIterator<const EdgeContainer>, const EdgeContainer>;
 
-  template<class EdgeContainer = EdgeVec>
-  HeadFactory<EdgeContainer> heads(EdgeContainer& c)
-  {
-    return HeadFactory<EdgeContainer>(c);
-  }
-  template<class EdgeContainer = EdgeVec>
-  TailFactory<EdgeContainer> tails(EdgeContainer& c)
-  {
-    return TailFactory<EdgeContainer>(c);
-  }
-   template<class EdgeContainer = EdgeVec>
-  HeadConstFactory<EdgeContainer> heads(const EdgeContainer& c)
-  {
-    return HeadConstFactory<EdgeContainer>(c);
-  }
-  template<class EdgeContainer = EdgeVec>
-  TailConstFactory<EdgeContainer> tails(const EdgeContainer& c)
-  {
-    return TailConstFactory<EdgeContainer>(c);
-  }
+  template<class _Edge = Edge<>, class _NodeContainer = std::unordered_set<typename _Edge::Node>>
+  using InEdgeFactory = EdgeIterFactory<_NodeContainer, InEdgeIterator<_Edge, _NodeContainer>, InEdgeConstIterator<_Edge, _NodeContainer>>;
+  template<class _Edge = Edge<>, class _NodeContainer = std::unordered_set<typename _Edge::Node>>
+  using OutEdgeFactory = EdgeIterFactory<_NodeContainer, OutEdgeIterator<_Edge, _NodeContainer>, OutEdgeConstIterator<_Edge, _NodeContainer>>;
+  template<class _Edge = Edge<>, class _NodeContainer = std::unordered_set<typename _Edge::Node>>
+  using InEdgeConstFactory = EdgeIterFactory<const _NodeContainer, InEdgeConstIterator<_Edge, _NodeContainer>>;
+  template<class _Edge = Edge<>, class _NodeContainer = std::unordered_set<typename _Edge::Node>>
+  using OutEdgeConstFactory = EdgeIterFactory<const _NodeContainer, OutEdgeConstIterator<_Edge, _NodeContainer>>;
 
+  template<class _Container,
+           class _Iterator,
+           class _ConstIterator> 
+  std::ostream& operator<<(std::ostream& os, const EdgeIterFactory<_Container, _Iterator, _ConstIterator>& fac)
+  {
+    for(const auto& i: fac) os << i << ' ';
+    return os;
+  }
 
 }

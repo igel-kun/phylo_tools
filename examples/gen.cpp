@@ -2,7 +2,7 @@
 #include "io/newick.hpp"
 
 #include "utils/command_line.hpp"
-#include "utils/ro_network.hpp"
+#include "utils/network.hpp"
 #include "utils/generator.hpp"
 
 using namespace PT;
@@ -19,8 +19,8 @@ void parse_options(const int argc, const char** argv)
   description["-l"] = {1,1};
   description["-a"] = {0,0};
   description[""] = {0,1};
-  const std::string help_message(std::string(argv[0]) + " <file>\n\
-      generate a random binary network and write it to file in extended newick format\n\
+  const std::string help_message(std::string(argv[0]) + " [file]\n\
+      generate a random binary network and write it to file (stdout if omitted) in extended newick format\n\
       FLAGS:\n\
       \t-v\tverbose output, prints networks\n\
       \t-r\tnumber of reticulations in the network\n\
@@ -109,7 +109,7 @@ int main(const int argc, const char** argv)
   generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, 0);
 
   DEBUG5(std::cout << "building N from "<<el<< std::endl);
-  Network N(el, names);
+  Network<> N(el, names);
 
   if(contains(options, "-v")) std::cout << N << std::endl;
 

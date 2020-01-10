@@ -42,12 +42,13 @@ namespace PT{
         }
       }
     }
-    // finally, check if everyone has its minimum number of parameters
+    // finally, check if everyone has the right number of parameters
     for(const auto& arg_para: options){
       const size_t num_paras = arg_para.second.size();
-      const size_t min_paras = description.at(arg_para.first).first;
-      if(num_paras < min_paras){
-        std::cerr << "option \""<<arg_para.first<<"\" has only "<<num_paras<<" parameters (expected at least "<<min_paras<<")"<<std::endl;
+      const std::pair<uint32_t, uint32_t>& para_bounds = description.at(arg_para.first);
+      if((num_paras < para_bounds.first) || (num_paras > para_bounds.second)){
+        std::cerr << "option \""<<arg_para.first<<"\" has "<<num_paras<<" parameters (expected between "<<para_bounds.first<<" & "<<para_bounds.second<<")"<<std::endl;
+        std::cerr << help_message << std::endl;
         exit(EXIT_FAILURE);
       }
     }

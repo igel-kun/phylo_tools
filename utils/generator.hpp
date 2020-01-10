@@ -69,7 +69,7 @@ namespace PT{
       const uint32_t num_unsatisfied = dangling.size();
       const auto parent_it = get_random_iterator(dangling);
       edges.emplace_back(parent_it->first, i);
-      decrease_or_remove(dangling, parent_it);
+      const bool removed = !decrease_or_remove(dangling, parent_it);
       DEBUG5(std::cout << " node #"<<i<<"\t- "<<reti_count <<" retis & "<<tree_count<<" tree nodes - ");
       DEBUG4(std::cout << "adding edge "<<edges.back()<<std::endl);
       
@@ -79,7 +79,9 @@ namespace PT{
              throw_bw_die(num_retis - reti_count, num_internal - i)){
         // node i is a reticulation
         // the second incoming edge is from a random unsatisfied node (except last_node)
-        const auto dang_it = get_random_iterator(dangling);
+        std::cout << "reti"<<std::endl;
+        const auto dang_it = removed ? get_random_iterator(dangling) : get_random_iterator_except(dangling, parent_it);
+        std::cout << "got "<<*dang_it<<std::endl;
         edges.emplace_back(dang_it->first, i);
         decrease_or_remove(dangling, dang_it);
         dangling[i] = 1;

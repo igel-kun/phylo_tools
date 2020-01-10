@@ -2,7 +2,7 @@
 #include "io/newick.hpp"
 
 #include "utils/command_line.hpp"
-#include "utils/ro_network.hpp"
+#include "utils/network.hpp"
 #include "utils/label_map.hpp"
 #include "solv/isomorphism.hpp"
 
@@ -15,8 +15,8 @@ void read_newick_from_stream(std::ifstream& in, WEdgeVec& edges, std::vector<std
   std::string in_line;
   std::getline(in, in_line);
 
-  NewickParser parser(in_line, names);
-  parser.read_tree(edges);
+  NewickParser<WEdgeVec> parser(in_line, names, edges);
+  parser.read_tree();
 }
 
 
@@ -61,13 +61,16 @@ int main(const int argc, const char** argv)
 
   DEBUG5(std::cout << "building N from "<<weighted_edges<< std::endl);
 
-  NetworkT<WEdge> N(weighted_edges, names);
+  EdgeWeightedNetwork<float, void*, IndexSet, NonGrowingNetworkEdgeStorage<WEdge>> N(weighted_edges, names);
+  //EdgeWeightedNetwork<> N(weighted_edges, names);
+  //EdgeWeightedNetwork<float, void*, IndexSet, GrowingNetworkAdjacencyStorage<WEdge>> N(weighted_edges, names);
 
   if(contains(options, "-v"))
     std::cout << N << std::endl;
  
-  for(uint32_t u = 0; u < N.num_nodes(); ++u)
-    for(const WEdge& uv: N[u].out)
+  for(uint32_t u = 0; u < N.num_nodes(); ++u){
+    for(const WEdge uv: N.out_edges(u))
       std::cout << "branch "<<u<<"["<<N.get_name(u)<<"] -> "<<head(uv)<<"["<<N.get_name(head(uv))<<"] has length "<<uv.data<<std::endl;
+  }
 }
 

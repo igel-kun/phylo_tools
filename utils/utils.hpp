@@ -13,6 +13,8 @@
 #include <bitset>
 #include <list>
 #include <vector>
+#include <stack>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -48,9 +50,9 @@
 // merge two lists
 #define SPLICE_LISTS(x,y) x.splice(x.end(), y)
 //! a more readable containment check
-#define contains(x,y) ((x).find(y) != (x).cend())
+#define contains(x,y) ((x).find(y) != (x).end())
 // find x in the container "list" and, ONLY IF NOT FOUND, execute constructor, assign findings to result (which should be a reference to value_type)
-#define FIND_OR_CONSTRUCT(result,x,list,constructor) {auto ___it = list.find(x); if(___it == list.cend()) ___it = list.insert(___it, {x, constructor}); result = ___it->second;}
+#define FIND_OR_CONSTRUCT(result,x,list,constructor) {auto ___it = list.find(x); if(___it == list.end()) ___it = list.insert(___it, {x, constructor}); result = ___it->second;}
 // circular shift
 #define rotl(x,y) ((x << y) | (x >> (sizeof(x)*CHAR_BIT - y)))
 #define rotr(x,y) ((x >> y) | (x << (sizeof(x)*CHAR_BIT - y)))
@@ -108,61 +110,157 @@
 #define STAT(x) 
 #endif
 
+// rotation
+uint32_t rotl32(uint32_t x, uint32_t n){
+  assert (n<32);
+  return (x<<n) | (x>>(-n&31));
+}
+uint32_t rotr32(uint32_t x, uint32_t n){
+  assert (n<32);
+  return (x>>n) | (x<<(-n&31));
+}
+
+// reverse bits
+static unsigned char rev_map[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe, 0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
+
+// Reverse the top and bottom nibble then swap them.
+inline uint8_t reverse8(const uint8_t n) { 
+  return (rev_map[n & 0xf] << 4) | rev_map[n>>4];
+}
+inline uint16_t reverse16(const uint16_t n) { 
+  return (reverse8(n & 0xff) << 8) | reverse8(n >> 8);
+}
+inline uint32_t reverse32(const uint32_t n) { 
+  return (reverse16(n & 0xffff) << 16) | reverse16(n >> 16);
+}
+inline uint64_t reverse64(const uint64_t n) {
+  const uint64_t n_high = n & 0xffffffff;
+  return (reverse32(n_high << 32) | reverse32(n >> 32));
+}
+
+size_t hash_combine(size_t x, const size_t y)
+{
+  x^= y + 0x9e3779b9 + (x << 6) + (x >> 2);
+  return x;
+}
 
 namespace std{
-//! output list of things
-template<typename Element>
-std::ostream& operator<<(std::ostream& os, const std::list<Element>& lst)
-{
-  os << "[";
-  for(auto i : lst) os << i << "  ";
-  os << "]";
-  return os;
-}
 
-//! output vector of things
-template<typename Element>
-std::ostream& operator<<(std::ostream& os, const std::vector<Element>& lst)
-{
-  os << "[";
-  for(auto i : lst) os << i << "  ";
-  os << "]";
-  return os;
-}
+  // why are those things not defined per default by STL???
 
-//! output map of things
-template<typename Element1, typename Element2>
-std::ostream& operator<<(std::ostream& os, const std::unordered_map<Element1, Element2>& map)
-{
-  os << "[";
-  for(auto i : map) os << i << "  ";
-  os << "]";
-  return os;
-}
+  template<typename T1, typename T2>
+  struct hash<pair<T1, T2> >{
+    size_t operator()(const pair<T1,T2>& p) const{
+      const std::hash<T1> hasher1;
+      const std::hash<T2> hasher2;
+      return hash_combine(hasher1(p.first), hasher2(p.second));
+    }
+  };
 
-template <typename A, typename B>
-std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p)
-{
-	return os << "("<<p.first<<", "<<p.second<<")";
-}
+  template<typename T, typename Container = std::deque<T>>
+  class iterable_stack: public std::stack<T, Container>
+  {
+    using std::stack<T, Container>::c;
+  public:
+    using iterator = typename Container::iterator;
+    using const_iterator = typename Container::const_iterator;
 
-//! a hash computation for an unordered set, XORing its members
-template<typename T>
-size_t hash_value(const std::unordered_set<T>& S)
-{
-  size_t result = 0;
-  for(const auto& i : S)
-    result = rotl(result, 1) ^ hash_value(i);
-  return result;
-}
+    iterator begin() { return c.begin(); }
+    iterator end() { return c.end(); }
+    const_iterator begin() const { return c.begin(); }
+    const_iterator end() const { return c.end(); }
+  };
 
-//! add two pairs of things
-template <typename A, typename B>
-std::pair<A,B> operator+(const std::pair<A,B>& l, const std::pair<A,B>& r)
-{
-	return {l.first + r.first, l.second + r.second};
-}
 
+  //! output things
+  template<class Iterator>
+  inline ostream& output_range(ostream& os, const Iterator& first, const Iterator& last, const char _in, const char _out)
+  {
+    os << _in;
+    for(auto it = first; it != last; ++it) os << *it << " ";
+    os << _out;
+    return os;
+  }
+
+  //! output list of things
+  template<typename Element>
+  ostream& operator<<(ostream& os, const list<Element>& lst)
+  {
+    return output_range(os, lst.begin(), lst.end(), '[', ']');
+  }
+
+  //! output vector of things
+  template<typename Element>
+  ostream& operator<<(ostream& os, const vector<Element>& lst)
+  {
+    return output_range(os, lst.begin(), lst.end(), '[', ']');
+  }
+
+  //! output unordered_set of things
+  template<typename Element>
+  ostream& operator<<(ostream& os, const unordered_set<Element>& lst)
+  {
+    return output_range(os, lst.begin(), lst.end(), '{', '}');
+  }
+
+  //! output set of things
+  template<typename Element>
+  ostream& operator<<(ostream& os, const set<Element>& lst)
+  {
+    return output_range(os, lst.begin(), lst.end(), '{', '}');
+  }
+  //! output set of things
+  template<typename Element>
+  ostream& operator<<(ostream& os, const iterable_stack<Element>& lst)
+  {
+    return output_range(os, lst.begin(), lst.end(), '<', '>');
+  }
+
+  //! output map of things
+  template<typename Element1, typename Element2>
+  ostream& operator<<(ostream& os, const unordered_map<Element1, Element2>& _map)
+  {
+    return output_range(os, _map.begin(), _map.end(), '<', '>');
+  }
+  //! output map of things
+  template<typename Element1, typename Element2>
+  ostream& operator<<(ostream& os, const map<Element1, Element2>& _map)
+  {
+    return output_range(os, _map.begin(), _map.end(), '<', '>');
+  }
+
+  template <typename A, typename B>
+  ostream& operator<<(ostream& os, const pair<A,B>& p)
+  {
+    return os << '('<<p.first<<','<<p.second<<')';
+  }
+  template <typename A>
+  ostream& operator<<(ostream& os, const reference_wrapper<A>& r)
+  {
+    return os << r.get();
+  }
+
+  //! a hash computation for an unordered set, XORing its members
+  template<typename T>
+  size_t hash_value(const unordered_set<T>& S)
+  {
+    size_t result = 0;
+    for(const auto& i : S)
+      result = rotl(result, 1) ^ hash_value(i);
+    return result;
+  }
+
+  //! add two pairs of things
+  template <typename A, typename B>
+  pair<A,B> operator+(const pair<A,B>& l, const pair<A,B>& r)
+  {
+    return {l.first + r.first, l.second + r.second};
+  }
+
+  template <class N>
+  struct is_stl_set_type { static const int value = 0; };
+  template <class N>
+  struct is_stl_map_type { static const int value = 0; };
 
 }
 
@@ -251,12 +349,35 @@ void merge_sorted_vectors(std::vector<Element>& target, const std::vector<Elemen
   }
 }
 
-//! decrease a value in a map, pointed to by an iterator
+//! decrease a value in a map, pointed to by an iterator; return true if the value was decreased and false if the item was removed
 template<class Map, long threshold = 1>
-void decrease_or_remove(Map& m, const typename Map::iterator& it)
+inline bool decrease_or_remove(Map& m, const typename Map::iterator& it)
 {
-  if(it->second == threshold) m.erase(it); else --it->second;
+  if(it->second == threshold) {
+    m.erase(it);
+    return false;
+  } else {
+    --(it->second);
+    return true;
+  }
 }
 
+#define return_map_lookup(x,y,z) {const auto _iter = x.find(y); return (_iter != x.end()) ? _iter->second : z; }
+/*
+// lookup a key in a map and return the default value if the key was not found
+template<class Map>
+typename Map::mapped_type& map_lookup(Map& _map, const typename Map::key_type& key, typename Map::mapped_type& default_value)
+{
+  const auto _iter = _map.find(key);
+  return (_iter == _map.end()) ? default_value : _iter->second;
+}
+
+template<class Map>
+const typename Map::mapped_type& map_lookup_const(const Map& _map, const typename Map::key_type& key, const typename Map::mapped_type& default_value)
+{
+  const auto _iter = _map.find(key);
+  return (_iter == _map.end()) ? default_value : _iter->second;
+}
+*/
 
 

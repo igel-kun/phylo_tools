@@ -1,4 +1,5 @@
 
+// Tree Containment mapper: computes a map that maps each node of T to a node of N thereby indicating a subdivision of T contained in N
 
 #pragma once
 

@@ -3,7 +3,7 @@
 
 #include "utils/utils.hpp"
 #include "utils/types.hpp"
-#include "utils/ro_network.hpp"
+#include "utils/network.hpp"
 #include "utils/label_map.hpp"
 #include "mapper.hpp"
 
