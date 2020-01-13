@@ -18,17 +18,17 @@ namespace PT{
     // we can use a disjoint set forest with no-rank union to find the current highest node of the weakly-connected component of a node
     std::DisjointSetForest<NetNode> highest;
 
+    DEBUG3(std::cout << "constructing extension tree from "<<ex<<std::endl);
     for(const auto& u: ex){
-      DEBUG3(std::cout << "extension node " << u << std::endl);
       // step 1: add a new set to the DSF with only u
       highest.add_new_set({u});
-      DEBUG3(std::cout << "highest ancestors: "<<highest<<std::endl);
+      DEBUG3(std::cout << "highest ancestors of node "<<u<<": "<<highest<<std::endl);
       // step 2: establish u as the parent in Gamma of all highest nodes in all weakly connected components (in G[ex[1..u]]) of its children in N
       std::unordered_set<NetNode> new_children;
       for(const NetNode v: N.children(u)){
         try{
           const NetNode x = highest.set_of(v).get_representative();
-          new_children.emplace(x);
+          append(new_children, x);
         } catch(std::out_of_range& e) {
           throw(std::logic_error("trying to compute extension tree on a non-extension"));
         }
@@ -36,7 +36,8 @@ namespace PT{
       // step 3: register u as the new hightest node in the weakly connected components of its new children 
       // step 4: add edges u->v to the edgelist
       for(const NetNode v: new_children){
-        highest.merge_sets_no_rank(v, u);
+        // NOTE: make sure the merge is not done by size but v is always plugged below u!
+        highest.merge_sets_of(u, v, false);
         append(el, u, v);
         DEBUG3(std::cout << "appended " << u << " -> "<< v<<" edges are now: "<<el<<std::endl);
       }
@@ -50,7 +51,8 @@ namespace PT{
     for(const auto u: ext.get_nodes_postorder()){
       uint32_t sw_u = N.in_degree(u);
       for(const auto v: ext.children(u))
-        sw_u += out.at(v) - 1; // only the arc uv contributes to sw[v] - sw[u]
+        sw_u += out.at(v);
+      sw_u -= N.out_degree(u);
       append(out, u, sw_u);
       DEBUG3(std::cout << "found sw("<<u<<") = "<<sw_u<<std::endl);
     }

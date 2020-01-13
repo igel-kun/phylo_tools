@@ -40,10 +40,8 @@ namespace PT{
     void compute_root()
     {
       char roots = 0;
-      std::cout << "checking successors...\n";
       for(const auto& uv: _successors){
         const Node u = uv.first;
-        std::cout << u << "\n";
         if(!contains(_predecessors, u)){
           if(roots++ == 0){
             _root = u;

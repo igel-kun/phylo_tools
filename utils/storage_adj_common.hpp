@@ -24,8 +24,8 @@ namespace PT{
 
     using OutEdgeContainer =      OutEdgeFactory<Edge, AdjContainer>;
     using ConstOutEdgeContainer = OutEdgeConstFactory<Edge, const AdjContainer>;
-    using SuccContainer =      typename GetFirstFactory<typename AdjContainer::value_type, AdjContainer>::Factory;
-    using ConstSuccContainer = typename GetConstFirstFactory<typename AdjContainer::value_type, AdjContainer>::Factory;
+    using SuccContainer =      AdjContainer;
+    using ConstSuccContainer = const AdjContainer;
     using EdgeContainer =      AdjacencyIterFactory<SuccessorMap, AdjacencyConstIterator<SuccessorMap> >;
     using ConstEdgeContainer = AdjacencyIterFactory<const SuccessorMap, AdjacencyConstIterator<const SuccessorMap> >;
 
@@ -47,9 +47,9 @@ namespace PT{
 
     size_t out_degree(const Node u) const { return successors(u).size(); }
 
-    ConstSuccContainer successors(const Node u) const { return_map_lookup(_successors, u, no_successors); }
-    ConstSuccContainer const_successors(const Node u) const { return_map_lookup(_successors, u, no_successors); }
-    SuccContainer successors(const Node u) { return_map_lookup(_successors, u, SuccContainer()); }
+    ConstSuccContainer& successors(const Node u) const { return_map_lookup(_successors, u, no_successors); }
+    ConstSuccContainer& const_successors(const Node u) const { return_map_lookup(_successors, u, no_successors); }
+    SuccContainer& successors(const Node u) { return_map_lookup(_successors, u, no_successors); }
 
     ConstOutEdgeContainer out_edges(const Node u) const { return {u, successors(u)}; }
     ConstOutEdgeContainer const_out_edges(const Node u) const { return {u, successors(u)}; }

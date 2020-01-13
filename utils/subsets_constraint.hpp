@@ -18,6 +18,7 @@ namespace PT{
     using Node = typename _Network::Node;
   protected:
     const _Network& N;
+    const bool ignore_deg2_nodes;
 
     _Container current; // current output set
     std::map<Node, Node> available; // this maps post-order numbers to their nodes for all available nodes, sorted by post-order number
@@ -35,8 +36,10 @@ namespace PT{
         if(N.is_leaf(u))
           branched.push(u);
         else
-          for(const Node v: N.children(u))
+          for(Node v: N.children(u)){
+            if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.children(v));
             init_DFS(v, time);
+          }
         append(po_number, u, time++);
       }
     }
@@ -50,7 +53,6 @@ namespace PT{
     // set a branched-on node to 0 and mark it available
     void un_branch(const Node u)
     {
-      std::cout << "un-branching "<<u<<"\n";
       append(available, po_number.at(u), u);
       current.erase(u);
     }
@@ -58,9 +60,10 @@ namespace PT{
     // propagate a change ?/1 -> 0 of u upwards
     void propagate_zero_up(const Node u)
     {
-      std::cout << "propagating 0 to "<<u<<"\n";
+      //std::cout << "propagating 0 to "<<u<<"\n";
       // if u was available, it no longer is, since a child of u is now 0-fixed
-      for(const Node v: N.parents(u)){
+      for(Node v: N.parents(u)){
+        if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
         if(++zero_fixed_children[v] == 1){
           available.erase(po_number.at(v));
           propagate_zero_up(v);
@@ -71,8 +74,9 @@ namespace PT{
     // propagate a change 0 -> 1/? of u upwards
     void propagate_nonzero_up(const Node u)
     {
-      std::cout << "propagating non-0 to "<<u<<"\n";
-      for(const Node v: N.parents(u)){
+      //std::cout << "propagating non-0 to "<<u<<"\n";
+      for(Node v: N.parents(u)){
+        if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
         if(--zero_fixed_children[v] == 0){
           append(available, po_number.at(v), v);
           propagate_nonzero_up(v);
@@ -84,20 +88,20 @@ namespace PT{
     // note: no need to change availability since it's already non-available due to its 0-branch
     void branch_to_one(const Node u)
     {
-      std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<contains(available, po_number.at(u))<<"] to 1\n";
+      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<contains(available, po_number.at(u))<<"] to 1"<<std::endl);
       append(current, u);
       propagate_nonzero_up(u);
-      std::cout << "b1("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<"\n";
+      DEBUG5(std::cout << "b1("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
     }
 
     // first branch of a node u: mark u unavailable and propagate
     void branch_to_zero(const Node u)
     {
-      std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<contains(available, po_number.at(u))<<"] to 0\n";
+      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<contains(available, po_number.at(u))<<"] to 0"<<std::endl);
       available.erase(po_number.at(u));
       propagate_zero_up(u);
       branched.push(u);
-      std::cout << "b0("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<"\n";
+      DEBUG5(std::cout << "b0("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
     }
 
     void next_subset()
@@ -114,18 +118,18 @@ namespace PT{
         branch_to_one(branched.top());
         // establish branches on all available nodes
         while(!available.empty()) branch_to_zero(front(available).second);
-        std::cout << "++ -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<"\n";
-      } else std::cout << "----- reached THE END ------\n";
+        DEBUG5(std::cout << "++ -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
+      }
     }
 
   public:
 
-    NetworkConstraintSubsetIterator(const _Network& _N, const bool construct_end_iterator = false):
-      N(_N)
+    NetworkConstraintSubsetIterator(const _Network& _N, const bool construct_end_iterator = false, const bool _ignore_deg2_nodes = true):
+      N(_N), ignore_deg2_nodes(_ignore_deg2_nodes)
     {
       if(!construct_end_iterator)
         first_subset();
-      std::cout << "init -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<"\n";
+      DEBUG5(std::cout << "init -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
     }
 
     inline bool is_valid() const { return !branched.empty(); }

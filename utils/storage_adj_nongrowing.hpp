@@ -147,10 +147,10 @@ namespace PT{
     using typename Parent::Adjacency;
 
     using RevAdjContainer = ConsecutiveStorage<Node>;
-    using ConstRevAdjContainer = ConsecutiveStorage<const Node>;
+    using ConstRevAdjContainer = const ConsecutiveStorage<Node>;
 
     using PredContainer = ConsecutiveStorageNoMem<Node>;
-    using ConstPredContainer = ConsecutiveStorageNoMem<const Node>;
+    using ConstPredContainer = const ConsecutiveStorageNoMem<Node>;
     
     using PredecessorMap = std::unordered_map<Node, PredContainer>;
     using ConstPredecessorMap = std::unordered_map<Node, ConstPredContainer>;
@@ -158,7 +158,6 @@ namespace PT{
     using InEdgeContainer = InEdgeFactory<Edge, PredContainer>;
     using ConstInEdgeContainer = InEdgeConstFactory<Edge, ConstPredContainer>;
 
-    static const PredContainer no_predecessors;
   protected:
     using Parent::_neighbors;
     using Parent::_successors;
@@ -200,10 +199,12 @@ namespace PT{
     uint32_t num_nodes() const { return _predecessors.size() + 1; }
     size_t in_degree(const Node u) const { return predecessors(u).size(); }
 
-    PredContainer      predecessors(const Node u) { return_map_lookup(_predecessors, u, no_predecessors); }
-    ConstPredContainer predecessors(const Node u) const { return_map_lookup(_predecessors, u, no_predecessors); }
+    ConstPredContainer& predecessors(const Node u) const {
+      static const PredContainer no_predecessors;
+      return_map_lookup(_predecessors, u, no_predecessors);
+    }
 
-    InEdgeContainer      in_edges(const Node u) { return InEdgeContainer(u, predecessors(u)); }
+    //InEdgeContainer      in_edges(const Node u) { return InEdgeContainer(u, predecessors(u)); }
     ConstInEdgeContainer in_edges(const Node u) const { return ConstInEdgeContainer(u, predecessors(u)); }
 
     //! initialization; 
@@ -236,9 +237,6 @@ namespace PT{
 
 
   };
-
-  template<class _Edge>
-  const typename NonGrowingNetworkAdjacencyStorage<_Edge>::PredContainer NonGrowingNetworkAdjacencyStorage<_Edge>::no_predecessors;
 
 }
 

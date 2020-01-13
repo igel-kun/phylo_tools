@@ -108,7 +108,6 @@ void print_extension(const MyNetwork& N, const Extension<>& ex)
   // compute scanwidth of ex
   const std::unordered_map<MyNode, uint32_t> sw = ex.sw_map(N);
 
-  assert(!sw.empty() && "Empty extension detected, this should not happen for non-empty networks!");
   std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(SWIter(sw.begin()), SWIter(sw.end())))<<")"<<std::endl;
 
   std::vector<MyEdge> gamma_el;

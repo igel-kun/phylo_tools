@@ -65,31 +65,28 @@ namespace PT{
 
 
     // convenience functions to not have to write .start[] all the time
-    _Item& operator[](const uint32_t i) { return start[i]; }
-    const _Item& operator[](const uint32_t i) const { return start[i]; }
+    inline _Item& operator[](const uint32_t i) { return start[i]; }
+    inline const _Item& operator[](const uint32_t i) const { return start[i]; }
 
     inline uint32_t size() const { return count; }
     inline void clear() { start = nullptr; count = 0; }
     inline bool empty() const { return count == 0; }
-    iterator begin() { return start; }
-    iterator end() { return start + count; }
-    const_iterator begin() const { return start; }
-    const_iterator end() const { return start + count; }
-    iterator rbegin() { return end() - 1; }
-    iterator rend() { return begin() - 1; }
-    const_iterator rbegin() const { return end() - 1; }
-    const_iterator rend() const { return begin() - 1; }
-    const_iterator cbegin() const { return start; }
-    const_iterator cend() const { return start + count; }
-    reference       back()       { return *rbegin(); }
-    const_reference back() const { return *rbegin(); }
-    reference       front()       { return *begin(); }
-    const_reference front() const { return *begin(); }
+    inline iterator begin() { return start; }
+    inline iterator end() { return start + count; }
+    inline const_iterator begin() const { return start; }
+    inline const_iterator end() const { return start + count; }
+    inline iterator rbegin() { return end() - 1; }
+    inline iterator rend() { return begin() - 1; }
+    inline const_iterator rbegin() const { return end() - 1; }
+    inline const_iterator rend() const { return begin() - 1; }
+    inline const_iterator cbegin() const { return start; }
+    inline const_iterator cend() const { return start + count; }
+    inline reference       back()       { return *rbegin(); }
+    inline const_reference back() const { return *rbegin(); }
+    inline reference       front()       { return *begin(); }
+    inline const_reference front() const { return *begin(); }
 
-    iterator emplace_back(const _Item& e)
-    {
-      return new(start + count++) _Item(e);
-    }
+    inline iterator emplace_back(const _Item& e) { return new(start + count++) _Item(e); }
 
     //! O(n) search
     iterator find(const _Item& x) const
@@ -137,8 +134,9 @@ namespace PT{
   template<typename _Item>  
   std::ostream& operator<<(std::ostream& os, const ConsecutiveStorageNoMem<_Item>& storage)
   {
+    os << '{';
     for(const auto& i: storage) os << i << ' ';
-    return os;
+    return os << '}';
   }
 
 

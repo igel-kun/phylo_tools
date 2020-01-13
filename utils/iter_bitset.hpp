@@ -339,6 +339,15 @@ namespace std {
     iterator find(const uint64_t x) const;
   };
 
+  template<typename bucket_map>
+  struct hash<iterable_bitset<bucket_map>>{
+    size_t operator()(const iterable_bitset<bucket_map>& bs) const{
+      const bucket_map& storage = bs.data();
+      size_t result = 0;
+      for(const auto& item: storage) has_combine(result, item);
+      return result;
+    }
+  };
 
 
   // ------------------ unordered_map-based bitset ----------------------------

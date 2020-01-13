@@ -35,8 +35,6 @@ namespace PT{
       // increase degrees of u and v
       ++(v_deg.first);
       ++(degrees[u].second);
-      
-      std::cout << "treated edge "<<uv<<" - nodes now "<<nodes<<" and degrees: "<<degrees<<"\n";
     }
   }
 

@@ -83,10 +83,10 @@ namespace PT{
   public:
     using Parent::Parent;
     using value_type = _Deref;
-    using reference = value_type&;
+    using reference = _Deref&;
     using const_reference = const reference;
 
-    _Deref operator*() const { return select(*pair_it); }
+    reference operator*() const { return select(*pair_it); }
     SelectingIterator& operator++() { ++pair_it; return *this; }
     SelectingIterator operator++(int) { SelectingIterator it(*this); ++(*this); return it; }
   };
@@ -119,9 +119,8 @@ namespace PT{
     _PairContainer& c;
 
   public:
-    using value_type = typename std::iterator_traits<_Iterator>::value_type;
-    using reference = typename std::iterator_traits<_Iterator>::reference;
-    //using const_reference = typename std::iterator_traits<_Iterator>::const_reference;
+    using value_type = typename _Iterator::value_type;
+    using reference = typename _Iterator::reference;
     using const_reference = typename _Iterator::const_reference;
 
     using iterator = _Iterator;
@@ -132,10 +131,14 @@ namespace PT{
     {}
     iterator begin() { return c.begin(); }
     iterator end() { return c.end(); }
+    iterator rbegin() { return c.rbegin(); }
+    iterator rend() { return c.rend(); }
     const_iterator begin() const { return c.begin(); }
     const_iterator end() const { return c.end(); }
     const_iterator cbegin() const { return c.begin(); }
     const_iterator cend() const { return c.end(); }
+    const_iterator rbegin() const { return c.rbegin(); }
+    const_iterator rend() const { return c.rend(); }
     bool empty() const { return c.empty(); }
     bool size() const { return c.size(); }
 

@@ -57,8 +57,8 @@ namespace PT{
       return Parent::type_of(u);
     }
 
-    PredContainer         parents(Node u)       { return edges.predecessors(u); }
-    ConstPredContainer      parents(Node u) const { return edges.predecessors(u); }
+    PredContainer        parents(Node u)       { return edges.predecessors(u); }
+    ConstPredContainer   parents(Node u) const { return edges.predecessors(u); }
     InEdgeContainer      in_edges(Node u) {return edges.in_edges(u); }
     ConstInEdgeContainer in_edges(Node u) const {return edges.in_edges(u); }
 
@@ -164,10 +164,12 @@ namespace PT{
   std::ostream& operator<<(std::ostream& os, const Network<_EdgeStorage, _NodeList, _NodeData>& N)
   {
     if(!N.empty()){
-      for(auto u: N.get_nodes())
-        std::cout << "children of "<<u<<": "<<N.children(u)<<std::endl;
-      for(auto u: N.get_nodes())
-        std::cout << "out-edges of "<<u<<": "<<N.out_edges(u)<<std::endl;
+      DEBUG3(
+        for(auto u: N.get_nodes())
+          std::cout << "children of "<<u<<": "<<N.children(u)<<std::endl;
+        for(auto u: N.get_nodes())
+          std::cout << "out-edges of "<<u<<": "<<N.out_edges(u)<<std::endl;
+      );
       N.print_subtree(os, N.root());
     } else os << "{}";
     return os;

@@ -48,7 +48,6 @@ namespace PT{
     void do_postorder() {do_postorder(N.root());}
     bool do_postorder(const Node u)
     {
-      std::cout << "next node: "<<u<<"\n";
       if(!track_seen || !contains(seen, u)){
         if(track_seen) append(seen, u);
         for(const auto& v: N.children(u)){
@@ -154,7 +153,6 @@ namespace PT{
       Parent(_N, _out)
     {
       seen.insert(_except.begin(), _except.end());
-      std::cout << "init traversal with except: "<<seen<<"\n";
     }
   };
 
@@ -184,7 +182,6 @@ namespace PT{
       except(_except)
     {
       seen.insert(_except.begin(), _except.end());
-      std::cout << "init traversal with except: "<<seen<<"\n";
     }
   };
 

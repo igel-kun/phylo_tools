@@ -162,10 +162,12 @@ namespace PT{
     // =================== information query ==============
 
     bool empty() const { return nodes.empty(); }
+    Node in_degree(const Node u) const { return edges.in_degree(u); }
     Node out_degree(const Node u) const { return edges.out_degree(u); }
     bool is_leaf(const Node u) const { return out_degree(u) == 0; }
     bool is_root(const Node u) const { return u == root(); }
     bool is_tree_node(const Node u) const { return out_degree(u) > 0; }
+    bool is_suppressible(const Node u) const { return (in_degree(u) == 1) && (out_degree(u) == 1); }
 
     Node type_of(const Node u) const
     {
@@ -416,7 +418,7 @@ namespace PT{
       DEBUG3(std::cout << "init Tree with consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_names.size()<<" names: "<<_names<<std::endl);
       
       for(uint32_t i = 0; i < _names.size(); ++i) append(nodes, i);
-      tree_summary(std::cout);
+      DEBUG2(tree_summary(std::cout));
     }
 
     // read all nodes and prepare the edge storage to receive edges; return the root
@@ -428,7 +430,7 @@ namespace PT{
       edges(given_edges, nodes, &leaves)
     {
       DEBUG3(std::cout << "init Tree with non-consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_names.size()<<" names: "<<_names<<" and "<<nodes.size()<<" nodes: "<<nodes<<std::endl);
-      tree_summary(std::cout);
+      DEBUG2(tree_summary(std::cout));
     }
 
     // initialize a subtree rooted at a node of the given tree

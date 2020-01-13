@@ -14,9 +14,11 @@ namespace PT{
   {
   public:
     using AdjRef = typename std::iterator_traits<_Iterator>::reference;
-    using iterator = _Iterator;
     using Edge = _Edge;
     using Node = typename _Edge::Node;
+    using iterator = _Iterator;
+    using reference = _Edge;
+    using const_reference = const _Edge;
   protected:
     Node u;
     _Iterator node_it;
@@ -75,12 +77,18 @@ namespace PT{
     _Edge operator*() const { return {*node_it, u}; }
   };
 
+  template<class _Edge = Edge<>,
+           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
+           class _Iterator = typename _NodeContainer::const_iterator>
+  using InEdgeConstIterator = InEdgeIterator<_Edge, const _NodeContainer, _Iterator>;
+ 
   // make an edge container from a head and a list of tails
   template<class _Edge = Edge<>,
            class _NodeContainer = std::unordered_set<typename _Edge::Node>,
            class _Iterator = typename _NodeContainer::iterator>
   class OutEdgeIterator : public InOutEdgeIterator<_Edge, _NodeContainer, _Iterator>
   {
+  protected:
     using Parent = InOutEdgeIterator<_Edge, _NodeContainer, _Iterator>;
     using Parent::u;
     using Parent::node_it;
@@ -90,11 +98,6 @@ namespace PT{
     _Edge operator*() const { return {u, *node_it}; }
   };
 
-  template<class _Edge = Edge<>,
-           class _NodeContainer = std::unordered_set<typename _Edge::Node>,
-           class _Iterator = typename _NodeContainer::const_iterator>
-  using InEdgeConstIterator = InEdgeIterator<_Edge, const _NodeContainer, _Iterator>;
-  
   template<class _Edge = Edge<>,
            class _NodeContainer = std::unordered_set<typename _Edge::Node>,
            class _Iterator = typename _NodeContainer::const_iterator>
@@ -109,6 +112,8 @@ namespace PT{
     using Node = typename _Container::value_type;
     using iterator = _Iterator;
     using const_iterator = _ConstIterator;
+    using reference = typename iterator::reference;
+    using const_reference = typename const_iterator::reference;
   protected:
     const bool copy_container;
     const Node u;
@@ -140,6 +145,13 @@ namespace PT{
     iterator end() { return {u, c->end()}; }
     const_iterator begin() const { return {u, c->begin()}; }
     const_iterator end() const { return {u, c->end()}; }
+    iterator rbegin() { return {u, c->rbegin()}; }
+    iterator rend() { return {u, c->rend()}; }
+    const_iterator rbegin() const { return {u, c->rbegin()}; }
+    const_iterator rend() const { return {u, c->rend()}; }
+
+    bool empty() const { return c->empty(); }
+    size_t size() const { return c->size(); }
   };
 
 

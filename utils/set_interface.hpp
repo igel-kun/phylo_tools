@@ -85,6 +85,8 @@ namespace std {
 
   template<class T>
   using emplace_result = std::pair<typename T::iterator, bool>;
+  template<class T>
+  using const_emplace_result = std::pair<typename T::const_iterator, bool>;
 
   template<class Set, typename ...Args>
   inline emplace_result<Set> append(Set& _set, Args... args)
@@ -93,15 +95,9 @@ namespace std {
     return _set.emplace(args...);
   }
   template<typename T, typename ...Args>
-  inline emplace_result<std::vector<T>> append(std::vector<T>& _vec, Args... args)
-  {
-    return {_vec.emplace(_vec.end(), args...), true};
-  }
+  inline emplace_result<std::vector<T>> append(std::vector<T>& _vec, Args... args) { return {_vec.emplace(_vec.end(), args...), true}; }
   template<typename T, typename ...Args>
-  inline emplace_result<std::vector_list<T>> append(std::vector_list<T>& _vec, Args... args)
-  {
-    return {_vec.emplace(_vec.end(), args...), true};
-  }
+  inline emplace_result<std::vector_list<T>> append(std::vector_list<T>& _vec, Args... args) { return {_vec.emplace(_vec.end(), args...), true}; }
 
   // this lets us append_to_map() for map<int, int> for example
   template<class T>
@@ -128,7 +124,7 @@ namespace std {
   template<class Map, typename ...Args>
   inline emplace_result<Map> append_to_map(Map& _map, const typename Map::key_type& _key, Args... args)
   {
-    static_assert(is_stl_map_type<Map>::value);
+    //static_assert(is_stl_map_type<Map>::value);
     auto key_it = _map.find(_key);
     if(key_it != _map.end()){
       // we ignore the result of appending into the mapped object...
@@ -156,14 +152,19 @@ namespace std {
     return append_to_map(_map, _key, args...);
   }
 
-  template<class Map>
-  inline uint32_t at(const Map& _map, const typename Map::key_type& _x)
+  template<class _Container>
+  inline void append(_Container& x, const _Container& y)
   {
-    static_assert(is_stl_map_type<Map>::value);
-    const auto _iter = _map.find(_x);
-    assert(_iter != _map.end());
-    return _iter->second;
+    x.insert(y.begin(), y.end());
   }
+  template<class T>
+  inline void append(std::vector<T>& x, const std::vector<T>& y)
+  {
+    x.insert(x.end(), y.begin(), y.end());
+  }
+
+
+
 
   // I would write an operator= to assign unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
   template<class T>

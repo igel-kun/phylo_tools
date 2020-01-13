@@ -15,6 +15,7 @@
 #include <vector>
 #include <stack>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -148,6 +149,9 @@ namespace std{
 
   // why are those things not defined per default by STL???
 
+  template<class _Container>
+  inline typename _Container::const_iterator max_element(const _Container& c) { return max_element(c.begin(), c.end()); }
+
   template<typename T1, typename T2>
   struct hash<pair<T1, T2> >{
     size_t operator()(const pair<T1,T2>& p) const{
@@ -240,15 +244,31 @@ namespace std{
     return os << r.get();
   }
 
-  //! a hash computation for an unordered set, XORing its members
-  template<typename T>
-  size_t hash_value(const unordered_set<T>& S)
-  {
-    size_t result = 0;
-    for(const auto& i : S)
-      result = rotl(result, 1) ^ hash_value(i);
-    return result;
-  }
+  //! a hash computation for a set, XORing its members
+  template<typename _Container>
+  struct set_hash{
+    size_t operator()(const _Container& S) const
+    {
+      size_t result = 0;
+      static const std::hash<typename _Container::value_type> Hasher;
+      for(const auto& i : S)
+        result ^= Hasher(i);
+      return result;
+    }
+  };
+
+  //! a hash computation for a list, XORing and cyclic shifting its members (such that the order matters)
+  template<typename _Container>
+  struct list_hash{
+    size_t operator()(const _Container& S) const
+    {
+      size_t result = 0;
+      static const std::hash<typename _Container::value_type> Hasher;
+      for(const auto& i : S)
+        result = rotl(result, 1) ^ Hasher(i);
+      return result;
+    }
+  };
 
   //! add two pairs of things
   template <typename A, typename B>
@@ -362,7 +382,7 @@ inline bool decrease_or_remove(Map& m, const typename Map::iterator& it)
   }
 }
 
-#define return_map_lookup(x,y,z) {const auto _iter = x.find(y); return (_iter != x.end()) ? _iter->second : z; }
+#define return_map_lookup(x,y,z) {const auto _iter = (x).find(y); return (_iter != (x).end()) ? _iter->second : (z); }
 /*
 // lookup a key in a map and return the default value if the key was not found
 template<class Map>
