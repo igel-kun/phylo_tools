@@ -49,7 +49,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Qunused-arguments -Wno-unknown-warning")
 endif()
 
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -Wall -Werror -Wno-error=cpp -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -std=c++11")
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -Wall -Werror -Wno-error=cpp -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -std=c++17")
 if(${FATAL} STREQUAL ON)
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wfatal-errors")
 endif()
