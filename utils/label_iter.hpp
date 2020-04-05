@@ -1,114 +1,77 @@
 
 #pragma once
 
+#include <memory>
 #include "utils.hpp"
+#include "stl_utils.hpp"
 #include "types.hpp"
 
 namespace PT {
 
-  std::ostream& operator<<(std::ostream& os, const IndexVec::const_iterator& it){
-    return os << "<iter>"<<std::endl;
-  }
+  // For all types except integral types:
+  template<typename T>
+  struct deref{ static Node do_deref(const T& x) { return *x; } };
+  // For integral types only:
+  template<>
+  struct deref<Node>{ static Node do_deref(const Node x) { return x; } };
 
-  template<typename IterType = IndexVec::const_iterator, class NameContainer = NameVec>
-  class LabeledNodeIter: public std::iterator<std::random_access_iterator_tag, LabeledNode>
+  // an iterator producing pairs of (Node, Property), where the property is produced by the getter
+  // Note: the getter should have a type called 'Property'
+  template<class Iter, class PropertyGetter>
+  class LabeledNodeIter
   {
-    const NameContainer& names;
+    Iter it;
+    const PropertyGetter& getter;
 
-    IterType name_it;
-
-    LabeledNodeIter();
+    LabeledNodeIter(); // disallow default construction
   public:
+    using Property = typename PropertyGetter::Property;
+    using value_type = LabeledNode<Property>;
+    using reference = value_type&;
+    using pointer = value_type*;
+    using difference_type = ptrdiff_t;
+    using iterator_category = std::random_access_iterator_tag;
 
-    LabeledNodeIter(const NameContainer& _names, const IterType& _it):
-      names(_names), name_it(_it)
+    LabeledNodeIter(const Iter& _it, const PropertyGetter& _getter):
+      it(_it), getter(_getter)
     {}
-
-    // using function overload resolution as type check is a bit dirty, but this allows using an int as well as an vector::iterator as IterType
-    uint32_t deref_iter(const uint32_t x) const { return x;}
-    uint32_t deref_iter(const IndexVec::const_iterator& x) const {return *x; }
-    uint32_t deref_iter(const IndexVec::iterator& x) const {return *x; }
     
     // dereference
-    LabeledNode operator*() const
+    value_type operator*() const
     {
-      const uint32_t x = deref_iter(name_it);
-      return {x, names.at(x)};
+      const Node x = deref<Iter>::do_deref(it);
+      return {x, getter(x)};
     }
 
     // increment
-    LabeledNodeIter& operator++()
-    {
-      ++name_it;
-      return *this;
-    }
+    LabeledNodeIter& operator++() { ++it; return *this; }
+    LabeledNodeIter operator++(int) { LabeledNodeIter result(it, getter); ++(*this); return result; }
 
-    //! post-increment
-    LabeledNodeIter operator++(int)
-    {
-      LabeledNodeIter result(names, name_it);
-      ++(*this);
-      return result;
-    }
-
-    bool operator==(const LabeledNodeIter& it)
-    {
-      return it.name_it == name_it;
-    }
-
-    bool operator!=(const LabeledNodeIter& it)
-    {
-      return it.name_it != name_it;
-    }
-    LabeledNodeIter& operator=(const LabeledNodeIter& it)
-    {
-      name_it = it.name_it;
-      return *this;
-    }
+    bool operator==(const LabeledNodeIter& it) const { return it.it == it; }
+    bool operator!=(const LabeledNodeIter& it) const { return it.it != it; }
   };
 
-  template<typename _IterType = IndexVec::const_iterator, class NameContainer = NameVec>
+  template<class NodeContainer, class PropertyGetter>
   class LabeledNodeIterFactory
   {
-    const NameContainer& names;
-    const _IterType it_begin;
-    const _IterType it_end;
+    std::shared_ptr<NodeContainer> c;
+    PropertyGetter getter;
   public:
-    using IterType = _IterType;
+    using iterator = LabeledNodeIter<std::IteratorOf_t<NodeContainer, false>, PropertyGetter>;
 
-    LabeledNodeIterFactory(const NameContainer& _names, const IterType& _begin, const IterType& _end):
-      names(_names), it_begin(_begin), it_end(_end) 
-    {
-      //std::cout << "constructed labeled-node-iter-fac with begin = "<<_begin<<" & end = "<<_end<<std::endl;
-      //std::cout << "constructed labeled-node-iter-factory with names:"<<std::endl;
-      //for(const auto& i: names) std::cout << i << " ";
-      //std::cout << std::endl;
-      //std::cout << "from "<<it_begin<<" to "<<it_end<<"("<<it_end-it_begin<<" items)"<<std::endl;
-    }
-    template<class _NodeContainer>
-    LabeledNodeIterFactory(const NameContainer& _names, const _NodeContainer& c):
-      names(_names), it_begin(c.begin()), it_end(c.end())
-    {}
+    LabeledNodeIterFactory(const std::shared_ptr<NodeContainer>& _c, const PropertyGetter& _getter): c(_c), getter(_getter) {}
+    LabeledNodeIterFactory(NodeContainer* _c, const PropertyGetter& _getter): c(_c), getter(_getter) {}
 
-    LabeledNodeIter<IterType> begin() const
-    {
-      return LabeledNodeIter<IterType>(names, it_begin);
-    }
-    LabeledNodeIter<IterType> end() const
-    {
-      return LabeledNodeIter<IterType>(names, it_end);
-    }
-    
-    size_t size() const
-    {
-      return it_end - it_begin;
-    }
-
+    iterator begin() const { return {c->begin(), getter}; }
+    iterator end() const { return {c->end(), getter}; }
+    size_t size() const { return c->size(); }
+    size_t empty() const { return c->empty(); }
   };
 
-  template<class _Names, class _NodeContainer, typename _IterType = IndexVec::const_iterator>
-  LabeledNodeIterFactory<_IterType> get_labeled_nodes(const _Names& names, const _NodeContainer& nodes)
-  {
-    return {names, nodes};
-  }
-}
+  template<class NodeContainer, class PropertyGetter>
+  LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(const std::shared_ptr<NodeContainer>& c, const PropertyGetter& pg) { return {c, pg}; }
+  template<class NodeContainer, class PropertyGetter>
+  LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(NodeContainer* c, const PropertyGetter& pg) { return {c, pg}; }
+
+}// namespace
+

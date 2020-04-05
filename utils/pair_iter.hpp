@@ -1,36 +1,19 @@
 
 #pragma once
 
+#include <memory>
+#include "stl_utils.hpp"
+
 namespace PT{
 
-
-  // classes to extract second or first from an edge
-  template<class _Pair, class _ItemRef = typename _Pair::second_type&>
-  struct extract_second{
-    using reference = _ItemRef;
-    const _ItemRef operator()(const _Pair& e) const { return e.second; }
-    _ItemRef operator()(_Pair& e) const { return e.second; }
-  };
-  template<class _Pair, class _ItemRef = typename _Pair::first_type&>
-  struct extract_first{
-    using reference = _ItemRef;
-    const _ItemRef operator()(const _Pair& e) const { return e.first; }
-    _ItemRef operator()(_Pair& e) const { return e.first; }
-  };
-  template<class _Pair>
-  using const_extract_second = extract_second<_Pair, const typename _Pair::second_type&>;
-  template<class _Pair>
-  using const_extract_first = extract_first<_Pair, const typename _Pair::first_type&>;
-
-
-
-  // spew out all first/second in a list of pairs
-  template<class _PairContainer,
-           class _Iterator = typename _PairContainer::iterator,
-           class _Pair = typename _PairContainer::value_type>
+  // spew out all first/second in a container of pairs
+  template<class _PairContainer>
   class PairIterator
   {
   protected:
+    using _Iterator = std::IteratorOf_t<_PairContainer>;
+    using _Pair = typename _PairContainer::value_type;
+
     _Iterator pair_it;
   public:
     using value_type = typename std::iterator_traits<_Iterator>::value_type;
@@ -69,156 +52,93 @@ namespace PT{
 
   };
 
-  template<class _PairContainer,
-           class _Iterator = typename _PairContainer::iterator,
-           class _Selector = extract_second<typename _PairContainer::value_type>,
-           class _Deref = typename _Selector::reference>
-  class SelectingIterator: public PairIterator<_PairContainer, _Iterator>
+  template<class _PairContainer, template<class> class _Selector>
+  class SelectingIterator: public PairIterator<_PairContainer>
   {
-    using Parent = PairIterator<_PairContainer, _Iterator>;
-    using Parent::pair_it;
+    using Parent = PairIterator<_PairContainer>;
+    using _Iterator = std::IteratorOf_t<_PairContainer>;
+    using PairType = typename _PairContainer::value_type;
+    using Selector = _Selector<PairType>;
 
-    // _declaration_ of selector; remember to define it too
-    static const _Selector select;
   public:
-    using Parent::Parent;
-    using value_type = _Deref;
-    using reference = _Deref&;
-    using const_reference = const reference;
+    // _declaration_ of selector; remember to define it too
+    static const Selector select;
 
+    using _Deref = typename Selector::reference;
+    using value_type  = typename Selector::value_type;
+    using reference   = typename Selector::reference;
+    using pointer     = value_type*;
+    using difference_type = ptrdiff_t;
+    using iterator_category = typename std::iterator_traits<_Iterator>::iterator_category;
+    
+    using Parent::pair_it;
+    using Parent::Parent;
+    
     reference operator*() const { return select(*pair_it); }
     SelectingIterator& operator++() { ++pair_it; return *this; }
     SelectingIterator operator++(int) { SelectingIterator it(*this); ++(*this); return it; }
   };
   
   // definition of selector
-  template<class _PairContainer, class _Iterator, class _Selector, typename _Dref>
-  const _Selector SelectingIterator<_PairContainer, _Iterator, _Selector, _Dref>::select;
-
+  template<class _PairContainer, template<class> class _Selector>
+  const typename SelectingIterator<_PairContainer, _Selector>::Selector SelectingIterator<_PairContainer, _Selector>::select;
 
   template<class _PairContainer>
-  using SecondIterator = SelectingIterator<_PairContainer, typename _PairContainer::iterator, extract_second<typename _PairContainer::value_type>>;
+  using SecondIterator = SelectingIterator<_PairContainer, std::extract_second>;
   template<class _PairContainer>
-  using FirstIterator = SelectingIterator<_PairContainer, typename _PairContainer::iterator, extract_first<typename _PairContainer::value_type>>;
-  template<class _PairContainer>
-  using ConstSecondIterator = SelectingIterator<_PairContainer, typename _PairContainer::const_iterator, const_extract_second<typename _PairContainer::value_type>>;
-  template<class _PairContainer>
-  using ConstFirstIterator = SelectingIterator<_PairContainer, typename _PairContainer::const_iterator, const_extract_first<typename _PairContainer::value_type>>;
-
-
-
+  using FirstIterator = SelectingIterator<_PairContainer, std::extract_first>;
 
 
   // factories
-  template<class _PairContainer,
-           class _Iterator,
-           class _ConstIterator>
+  template<class _PairContainer, template<class> class _Iterator>
   class PairItemIterFactory
   {
   protected:
-    _PairContainer& c;
+    std::shared_ptr<_PairContainer> c;
 
   public:
-    using value_type = typename _Iterator::value_type;
-    using reference = typename _Iterator::reference;
-    using const_reference = typename _Iterator::const_reference;
+    using iterator =       _Iterator<_PairContainer>;
+    using const_iterator = _Iterator<const _PairContainer>;
+    using value_type = typename std::iterator_traits<iterator>::value_type;
+    using reference =  typename std::iterator_traits<iterator>::reference;
 
-    using iterator = _Iterator;
-    using const_iterator = _ConstIterator;
+    PairItemIterFactory(const std::shared_ptr<_PairContainer>& _c): c(_c) {}
+    PairItemIterFactory(_PairContainer* _c): c(_c) {}
 
-    PairItemIterFactory(_PairContainer& _c):
-      c(_c)
-    {}
-    iterator begin() { return c.begin(); }
-    iterator end() { return c.end(); }
-    iterator rbegin() { return c.rbegin(); }
-    iterator rend() { return c.rend(); }
-    const_iterator begin() const { return c.begin(); }
-    const_iterator end() const { return c.end(); }
-    const_iterator cbegin() const { return c.begin(); }
-    const_iterator cend() const { return c.end(); }
-    const_iterator rbegin() const { return c.rbegin(); }
-    const_iterator rend() const { return c.rend(); }
-    bool empty() const { return c.empty(); }
-    bool size() const { return c.size(); }
-
-    template<class __PairContainer, class __Iterator, class __ConstIterator>
-    operator PairItemIterFactory<__PairContainer, __Iterator, __ConstIterator>() const
-    {
-      return PairItemIterFactory<__PairContainer, __Iterator, __ConstIterator>(c);
-    }
-
+    iterator begin() { return c->begin(); }
+    iterator end() { return c->end(); }
+    const_iterator begin() const { return c->begin(); }
+    const_iterator end() const { return c->end(); }
+    bool empty() const { return c->empty(); }
+    bool size() const { return c->size(); }
   };
 
   template<class _PairContainer>
-  using SecondFactory = PairItemIterFactory<_PairContainer, SecondIterator<_PairContainer>, ConstSecondIterator<_PairContainer>>;
+  using SecondFactory = PairItemIterFactory<_PairContainer, SecondIterator>;
   template<class _PairContainer>
-  using FirstFactory = PairItemIterFactory<_PairContainer, FirstIterator<_PairContainer>, ConstFirstIterator<_PairContainer>>;
-  template<class _PairContainer>
-  using ConstSecondFactory = PairItemIterFactory<const _PairContainer, ConstSecondIterator<const _PairContainer>, ConstSecondIterator<const _PairContainer>>;
-  template<class _PairContainer>
-  using ConstFirstFactory = PairItemIterFactory<const _PairContainer, ConstFirstIterator<const _PairContainer>, ConstFirstIterator<const _PairContainer>>;
+  using FirstFactory = PairItemIterFactory<_PairContainer, FirstIterator>;
 
   template<class _PairContainer>
-  SecondFactory<_PairContainer> seconds(_PairContainer& c) { return SecondFactory<_PairContainer>(c); }
+  SecondFactory<_PairContainer> seconds(std::shared_ptr<_PairContainer>& c) { return {c}; }
   template<class _PairContainer>
-  FirstFactory<_PairContainer> firsts(_PairContainer& c) { return FirstFactory<_PairContainer>(c); }
+  FirstFactory<_PairContainer> firsts(std::shared_ptr<_PairContainer>& c) { return {c}; }
   template<class _PairContainer>
-  ConstSecondFactory<_PairContainer> const_seconds(const _PairContainer& c) { return ConstSecondFactory<_PairContainer>(c); }
+  SecondFactory<_PairContainer> seconds(_PairContainer* c) { return {c}; }
   template<class _PairContainer>
-  ConstFirstFactory<_PairContainer> const_firsts(const _PairContainer& c) { return ConstFirstFactory<_PairContainer>(c); }
+  FirstFactory<_PairContainer> firsts(_PairContainer* c) { return {c}; }
+  template<class _PairContainer>
+  SecondFactory<_PairContainer> seconds(_PairContainer&& c) { return {new _PairContainer(c)}; }
+  template<class _PairContainer>
+  FirstFactory<_PairContainer> firsts(_PairContainer&& c) { return {new _PairContainer(c)}; }
 
-
-  // return a FirstFactory M if N is a pair; otherwise, just return M
-  template<class N, class M>
-  struct GetFirstFactory{ using Factory = M&; };
-  template<class N, class M>
-  struct GetConstFirstFactory{ using Factory = const M&; };
-  template<class P, class Q, class M>
-  struct GetFirstFactory<std::pair<P,Q>, M>{ using Factory = FirstFactory<M>; };
-  template<class P, class Q, class M>
-  struct GetConstFirstFactory<std::pair<P,Q>, M>{ using Factory = ConstFirstFactory<M>; };
-
-  template<class N, class M>
-  struct GetSecondFactory{ using Factory = M&; };
-  template<class N, class M>
-  struct GetConstSecondFactory{ using Factory = const M&; };
-  template<class P, class Q, class M>
-  struct GetSecondFactory<std::pair<P,Q>, M>{ using Factory = SecondFactory<M>&; };
-  template<class P, class Q, class M>
-  struct GetConstSecondFactory<std::pair<P,Q>, M>{ using Factory = ConstSecondFactory<M>&; };
 
   template<class _PairContainer,
-           class _Iterator,
-           class _ConstIterator>
-  std::ostream& operator<<(std::ostream& os, const PairItemIterFactory<_PairContainer, _Iterator, _ConstIterator>& fac)
+           template<class> class _Iterator>
+  std::ostream& operator<<(std::ostream& os, const PairItemIterFactory<_PairContainer, _Iterator>& fac)
   {
     for(const auto& i: fac) os << i << ' ';
     return os;
   }
 
 }
-
-
-namespace std{
-
-  template<class _PairContainer,
-           class _Iterator,
-           class _Pair>
-  struct iterator_traits<PT::PairIterator<_PairContainer, _Iterator, _Pair> >: public iterator_traits<_Iterator>
-  {
-    using const_reference = const typename iterator_traits<_Iterator>::reference;
-  };
-
-  template<class _PairContainer,
-           class _Iterator,
-           class _Selector,
-           class _Deref>
-  struct iterator_traits<PT::SelectingIterator<_PairContainer, _Iterator, _Selector, _Deref> >: public iterator_traits<_Iterator>
-  {
-    using const_reference = const typename iterator_traits<_Iterator>::reference;
-  };
-
-}
-
 

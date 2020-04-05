@@ -13,14 +13,17 @@
 namespace std {
 
   template <class N>
-  struct is_stl_set_type<std::set<N>> { static const int value = 1; };
+  struct is_stl_set_type<std::set<N>> { static constexpr bool value = 1; };
   template <class N>
-  struct is_stl_set_type<std::unordered_set<N>> { static const int value = 1; };
+  struct is_stl_set_type<std::unordered_set<N>> { static constexpr bool value = 1; };
  
   template <class N, class M>
-  struct is_stl_map_type<std::map<N, M>> { static const int value = 1; };
+  struct is_stl_map_type<std::map<N, M>> { static constexpr bool value = 1; };
   template <class N, class M>
-  struct is_stl_map_type<std::unordered_map<N, M>> { static const int value = 1; };
+  struct is_stl_map_type<std::unordered_map<N, M>> { static constexpr bool value = 1; };
+  template<class N, class M>
+  struct is_stl_map_type<std::vector_map<N, M>> { static constexpr bool value = 1; };
+
 
 
 
@@ -70,14 +73,27 @@ namespace std {
   }
 
   template<class T>
-  inline const typename T::const_reference front(const T& _set)
+  inline typename std::iterator_traits<std::IteratorOf_t<T>>::reference front(T& _set)
   {
     assert(!_set.empty());
     return *(_set.begin());
   }
 
   template<class T>
-  inline const typename T::const_reference back(const T& _set)
+  inline typename std::iterator_traits<std::IteratorOf_t<T>>::reference back(T& _set)
+  {
+    assert(!_set.empty());
+    return *(_set.rbegin());
+  }
+  template<class T>
+  inline typename std::iterator_traits<std::IteratorOf_t<const T>>::reference front(const T& _set)
+  {
+    assert(!_set.empty());
+    return *(_set.begin());
+  }
+
+  template<class T>
+  inline typename std::iterator_traits<std::IteratorOf_t<const T>>::reference back(const T& _set)
   {
     assert(!_set.empty());
     return *(_set.rbegin());
@@ -85,8 +101,6 @@ namespace std {
 
   template<class T>
   using emplace_result = std::pair<typename T::iterator, bool>;
-  template<class T>
-  using const_emplace_result = std::pair<typename T::const_iterator, bool>;
 
   template<class Set, typename ...Args>
   inline emplace_result<Set> append(Set& _set, Args... args)
@@ -96,8 +110,8 @@ namespace std {
   }
   template<typename T, typename ...Args>
   inline emplace_result<std::vector<T>> append(std::vector<T>& _vec, Args... args) { return {_vec.emplace(_vec.end(), args...), true}; }
-  template<typename T, typename ...Args>
-  inline emplace_result<std::vector_list<T>> append(std::vector_list<T>& _vec, Args... args) { return {_vec.emplace(_vec.end(), args...), true}; }
+//  template<typename T, typename ...Args>
+//  inline emplace_result<std::vector_list<T>> append(std::vector_list<T>& _vec, Args... args) { return {_vec.emplace(_vec.end(), args...), true}; }
 
   // this lets us append_to_map() for map<int, int> for example
   template<class T>
@@ -132,7 +146,7 @@ namespace std {
       // ... and just return that no insertion into the map took place
       return {key_it, false};
     } else {
-      return {_map.emplace_hint(key_it, PWC, std::make_tuple(_key), std::make_tuple(args...)), true};
+      return {_map.emplace_hint(key_it, _key, args...), true};
     }
   }
 
@@ -146,8 +160,8 @@ namespace std {
   {
     return append_to_map(_map, _key, args...);
   }
-  template<class Q, typename ...Args>
-  inline emplace_result<std::vector_map<Q>> append(std::vector_map<Q>& _map, const typename std::vector_map<Q>::key_type& _key, Args... args)
+  template<class P, class Q, typename ...Args>
+  inline emplace_result<std::vector_map<P,Q>> append(std::vector_map<P,Q>& _map, const typename std::vector_map<P,Q>::key_type& _key, Args... args)
   {
     return append_to_map(_map, _key, args...);
   }
@@ -218,4 +232,40 @@ namespace std {
     return copy(x, result);
   }
 
+
+  // a set holding exactly one item, but having a set-interface
+  template<class _Element>
+  class SingletonSet
+  {
+    _Element item;
+
+  public:
+    using iterator = _Element*;
+    using const_iterator = const _Element*;
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+    using value_type = _Element;
+    using reference = value_type&;
+    using const_reference = const reference;
+
+    SingletonSet() = delete;
+    SingletonSet(_Element& _item): item(_item) {}
+
+    size_t size() const { return 1; }
+    bool empty() const { return false; }
+    reference       front() { return *item; }
+    const_reference front() const { return *item; }
+    iterator       find(const _Element& x) { return ((x == *item) ? begin() : end()); }
+    const_iterator find(const _Element& x) const { return ((x == *item) ? begin() : end()); }
+    
+    iterator begin() { return &item; }
+    const_iterator begin() const { return &item; }
+    reverse_iterator rbegin() { return &item; }
+    const_reverse_iterator rbegin() const { return &item; }
+    iterator end() { return begin() + 1; }
+    const_iterator end() const { return begin() + 1; }
+    reverse_iterator rend() { return begin() + 1; }
+    const_reverse_iterator rend() const { return begin() + 1; }
+  };
 }

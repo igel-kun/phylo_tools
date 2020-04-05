@@ -11,34 +11,23 @@
 #include "utils/scanwidth.hpp"
 
 using namespace PT;
-  
+ 
+using MyNetwork = RONetwork<>;
+using MyEdge = typename MyNetwork::Edge;
+using LabelMap = typename MyNetwork::LabelMap;
+using SWIter = SecondIterator<std::unordered_map<PT::Node, uint32_t>>;
 
-// read a network from an input stream 
-void read_newick_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
-{
-  std::string in_line;
-  std::getline(in, in_line);
-
-  NewickParser<EdgeVec> parser(in_line, names, el);
-  parser.read_tree();
-}
-
-void read_edgelist_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
-{
-  EdgeVecParser<> parser(in, names, el);
-  parser.read_tree();
-}
-
-bool read_from_stream(std::ifstream& in, EdgeVec& el, std::vector<std::string>& names)
+ 
+bool read_from_stream(std::ifstream& in, EdgeVec<MyNetwork>& el, LabelMap& names)
 {
   try{
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
-    read_newick_from_stream(in, el, names);
+    PT::parse_newick_string(in, el, names);
   } catch(const MalformedNewick& nw_err){
     DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
     try{
       in.seekg(0);
-      read_edgelist_from_stream(in, el, names);
+      PT::parse_edgelist(in, el, names);
     } catch(const MalformedEdgeVec& el_err){
       std::cout << "reading Newick failed: "<<nw_err.what()<<std::endl;
       return false;
@@ -56,6 +45,7 @@ void parse_options(const int argc, const char** argv)
   description["-e"] = {0,0};
   description["-et"] = {0,0};
   description["-pp"] = {0,0};
+  description["-lm"] = {0,0};
   description["-m"] = {1,1};
   description[""] = {1,1};
   const std::string help_message(std::string(argv[0]) + " <file>\n\
@@ -64,6 +54,7 @@ void parse_options(const int argc, const char** argv)
       \t-v\tverbose output, prints network\n\
       \t-e\tprint an optimal extension\n\
       \t-et\tprint an optimal extension tree (corresponds to the extension)\n\
+      \t-lm\tuse low-memory data structures when doing dynamic programming (uses 25% of the space at the cost of factor |V(N)| running time)\n\
       \t-m <int>\tmethod to use to compute scanwidth: 0 = brute force all permutations, 1 = dynamic programming on all vertices, 2 = brute force on raising vertices only, 3 = dynamic programming on raising vertices only, 4 = heuristic [default=3]\n\
       \t-pp\tuse preprocessing\n\
       \n");
@@ -95,30 +86,23 @@ const unsigned parse_method()
   } 
 }
 
-using MyNetwork = Network<NonGrowingNetworkAdjacencyStorage<>>;
-using MyNode = typename MyNetwork::Node;
-using MyEdge = typename MyNetwork::Edge;
-using SWIter = ConstSecondIterator<std::unordered_map<MyNode, uint32_t>>;
-
-void print_extension(const MyNetwork& N, const Extension<>& ex)
+void print_extension(const MyNetwork& N, const Extension& ex)
 {
-  
   std::cout << "extension: " << ex << std::endl;
 
   // compute scanwidth of ex
-  const std::unordered_map<MyNode, uint32_t> sw = ex.sw_map(N);
+  const auto sw = ex.sw_map(N);
 
-  std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(SWIter(sw.begin()), SWIter(sw.end())))<<")"<<std::endl;
+  std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(seconds(&sw)))<<")"<<std::endl;
 
   std::vector<MyEdge> gamma_el;
   ext_to_tree(N, ex, gamma_el);
 
   std::cout << "constructing extension tree\n";
-  Tree<> Gamma(gamma_el, N.get_names());
-  const std::unordered_map<MyNode, uint32_t> gamma_sw = ext_tree_sw_map(Gamma, N);
+  typename MyNetwork::ROTree Gamma(gamma_el, N.labels());
+  const OutDegreeMap gamma_sw = ext_tree_sw_map(Gamma, N);
   
-  std::cout << "extension tree:\n" << Gamma << std::endl
-    << "(sw = "<< *std::max_element(SWIter(gamma_sw.begin()), SWIter(gamma_sw.end()))<<")"<<std::endl;
+  std::cout << "extension tree:\n" << Gamma << std::endl << "(sw = "<< *std::max_element(seconds(&gamma_sw))<<")"<<std::endl;
 }
 
 int main(const int argc, const char** argv)
@@ -127,8 +111,8 @@ int main(const int argc, const char** argv)
 
   std::ifstream in(options[""][0]);
 
-  EdgeVec el;
-  std::vector<std::string> names;
+  EdgeVec<MyNetwork> el;
+  typename MyNetwork::LabelMap names;
 
   std::cout << "reading network..."<<std::endl;
   if(!read_from_stream(in, el, names)){
@@ -144,14 +128,20 @@ int main(const int argc, const char** argv)
 
 //  if(contains(options, "-pp") sw_preprocess(N);
 
-
-  Extension<> ex;
-  for(const auto& u: N.get_nodes<postorder>())
-    ex.push_back(u);
+  std::cout << "\n ==== computing silly post-order extension ===\n";
+  Extension ex;
+  for(const auto& u: N.get_nodes<postorder>()) append(ex, u);
   print_extension(N, ex);
+
   std::cout << "\n ==== computing optimal extension ===\n";
-  Extension<> ex_opt;
-  compute_min_sw_extension_brute_force(N, ex_opt);
+  
+  Extension ex_opt;
+  if(contains(options, "-lm"))
+    compute_min_sw_extension<true>(N, ex_opt);
+  else
+    compute_min_sw_extension<false>(N, ex_opt);
+  
+  std::cout << "\n ==== optimal extension found ===\n";
   print_extension(N, ex_opt);
 
   std::cout << "The End\n";

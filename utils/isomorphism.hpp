@@ -40,12 +40,12 @@ namespace PT{
   }
 
 
-  template<class PossSet = std::unordered_bitset, class NetworkA = Network<>, class NetworkB = Network<>>
+  template<class NetworkA = RONetwork<>, class NetworkB = RONetwork<>, class PossSet = std::unordered_bitset>
   class IsomorphismMapper
   {
-    using MappingPossibility = std::unordered_map<uint32_t, PossSet>;
+    using MappingPossibility = std::unordered_map<Node, PossSet>;
     using UpdateSet = std::unordered_bitset;
-    using UpdateOrder = std::priority_queue<IndexPair, std::vector<IndexPair>, std::greater<IndexPair> >;
+    using UpdateOrder = std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair> >;
 
     const NetworkA& N1;
     const NetworkB& N2;

@@ -9,61 +9,70 @@
 
 namespace PT {
 
-#define NO_LABEL UINT32_MAX
+  struct LeafLabelsOnlyT {};
+  LeafLabelsOnlyT leaf_labels_only;
 
-  // the last parameter is only to differentiate the different build_labelmap functions
-  template<class IterType = IndexVec::const_iterator>
-  MULabelMap* build_labelmap(const LabeledNodeIterFactory<IterType>& Nfac,
-                             const LabeledNodeIterFactory<IterType>& Tfac,
-                             const MULabelMap* sentinel = nullptr)
+  // a label map maps labels (strings) to pairs of node-storages (Node for single-labeled networks, NodeSet for multi-labeled networks)
+  template<class LabelStorageNet, class LabelStorageTree>
+  class LabelMatching: public std::unordered_map<std::string, std::pair<LabelStorageNet, LabelStorageTree>>
   {
-    MULabelMap* result = new MULabelMap();
+    using Parent = std::unordered_map<std::string, std::pair<LabelStorageNet, LabelStorageTree>>;
 
-    for(const LabeledNode& p: Nfac){
-      auto& leaf_correspondance = (*result)[p.second];
-      leaf_correspondance.first.push_back(p.first);
-      leaf_correspondance.second = NO_LABEL;
+  public:
+
+    template<class NodeIteratorN, class PropertyGetterN, class NodeIteratorT, class PropertyGetterT>
+    LabelMatching(const LabeledNodeIterFactory<NodeIteratorN, PropertyGetterN>& Nfac,
+              const LabeledNodeIterFactory<NodeIteratorT, PropertyGetterT>& Tfac):
+      Parent()
+    {
+      for(const LabeledNode<>& p: Nfac){
+        auto emp_res = Parent::emplace(p.second);
+        append(emp_res.first->second.first, p.first);
+        if(emp_res.second){
+          if(std::is_integral_v<LabelStorageTree>)
+            emp_res.first->second.second = (LabelStorageTree)(-1);
+        } else {
+          if(!std::is_integral_v<LabelStorageNet>)
+            append(emp_res.first->second.first, p.first);
+          else throw std::logic_error("single-label map for multi-labeled tree/network");
+        }
+              
+      }
+      for(const LabeledNode<>& p: Tfac){
+        auto emp_res = Parent::emplace(p.second);
+        append(emp_res.first->second, p.first);
+        
+        // if the label p.second has not been seen in N before, initialize the net-node-storage in the label-map
+        if(emp_res.second){
+          if(std::is_integral<LabelStorageNet>::value)
+            emp_res.first->first = (LabelStorageNet)(-1);
+        } else {
+          if(std::is_integral<LabelStorageTree>::value && (emp_res.first->second == (LabelStorageTree)(-1)))
+            throw std::logic_error("single-label map for multi-labeled network/tree");
+        }
+      }
     }
-    for(const LabeledNode& p: Tfac)
-      (*result)[p.second].second = p.first;
 
-    return result;
-  }
 
-  //! build a mapping between the labeled nodes produced by the LabeledNodeIterFactories
-  template<class IterType = IndexVec::const_iterator>
-  LabelMap* build_labelmap(const LabeledNodeIterFactory<IterType>& Nfac,
-                           const LabeledNodeIterFactory<IterType>& Tfac,
-                           const LabelMap* sentinel = nullptr)
-  {
-    LabelMap* result = new LabelMap();
+    template<class _Network, class _Tree>
+    LabelMatching(const _Network& N, const _Tree& T):
+      LabelMatching(N.get_nodes_labeled(), T.get_nodes_labeled())
+    {}
 
-    for(const LabeledNode& p: Nfac)
-      if(!p.second.empty()){
-        if(!result->DEEP_EMPLACE_TWO(p.second, p.first, NO_LABEL).second)
-          throw std::logic_error("single-label map, but first tree/network is multi-labelled");
-      }
-      
-    for(const LabeledNode& p: Tfac)
-      if(!p.second.empty()){
-        auto& _tmp = (*result)[p.second].second;
-        if(_tmp != NO_LABEL) throw std::logic_error("single-label map, but second tree/network is multi-labelled");
-        _tmp = p.first;
-      }
+    // prepend 'leaf_labels_only' to the argument list to construct label-maps only for the leaf-labels
+    template<class _Network, class _Tree>
+    LabelMatching(const LeafLabelsOnlyT& sentinel, const _Network& N, const _Tree& T):
+      LabelMatching(N.get_leaves_labeled(), T.get_leaves_labeled())
+    {}
+  };
 
-    return result;
-  }
+  template<class Network = RONetwork<>, class Tree = RONetwork<>>
+  LabelMatching<typename Network::LabelStorage, typename Tree::LabelStorage> get_label_matching(const Network& N, const Tree& T)
+  { return {N, T}; }
 
-  template<class _Network = Network<>, class _Tree = Tree<>, class _LMap>
-  _LMap* build_labelmap(const _Network& N, const _Tree& T, const _LMap* sentinel = nullptr)
-  {
-    return build_labelmap(N.get_nodes_labeled(), T.get_nodes_labeled(), sentinel);
-  }
+  template<class Network = RONetwork<>, class Tree = RONetwork<>>
+  LabelMatching<typename Network::LabelStorage, typename Tree::LabelStorage> get_leaf_label_matching(const Network& N, const Tree& T)
+  { return {leaf_labels_only, N, T}; }
 
-  template<class _Network = Network<>, class _Tree = Tree<>, class _LMap>
-  _LMap* build_leaf_labelmap(const _Network& N, const _Tree& T, const _LMap* sentinel = nullptr)
-  {
-    return build_labelmap(N.get_leaves_labeled(), T.get_leaves_labeled(), sentinel);
-  }
 
 }

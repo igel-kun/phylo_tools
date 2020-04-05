@@ -5,64 +5,105 @@
 #include "edge_iter.hpp"
 #include "storage.hpp"
 #include "storage_common.hpp"
-#include "pair_iter.hpp"
-#include "adj_iter.hpp"
 #include "set_interface.hpp"
 
 #warning TODO: implement move constructors for edge storages and adjacency storages!!!
 namespace PT{
 
-  template<class _Edge, class _AdjContainer>
+
+  template<class _EdgeData, class _SuccessorMap, class _PredecessorMap>
   class RootedAdjacencyStorage
   {
   public:
-    using AdjContainer = _AdjContainer;
-    using Edge = _Edge;
-    using Node = typename _Edge::Node;
-    using Adjacency = typename _AdjContainer::value_type;
-    using SuccessorMap = std::unordered_map<Node, AdjContainer>;
+    using EdgeData = _EdgeData;
+    using SuccessorMap = _SuccessorMap;
+    using PredecessorMap = _PredecessorMap;
+      
+    using NodeContainer = FirstFactory<const SuccessorMap>;
+    using NodeContainerRef = NodeContainer;
+    using ConstNodeContainer = NodeContainer;
+    using ConstNodeContainerRef = NodeContainerRef;
 
-    using OutEdgeContainer =      OutEdgeFactory<Edge, AdjContainer>;
-    using ConstOutEdgeContainer = OutEdgeConstFactory<Edge, const AdjContainer>;
-    using SuccContainer =      AdjContainer;
-    using ConstSuccContainer = const AdjContainer;
-    using EdgeContainer =      AdjacencyIterFactory<SuccessorMap, AdjacencyConstIterator<SuccessorMap> >;
-    using ConstEdgeContainer = AdjacencyIterFactory<const SuccessorMap, AdjacencyConstIterator<const SuccessorMap> >;
+    using SuccContainer         = typename SuccessorMap::mapped_type;
+    using SuccContainerRef      = SuccContainer&;
+    using ConstSuccContainer    = const SuccContainer;
+    using ConstSuccContainerRef = const SuccContainer&;
+    using PredContainer         = typename PredecessorMap::mapped_type;
+    using PredContainerRef      = PredContainer&;
+    using ConstPredContainer    = const PredContainer;
+    using ConstPredContainerRef = const PredContainer&;
+   
+    // Edges and RevEdges differ in that one of the two should contain a reference to the EdgeData instead of the data itself
+    using Adjacency = typename SuccContainer::value_type;
+    using Edge = EdgeFromAdjacency<Adjacency>;
+    using RevAdjacency = typename PredContainer::value_type;
+    using RevEdge = EdgeFromAdjacency<Adjacency>;
 
+    using ConstEdgeContainer    = OutEdgeMapIterFactory<const SuccessorMap>;
+    using ConstEdgeContainerRef = ConstEdgeContainer;
+    using ConstOutEdgeContainer = OutEdgeFactory<ConstSuccContainer>;
+    using ConstOutEdgeContainerRef = ConstOutEdgeContainer;
+    using ConstInEdgeContainer  = InEdgeFactory<ConstPredContainer>;
+    using ConstInEdgeContainerRef = ConstInEdgeContainer;
+
+    // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
+    using MapValueNonEmptyPredicate = std::MapValuePredicate<const SuccessorMap, std::NonEmptySetPredicate<ConstSuccContainer>>;
+    using EmptySuccIterFactory  = std::SkippingIterFactory<const SuccessorMap, MapValueNonEmptyPredicate>;
+    using ConstLeafContainer    = FirstFactory<EmptySuccIterFactory>;
+    using ConstLeafContainerRef = ConstLeafContainer;
+
+    using value_type = Edge;
+    using reference = Edge;
+    using iterator        = typename ConstEdgeContainer::iterator;
+    using const_iterator  = typename ConstEdgeContainer::const_iterator;
   protected:
     SuccessorMap _successors;
-    Node _root;
-    size_t _size;
+    PredecessorMap _predecessors;
+    
+    Node _root = 0;
+    size_t _size = 0;
 
-    static const AdjContainer no_successors;
+    // compute the root from the _in_edges and _out_edges mappings
+    void compute_root()
+    {
+      char roots = 0;
+      for(const auto& uv: _successors){
+        const Node u = uv.first;
+        if(!contains(_predecessors, u)){
+          if(roots++ == 0){
+            _root = u;
+          } else throw std::logic_error("cannot create tree/network with multiple roots ("+std::string(_root)+" & "+std::string(u)+")");
+        }
+      }
+    }
+
   public:
-  
-    RootedAdjacencyStorage(): _size(0) {}
+
+    // =============== iteration ================
+    const_iterator begin() const { return const_iterator(_successors); }
+    const_iterator end() const { return const_iterator(_successors, _successors.end()); }
 
     // =============== query ===================
-
-    size_t size() const { return _size; }
+    size_t num_nodes() const { return _predecessors.size() + 1; }
     size_t num_edges() const { return size(); }
+    Degree out_degree(const Node u) const { return successors(u).size(); }
+    Degree in_degree(const Node u) const { return predecessors(u).size(); }
+    size_t size() const { return _size; }
+    bool empty() const { return _size == 0; }
     Node root() const { return _root; }
 
-    size_t out_degree(const Node u) const { return successors(u).size(); }
 
-    ConstSuccContainer& successors(const Node u) const { return_map_lookup(_successors, u, no_successors); }
-    ConstSuccContainer& const_successors(const Node u) const { return_map_lookup(_successors, u, no_successors); }
-    SuccContainer& successors(const Node u) { return_map_lookup(_successors, u, no_successors); }
+    // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
+    ConstNodeContainerRef nodes() const { return firsts(&_successors); }
+    ConstSuccContainerRef successors(const Node u) const { return _successors.at(u); }
+    ConstPredContainerRef predecessors(const Node u) const { return _predecessors.at(u); }
 
-    ConstOutEdgeContainer out_edges(const Node u) const { return {u, successors(u)}; }
-    ConstOutEdgeContainer const_out_edges(const Node u) const { return {u, successors(u)}; }
-    OutEdgeContainer out_edges(const Node u) { return {u, successors(u)}; }
+    ConstOutEdgeContainer out_edges(const Node u) const { return {u, &successors(u)}; }
+    ConstInEdgeContainer  in_edges(const Node u) const { return {u, &predecessors(u)}; }
+    ConstEdgeContainer    edges() const { return &_successors; }
 
-    ConstEdgeContainer edges() const { return ConstEdges(_successors); }
-    EdgeContainer edges() { return Edges(_successors); }
-
-    // ================= modification =================
+    ConstLeafContainerRef leaves() const { return firsts(new EmptySuccIterFactory(&_successors, _successors)); }
   };
-
-  template<class _Edge, class _AdjContainer>
-  const typename RootedAdjacencyStorage<_Edge, _AdjContainer>::AdjContainer RootedAdjacencyStorage<_Edge, _AdjContainer>::no_successors;
 
 
 }// namespace

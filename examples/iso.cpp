@@ -5,7 +5,7 @@
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
 #include "utils/label_map.hpp"
-#include "solv/isomorphism.hpp"
+#include "utils/isomorphism.hpp"
 
 using namespace PT;
   

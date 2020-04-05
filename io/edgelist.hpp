@@ -5,66 +5,80 @@
 #include "utils/types.hpp"
 #include <unordered_map>
 
-struct MalformedEdgeVec : public std::exception 
-{
-  const char* what() const throw() {
-    return "error reading edgelist";
-  }
-};
+namespace PT{
+  struct MalformedEdgeVec : public std::exception 
+  {
+    const char* what() const throw() {
+      return "error reading edgelist";
+    }
+  };
 
 #warning TODO: teach it to parse weighted edges
 
-template<class Edge = PT::Edge<> >
-class EdgeVecParser
-{
-  std::ifstream& edgestream;
-  std::vector<std::string>& names;
-
-  std::unordered_map<std::string, uint32_t> name_to_id;
-  PT::EdgeVec& edges;
-
-  EdgeVecParser();
-public:
-
-  EdgeVecParser(std::ifstream& _edgestream, std::vector<std::string>& _names, PT::EdgeVec& _edges):
-    edgestream(_edgestream),
-    names(_names),
-    edges(_edges)
+  template<class EdgeList, class LabelMap>
+  class EdgeVecParser
   {
-    names.clear();
-    edges.clear();
-  }
+    std::istream& edgestream;
+    EdgeList& edges;
+    LabelMap& names;
+    std::unordered_map<std::string, Node> name_to_node;
 
-  uint32_t get_id(const std::string& name)
-  {
-    auto name_it = name_to_id.find(name);
-    if(name_it == name_to_id.end()){
-      const uint32_t id = names.size();
-      name_to_id.emplace_hint(name_it, name, id);
-      names.push_back(name);
-      return id;
-    } else return name_it->second;
-  }
+    EdgeVecParser();
+  public:
+    using Edge = typename EdgeList::value_type;
 
-  void read_tree()
-  {
-    Edge e;
-    while(!edgestream.eof()){
-      std::string name;
-      
-      edgestream >> name;
-      e.tail() = get_id(name);
-      if(edgestream.bad() || edgestream.eof() || edgestream.fail() || !std::isblank(edgestream.peek()))
-        throw MalformedEdgeVec();
-
-      edgestream >> name;
-      e.head() = get_id(name);
-      if(edgestream.bad() || (!edgestream.eof() && edgestream.fail()) || !std::isspace(edgestream.peek()))
-        throw MalformedEdgeVec();
-      
-      edges.push_back(e);
-      while(edgestream.peek() == 10) edgestream.get();
+    EdgeVecParser(std::istream& _edgestream, EdgeList& _edges, LabelMap& _names):
+      edgestream(_edgestream),
+      edges(_edges),
+      names(_names)
+    {
+      names.clear();
+      edges.clear();
     }
+
+    Node get_id(const std::string& name)
+    {
+      const auto name_it = name_to_node.find(name);
+      if(name_it == name_to_node.end()){
+        const Node id = (Node)names.size();
+        name_to_node.emplace_hint(name_it, name, id);
+        names.push_back(name);
+        return id;
+      } else return name_it->second;
+    }
+
+    void read_tree()
+    {
+      Edge e;
+      while(!edgestream.eof()){
+        std::string name;
+        
+        edgestream >> name;
+        e.tail() = get_id(name);
+        if(edgestream.bad() || edgestream.eof() || edgestream.fail() || !std::isblank(edgestream.peek()))
+          throw MalformedEdgeVec();
+
+        edgestream >> name;
+        e.head() = get_id(name);
+        if(edgestream.bad() || (!edgestream.eof() && edgestream.fail()) || !std::isspace(edgestream.peek()))
+          throw MalformedEdgeVec();
+        
+        edges.push_back(e);
+        while(edgestream.peek() == 10) edgestream.get();
+      }
+    }
+
+  };
+
+  template<class EdgeList, class LabelMap>
+  void parse_edgelist(std::istream& in, EdgeList& el, LabelMap& names)
+  {
+    EdgeVecParser<EdgeList, LabelMap> parser(in, el, names);
+    parser.read_tree();
   }
 
-};
+
+
+}
+
+

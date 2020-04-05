@@ -6,61 +6,43 @@
 
 namespace PT{
 
-  // a network consists of a list of nodes, each having out- and in-neighbors
-  template<class _EdgeStorage = GrowingNetworkAdjacencyStorage<>,
-           class _NodeList = std::vector<uint32_t>,
-           class _NodeData = void*,
-           class _EdgeData = void*>
-  class Network : public _Tree<_EdgeStorage, _NodeList, _NodeData, _EdgeData, false> 
+  // the main network class
+  // note: the order of template arguments is such as to minimize expected number of arguments that have to be given
+  template<class _NodeData,
+           class _EdgeData,
+           class _label_type = single_label_tag,
+           class _EdgeStorage = MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>,
+           class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
+  class Network : public Tree<_NodeData, _EdgeData, _label_type, _EdgeStorage, _LabelMap>
   {
-    using Parent = _Tree<_EdgeStorage, _NodeList, _NodeData, _EdgeData, false>; 
+    using Parent = Tree<_NodeData, _EdgeData, _label_type, _EdgeStorage, _LabelMap>;
   protected:
-    using Parent::names;
-    using Parent::nodes;
-    using Parent::edges;
-
-    bool is_tree_type() const { return false; }
+    using Parent::node_labels;
+    using Parent::_edges;
   public:
-
-    using typename Parent::Node;
+    using NetworkTypeTag = network_tag;
     using typename Parent::Edge;
-    using Parent::_Tree;
+    using Parent::Parent;
     using Parent::children;
+    using Parent::parents;
     using Parent::is_leaf;
     using Parent::out_degree;
+    using Parent::in_degree;
     using Parent::out_edges;
-
-    using OutEdgeContainer =      typename Parent::OutEdgeContainer;
-    using ConstOutEdgeContainer = typename Parent::ConstOutEdgeContainer;
-
-    using SuccContainer = typename Parent::SuccContainer;
-    using ConstSuccContainer = typename Parent::ConstSuccContainer;
-
-    using PredContainer = typename _EdgeStorage::PredContainer;
-    using ConstPredContainer = typename _EdgeStorage::ConstPredContainer;
-    
-    using InEdgeContainer = typename _EdgeStorage::InEdgeContainer;
-    using ConstInEdgeContainer = typename _EdgeStorage::ConstInEdgeContainer;
+    using Parent::get_nodes;
+    using Parent::num_nodes;
+    using Parent::root;
 
     // =================== information query ==============
 
+    inline bool is_tree_node(const Node u) const { return in_degree(u) == 1; }
+    inline bool is_reti(const Node u) const { return in_degree(u) > 1; }
+    inline bool is_inner_tree_node(const Node u) const { return is_tree_node(u) && !is_leaf(u); }
 
-    uint32_t in_degree(const Node u) const { return edges.in_degree(u); }
-    bool is_tree_node(const Node u) const { return in_degree(u) == 1; }
-    bool is_reti(const Node u) const { return in_degree(u) > 1; }
-    bool is_inner_tree_node(const Node u) const { return is_tree_node(u) && !is_leaf(u); }
-
-    uint32_t root() const { return edges.root(); }
     uint32_t type_of(const Node u) const
     {
-      if(is_reti(u)) return NODE_TYPE_RETI;
-      return Parent::type_of(u);
+      if(is_reti(u)) return NODE_TYPE_RETI; else return Parent::type_of(u);
     }
-
-    PredContainer        parents(Node u)       { return edges.predecessors(u); }
-    ConstPredContainer   parents(Node u) const { return edges.predecessors(u); }
-    InEdgeContainer      in_edges(Node u) {return edges.in_edges(u); }
-    ConstInEdgeContainer in_edges(Node u) const {return edges.in_edges(u); }
 
     //! return whether the tree indices are in pre-order (modulo gaps) (they should always be) 
     bool is_preordered(const Node sub_root, Node& counter) const
@@ -74,8 +56,8 @@ namespace PT{
     }
     bool is_preordered() const
     {
-      Node counter = root;
-      return is_preordered(root, counter);
+      Node counter = root();
+      return is_preordered(root(), counter);
     }
 
   public:
@@ -86,14 +68,16 @@ namespace PT{
     inline std::vector<Edge> get_bridges_postorder() const { return list_bridges(*this, root()); }
 
     //! get a list of component roots in preorder
-    void get_comp_roots(IndexVec& comp_roots) const
+    NodeVec get_comp_roots() const
     {
-      for(uint32_t r: nodes){
-        if(is_inner_tree_node(r)){
-          const uint32_t v = parents(r)[0];
+      NodeVec comp_roots;
+      for(const Node u: get_nodes()){
+        if(is_inner_tree_node(u)){
+          const Node v = parents(u).front();
           if(is_reti(v)) comp_roots.push_back(v);
         }
       }
+      return comp_roots;
     }
 
     // =================== modification ====================
@@ -102,23 +86,19 @@ namespace PT{
 
     // ================== construction =====================
 
-    Network(const NameVec& _names, const uint32_t _num_nodes):
-      Parent(_names, _num_nodes)
-    {}
-
     // =================== i/o ======================
     
-    void print_subtree(std::ostream& os, const uint32_t u, std::string prefix, std::unordered_bitset& seen) const
+    void print_subtree(std::ostream& os, const Node u, std::string prefix, std::unordered_bitset& seen) const
     {
-      std::string name = names.at(u);
+      std::string name = node_labels.at(u);
       if(name == "") name = (is_reti(u)) ? std::string("(R" + std::to_string(u) + ")") : std::string("+");
       DEBUG3(name += "[" + std::to_string(u) + "]");
       os << '-' << name;
       
-      const bool u_seen = test(seen, u);
+      const bool u_seen = test(seen, (size_t)u);
       const auto& u_childs = children(u);
       if(!u_seen || !is_reti(u)){
-        if(!u_seen) append(seen, u);
+        if(!u_seen) append(seen, (size_t)u);
         switch(out_degree(u)){
           case 0:
             os << std::endl;
@@ -141,38 +121,37 @@ namespace PT{
       } else os << std::endl;
     }
 
-    void print_subtree(std::ostream& os, const uint32_t u) const
+    void print_subtree(std::ostream& os, const Node u) const
     {
-      std::unordered_bitset seen(nodes.size());
+      std::unordered_bitset seen(num_nodes());
       print_subtree(os, u, "", seen);
     }
 
     friend class TreeComponentInfo;
   };
 
-
-  template<class _NodeData = void*,
-           class _EdgeData = void*,
-           class _NodeList = IndexSet,
-           class _EdgeStorage = NonGrowingNetworkAdjacencyStorage<> >
-  using RONetwork = Network<_EdgeStorage, _NodeList, _NodeData, _EdgeData>;
-
-
-  template<class _NodeData = void*,
-           class _NodeList = IndexSet,
-           class _EdgeStorage = NonGrowingNetworkAdjacencyStorage<> >
-  std::ostream& operator<<(std::ostream& os, const Network<_EdgeStorage, _NodeList, _NodeData>& N)
+  template<class _NodeData, class _EdgeData, class _label_type, class _EdgeStorage, class _LabelMap>
+  std::ostream& operator<<(std::ostream& os, const Network<_NodeData, _EdgeData, _label_type, _EdgeStorage, _LabelMap>& N)
   {
     if(!N.empty()){
-      DEBUG3(
-        for(auto u: N.get_nodes())
-          std::cout << "children of "<<u<<": "<<N.children(u)<<std::endl;
-        for(auto u: N.get_nodes())
-          std::cout << "out-edges of "<<u<<": "<<N.out_edges(u)<<std::endl;
-      );
       N.print_subtree(os, N.root());
     } else os << "{}";
     return os;
   }
 
-}
+
+  // convenience aliases
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
+  using MutableNetwork = Network<_NodeData, _EdgeData, _label_type, MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = ConsecutiveMap<Node,std::string>>
+  using ConstNetwork = Network<_NodeData, _EdgeData, _label_type, ConsecutiveNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+
+  // these two types should cover 95% of all (non-internal) use cases
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
+  using RWNetwork = MutableNetwork<_NodeData, _EdgeData, _label_type>;
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
+  using RONetwork = ConstNetwork<_NodeData, _EdgeData, _label_type>;
+
+
+
+} // namespace

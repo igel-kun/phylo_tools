@@ -2,11 +2,13 @@
 #pragma once
 
 #include <vector>
+#include "utils/types.hpp"
 #include "utils/iter_bitset.hpp"
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
 
 namespace PT{
+  using Index = uintptr_t;
 
   //! an exception for problems with the input string
   struct MalformedNewick : public std::exception 
@@ -23,10 +25,10 @@ namespace PT{
   };
 
   template<class _Network>
-  std::string get_extended_newick(const _Network& N, const uint32_t sub_root, std::unordered_bitset& retis_seen)
+  std::string get_extended_newick(const _Network& N, const Node sub_root, std::unordered_bitset& retis_seen)
   {
     std::string accu = "";
-    if(!N.is_reti(sub_root) || !retis_seen.test(sub_root)){
+    if(!N.is_reti(sub_root) || !test(retis_seen, (Index)(sub_root))){
       accu += "(";
       for(const auto& w: N.children(sub_root))
         accu += get_extended_newick(N, w, retis_seen) + ",";
@@ -37,7 +39,7 @@ namespace PT{
     accu += N.get_name(sub_root);
     if(N.is_reti(sub_root)) {
       accu += "#H" + std::to_string(sub_root);
-      retis_seen.set(sub_root);
+      retis_seen.set((Index)(sub_root));
     }
     return accu;
   }
@@ -51,47 +53,31 @@ namespace PT{
 
 
   // helper functions to be able to transparently use weights or not
-  template<class Edge = Edge<> >
-  inline void put_branch_in_edgelist(EdgeList& el, const Edge& e, const float& len)
-  {
-    el.emplace_back(e);
-  }
-
-  template<class Edge = Edge<> >
-  inline void put_branch_in_edgelist(EdgeVec& el, const Edge& e, const float& len)
-  {
-    el.emplace_back(e);
-  }
-
-  template<class Edge = Edge<> >
-  inline void put_branch_in_edgelist(WEdgeList& el, const Edge& e, const float& len)
-  {
-    el.emplace_back(e, len);
-  }
-
-  template<class Edge = Edge<> >
-  inline void put_branch_in_edgelist(WEdgeVec& el, const Edge& e, const float& len)
-  {
-    el.emplace_back(e, len);
-  }
-
+  template<template<class,class...> class _Container, class... Args>
+  inline void put_branch_in_edgelist(_Container<Edge<>,Args...>& container, const Node x, const Node y, const float len)
+  { append(container, x, y); }
+  template<template<class,class...> class _Container, class... Args>
+  inline void put_branch_in_edgelist(_Container<WEdge,Args...>& container, const Node x, const Node y, const float len)
+  { append(container, x, y, len); }
 
 
 
   //! a newick parser
   //NOTE: we parse newick from the back to the front since the node names are _appended_ to the node instead of _prepended_
   // EL can be an EdgeList or a WEdgeList if we are interested in branch-lengths
-  template<class EL = EdgeList>
+  template<class EL = EdgeVec, class LabelMap = ConsecutiveMap<Node, std::string>>
   class NewickParser
   {
     // a HybridInfo is a name of a hybrid together with it's hybrid-index
-    using HybridInfo = std::pair<std::string, uint32_t>;
+    using HybridInfo = std::pair<std::string, Index>;
+    using IndexAndDegree = std::pair<Index, Degree>;
+    using Edge = typename EL::value_type;
 
     const std::string& newick_string;
-    std::vector<std::string>& names;
+    LabelMap& names;
 
     // map a hybrid-index to a node index (and in-degree) so that we can find the corresponding hybrid when reading a hybrid number
-    std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> hybrids;
+    std::unordered_map<Index, IndexAndDegree> hybrids;
     ssize_t back;
 
     bool parsed = false;
@@ -109,8 +95,8 @@ namespace PT{
   public:
 
     NewickParser(const std::string& _newick_string,
-                 NameVec& _names,
                  EL& _edges,
+                 LabelMap& _names,
                  const bool _allow_non_binary = true,
                  const bool _allow_junctions = true):
       newick_string(_newick_string),
@@ -136,7 +122,7 @@ namespace PT{
       return names.size();
     }
 
-    const NameVec& get_names() const
+    const LabelMap& get_names() const
     {
       if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
       return names;
@@ -169,18 +155,18 @@ namespace PT{
       while((back >= 0) && std::isspace(newick_string.at(back))) --back;
     }
 
-    inline bool is_reticulation(const IndexPair& root) const
+    inline bool is_reticulation(const IndexAndDegree& root) const
     {
       return root.second != UINT32_MAX;
     }
 
     // a subtree is a leaf or an internal vertex
-    IndexPair read_subtree()
+    IndexAndDegree read_subtree()
     {
       skip_whitespaces();
 
       // read the name of the root, any non-trailing whitespaces are considered part of the name
-      uint32_t root = names.size();
+      Index root = names.size();
       names.push_back(read_name());
 
       // find if root is a hybrid and, if so, it's number
@@ -195,10 +181,10 @@ namespace PT{
           if(++(hyb_it->second.second) == 3) not_binary();
         } else {
           names.back() = hyb_info.first;
-          hybrids.emplace_hint(hyb_it, hyb_info.second, std::pair<uint32_t, uint32_t>(root, 0));
+          hybrids.emplace_hint(hyb_it, hyb_info.second, IndexAndDegree(root, 0));
         }
       }
-      IndexPair result = {root, hyb_info.second};
+      IndexAndDegree result = {root, hyb_info.second};
 
       // if the subtree dangling from root is non-empty, then recurse
       if((back > 0) && newick_string.at(back) == ')') read_internal(result);
@@ -208,7 +194,7 @@ namespace PT{
     }
 
     // an internal vertex is ( + branchlist + )
-    void read_internal(const IndexPair& root)
+    void read_internal(const IndexAndDegree& root)
     {
       assert(back >= 2);
       if(newick_string.at(back) == ')') --back;
@@ -221,9 +207,9 @@ namespace PT{
     }
 
     // a branchset is a comma-separated list of branches
-    void read_branchset(const IndexPair& root)
+    void read_branchset(const IndexAndDegree& root)
     {
-      std::unordered_set<uint32_t> children_seen;
+      std::unordered_set<Index> children_seen;
       children_seen.insert(read_branch(root));
       while(newick_string.at(back) == ',') {
         if(is_reticulation(root)){
@@ -233,7 +219,7 @@ namespace PT{
         }
         if(children_seen.size() == 3) not_binary();
         --back;
-        const uint32_t new_child = read_branch(root);
+        const Index new_child = read_branch(root);
         if(!children_seen.emplace(new_child).second)
           throw MalformedNewick(newick_string, back, "read double edge "+ std::to_string(root.first) + " --> "+std::to_string(new_child));
         if(back < 0) throw MalformedNewick(newick_string, back, "unmatched ')'");
@@ -242,11 +228,11 @@ namespace PT{
 
     // a branch is a subtree + a length
     // return the head of the read branch
-    uint32_t read_branch(const IndexPair& root)
+    Index read_branch(const IndexAndDegree& root)
     {
       const float len = read_length();
-      const IndexPair child = read_subtree();
-      put_branch_in_edgelist(edges, {root.first, child.first}, len);
+      const IndexAndDegree child = read_subtree();
+      put_branch_in_edgelist(edges, (Node)(root.first), (Node)(child.first), len);
       return child.first;
     }
 
@@ -289,6 +275,22 @@ namespace PT{
     }
 
   };
+
+  template<class EdgeList, class LabelMap>
+  void parse_newick_string(const std::string in, EdgeList& el, LabelMap& names)
+  {
+    NewickParser<EdgeList, LabelMap> parser(in, el, names);
+    parser.read_tree();
+  }
+  template<class EdgeList, class LabelMap>
+  void parse_newick_string(std::istream& in, EdgeList& el, LabelMap& names)
+  {
+    std::string in_line;
+    std::getline(in, in_line);
+
+    NewickParser<EdgeList, LabelMap> parser(in_line, el, names);
+    parser.read_tree();
+  }
 
 }
 

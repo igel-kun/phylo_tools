@@ -4,18 +4,19 @@
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
 #include "utils/label_map.hpp"
-#include "solv/isomorphism.hpp"
 
 using namespace PT;
-  
+
+using MyNetwork = RONetwork<void, float>;
+using MyLabelMap = typename MyNetwork::LabelMap;
 
 // read a network from an input stream 
-void read_newick_from_stream(std::ifstream& in, WEdgeVec& edges, std::vector<std::string>& names)
+void read_newick_from_stream(std::ifstream& in, WEdgeVec& edges, MyLabelMap& names)
 {
   std::string in_line;
   std::getline(in, in_line);
 
-  NewickParser<WEdgeVec> parser(in_line, names, edges);
+  NewickParser<WEdgeVec, MyLabelMap> parser(in_line, edges, names);
   parser.read_tree();
 }
 
@@ -49,7 +50,7 @@ int main(const int argc, const char** argv)
   std::ifstream in(options[""][0]);
 
   WEdgeVec weighted_edges;
-  std::vector<std::string> names;
+  MyLabelMap names;
 
   std::cout << "reading network..."<<std::endl;
   try{
@@ -61,16 +62,16 @@ int main(const int argc, const char** argv)
 
   DEBUG5(std::cout << "building N from "<<weighted_edges<< std::endl);
 
-  EdgeWeightedNetwork<float, void*, IndexSet, NonGrowingNetworkEdgeStorage<WEdge>> N(weighted_edges, names);
+  MyNetwork N(weighted_edges, names);
   //EdgeWeightedNetwork<> N(weighted_edges, names);
   //EdgeWeightedNetwork<float, void*, IndexSet, GrowingNetworkAdjacencyStorage<WEdge>> N(weighted_edges, names);
 
   if(contains(options, "-v"))
     std::cout << N << std::endl;
  
-  for(uint32_t u = 0; u < N.num_nodes(); ++u){
+  for(const Node u: N.get_nodes()){
     for(const WEdge uv: N.out_edges(u))
-      std::cout << "branch "<<u<<"["<<N.get_name(u)<<"] -> "<<head(uv)<<"["<<N.get_name(head(uv))<<"] has length "<<uv.data<<std::endl;
+      std::cout << "branch "<<u<<"["<<N.get_label(u)<<"] -> "<<head(uv)<<"["<<N.get_label(uv.head())<<"] has length "<<uv.data()<<std::endl;
   }
 }
 

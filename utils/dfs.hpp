@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "set_interface.hpp"
 
 namespace PT{
   enum TraversalType {preorder, inorder, postorder};
@@ -8,18 +9,17 @@ namespace PT{
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
-           class _Container>
+           class _Container,
+           class _Network>
   class Traversal
   {
   public:
-    using Node = typename _Network::Node;
     using Edge = typename _Network::Edge;
   protected:
     const _Network& N;
     _Container& out;
 
-    std::unordered_set<Node> seen;
+    NodeSet seen;
 
     virtual void emit_node(const Node u) const = 0;
     virtual void emit_edge(const Node u, const Node v) const = 0;
@@ -95,13 +95,12 @@ namespace PT{
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
-           class _Container>
-  class NodeTraversal: public Traversal<o, track_seen, _Network, _Container>
+           class _Container,
+           class _Network>
+  class NodeTraversal: public Traversal<o, track_seen, _Container, _Network>
   {
-    using Parent = Traversal<o, track_seen, _Network, _Container>;
+    using Parent = Traversal<o, track_seen, _Container, _Network>;
   public:
-    using typename Parent::Node;
     using typename Parent::Edge;
     using Parent::Parent;
   protected:
@@ -113,13 +112,12 @@ namespace PT{
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
-           class _Container>
-  class EdgeTraversal: public Traversal<o, track_seen, _Network, _Container>
+           class _Container,
+           class _Network>
+  class EdgeTraversal: public Traversal<o, track_seen, _Container, _Network>
   {
-    using Parent = Traversal<o, track_seen, _Network, _Container>;
+    using Parent = Traversal<o, track_seen, _Container, _Network>;
   public:
-    using typename Parent::Node;
     using typename Parent::Edge;
     using Parent::Parent;
 
@@ -132,14 +130,13 @@ namespace PT{
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
            class _Container,
-           class _ExceptContainer = std::unordered_set<typename _Network::Node>>
-  class NodeTraversalExcept: public Traversal<o, track_seen, _Network, _Container>
+           class _ExceptContainer,
+           class _Network>
+  class NodeTraversalExcept: public Traversal<o, track_seen, _Container, _Network>
   {
-    using Parent = Traversal<o, track_seen, _Network, _Container>;
+    using Parent = Traversal<o, track_seen, _Container, _Network>;
   public:
-    using typename Parent::Node;
     using typename Parent::Edge;
     using Parent::Parent;
   protected:
@@ -158,14 +155,13 @@ namespace PT{
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
            class _Container,
-           class _ExceptContainer = std::unordered_set<typename _Network::Node>>
-  class EdgeTraversalExcept: public Traversal<o, track_seen, _Network, _Container>
+           class _ExceptContainer,
+           class _Network>
+  class EdgeTraversalExcept: public Traversal<o, track_seen, _Container, _Network>
   {
-    using Parent = Traversal<o, track_seen, _Network, _Container>;
+    using Parent = Traversal<o, track_seen, _Container, _Network>;
   public:
-    using typename Parent::Node;
     using typename Parent::Edge;
     using Parent::Parent;
 
@@ -188,43 +184,43 @@ namespace PT{
 
   // convenience functions
   template<TraversalType o,
-           class _Network,
-           class _Container = std::vector<typename _Network::Node>,
-           class _ExceptContainer = std::unordered_set<typename _Network::Node>>
-  _Container node_traversal(_Network& N, const _ExceptContainer& except, const typename _Network::Node u)
+           class _Container,
+           class _ExceptContainer,
+           class _Network>
+  _Container node_traversal(_Network& N, const _ExceptContainer& except, const Node u)
   {
     _Container out;
-    return NodeTraversalExcept<o, true, _Network, _Container, _ExceptContainer>(N, out, except).do_traversal(u);
+    return NodeTraversalExcept<o, true, _Container, _ExceptContainer, _Network>(N, out, except).do_traversal(u);
   }
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
-           class _Container = std::vector<typename _Network::Node>>
-  _Container node_traversal(_Network& N, const typename _Network::Node u)
+           class _Container,
+           class _Network>
+  _Container node_traversal(_Network& N, const Node u)
   {
     _Container out;
-    return NodeTraversal<o, track_seen, _Network, _Container>(N, out).do_traversal(u);
+    return NodeTraversal<o, track_seen, _Container, _Network>(N, out).do_traversal(u);
   }
 
   template<TraversalType o,
-           class _Network,
-           class _Container = std::vector<typename _Network::Edge>,
-           class _ExceptContainer = std::unordered_set<typename _Network::Node>>
-  _Container edge_traversal(_Network& N, const _ExceptContainer& except, const typename _Network::Node u)
+           class _Container,
+           class _ExceptContainer,
+           class _Network>
+  _Container edge_traversal(_Network& N, const _ExceptContainer& except, const Node u)
   {
     _Container out;
-    return EdgeTraversalExcept<o, true, _Network, _Container, _ExceptContainer>(N, out, except).do_traversal(u);
+    return EdgeTraversalExcept<o, true, _Container, _ExceptContainer, _Network>(N, out, except).do_traversal(u);
   }
 
   template<TraversalType o,
            bool track_seen,
-           class _Network,
-           class _Container = std::vector<typename _Network::Node>>
-  _Container edge_traversal(_Network& N, const typename _Network::Node u)
+           class _Container,
+           class _Network>
+  _Container edge_traversal(_Network& N, const Node u)
   {
     _Container out;
-    return EdgeTraversal<o, track_seen, _Network, _Container>(N, out).do_traversal(u);
+    return EdgeTraversal<o, track_seen, _Container, _Network>(N, out).do_traversal(u);
   }
 
 

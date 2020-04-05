@@ -5,10 +5,40 @@
 #include <unordered_map>
 #include <list>
 
-#include "iter_bitset.hpp"
 #include "utils.hpp"
+#include "iter_bitset.hpp"
+#include "vector_map.hpp"
 
 namespace PT{
+
+  template<class Key,
+           class Val,
+           class Hash = std::hash<Key>,
+           class KeyEqual = std::equal_to<Key>>
+  using HashMap = std::unordered_map<Key, Val, Hash, KeyEqual>;
+
+  template<class Key, class Value>
+  using ConsecutiveMap = std::vector_map<Key, Value>;
+
+  template<
+    class Key,
+    class Hash = std::hash<Key>,
+    class KeyEqual = std::equal_to<Key>>
+  using HashSet = std::unordered_set<Key, Hash, KeyEqual>;
+
+  using Node = void*;
+  const void* const NoNode(reinterpret_cast<const void* const>(-1));
+
+  using NodeTranslation = HashMap<Node, Node>;
+  using ConsecutiveLabelMap = ConsecutiveMap<Node, std::string>;
+
+  using Degree = uint_fast32_t;
+  using InOutDeg = std::pair<Degree, Degree>;
+  using NodeWithDegree = std::pair<Node, Degree>;
+  using InDegreeMap = HashMap<Node, Degree>;
+  using OutDegreeMap = HashMap<Node, Degree>;
+  using InOutDegreeMap = HashMap<Node, InOutDeg>;
+  
 
   // indicate whether a given edgelist can be assumed to contain all nodes in consecutive order
   // (useful for tree/network construction from newick strings)
@@ -17,20 +47,21 @@ namespace PT{
   struct non_consecutive_edgelist_tag { };
   constexpr non_consecutive_edgelist_tag non_consecutive_edgelist = non_consecutive_edgelist_tag();
 
+  template<class Property = const std::string>
+  using LabeledNode = std::pair<Node, Property>;
+  template<class Property = const std::string>
+  using LabeledNodeVec = std::vector<LabeledNode<Property>>;
 
-  typedef std::pair<uint32_t, uint32_t> UIntPair;
-  typedef std::pair<uint32_t, const std::string&> LabeledNode;
-  typedef std::vector<LabeledNode> LNodeVec;
-  typedef std::list<uint32_t> IndexList;
-  typedef UIntPair IndexPair;
-  typedef std::vector<uint32_t> IndexVec;
-  typedef std::unordered_set<uint32_t> IndexSet;
-  typedef std::unordered_bitset IndexBitSet;
+  using NameVec = std::vector<std::string>;
 
-  typedef std::unordered_map<std::string, IndexPair> LabelMap;
-  typedef std::unordered_map<std::string, std::pair<IndexVec, uint32_t>> MULabelMap;
-  typedef std::unordered_map<uint32_t, IndexVec> DisplayMap;
+  using NodePair = std::pair<Node, Node>;
+  using NodeVec = std::vector<Node>;
+  using NodeSet = HashSet<Node>;
 
-  typedef std::vector<std::string> NameVec;
+ 
+  template<class Network>
+  using NetEdgeVec = std::vector<typename Network::Edge>;
+  template<class Network>
+  using NetEdgeSet = HashSet<typename Network::Edge>;
 
 }

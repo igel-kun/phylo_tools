@@ -9,11 +9,12 @@
 namespace PT{
 
   template<class Node>
-  struct BridgeInfo{
-    Node num_descendants;
-    Node disc_time;
-    Node lowest_neighbor;
-    Node highest_neighbor;
+  struct BridgeInfo
+  {
+    size_t num_descendants;
+    size_t disc_time;
+    size_t lowest_neighbor; // this is the po-numberof the lowest neighbor of any node in the subtree
+    size_t highest_neighbor;
 
     BridgeInfo(const Node _disc_time):
       num_descendants(1), disc_time(_disc_time), lowest_neighbor(_disc_time), highest_neighbor(_disc_time)
@@ -21,18 +22,12 @@ namespace PT{
  
     // the DFS interval of v is disc_time + [0:num_descendants]
     // uv is a bridge <=> noone in the sub-DFS-tree rooted at v has seen a neighbor outside this interval   
-    inline const bool is_bridge_head() const
+    inline bool is_bridge_head() const
     {
-      return (lowest_neighbor >= disc_time) && (highest_neighbor < disc_time + num_descendants);
+      return (disc_time != 0) && (lowest_neighbor >= disc_time) && (highest_neighbor < disc_time + num_descendants);
     }
-    inline void update_lowest_neighbor(const Node u)
-    {
-      lowest_neighbor = std::min(lowest_neighbor, u);
-    }
-    inline void update_highest_neighbor(const Node u)
-    {
-      highest_neighbor = std::max(highest_neighbor, u);
-    }
+    inline void update_lowest_neighbor(const size_t u) { lowest_neighbor = std::min(lowest_neighbor, u); }
+    inline void update_highest_neighbor(const size_t u) { highest_neighbor = std::max(highest_neighbor, u); }
 
   };
 
@@ -46,18 +41,17 @@ namespace PT{
   class BridgeFinder
   {
   public:
-    using Node = typename _Network::Node;
     using NodeInfoMap = std::unordered_map<Node, BridgeInfo<Node>>;
 
   protected:
     const _Network& N;
     _Container& out;
-    Node time;
+    size_t time;
     
     NodeInfoMap node_infos;
 
     // the initial DFS sets up preorder numbers and numbers of descendants in the DFS-tree
-    const std::const_emplace_result<NodeInfoMap> initial_DFS(const Node u)
+    const std::emplace_result<NodeInfoMap> initial_DFS(const Node u)
     {
       auto emp_res = node_infos.emplace(u, time);
       if(emp_res.second){
@@ -75,18 +69,20 @@ namespace PT{
     }
 
     // NOTE: this will return the bridges in post-order!
-    const BridgeInfo<Node>& bridge_collector_DFS(const Node u) { return bridge_collector_DFS(u, u, 0); }
-    const BridgeInfo<Node>& bridge_collector_DFS(const Node u, const Node v, const Node u_time)
+    inline void bridge_collector_DFS(const Node u) { bridge_collector_DFS(u, u); }
+
+    const std::pair<const BridgeInfo<Node>&, const bool> bridge_collector_DFS(const Node u, const Node v)
     {
       BridgeInfo<Node>& v_info = node_infos.at(v);
-      if(v_info.disc_time >= u_time){
+      // we use disc_time = 0 as indication of having already visited v
+      if(v_info.disc_time != 0){
         for(const auto w: N.children(v)){
-          const BridgeInfo<Node>& w_info = bridge_collector_DFS(v, w, v_info.disc_time);
+          const auto w_info = bridge_collector_DFS(v, w);
           // register bridge if need be
-          if(!w_info.is_bridge_head()){
+          if(!w_info.second){
             // update u_info if uv is not a bridge (if it is, no update is necessary)
-            v_info.update_lowest_neighbor(w_info.lowest_neighbor);
-            v_info.update_highest_neighbor(w_info.highest_neighbor);
+            v_info.update_lowest_neighbor(w_info.first.lowest_neighbor);
+            v_info.update_highest_neighbor(w_info.first.highest_neighbor);
           } else append(out, v, w);
         }
         // update v_info from the parents of v except its parent in the DFS tree
@@ -97,18 +93,21 @@ namespace PT{
             v_info.update_highest_neighbor(w_info.disc_time);
           }
         }
+        const bool bridge_head = v_info.is_bridge_head();
+        v_info.disc_time = 0;
+        return {v_info, bridge_head};
       }
-      return v_info;
+      return {v_info, false};
     }
 
   public:
 
     BridgeFinder(const _Network& _N, _Container& _out):
-      N(_N), out(_out), time(0), node_infos()
+      N(_N), out(_out), time(1), node_infos()
     {
       initial_DFS(N.root());
       bridge_collector_DFS(N.root());
-      DEBUG3(std::cout << "found bridges: "<<out<<"\n");
+      DEBUG3(std::cout << "This is a BridgeFinder of\n"<<N<<"\nfound bridges: "<<out<<"\n");
     }
 
     _Container& list_bridges(const Node u) const { return out; }
@@ -118,7 +117,7 @@ namespace PT{
 
   // convenience functions
   template<class _Network, class _Container = std::vector<typename _Network::Edge>>
-  _Container list_bridges(const _Network& N, const typename _Network::Node u)
+  _Container list_bridges(const _Network& N, const Node u)
   {
     _Container out;
     return BridgeFinder<_Network, _Container>(N, out).list_bridges(u);

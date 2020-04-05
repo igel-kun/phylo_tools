@@ -3,17 +3,14 @@
 
 #include <vector>
 #include "utils.hpp"
-#include "iter_bitset.hpp"
-#include "types.hpp"
 #include "label_iter.hpp"
+#include "types.hpp"
 #include "dfs.hpp"
 #include "except.hpp"
 #include "edge.hpp"
 #include "set_interface.hpp"
-#include "storage_edge_growing.hpp"
-#include "storage_edge_nongrowing.hpp"
-#include "storage_adj_growing.hpp"
-#include "storage_adj_nongrowing.hpp"
+#include "storage_adj_mutable.hpp"
+#include "storage_adj_immutable.hpp"
 
 namespace PT{
 
@@ -23,77 +20,90 @@ namespace PT{
 #define NODE_TYPE_ISOL 0x03
 
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
+  struct tree_tag {};
+  struct network_tag {};
+  struct single_label_tag {};
+  struct multi_label_tag {};
 
-
-  template<class _EdgeStorage = GrowingTreeAdjacencyStorage<>,
-           class _NodeList = IndexSet,
-           class _NodeData = void*,
-           class _EdgeData = void*,
-           bool _is_tree_type = true>
+  // the central Tree class
+  // note: we need to give the label-map type as template in order to allow creating mutable copies of subtrees of immutable trees
+  //       keeping a reference to the label-map of the host tree
+  template<class _label_type = single_label_tag,
+           class _EdgeStorage = MutableTreeAdjacencyStorage<void, void>,
+           class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>,
+           class _network_type = tree_tag>
   class _Tree 
   {
   public:
-    using NodeList = _NodeList;
-    using EdgeStorage = _EdgeStorage;
+    using NetworkTypeTag = _network_type;
+    
+    inline static constexpr bool is_network = std::is_same_v<_network_type, network_tag>;
+    inline static constexpr bool is_tree    = std::is_same_v<_network_type, tree_tag>;
 
-    using Node = typename _NodeList::value_type;
-    using Edge = typename _EdgeStorage::Edge;
+    using Mutability_Tag = typename _EdgeStorage::Mutability_Tag;
+
+    using EdgeStorage = _EdgeStorage;
+    using Edge = typename EdgeStorage::Edge;
+    using EdgeData  = typename EdgeStorage::EdgeData;
+
+    using EdgeContainer     = typename EdgeStorage::ConstEdgeContainer;
+    using EdgeContainerRef  = typename EdgeStorage::ConstEdgeContainerRef;
+    using NodeContainer     = typename EdgeStorage::ConstNodeContainer;
+    using NodeContainerRef  = typename EdgeStorage::ConstNodeContainerRef;
+    using NodeIterator      = typename NodeContainer::const_iterator;
+    
+    using OutEdgeContainer  = typename EdgeStorage::ConstOutEdgeContainer;
+    using OutEdgeContainerRef = typename EdgeStorage::ConstOutEdgeContainerRef;
+    using InEdgeContainer   = typename EdgeStorage::ConstInEdgeContainer;
+    using InEdgeContainerRef= typename EdgeStorage::ConstInEdgeContainerRef;
+    using SuccContainer     = typename EdgeStorage::ConstSuccContainer;
+    using SuccContainerRef  = typename EdgeStorage::ConstSuccContainerRef;
+    using PredContainer     = typename EdgeStorage::ConstPredContainer;
+    using PredContainerRef  = typename EdgeStorage::ConstPredContainerRef;
+    using LeafContainer     = typename EdgeStorage::ConstLeafContainer;
+    using LeafContainerRef  = typename EdgeStorage::ConstLeafContainerRef;
+
+    using LabelStorage = std::conditional<std::is_same_v<_label_type, single_label_tag>, Node, std::unordered_set<Node>>;
+    
+    using LabelMap = _LabelMap;
+    using LabelType = typename LabelMap::mapped_type;
+    using LabeledNodeContainer = LabeledNodeIterFactory<NodeIterator, std::MapGetter<LabelMap>>;
+    using LabeledNodeContainerRef = LabeledNodeContainer;
 
   protected:
-
-    const NameVec& names;
-
-    _NodeList nodes;
-    _NodeList leaves;
-    _EdgeStorage edges;
-    
-    std::unordered_map<Node, _NodeData> node_data;
-    std::unordered_map<Edge, _EdgeData> edge_data;
+    const LabelMap& node_labels;
+    _EdgeStorage _edges;
 
   public:
-    using NodeIterator = typename _NodeList::iterator;
-    using ConstNodeIterator = typename _NodeList::const_iterator;
-    
-    using OutEdgeContainer =      typename _EdgeStorage::OutEdgeContainer;
-    using ConstOutEdgeContainer = typename _EdgeStorage::ConstOutEdgeContainer;
-    using SuccContainer =      typename _EdgeStorage::SuccContainer;
-    using ConstSuccContainer = typename _EdgeStorage::ConstSuccContainer;
-    using PredContainer =      typename _EdgeStorage::PredContainer;
-    using ConstPredContainer = typename _EdgeStorage::ConstPredContainer;
-
 
     // =============== variable query ======================
-    const _NodeList& get_leaves() const { return leaves; }
-    const _NodeList& get_nodes() const { return nodes; }
-    const _EdgeStorage& get_edges() const { return edges; }
-    const NameVec& get_names() const { return names; }
-    const std::string& get_name(const uint32_t u) const { return names.at(u); }
-    const _NodeData& get_data(const uint32_t u_idx) const { return node_data.at(u_idx); }
-    const _NodeData& operator[](const uint32_t u_idx) const { return node_data.at(u_idx); }
-    _NodeData& operator[](const uint32_t u_idx) { return node_data.at(u_idx); }
-    ConstNodeIterator  begin() const { return nodes.begin(); }
-    ConstNodeIterator end() const { return nodes.end(); }
-    NodeIterator begin() { return nodes.begin(); }
-    NodeIterator end() { return nodes.end(); }
+    const LeafContainerRef leaves() const { return _edges.leaves(); }
+    const NodeContainerRef nodes() const { return _edges.nodes(); }
+    const EdgeContainerRef edges() const { return _edges; }
+    const LabelMap& labels() const { return node_labels; }
+    NodeIterator begin() const { return _edges.nodes_begin(); }
+    NodeIterator end() const { return _edges.nodes_end(); }
 
-    Node root() const { return edges.root(); }
-    uint32_t num_nodes() const {return nodes.size();}
-    uint32_t num_edges() const {return edges.size();}
+    Node root() const { return _edges.root(); }
+    size_t num_nodes() const {return _edges.num_nodes();}
+    //size_t num_leaves() const {return _edges.num_leaves();}
+    size_t num_edges() const {return _edges.num_edges();}
+    const LabelType& get_label(const Node u) const { return node_labels.at(u); }
 
-    //inline std::vector<Node> get_nodes_preorder(const Node u = root()) const { return tree_traversal<preorder>(*this, u); }
-    //inline std::vector<Node> get_nodes_postorder(const Node u = root()) const { return tree_traversal<postorder>(*this, u); }
-    //inline std::vector<Node> get_nodes_inorder(const Node u = root()) const { return tree_traversal<inorder>(*this, u); }
+    //inline NodeVec get_nodes_preorder(const Node u = root()) const { return tree_traversal<preorder>(*this, u); }
+    //inline NodeVec get_nodes_postorder(const Node u = root()) const { return tree_traversal<postorder>(*this, u); }
+    //inline NodeVec get_nodes_inorder(const Node u = root()) const { return tree_traversal<inorder>(*this, u); }
 
     // Why oh why, C++, can I not initialize with non-static members/methods???
 
 
     // list all nodes below u in order o (preorder, inorder, postorder)
-    template<TraversalType o = postorder, class _Container = std::vector<Node>>
+    template<TraversalType o = postorder, class _Container = NodeVec>
     inline _Container get_nodes_below(const Node u) const
-    { return node_traversal<o, !_is_tree_type>(*this, u); }
-    template<TraversalType o = postorder, class _Container = std::vector<Node>>
+    { return node_traversal<o, is_network, _Container>(*this, u); }
+    template<TraversalType o = postorder, class _Container = NodeVec>
     inline _Container get_nodes() const
-    { return node_traversal<o, !_is_tree_type>(*this, root()); }
+    { return node_traversal<o, is_network, _Container>(*this, root()); }
 #define get_nodes_postorder template get_nodes<postorder>
 #define get_nodes_preorder template get_nodes<preorder>
 #define get_nodes_inorder template get_nodes<inorder>
@@ -102,12 +112,12 @@ namespace PT{
 #define get_nodes_below_inorder template get_nodes_below<inorder>
 
     // list all nodes below u in order o (preorder, inorder, postorder) avoiding the nodes given in except
-    template<TraversalType o = postorder, class _Container = std::vector<Node>, class _ExceptContainer = std::unordered_set<Node>>
+    template<TraversalType o = postorder, class _Container = NodeVec, class _ExceptContainer = NodeSet>
     inline _Container get_nodes_below_except(const _ExceptContainer& except, const Node u) const
-    { return node_traversal<o>(*this, except, u); }
-    template<TraversalType o = postorder, class _Container = std::vector<Node>, class _ExceptContainer = std::unordered_set<Node>>
+    { return node_traversal<o, _Container, _ExceptContainer>(*this, except, u); }
+    template<TraversalType o = postorder, class _Container = NodeVec, class _ExceptContainer = NodeSet>
     inline _Container get_nodes_except(const _ExceptContainer& except) const
-    { return node_traversal<o>(*this, except, root()); }
+    { return node_traversal<o, _Container, _ExceptContainer>(*this, except, root()); }
 #define get_nodes_except_postorder template get_nodes_except<postorder>
 #define get_nodes_except_preorder template get_nodes_except<preorder>
 #define get_nodes_except_inorder template get_nodes_except<inorder>
@@ -119,10 +129,10 @@ namespace PT{
     // list all edges below u in order o (preorder, inorder, postorder)
     template<TraversalType o = postorder, class _Container = std::vector<Edge>>
     inline _Container get_edges_below(const Node u) const
-    { return edge_traversal<o, !_is_tree_type>(*this, u); }
+    { return edge_traversal<o, is_network, _Container>(*this, u); }
     template<TraversalType o = postorder, class _Container = std::vector<Edge>>
     inline _Container get_edges() const
-    { return edge_traversal<o, !_is_tree_type>(*this, root()); }
+    { return edge_traversal<o, is_network, _Container>(*this, root()); }
 #define get_edges_postorder template get_edges<postorder>
 #define get_edges_preorder template get_edges<preorder>
 #define get_edges_inorder template get_edges<inorder>
@@ -133,12 +143,12 @@ namespace PT{
 
 
     // list all edges below u in order o (preorder, inorder, postorder) avoiding the nodes given in except
-    template<TraversalType o = postorder, class _Container = std::vector<Edge>, class _ExceptContainer = std::unordered_set<Node>>
+    template<TraversalType o = postorder, class _Container = std::vector<Edge>, class _ExceptContainer = NodeSet>
     inline _Container get_edges_below_except(const _ExceptContainer& except, const Node u) const
-    { return edge_traversal<o>(*this, except, u); }
-    template<TraversalType o = postorder, class _Container = std::vector<Edge>, class _ExceptContainer = std::unordered_set<Node>>
+    { return edge_traversal<o, _Container, _ExceptContainer>(*this, except, u); }
+    template<TraversalType o = postorder, class _Container = std::vector<Edge>, class _ExceptContainer = NodeSet>
     inline _Container get_edges_except(const _ExceptContainer& except) const
-    { return edge_traversal<o>(*this, except, root()); }
+    { return edge_traversal<o, _Container, _ExceptContainer>(*this, except, root()); }
 #define get_edges_except_postorder template get_edges_except<postorder>
 #define get_edges_except_preorder template get_edges_except<preorder>
 #define get_edges_except_inorder template get_edges_except<inorder>
@@ -147,23 +157,17 @@ namespace PT{
 #define get_edges_below_except_inorder template get_edges_below_except<inorder>
 
 
+    LabeledNodeContainerRef get_nodes_labeled() const { return { get_nodes(), node_labels}; }
 
-    LabeledNodeIterFactory<> get_leaves_labeled() const
-    {
-      return get_labeled_nodes(names, leaves);
-    }
-    LabeledNodeIterFactory<uint32_t> get_nodes_labeled() const
-    {
-      return LabeledNodeIterFactory<uint32_t>(names, 0, nodes.size());
-    }
 
 
 
     // =================== information query ==============
 
-    bool empty() const { return nodes.empty(); }
-    Node in_degree(const Node u) const { return edges.in_degree(u); }
-    Node out_degree(const Node u) const { return edges.out_degree(u); }
+    bool empty() const { return num_nodes() == 0; }
+    bool edgeless() const { return num_edges() == 0; }
+    Degree in_degree(const Node u) const { return _edges.in_degree(u); }
+    Degree out_degree(const Node u) const { return _edges.out_degree(u); }
     bool is_leaf(const Node u) const { return out_degree(u) == 0; }
     bool is_root(const Node u) const { return u == root(); }
     bool is_tree_node(const Node u) const { return out_degree(u) > 0; }
@@ -177,18 +181,18 @@ namespace PT{
     }
 
 
-    ConstPredContainer parents(Node u) const { return edges.predecessors(u); }
-    ConstSuccContainer children(Node u) const { return edges.successors(u); }
-    ConstOutEdgeContainer out_edges(Node u) const {return edges.const_out_edges(u); }
-    ConstOutEdgeContainer const_out_edges(Node u) const {return edges.const_out_edges(u); }
+    PredContainerRef    parents(const Node u) const { return _edges.predecessors(u); }
+    SuccContainerRef    children(const Node u) const { return _edges.successors(u); }
+    OutEdgeContainerRef out_edges(const Node u) const {return _edges.out_edges(u); }
+    InEdgeContainerRef  in_edges(const Node u) const {return _edges.in_edges(u); }
     
-    Node parent(Node u) const { return std::front(parents(u)); }
+    Node parent(const Node u) const { return std::front(parents(u)); }
 
     Node naiveLCA_preordered(Node x, Node y) const
     {
       assert(is_preordered());
-      assert(x < nodes.size());
-      assert(y < nodes.size());
+      assert(x < num_nodes());
+      assert(y < num_nodes());
       while(x != y){
         if(x > y) 
           x = parent(x);
@@ -198,10 +202,10 @@ namespace PT{
       return x;
     }
     //! the naive LCA just walks up from x and y one step at a time until we find a node that has been seen by both walks
-    uint32_t naiveLCA(uint32_t x, uint32_t y) const
+    Node naiveLCA(Node x, Node y) const
     {
-      assert(x < nodes.size());
-      assert(y < nodes.size());
+      assert(x < num_nodes());
+      assert(y < num_nodes());
       std::unordered_bitset seen(num_nodes());
       while(x != y){
         if(update_for_LCA(seen, x)) return x;
@@ -210,24 +214,24 @@ namespace PT{
     }
   protected:
     // helper function for the LCA
-    bool update_for_LCA(std::unordered_bitset& seen, uint32_t& z) const
+    bool update_for_LCA(std::unordered_bitset& seen, Node& z) const
     {
-      if((z != root) && !test(seen,z)){
-        seen.insert(z);
+      if((z != root) && !test(seen, (size_t)z)){
+        seen.insert((size_t)z);
         z = parent(z);
-        return test(seen,z);
+        return test(seen, (size_t)z);
       } else return false;
     }
   public:
 
-    uint32_t LCA(const uint32_t x, const uint32_t y) const
+    Node LCA(const Node x, const Node y) const
     {
 #warning TODO: use more efficient LCA
       return naiveLCA(x,y);
     }
 
     //! return if there is a directed path from x to y in the tree; requires the tree to be pre-ordered
-    bool has_path(uint32_t x, const uint32_t y) const
+    bool has_path(Node x, const Node y) const
     {
       if(x < y) return false;
       while(1){
@@ -237,22 +241,22 @@ namespace PT{
       } 
     }
 
-    // return the descendant among x and y unless they are incomparable; return UINT32_MAX in this case
-    uint32_t get_minimum(const uint32_t x, const uint32_t y) const
+    // return the descendant among x and y unless they are incomparable; return NoNode in this case
+    Node get_minimum(const Node x, const Node y) const
     {
-      const uint32_t lca = LCA(x,y);
+      const Node lca = LCA(x,y);
       if(lca == x) return y;
       if(lca == y) return x;
-      return UINT32_MAX;
+      return NoNode;
     }
 
 
     //! return whether the tree indices are in pre-order (modulo gaps) (they should always be) 
-    bool is_preordered(const uint32_t sub_root, uint32_t& counter) const
+    bool is_preordered(const Node sub_root, Node& counter) const
     {
       if(sub_root >= counter) {
         counter = sub_root;
-        for(uint32_t v: children(sub_root))
+        for(const Node v: children(sub_root))
           if(!is_preordered(v, counter)) return false;
         return true;
       } else return false;
@@ -260,102 +264,61 @@ namespace PT{
 
     bool is_preordered() const
     {
-      uint32_t counter = root;
+      Node counter = root;
       return is_preordered(root, counter);
     }
 
     bool is_multi_labeled() const
     {
-      std::unordered_set<std::string> seen;
-      for(const uint32_t u_idx: leaves){
-        const std::string& _name = names[u_idx];
-        if(contains(seen, _name)) return true;
-      }
+      HashSet<LabelType> seen;
+      for(const Node u: leaves())
+        if(contains(seen, node_labels[u])) return true;
       return false;
     }
 
-    bool is_edge(const uint32_t u, const uint32_t v) const 
+    bool is_edge(const Node u, const Node v) const 
     {
-      return test(edges.out_edges(u), v);
+      return test(_edges.out_edges(u), v);
     }
 
     //! for sanity checks: test if there is a directed cycle in the data structure (more useful for networks, but definable for trees too)
     bool has_cycle() const
     {
-      if(!empty()){
-        //need 0-initialized array
-        uint32_t* depth_at = (uint32_t*)calloc(nodes.size(), sizeof(uint32_t));
-        const bool result = has_cycle(root, depth_at, 1);
-        free(depth_at);
-        return result;
-      } else return false;
+      if(!empty())
+        return has_cycle(root, NodeVec(num_nodes()), 1);
+      else return false;
     }
 
   protected:
-    bool has_cycle(const uint32_t sub_root, uint32_t* depth_at, const uint32_t depth) const
+    bool has_cycle(const Node sub_root, uint32_t* depth_at, const uint32_t depth) const
     {
-      if(depth_at[sub_root] == 0){
-        depth_at[sub_root] = depth;
-        for(uint32_t w: children(sub_root))
+      if(depth_at[(size_t)sub_root] == 0){
+        depth_at[(size_t)sub_root] = depth;
+        for(const Node w: children(sub_root))
           if(has_cycle(w, depth_at, depth + 1)) return true;
-        depth_at[sub_root] = UINT32_MAX; // mark as seen and not cyclic
+        depth_at[(size_t)sub_root] = UINT32_MAX; // mark as seen and not cyclic
         return false;
-      } else return (depth_at[sub_root] <= depth);
+      } else return (depth_at[(size_t)sub_root] <= depth);
     }
   public:
     // =================== modification ====================
 
     //! add an edge
-    bool add_edge(const Edge& e)
-    {
-      return edges.add_edge(e);
-    }
-
-    bool remove_edge(const Edge& e)
-    {
-      return edges.remove_edge(e);
-    }
-
-    void remove_node(const Node u)
-    {
-      leaves.erase(u);
-      edges.remove_node(u);
-    }
+    bool add_edge(const Edge& e) { return _edges.add_edge(e); }
+    bool remove_edge(const Edge& e) { return _edges.remove_edge(e); }
+    void remove_node(const Node u) { _edges.remove_node(u); }
 
     void remove_node(const Node u) const
     {
       assert(false && "cannot remove node from const tree/network");
     }
 
-    template<class __Tree = _Tree<_EdgeStorage, _NodeList, _NodeData>>
-    __Tree remove_rooted_subtree(const Node u) const
-    {
-      const std::vector<Edge> el = remove_edges_below(u);
-      return {names, el};
-    }
-    // copy the subtree rooted at u into t, but ignore subtrees rooted at nodes in 'except'
-    template<class __Tree = _Tree<_EdgeStorage, _NodeList, _NodeData>, class _NodeContainer>
-    __Tree remove_rooted_subtree_except(const Node u, const _NodeContainer& except) const
-    {
-      const std::vector<Edge> el = remove_edges_below_except(except, u);
-      return {names, el};
-    }
-
-
     // copy the subtree rooted at u into t
-    template<class __Tree = _Tree<_EdgeStorage, _NodeList, _NodeData>>
-    __Tree get_rooted_subtree(const Node u) const
-    {
-      const std::vector<Edge> el = get_edges_below(u);
-      return {names, el};
-    }
+    template<class __Tree = _Tree<_label_type, _EdgeStorage, _LabelMap, _network_type>>
+    __Tree get_rooted_subtree(const Node u) const { return {get_edges_below(u), node_labels}; }
     // copy the subtree rooted at u into t, but ignore subtrees rooted at nodes in 'except'
-    template<class __Tree = _Tree<_EdgeStorage, _NodeList, _NodeData>, class _NodeContainer>
-    __Tree get_rooted_subtree_except(const Node u, const _NodeContainer& except) const
-    {
-      const std::vector<Edge> el = get_edges_below_except(u, except);
-      return {names, el};
-    }
+    template<class __Tree = _Tree<_label_type, _EdgeStorage, _LabelMap, _network_type>>
+    __Tree get_rooted_subtree_except(const Node u, const NodeContainer& except) const { return {get_edges_below_except(u, except), node_labels}; }
 
 
     template<class _Edgelist>
@@ -397,57 +360,46 @@ namespace PT{
 
     void tree_summary(const std::ostream& os) const
     {
-      DEBUG3(std::cout << "tree has "<<edges.size()<<" edges and "<<nodes.size()<<" nodes, "<<leaves.size()<<" leaves: "<<leaves<<std::endl);
+      DEBUG3(std::cout << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<std::endl);
 
-      for(uint32_t i: nodes){
+      for(const Node i: nodes()){
         std::cout << i << ":";
-        std::cout << " IN: "<< edges.in_edges(i);
-        std::cout << " OUT: "<<edges.out_edges(i) << std::endl;
+        std::cout << " IN: "<< in_edges(i);
+        std::cout << " OUT: "<< out_edges(i) << std::endl;
       }
 
     }
 
     // read all nodes and prepare the edge storage to receive edges; return the root
-    template<class EdgeContainer = std::vector<Edge>>
-    _Tree(const consecutive_edgelist_tag& tag, const EdgeContainer& given_edges, const NameVec& _names):
-      names(_names),
-      nodes(),
-      leaves(),
-      edges(tag, given_edges, _names.size(), &leaves)
+    template<class GivenEdgeContainer = std::vector<Edge>>
+    _Tree(const consecutive_edgelist_tag& tag, const EdgeContainer& given_edges, const LabelMap& _node_labels):
+      node_labels(_node_labels),
+      _edges(tag, given_edges, _node_labels.size())
     {
-      DEBUG3(std::cout << "init Tree with consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_names.size()<<" names: "<<_names<<std::endl);
-      
-      for(uint32_t i = 0; i < _names.size(); ++i) append(nodes, i);
+      DEBUG3(std::cout << "init Tree with consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
 
     // read all nodes and prepare the edge storage to receive edges; return the root
-    template<class EdgeContainer = std::vector<Edge>>
-    _Tree(const EdgeContainer& given_edges, const NameVec& _names):
-      names(_names),
-      nodes(),
-      leaves(),
-      edges(given_edges, nodes, &leaves)
+    template<class GivenEdgeContainer = std::vector<Edge>>
+    _Tree(const GivenEdgeContainer& given_edges, const LabelMap& _node_labels):
+      node_labels(_node_labels),
+      _edges(given_edges)
     {
-      DEBUG3(std::cout << "init Tree with non-consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_names.size()<<" names: "<<_names<<" and "<<nodes.size()<<" nodes: "<<nodes<<std::endl);
+      DEBUG3(std::cout << "init Tree with non-consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<" and "<<num_nodes()<<" nodes: "<<nodes()<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
 
     // initialize a subtree rooted at a node of the given tree
-    template<class __Tree = _Tree<_EdgeStorage, _NodeList, _NodeData>>
-    _Tree(const __Tree& supertree, const NameVec& _names, const typename __Tree::Node _root):
-      names(_names),
-      nodes(),
-      leaves(),
-      edges(supertree.get_edges_below(_root), &nodes, &leaves)
-    {
-    }
-
-
-
-  protected:
-    _Tree(const NameVec& _names):
-      names(_names)
+    // note: we have to force the label-maps to be compatible since they are just references to a global map stored somewhere else
+    // note: the label-types CAN be different, but you have to make sure that they fit - for example, if you construct a single-labeled
+    //       tree as a subtree of a multi-labeled tree, you'll have to make sure that this subtree is indeed single-labeled, as otherwise,
+    //       some code later on may fail!
+    // note: Likewise, if you construct a subtree with _network_type = tree_tag of a network, you better make sure there are no "loops" in that subtree!
+    template<class __label_type, class __EdgeStorage, class __network_type>
+    _Tree(const _Tree<__label_type, __EdgeStorage, LabelMap, __network_type>& supertree, const Node _root):
+      node_labels(supertree.node_labels),
+      _edges(supertree.get_edges_below(_root))
     {}
 
   public:
@@ -455,9 +407,9 @@ namespace PT{
 
     // =================== i/o ======================
     
-    void print_subtree(std::ostream& os, const uint32_t u, std::string prefix) const
+    void print_subtree(std::ostream& os, const Node u, std::string prefix) const
     {
-      std::string name = names.at(u);
+      LabelType name = node_labels[u];
       DEBUG3(name += "[" + std::to_string(u) + "]");
       if(name == "") name = "+";
       os << '-' << name;
@@ -468,7 +420,7 @@ namespace PT{
           os << std::endl;
           break;
         case 1:
-          print_subtree(os, front(u_childs), prefix + std::string(name.length() + 1u, ' '));
+          print_subtree(os, std::front(u_childs), prefix + std::string(name.length() + 1u, ' '));
           break;
         default:
           prefix += std::string(name.length(), ' ') + '|';
@@ -483,27 +435,9 @@ namespace PT{
     }
     
   };
-
-
-  template<class _EdgeStorage = GrowingTreeAdjacencyStorage<>,
-           class _NodeList = IndexSet,
-           class _NodeData = void*,
-           class _EdgeData = void*>
-  using Tree = _Tree<_EdgeStorage, _NodeList, _NodeData, _EdgeData, true>;
-
-
-  template<class _EdgeStorage = NonGrowingTreeAdjacencyStorage<>,
-           class _NodeList = IndexVec,
-           class _NodeData = void*,
-           class _EdgeData = void*>
-  using ROTree = _Tree<_EdgeStorage, _NodeList, _NodeData, _EdgeData, true>;
-
   
-  template<class _EdgeStorage = NonGrowingTreeAdjacencyStorage<>,
-           class _NodeList = IndexVec,
-           class _NodeData = void*,
-           class _EdgeData = void*>
-  std::ostream& operator<<(std::ostream& os, const _Tree<_EdgeStorage, _NodeList, _NodeData, _EdgeData, true>& T)
+  template<class _label_type, class _EdgeStorage, class _LabelMap>
+  std::ostream& operator<<(std::ostream& os, const _Tree<_label_type, _EdgeStorage, _LabelMap>& T)
   {
     if(!T.empty()){
       std::string prefix = "";
@@ -514,4 +448,51 @@ namespace PT{
 
 
 
+  template<class _NodeData,
+           class _EdgeData = void,
+           class _label_type = single_label_tag,
+           class _EdgeStorage = MutableTreeAdjacencyStorage<_EdgeData>,
+           class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
+  class Tree: public _Tree<_label_type, _EdgeStorage, _LabelMap>
+  {
+    using Parent = _Tree<_label_type, _EdgeStorage, _LabelMap>;
+    using Parent::_edges;
+  public:
+    using Parent::Parent;
+
+    using NodeData = _NodeData;
+    using EdgeData = _EdgeData;
+
+    const NodeData& get_data(const Node u) const { return _edges.get_node_data(u); }
+    NodeData& get_data(const Node u) { return _edges.get_node_data(u); }
+    const NodeData& operator[](const Node u) const { return _edges.get_node_data(u); }
+    NodeData& operator[](const Node u) { return _edges.get_node_data(u); }
+  };
+
+  template<class _EdgeData, class _label_type, class _EdgeStorage, class _LabelMap>
+  class Tree<void, _EdgeData, _label_type, _EdgeStorage, _LabelMap>: public _Tree<_label_type, _EdgeStorage, _LabelMap>
+  {
+    using Parent = _Tree<_label_type, _EdgeStorage, _LabelMap>;
+  public:
+    using Parent::Parent;
+    using Parent::get_label;
+    using typename Parent::LabelType;
+
+    using NodeData = void;
+    using EdgeData = _EdgeData;
+
+    const LabelType& operator[](const Node u) const { return get_label(u); }
+  };
+
+  // convenience aliases
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
+  using MutableTree = Tree<_NodeData, _EdgeData, _label_type, MutableTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
+  using ConstTree = Tree<_NodeData, _EdgeData, _label_type, ConsecutiveTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+
+  // these two types should cover 95% of all (non-internal) use cases
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
+  using RWTree = MutableTree<_NodeData, _EdgeData, _label_type>;
+  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
+  using ROTree = ConstTree<_NodeData, _EdgeData, _label_type>;
 }
