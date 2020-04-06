@@ -40,18 +40,9 @@
 
 #define PWC std::piecewise_construct
 #define SIZE_T_BITS ((unsigned)(CHAR_BIT*sizeof(size_t)))
-// avoid the clutter for map-emplaces where both constructors take just one/two arguments
-#define DEEP_EMPLACE(x,y) emplace(PWC, std::make_tuple(x), std::make_tuple(y))
-#define DEEP_EMPLACE_TWO(x,y,z) emplace(PWC, std::make_tuple(x), std::make_tuple(y, z))
-#define DEEP_EMPLACE_HINT(x,y,z) emplace_hint(x, PWC, std::make_tuple(y), std::make_tuple(z))
-// avoid the clutter for map-emplaces where the target is default constructed
-#define DEFAULT_EMPLACE(x) emplace(PWC, std::make_tuple(x), std::make_tuple())
-#define DEFAULT_EMPLACE_HINT(x,y) emplace(x, PWC, std::make_tuple(y), std::make_tuple())
-// merge two lists
-#define SPLICE_LISTS(x,y) x.splice(x.end(), y)
 
 
-#if __cplusplus <= 201703L
+#if __cplusplus < 201703L
 	//! a more readable containment check
 	#define contains(x,y) ((x).find(y) != (x).end())
 #endif

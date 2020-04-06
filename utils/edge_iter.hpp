@@ -67,7 +67,7 @@ namespace PT{
     using Parent::Parent;
     using typename Parent::value_type;
 
-    value_type operator*() const { return value_type(reverse_tag, u, *node_it); }
+    value_type operator*() const { return value_type(reverse_edge, u, *node_it); }
   };
 
   // make an edge container from a head and a container of tails

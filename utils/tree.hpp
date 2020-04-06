@@ -37,8 +37,8 @@ namespace PT{
   public:
     using NetworkTypeTag = _network_type;
     
-    inline static constexpr bool is_network = std::is_same_v<_network_type, network_tag>;
-    inline static constexpr bool is_tree    = std::is_same_v<_network_type, tree_tag>;
+    static constexpr bool is_network = std::is_same_v<_network_type, network_tag>;
+    static constexpr bool is_tree    = std::is_same_v<_network_type, tree_tag>;
 
     using Mutability_Tag = typename _EdgeStorage::Mutability_Tag;
 
@@ -372,23 +372,15 @@ namespace PT{
 
     // read all nodes and prepare the edge storage to receive edges; return the root
     template<class GivenEdgeContainer = std::vector<Edge>>
-    _Tree(const consecutive_edgelist_tag& tag, const EdgeContainer& given_edges, const LabelMap& _node_labels):
-      node_labels(_node_labels),
-      _edges(tag, given_edges, _node_labels.size())
-    {
-      DEBUG3(std::cout << "init Tree with consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
-      DEBUG2(tree_summary(std::cout));
-    }
-
-    // read all nodes and prepare the edge storage to receive edges; return the root
-    template<class GivenEdgeContainer = std::vector<Edge>>
     _Tree(const GivenEdgeContainer& given_edges, const LabelMap& _node_labels):
       node_labels(_node_labels),
       _edges(given_edges)
     {
-      DEBUG3(std::cout << "init Tree with non-consecutive EdgeContainer "<<given_edges<<std::endl<<" and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<" and "<<num_nodes()<<" nodes: "<<nodes()<<std::endl);
+      DEBUG3(std::cout << "init Tree with EdgeContainer "<<given_edges<<std::endl<<" and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
+
+
 
     // initialize a subtree rooted at a node of the given tree
     // note: we have to force the label-maps to be compatible since they are just references to a global map stored somewhere else

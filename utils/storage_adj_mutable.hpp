@@ -47,11 +47,14 @@ namespace PT{
     using Parent::_size;
 
   public:
+    // Note: we assume that the node u exists already
     bool add_edge(const Edge& uv){ return add_edge(uv.tail(), uv.get_adjacency()); }
     bool add_edge(const Node u, const Adjacency& v)
     {
       if(append(_predecessors[v], u).second){
-        const bool uv_app = append(_successors[u], v).second;
+        // add v to the successors if its a new node
+        _successors.emplace(v);
+        const bool uv_app = append(_successors.at(u), v).second;
         assert(uv_app);
         ++_size;
         return true;
@@ -91,19 +94,15 @@ namespace PT{
     }
 
 
-    //! initialization from edgelist with consecutive nodes
-    // actually, we don't care about consecutiveness for growing storages...
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableNetworkAdjacencyStorage(const consecutive_edgelist_tag& tag, const GivenEdgeContainer& given_edges, LeafContainer* leaves = nullptr):
-      _MutableNetworkAdjacencyStorage(given_edges, leaves)
-    {}
-
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class NodeContainer, class LeafContainer = NodeVec>
-    _MutableNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges, LeafContainer* leaves)
+    _MutableNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges,
+                                    NodeTranslation* old_to_new = nullptr,
+                                    LeafContainer* leaves = nullptr):
+      Parent()
     {
       for(const auto& uv: given_edges) add_edge(uv);
-      _root = compute_root_and_leaves(*this, leaves);
+      compute_root_and_leaves(old_to_new, leaves);
     }
 
   };
@@ -160,15 +159,46 @@ namespace PT{
 
   public:
 
+    // the non-secure versions allow any form of edge addition
+    // ATTENTION: this will NOT update the root! use set_root() afterwards!
     bool add_edge(const Edge& uv) { return add_edge(uv.tail(), uv.get_adjacency()); }
     bool add_edge(const Node u, const Adjacency& v)
     {
-      if(!append(_predecessors, v, u).second)
-        throw std::logic_error("cannot create reticulation in tree adjacency storage");
-      if(append(_successors[u], v).second){
-        ++_size;
-        return true;
+      if(append(_successors, u, v).second){
+        if(append(_predecessors, v, u).second){
+          ++_size;
+        } else throw std::logic_error("cannot create tree with reticulation (edges ("+std::string(front(_predecessors[v]))+","+std::string(v)+") and ("+std::string(u)+","+std::string(v)+") given)");
       } else return false;
+      return true;
+    }
+
+    // the secure versions allow only adding edges uv for which u is in the tree, but v is not, or v is the root and u is not in the tree
+    bool add_edge_secure(const Edge& uv) { return add_edge(uv.tail(), uv.get_adjacency()); }
+    bool add_edge_secure(const Node u, const Adjacency& v)
+    {
+      auto emp_succ = append(_successors, u);
+      if(emp_succ.second){
+        // oh, u did not exist before, so we added a new root
+        if((v == _root) || _predecessors.empty()){
+          _root = u;
+          append(*emp_succ.first, v);
+          append(_predecessors, v, u);
+          ++_size;
+          return true;
+        } else {
+          if(_predecessors.contains(v))
+            throw std::logic_error("cannot create reticulation ("+std::string(v)+") in a tree");
+          else
+            throw std::logic_error("cannot create isolated edge ("+std::string(u)+","+std::string(v)+") with add_edge_secure() - if you are adding a bunch of edges resulting in a valid tree, use add_edge() + set_root()");
+        }
+      } else {
+        auto emp_pred = append(_predecessors, v);
+        if(emp_pred.second){
+          append(*emp_pred.first, u);
+          append(*emp_succ.first, v);
+          ++_size;
+        } else throw std::logic_error("cannot create reticulation ("+std::string(v)+") in a tree");
+      }
     }
 
     bool remove_edge(const Edge& uv) { return remove_edge(uv.tail(), uv.head()); }
@@ -198,29 +228,17 @@ namespace PT{
       } else return false;
     }
 
-    //! initialization from edgelist with consecutive nodes
-    // actually, we don't care about consecutiveness for mutable storages, but this is in for compatibility with immutable storages
+    //! initialization from edgelist
     template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableTreeAdjacencyStorage(const GivenEdgeContainer& given_edges, LeafContainer* leaves = nullptr):
-      Parent()
-    {
-      for(const auto& uv: given_edges) add_edge(uv);
-      init(leaves);
-    }
-
-    //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableTreeAdjacencyStorage(const GivenEdgeContainer& given_edges,
-                                NodeTranslation* old_to_new = nullptr,
-                                LeafContainer* leaves = nullptr):
+    _MutableTreeAdjacencyStorage(const non_consecutive_tag tag,
+                                 const GivenEdgeContainer& given_edges,
+                                 NodeTranslation* old_to_new = nullptr,
+                                 LeafContainer* leaves = nullptr):
       Parent()
     {
       for(const auto& uv: given_edges)
-        add_edge(uv);
-      init(leaves);
+      compute_root_and_leaves(old_to_new, leaves);
     }
-
-
   };
 
 

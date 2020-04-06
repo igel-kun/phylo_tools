@@ -7,8 +7,8 @@
 
 namespace PT{
 
-  struct reverse_tag_t {};
-  reverse_tag_t reverse_tag;
+  struct reverse_edge_tag {};
+  constexpr reverse_edge_tag reverse_edge = reverse_edge_tag();
 
   template<class _Data>
   struct __Adjacency: public std::pair<Node, _Data>
@@ -52,8 +52,12 @@ namespace PT{
     // construct an edge from a node and whatever is needed to construct an adjacency (for example, an adjacency)
     template <class... T> AbstractEdge(const Node u, T... t) : Parent(u, Adjacency(t...)) {}
     // construct the reverse of an edge in a similar manner as above
-    template <class... T> AbstractEdge(const reverse_tag_t tag, const Node u, T... t) : Parent(u, Adjacency(t...))
+    template <class... T> AbstractEdge(const reverse_edge_tag tag, const Node u, T... t) : Parent(u, Adjacency(t...))
       { reverse(); }
+    // construct from edge with different data; for example, from a ReverseEdge (whose data is a reference_wrapper)
+    template<class _Data>
+    AbstractEdge(const AbstractEdge<_Data>& other):
+      Parent(static_cast<typename Parent::first>(other.first), static_cast<typename Parent::second>(other.second)) {}
 
     Node& head() { return this->second; }
     Node& tail() { return this->first; }

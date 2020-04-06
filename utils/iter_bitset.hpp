@@ -97,8 +97,11 @@ namespace std {
     bool set(const_reference x, const bool value) { if(value) return set(x); else return clear(x); }
     void invert() { flip_all(); }
     size_t capacity() const { return num_bits; }
+    size_t count() const { return _count; }    
     size_t size() const { return count(); }
+    bool empty() const { return _count == 0; }
     reference front() const { return *begin(); }
+    bool full() const { return num_bits == _count; }
 
     bool test(const_reference x) const
     {
@@ -127,8 +130,9 @@ namespace std {
     bool clear(const_reference x)
     {
       if(x < num_bits){
-        try{ // if the at() fails, we know that the bit was already cleared before, so no modification is necessary
-          bucket_type& buffer = storage.at(BUCKET_OF(x));
+        const bucket_iter it = storage.find(BUCKET_OF(x));
+        if(it != storage.end()){
+          bucket_type& buffer = it->second;
           bucket_type bit_set = (1ul << POS_OF(x));
           if(buffer & bit_set){
             buffer ^= bit_set;
@@ -136,7 +140,7 @@ namespace std {
             if(!buffer) storage.erase(BUCKET_OF(x));
             return true;
           }
-        } catch(std::out_of_range& e) {} // if the bucket in which we want to clear doesn't exist, we don't care
+        } // if the bucket in which we want to clear doesn't exist, we don't care
       }
       return false;
     }
@@ -156,6 +160,7 @@ namespace std {
       } else return set(x);
     }
 
+    // set all num_bits bits of the set: 0...num_bits-1
     void set_all()
     {
       _count = num_bits;
@@ -187,10 +192,6 @@ namespace std {
       }
     }
         
-    size_t count() const { return _count; }
-    
-    bool empty() const { return _count == 0; }
-
     template<class _Iterator>
     void insert(_Iterator start, const _Iterator& finish)
     {
@@ -275,10 +276,9 @@ namespace std {
     template<typename Set>
     bool operator==(const Set& s) const
     {
-      static_assert(is_stl_set_type<Set>::value);
       if(size() == s.size()) {
-        for(const uint32_t x: *this)
-          if(!contains(s, x)) return false;
+        for(const value_type x: *this)
+          if(!test(s, x)) return false;
       } else return false;
       return true;
     }
@@ -291,16 +291,11 @@ namespace std {
     }
     
     template<typename Set>
-    bool operator!=(const Set& s) const
-    {
-      static_assert(is_stl_set_type<Set>::value);
-      return !operator==(s);
-    }
+    bool operator!=(const Set& s) const { return !operator==(s); }
 
     template<class Container>
     iterable_bitset& operator-=(const Container& c)
     {
-      static_assert(!std::is_same<Container, iterable_bitset>::value);
       for(const auto& i: c) erase(i);
       return *this;
     }
@@ -308,7 +303,6 @@ namespace std {
     template<class Container>
     iterable_bitset& operator|=(const Container& c)
     {
-      static_assert(!std::is_same<Container, iterable_bitset>::value);
       for(const auto& i: c) insert(i);
       return *this;
     }
@@ -316,7 +310,6 @@ namespace std {
     template<class Container>
     iterable_bitset& operator&=(const Container& c)
     {
-      static_assert(!std::is_same<Container, iterable_bitset>::value);
       auto _iter = begin();
       const auto _end = end();
       while(_iter != _end){
@@ -573,15 +566,6 @@ namespace std {
     for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
     return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
   }
-
-  template<>
-  struct is_stl_set_type<ordered_bitset>{
-    static constexpr bool value = true;
-  };
-  template<>
-  struct is_stl_set_type<unordered_bitset>{
-    static constexpr bool value = true;
-  };
 
   // ========================= iterators =====================================
   

@@ -3,7 +3,6 @@
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
-#include "utils/label_map.hpp"
 
 using namespace PT;
 
@@ -66,7 +65,7 @@ int main(const int argc, const char** argv)
   //EdgeWeightedNetwork<> N(weighted_edges, names);
   //EdgeWeightedNetwork<float, void*, IndexSet, GrowingNetworkAdjacencyStorage<WEdge>> N(weighted_edges, names);
 
-  if(contains(options, "-v"))
+  if(test(options, "-v"))
     std::cout << N << std::endl;
  
   for(const Node u: N.get_nodes()){

@@ -78,38 +78,20 @@ namespace PT{
     }
 
   public:
-    
-    //! initialization; 
+    //! initialization from edgelist without consecutive nodes; as we are a consecutive storage, we will have to translate node indices, so use 'old_to_new'
     template<class GivenEdgeContainer, class LeafContainer = std::vector<Node> >
-    _ConsecutiveNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges, LeafContainer* leaves = nullptr):
+    _ConsecutiveNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges,
+                                        NodeTranslation* old_to_new = nullptr,
+                                        LeafContainer* leaves = nullptr):
       _succ_storage(given_edges.size()),
       _pred_storage(given_edges.size())
     {
-      DEBUG3(std::cout << "initializing ConsecutiveNetworkAdjacencyStorage with "<<given_edges.size()<<" edges & leaf storage "<<leaves<<std::endl);
+      DEBUG3(std::cout << "initializing ConsecutiveNetworkAdjacencyStorage with leaf storage at "<<leaves<<" and "<<given_edges.size()<<" consecutive edges:\n" << given_edges<<std::endl);
       InOutDegreeMap deg;
-      compute_degrees(given_edges, deg);
-      _root = compute_root_and_leaves(deg, leaves);
-      insert_edges(given_edges, deg);
-
-      DEBUG4(std::cout << "predecessor storage:\n"<<_pred_storage<<std::endl);
-      DEBUG4(std::cout << "successor storage:\n"<<_succ_storage<<std::endl);
-
-    }
-
-    //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = std::vector<Node> >
-    _ConsecutiveNetworkAdjacencyStorage(const consecutive_edgelist_tag& tag, const GivenEdgeContainer& given_edges, const size_t num_nodes, LeafContainer* leaves = nullptr):
-      _succ_storage(given_edges.size()),
-      _pred_storage(given_edges.size())
-    {
-      DEBUG3(std::cout << "initializing ConsecutiveNetworkAdjacencyStorage with "<<given_edges.size()<<" edges & leaf storage "<<leaves<<" (no nodes)"<<std::endl);
-      InOutDegreeMap deg;
-      compute_degrees(given_edges, deg, num_nodes);
-      DEBUG5(std::cout << "degrees: "<<deg<<std::endl);
+      compute_degrees(given_edges, deg, old_to_new);
       _root = compute_root_and_leaves(deg, leaves);
       insert_edges(given_edges, deg);
     }
-
 
   };
 
@@ -197,26 +179,15 @@ namespace PT{
   public:
     size_t in_degree(const Node u) const { return (u == _root) ? 0 : 1; }
 
-    //! initialization from edgelist with consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = std::vector<Node> >
-    _ConsecutiveTreeAdjacencyStorage(const GivenEdgeContainer& given_edges,
-                                  LeafContainer* leaves = nullptr):
+    //! initialization from edgelist without consecutive nodes
+    template<class GivenEdgeContainer, class NodeContainer, class LeafContainer = NodeVec>
+    _ConsecutiveTreeAdjacencyStorage(const consecutive_tag tag,
+                                     const GivenEdgeContainer& given_edges,
+                                     NodeTranslation* old_to_new = nullptr,
+                                     LeafContainer* leaves = nullptr):
       _succ_storage(given_edges.size())
     {
       DEBUG3(std::cout << "initializing ConsecutiveTreeAdjacencyStorage with "<<given_edges.size()<<" edges & leaf storage "<<leaves<<std::endl);
-      InOutDegreeMap deg;
-      compute_degrees(given_edges, deg);
-      _root = compute_root_and_leaves(deg, leaves);
-      insert_edges(given_edges, deg);
-    }
-
-    //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class NodeContainer, class LeafContainer = NodeVec>
-    _ConsecutiveTreeAdjacencyStorage(const GivenEdgeContainer& given_edges,
-                                  NodeTranslation* old_to_new = nullptr,
-                                  LeafContainer* leaves = nullptr):
-      _succ_storage(given_edges.size())
-    {
       InOutDegreeMap deg;
       compute_degrees(given_edges, deg, old_to_new);
       _root = compute_root_and_leaves(deg, leaves);

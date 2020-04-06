@@ -4,6 +4,7 @@
 #pragma once
 
 #include "utils.hpp"
+#include "predicates.hpp"
 #include "raw_vector_map.hpp"
 #include "iter_bitset.hpp"
 #include "skipping_iter.hpp"
@@ -70,15 +71,15 @@ namespace std{
       present.clear();
     }
 
-    iterator begin() { return {*this, Parent::begin(), true, AbsentPredicate(*this, present)}; }
-    const_iterator begin() const { return const_iterator(*this, Parent::begin(), true, AbsentPredicate(*this, present)); }
-    const_iterator cbegin() const { return {*this, Parent::begin(), true, AbsentPredicate(*this, present)}; }
-    iterator end() { return {*this, Parent::end(), false, AbsentPredicate(*this, present)}; }
-    const_iterator end() const { return {*this, Parent::end(), false, AbsentPredicate(*this, present)}; }
-    const_iterator cend() const { return {*this, Parent::end(), false, AbsentPredicate(*this, present)}; }
+    iterator begin() { return make_iterator(Parent::begin()); }
+    const_iterator begin() const { return make_iterator(Parent::begin()); }
+    const_iterator cbegin() const { return make_iterator(Parent::begin()); }
+    iterator end() { return make_iterator(Parent::end(), false); }
+    const_iterator end() const { return make_iterator(Parent::end(), false); }
+    const_iterator cend() const { return make_iterator(Parent::end(), false); }
 
-    iterator find(const _Key& x) { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
-    const_iterator find(const _Key& x) const { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
+    iterator find(const _Key& x) { if((size_t)x < size()) return make_iterator({data() + (size_t)x}, false); else return end(); }
+    const_iterator find(const _Key& x) const { if((size_t)x < size()) return make_iterator({data() + (size_t)x}, false); else return end(); }
   };
 
 }

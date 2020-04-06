@@ -3,12 +3,25 @@
 #pragma once
 
 #include "types.hpp"
+#include "iter_bitset.hpp"
 
 // this contains common functions for use in edge_- and adjacency_storages
 
 namespace PT{
   struct immutable_tag {};
   struct mutable_tag {};
+
+  // return whether the nodes in the given edgelist occur consecutively
+  template<class EdgeList>
+  bool is_consecutive(const EdgeList& el)
+  {
+    std::ordered_bitset _seen;
+    for(const auto& xy: el) {
+      _seen.set(head(xy));
+      _seen.set(tail(xy));
+    }
+    return _seen.full();
+  }
 
 
   template<class GivenEdgeContainer>
@@ -22,17 +35,17 @@ namespace PT{
   }
 
   template<class GivenEdgeContainer>
-  void compute_degrees(const GivenEdgeContainer& given_edges, InOutDegreeMap& degrees, NodeTranslation* old_to_new)
+  inline void compute_degrees(const GivenEdgeContainer& given_edges, InOutDegreeMap& degrees, NodeTranslation* old_to_new)
   {
     if(old_to_new){
       // compute out-degrees and translate
       size_t num_nodes = 0;
       for(const auto &uv: given_edges){
-        const auto emp_res = old_to_new->emplace(uv.head(), num_nodes);
+        const auto emp_res = append(*old_to_new, uv.head(), (Node)num_nodes);
         if(emp_res.second) ++num_nodes;
         ++degrees[emp_res.first->second].first;
 
-        const auto emp_res2 = old_to_new->emplace(uv.tail(), num_nodes);
+        const auto emp_res2 = append(*old_to_new, uv.tail(), (Node)num_nodes);
         if(emp_res2.second) ++num_nodes;
         ++degrees[emp_res2.first->second].second;
       }
@@ -57,22 +70,19 @@ namespace PT{
     return _root;
   }
 
-  // compute the root and leaves from an edge-container
   template<class EdgeContainer, class LeafContainer>
-  Node compute_root_and_leaves(const EdgeContainer& edges, LeafContainer* leaves = nullptr)
+  void compute_root_and_leaves(const EdgeContainer& edges, NodeTranslation* old_to_new, LeafContainer* leaves = nullptr)
   {
-    char roots = 0;
-    Node _root = 0;
-    for(const Node u: edges.get_nodes()){
-      if(edges.in_degree(u) == 0){
-        if(roots++ == 0)
-          _root = u;
-        else throw std::logic_error("cannot create tree/network with multiple roots ("+std::string(_root)+" & "+std::string(u)+")");
-      } else if(leaves && (edges.out_degree(u) == 0)) append(*leaves, u);
-    }
-    return _root;
+    edges.compute_root();
+    if(leaves)
+      for(const auto& uV: edges.successors())
+        if(uV.second.empty())
+          append(leaves, uV.first);
+    // translate maps are kind of silly for mutable storages, but if the user insists to want one, we'll give her/him one
+    if(old_to_new)
+      for(const auto& uV: edges.successors())
+        append(*old_to_new, uV.first, uV.first);
   }
-
 
 }// namespace
 

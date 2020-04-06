@@ -114,7 +114,3 @@ namespace PT{
 
 }
 
-namespace std{
-  template<class _Item> struct is_stl_set_type<PT::ConsecutiveStorage<_Item>> { static constexpr bool value = true; };
-  template<class _Item> struct is_stl_set_type<PT::ConsecutiveStorageNoMem<_Item>> { static constexpr bool value = true; };
-}

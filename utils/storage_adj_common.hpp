@@ -60,21 +60,26 @@ namespace PT{
     SuccessorMap _successors;
     PredecessorMap _predecessors;
     
-    Node _root = 0;
+    Node _root = NoNode;
     size_t _size = 0;
 
     // compute the root from the _in_edges and _out_edges mappings
     void compute_root()
     {
-      char roots = 0;
-      for(const auto& uv: _successors){
-        const Node u = uv.first;
-        if(!contains(_predecessors, u)){
-          if(roots++ == 0){
-            _root = u;
-          } else throw std::logic_error("cannot create tree/network with multiple roots ("+std::string(_root)+" & "+std::string(u)+")");
+      _root = NoNode;
+#ifdef NDEBUG
+      for(const auto& uV: _predecessors)
+        if(uV.second.empty()){ _root = uV.first; break; }
+#else
+      for(const auto& uV: _predecessors)
+        if(uV.second.empty()){
+          if(_root == NoNode)
+            _root = uV.first;
+          else throw std::logic_error("cannot create tree/network with multiple roots ("+std::string(_root)+" & "+std::string(uV.first)+")");
         }
-      }
+#endif
+      if((root == NoNode) && !_predecessors.empty())
+        throw std::logic_error("given edgelist is cyclic (has no root)");
     }
 
   public:
@@ -92,6 +97,13 @@ namespace PT{
     bool empty() const { return _size == 0; }
     Node root() const { return _root; }
 
+    // set the root to a node that does not have predecessors (this might become necessary after adding edges willy nilly)
+    void set_root(const Node u)
+    {
+      if(_predecessors.at(u).empty())
+        _root = u;
+      else throw std::logic_error("cannot set the root to "+std::string(u)+" as it has at least one predecesor "+std::string(front(_predecessors.at(u))));
+    }
 
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
     ConstNodeContainerRef nodes() const { return firsts(&_successors); }

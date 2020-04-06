@@ -11,23 +11,48 @@
 
 namespace PT{
 
+  // OMG, why is contains() C++20 for unordered_sets/maps but C++17 for normal sets/maps?
   template<class Key,
            class Val,
            class Hash = std::hash<Key>,
            class KeyEqual = std::equal_to<Key>>
-  using HashMap = std::unordered_map<Key, Val, Hash, KeyEqual>;
+  class HashMap: public std::unordered_map<Key, Val, Hash, KeyEqual>
+  {
+    using Parent = std::unordered_map<Key, Val, Hash, KeyEqual>;
+  public:
+    using Parent::Parent;
 
-  template<class Key, class Value>
-  using ConsecutiveMap = std::vector_map<Key, Value>;
+#if __cplusplus < 201709L
+    inline bool contains(const Key& x) const { return Parent::find() != Parent::end(); }
+#endif
+  };
+/*
+  template<
+    class Key,
+    class Hash = std::hash<Key>,
+    class KeyEqual = std::equal_to<Key>>
+  class HashSet: public std::unordered_set<Key, Hash, KeyEqual>
+  {
+    using Parent = std::unordered_set<Key, Hash, KeyEqual>;
+  public:
+    using Parent::Parent;
 
+#if __cplusplus < 201709L
+    inline bool contains(const Key& x) const { return Parent::find() != Parent::end(); }
+#endif
+  };
+*/
   template<
     class Key,
     class Hash = std::hash<Key>,
     class KeyEqual = std::equal_to<Key>>
   using HashSet = std::unordered_set<Key, Hash, KeyEqual>;
 
+  template<class Key, class Value>
+  using ConsecutiveMap = std::vector_map<Key, Value>;
+
   using Node = void*;
-  const void* const NoNode(reinterpret_cast<const void* const>(-1));
+  void* const NoNode(reinterpret_cast<void* const>(-1));
 
   using NodeTranslation = HashMap<Node, Node>;
   using ConsecutiveLabelMap = ConsecutiveMap<Node, std::string>;
@@ -42,10 +67,10 @@ namespace PT{
 
   // indicate whether a given edgelist can be assumed to contain all nodes in consecutive order
   // (useful for tree/network construction from newick strings)
-  struct consecutive_edgelist_tag { };
-  constexpr consecutive_edgelist_tag consecutive_edgelist = consecutive_edgelist_tag();
-  struct non_consecutive_edgelist_tag { };
-  constexpr non_consecutive_edgelist_tag non_consecutive_edgelist = non_consecutive_edgelist_tag();
+  struct consecutive_tag { };
+  constexpr consecutive_tag consecutive_nodes = consecutive_tag();
+  struct non_consecutive_tag { };
+  constexpr non_consecutive_tag non_consecutive_nodes = non_consecutive_tag();
 
   template<class Property = const std::string>
   using LabeledNode = std::pair<Node, Property>;

@@ -34,7 +34,7 @@ namespace PT{
     void do_preorder() {do_preorder(N.root());}
     bool do_preorder(const Node u)
     {
-      if(!track_seen || !contains(seen, u)){
+      if(!track_seen || !test(seen, u)){
         if(track_seen) append(seen, u);
         emit_node(u);
         for(const auto& v: N.children(u)){
@@ -48,7 +48,7 @@ namespace PT{
     void do_postorder() {do_postorder(N.root());}
     bool do_postorder(const Node u)
     {
-      if(!track_seen || !contains(seen, u)){
+      if(!track_seen || !test(seen, u)){
         if(track_seen) append(seen, u);
         for(const auto& v: N.children(u)){
           do_postorder(v);
@@ -62,7 +62,7 @@ namespace PT{
     void do_inorder() {do_inorder(N.root());}
     bool do_inorder(const Node u)
     {
-      if(!track_seen || !contains(seen, u)){
+      if(!track_seen || !test(seen, u)){
         if(track_seen) append(seen, u);
         
         bool emitted = false;
@@ -171,7 +171,7 @@ namespace PT{
     const _ExceptContainer& except;
 
     void emit_node(const Node u) const {}
-    void emit_edge(const Node u, const Node v) const { if(!contains(except, v)) append(out, u, v); }
+    void emit_edge(const Node u, const Node v) const { if(!test(except, v)) append(out, u, v); }
   public:
     EdgeTraversalExcept(_Network& _N, _Container& _out, const _ExceptContainer& _except):
       Parent(_N, _out),
