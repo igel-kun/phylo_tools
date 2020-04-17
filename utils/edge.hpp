@@ -19,10 +19,7 @@ namespace PT{
 
     // this is the closest we can get to inheriting the parent class' constructors
     //template <class... T> __Adjacency(const Node u, T... t) : Parent(u, Data(t...))
-    __Adjacency(const Node u, Data& d) : Parent(u, d)
-    {
-      std::cout << "\n((ADJ construct made adjacency ("<<Parent::first<<","<<Parent::second<<")) from ("<<u<<", ...))\n";
-    }
+    __Adjacency(const Node u, Data& d) : Parent(u, d) {}
 
     // access the adjacency's data
     Data& data() { return Parent::second; }
@@ -50,7 +47,8 @@ namespace PT{
     using Parent::Parent;
     
     // construct an edge from a node and whatever is needed to construct an adjacency (for example, an adjacency)
-    template <class... T> AbstractEdge(const Node u, T... t) : Parent(u, Adjacency(t...)) {}
+    template <class... T> AbstractEdge(const Node u, T... t) : Parent(u, Adjacency(t...))
+    {}
     // construct the reverse of an edge in a similar manner as above
     template <class... T> AbstractEdge(const reverse_edge_tag tag, const Node u, T... t) : Parent(u, Adjacency(t...))
       { reverse(); }
@@ -75,6 +73,9 @@ namespace PT{
         return this->second < e.second;
     }
 
+    Adjacency& get_adjacency() { return Parent::second; }
+    const Adjacency& get_adjacency() const { return Parent::second; }
+
     std::ostream& print(std::ostream& os) const { return os << Parent(*this); }
   };
 
@@ -88,12 +89,10 @@ namespace PT{
     using Data = _Data;
     using Adjacency = Adjacency_t<Data>;
  
-    Adjacency& get_adjacency() { return Parent::second; }
-    const Adjacency& get_adjacency() const { return Parent::second; }
-    Data& data() { return get_adjacency().data(); }
-    const Data& data() const { return get_adjacency().data(); }
+    Data& data() { return Parent::get_adjacency().data(); }
+    const Data& data() const { return Parent::get_adjacency().data(); }
 
-    std::ostream& print(std::ostream& os) const { return os << "("<<head()<<","<<tail()<<"):"<<data(); }
+    std::ostream& print(std::ostream& os) const { return os << "("<<tail()<<","<<head()<<"):"<<data(); }
   };
  
   template<>
@@ -118,12 +117,9 @@ namespace PT{
   template<class Data>
   Node& tail(Edge<Data>& e) { return e.tail(); }
 
-  template<class Adjacency>
-  struct DataFromAdjacency { using type = typename Adjacency::Data; };
-  template<>
-  struct DataFromAdjacency<Node> { using type = void; };
-  template<>
-  struct DataFromAdjacency<const Node> { using type = void; };
+  template<class Adjacency> struct DataFromAdjacency { using type = typename Adjacency::Data; };
+  template<> struct DataFromAdjacency<Node> { using type = void; };
+  template<> struct DataFromAdjacency<const Node> { using type = void; };
   template<class Adjacency>
   using DataFromAdjacency_t = typename DataFromAdjacency<Adjacency>::type;
 
@@ -145,13 +141,8 @@ namespace PT{
   template<class EdgeData>
   using ReverseAdjacencyFromData = typename ReverseEdgeFromData<EdgeData>::Adjacency;
 
-  template<class Adjacency>
-  ReverseAdjacency<Adjacency> get_reverse_adjacency(const Node u, Adjacency& adj) {
-    ReverseAdjacency<Adjacency> result(u, adj.data());
-    std::cout << " [[constructed reverse adj "<<result<<" from "<<u<<" & adj "<<adj<<"]]\n";
-    return result; //{u, adj.data()};
-  }
-  template<>
+  template<class Adjacency, std::enable_if_t<!std::is_same_v<Adjacency, Node>, int> = 0>
+  ReverseAdjacency<Adjacency> get_reverse_adjacency(const Node u, Adjacency& adj) { return {u, adj.data()}; }
   ReverseAdjacency<Node> get_reverse_adjacency(const Node u, const Node& v) { return u; }
 
   // an adjacency for storing weights on edges

@@ -42,28 +42,30 @@ namespace std{
       { return const_iterator(*this, raw_it, fix_index, *this, present); }
 
     template<class ...Args>
-	  insert_result emplace(const key_type x, Args&&... args)
+	  insert_result try_emplace(const key_type x, Args&&... args)
     {
       const size_t x_idx = (size_t)x;
       if(x_idx >= size()) {
         Parent::reserve(x_idx + 1);
         Parent::resize(x_idx);
-        Parent::emplace_back(args...);
+        Parent::emplace_back(forward<Args>(args)...);
         present.set(x_idx);
       } else {
         if(!present.test(x_idx)){
-          data()[x_idx] = _Element(args...);
+          data()[x_idx] = _Element(forward<Args>(args)...);
         } else return { make_iterator({data(), x_idx}, false), false };
       }
       return { make_iterator({data(), x_idx}, false), true };
     }
-    // insert and emplace are almost synonymous
-    insert_result insert(const pair<key_type, _Element>& x) { return emplace(x.first, x.second); }
+    // insert and emplace are (almost) synonymous to try_emplace
+    template<class ...Args>
+    insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, forward<Args>(args)...); }
+    insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
     template<class ...Args>
-	  iterator emplace_hint(const iterator& it, const key_type x, Args&&... args) { return emplace(x, args...).first; }
+	  iterator emplace_hint(const iterator& it, const key_type x, Args&&... args) { return emplace(x, forward<Args>(args)...).first; }
     template<class ...Args>
-	  iterator emplace_hint(const const_iterator& it, const key_type x, Args&&... args) { return emplace(x, args...).first; }
+	  iterator emplace_hint(const const_iterator& it, const key_type x, Args&&... args) { return emplace(x, forward<Args>(args)...).first; }
 
     void clear()
     {

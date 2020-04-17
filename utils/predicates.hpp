@@ -4,7 +4,10 @@ namespace std{
   // Predicates
   // note: for an iterator it, use pred.value(it) to get the value of the predicate for the item at position it
   template<class Predicate>
-  struct NotPredicate: public Predicate { template<class X> static bool value(const X& x) { return !Predicate::value(x); } };
+  struct NotPredicate: public Predicate
+  {
+    template<class X> static bool value(const X& x) { return !Predicate::value(x); }
+  };
   struct TruePredicate{ template<class X> static bool value(X& x) { return true; } };
   using FalsePredicate = NotPredicate<TruePredicate>;
 
@@ -17,14 +20,16 @@ namespace std{
     const _ItemPredicate it_pred;
     
     template<class... Args>
-    MapPredicate(const _Map& _X, Args... args): X(_X), it_pred(args...) {}
-     };
+    MapPredicate(const _Map& _X, Args&&... args): X(_X), it_pred(forward<Args>(args)...) {}
+  };
   template<class _Map, class _ItemPredicate>
   struct MapValuePredicate: public MapPredicate<_Map, _ItemPredicate>{
     using Parent = MapPredicate<_Map, _ItemPredicate>;
     using Parent::Parent;
     template<class MapIter>
-    bool value(const MapIter& it) const { return Parent::it_pred.value(&(it->second)); }
+    bool value(const MapIter& it) const {
+      return Parent::it_pred.value(&(it->second));
+    }
   };
   template<class _Map, class _ItemPredicate>
   struct MapKeyPredicate: public MapPredicate<_Map, _ItemPredicate>{

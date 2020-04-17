@@ -8,6 +8,7 @@
 
 namespace std {
 
+
   template<class _Key, class _Element>
   class raw_vector_map;
 
@@ -50,14 +51,26 @@ namespace std {
     bool operator==(const raw_vector_map_iterator<__Key, __Element>& x) const { return index == x.index; }
     template<class __Key, class __Element>
     bool operator!=(const raw_vector_map_iterator<__Key, __Element>& x) const { return index != x.index; }
-
     template<class __Key, class __Element>
-    friend class raw_vector_map;
+    friend class raw_vector_map_iterator;
+  };
+
+
+  // NOTE: to forbid implicit casting of raw_vector_map to vector, we use this intermediate class which forbids copy construction from raw_vector_map
+  // (see https://stackoverflow.com/questions/36473354/prevent-derived-class-from-casting-to-base)
+  template<class T>
+  class _vector: public vector<T>
+  {
+  public:
+    using vector<T>::vector;
+
+    template<class _Key, class _Element>
+    _vector(const raw_vector_map<_Key, _Element>&) = delete;
   };
 
 
   template<class _Key, class _Element>
-  class raw_vector_map: public vector<_Element>
+  class raw_vector_map: public _vector<_Element>
   {
     using Parent = vector<_Element>;
   public:
@@ -97,16 +110,19 @@ namespace std {
     // in particular, if you first emplace(10, ...), then emplace(8, ...) will refuse to emplace since it assumes that all below 10 are already emplaced
     // if this is not what you want, use the vector_map<> in vector_map2.hpp instead!
     template<class ...Args>
-	  insert_result emplace(const key_type x, Args&&... args)
+	  insert_result try_emplace(const key_type x, Args&&... args)
     {
       const size_t x_idx = (size_t)x;
       if(x_idx >= size()) {
         Parent::reserve(x_idx + 1);
         Parent::resize(x_idx);
-        Parent::emplace_back(args...);
+        Parent::emplace_back(forward<Args>(args)...);
         return { {data(), x_idx}, true };
       } else return { {data(), x_idx}, false };
     }
+    template<class ...Args>
+	  insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, forward<Args>(args)...); }
+	  insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
     mapped_type& operator[](const key_type& key) { return Parent::operator[]((size_t)key); }
     const mapped_type& operator[](const key_type& key) const { return Parent::operator[]((size_t)key); }
@@ -123,9 +139,6 @@ namespace std {
     iterator find(const _Key& x) { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
     const_iterator find(const _Key& x) const { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
   };
-
-
-
 
 
 }

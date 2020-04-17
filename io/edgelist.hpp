@@ -38,13 +38,13 @@ namespace PT{
 
     Node get_id(const std::string& name)
     {
-      const auto name_it = name_to_node.find(name);
-      if(name_it == name_to_node.end()){
+      auto emp_res = append(name_to_node, name);
+      if(emp_res.second){
         const Node id = (Node)names.size();
-        name_to_node.emplace_hint(name_it, name, id);
-        names.push_back(name);
+        emp_res.first->second = id;
+        append(names, id, name);
         return id;
-      } else return name_it->second;
+      } else return emp_res.first->second;
     }
 
     void read_tree()
@@ -73,8 +73,7 @@ namespace PT{
   template<class EdgeList, class LabelMap>
   void parse_edgelist(std::istream& in, EdgeList& el, LabelMap& names)
   {
-    EdgeVecParser<EdgeList, LabelMap> parser(in, el, names);
-    parser.read_tree();
+    EdgeVecParser<EdgeList, LabelMap>(in, el, names).read_tree();
   }
 
 

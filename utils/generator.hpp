@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include "utils/utils.hpp"
-#include "utils/types.hpp"
-#include "utils/random.hpp"
+#include "utils.hpp"
+#include "types.hpp"
+#include "random.hpp"
 
 namespace PT{
 

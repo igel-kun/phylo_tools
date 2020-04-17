@@ -18,11 +18,11 @@ using LabelMap = typename MyNetwork::LabelMap;
 using SWIter = SecondIterator<std::unordered_map<PT::Node, uint32_t>>;
 
  
-bool read_from_stream(std::ifstream& in, EdgeVec<MyNetwork>& el, LabelMap& names)
+bool read_from_stream(std::ifstream& in, EdgeVec& el, LabelMap& names)
 {
   try{
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
-    PT::parse_newick_string(in, el, names);
+    PT::parse_newick(in, el, names);
   } catch(const MalformedNewick& nw_err){
     DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
     try{
@@ -93,16 +93,16 @@ void print_extension(const MyNetwork& N, const Extension& ex)
   // compute scanwidth of ex
   const auto sw = ex.sw_map(N);
 
-  std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(seconds(&sw)))<<")"<<std::endl;
+  std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(seconds(sw)))<<")"<<std::endl;
 
   std::vector<MyEdge> gamma_el;
   ext_to_tree(N, ex, gamma_el);
 
   std::cout << "constructing extension tree\n";
-  typename MyNetwork::ROTree Gamma(gamma_el, N.labels());
+  CompatibleROTree<MyNetwork> Gamma(gamma_el, N.labels());
   const OutDegreeMap gamma_sw = ext_tree_sw_map(Gamma, N);
   
-  std::cout << "extension tree:\n" << Gamma << std::endl << "(sw = "<< *std::max_element(seconds(&gamma_sw))<<")"<<std::endl;
+  std::cout << "extension tree:\n" << Gamma << std::endl << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
 }
 
 int main(const int argc, const char** argv)
@@ -111,7 +111,7 @@ int main(const int argc, const char** argv)
 
   std::ifstream in(options[""][0]);
 
-  EdgeVec<MyNetwork> el;
+  EdgeVec el;
   typename MyNetwork::LabelMap names;
 
   std::cout << "reading network..."<<std::endl;
@@ -123,7 +123,7 @@ int main(const int argc, const char** argv)
   DEBUG5(std::cout << "building N ("<<names.size()<<" nodes) from edges: "<<el<< std::endl);
   MyNetwork N(el, names);
 
-  if(contains(options, "-v"))
+  if(test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
 //  if(contains(options, "-pp") sw_preprocess(N);
@@ -136,7 +136,7 @@ int main(const int argc, const char** argv)
   std::cout << "\n ==== computing optimal extension ===\n";
   
   Extension ex_opt;
-  if(contains(options, "-lm"))
+  if(test(options, "-lm"))
     compute_min_sw_extension<true>(N, ex_opt);
   else
     compute_min_sw_extension<false>(N, ex_opt);

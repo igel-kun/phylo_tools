@@ -7,7 +7,7 @@
 #include "types.hpp"
 
 namespace PT {
-
+  
   // For all types except integral types:
   template<typename T>
   struct deref{ static Node do_deref(const T& x) { return *x; } };
@@ -23,10 +23,10 @@ namespace PT {
     Iter it;
     const PropertyGetter& getter;
 
-    LabeledNodeIter(); // disallow default construction
+    LabeledNodeIter() = delete; // disallow default construction
   public:
-    using Property = typename PropertyGetter::Property;
-    using value_type = LabeledNode<Property>;
+    using PropertyType = typename PropertyGetter::PropertyType;
+    using value_type = LabeledNode<PropertyType>;
     using reference = value_type&;
     using pointer = value_type*;
     using difference_type = ptrdiff_t;
@@ -40,15 +40,15 @@ namespace PT {
     value_type operator*() const
     {
       const Node x = deref<Iter>::do_deref(it);
-      return {x, getter(x)};
+      return value_type(x, getter(x));
     }
 
     // increment
     LabeledNodeIter& operator++() { ++it; return *this; }
     LabeledNodeIter operator++(int) { LabeledNodeIter result(it, getter); ++(*this); return result; }
 
-    bool operator==(const LabeledNodeIter& it) const { return it.it == it; }
-    bool operator!=(const LabeledNodeIter& it) const { return it.it != it; }
+    bool operator==(const LabeledNodeIter& _it) const { return _it.it == it; }
+    bool operator!=(const LabeledNodeIter& _it) const { return _it.it != it; }
   };
 
   template<class NodeContainer, class PropertyGetter>
@@ -59,8 +59,13 @@ namespace PT {
   public:
     using iterator = LabeledNodeIter<std::IteratorOf_t<NodeContainer, false>, PropertyGetter>;
 
-    LabeledNodeIterFactory(const std::shared_ptr<NodeContainer>& _c, const PropertyGetter& _getter): c(_c), getter(_getter) {}
-    LabeledNodeIterFactory(NodeContainer* _c, const PropertyGetter& _getter): c(_c), getter(_getter) {}
+    // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
+    template<class... Args>
+    LabeledNodeIterFactory(NodeContainer& _c, Args&&... args): c(&_c, std::NoDeleter()), getter(std::forward<Args>(args)...) {}
+    template<class... Args>
+    LabeledNodeIterFactory(NodeContainer* const _c, Args&&... args): c(&_c), getter(std::forward<Args>(args)...) {}
+    template<class... Args>
+    LabeledNodeIterFactory(NodeContainer&& _c, Args&&... args): c(new NodeContainer(std::forward<NodeContainer>(_c))), getter(std::forward<Args>(args)...) {}
 
     iterator begin() const { return {c->begin(), getter}; }
     iterator end() const { return {c->end(), getter}; }
@@ -69,9 +74,8 @@ namespace PT {
   };
 
   template<class NodeContainer, class PropertyGetter>
-  LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(const std::shared_ptr<NodeContainer>& c, const PropertyGetter& pg) { return {c, pg}; }
-  template<class NodeContainer, class PropertyGetter>
-  LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(NodeContainer* c, const PropertyGetter& pg) { return {c, pg}; }
+  LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(NodeContainer* const c, const PropertyGetter& pg, const bool del_on_exit = false)
+    { return {c, pg, del_on_exit}; }
 
 }// namespace
 

@@ -28,19 +28,27 @@ namespace PT{
   // the central Tree class
   // note: we need to give the label-map type as template in order to allow creating mutable copies of subtrees of immutable trees
   //       keeping a reference to the label-map of the host tree
-  template<class _label_type = single_label_tag,
+  template<class _LabelTag = single_label_tag,
            class _EdgeStorage = MutableTreeAdjacencyStorage<void, void>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>,
-           class _network_type = tree_tag>
+           class _NetworkTag = tree_tag>
   class _Tree 
   {
   public:
-    using NetworkTypeTag = _network_type;
+    using NetworkTypeTag = _NetworkTag;
     
-    static constexpr bool is_network = std::is_same_v<_network_type, network_tag>;
-    static constexpr bool is_tree    = std::is_same_v<_network_type, tree_tag>;
+    static constexpr bool is_network = std::is_same_v<_NetworkTag, network_tag>;
+    static constexpr bool is_tree    = std::is_same_v<_NetworkTag, tree_tag>;
 
-    using Mutability_Tag = typename _EdgeStorage::Mutability_Tag;
+    using MutabilityTag = typename _EdgeStorage::MutabilityTag;
+    static constexpr bool is_mutable = std::is_same_v<MutabilityTag, mutable_tag>;
+    static constexpr bool has_consecutive_nodes = is_mutable;
+
+    using LabelTag = _LabelTag;
+    static constexpr bool is_single_labeled = std::is_same_v<LabelTag, single_label_tag>;
+
+    template<class T>
+    using NodeMap = typename _EdgeStorage::template NodeMap<T>;
 
     using EdgeStorage = _EdgeStorage;
     using Edge = typename EdgeStorage::Edge;
@@ -63,12 +71,13 @@ namespace PT{
     using LeafContainer     = typename EdgeStorage::ConstLeafContainer;
     using LeafContainerRef  = typename EdgeStorage::ConstLeafContainerRef;
 
-    using LabelStorage = std::conditional<std::is_same_v<_label_type, single_label_tag>, Node, std::unordered_set<Node>>;
-    
     using LabelMap = _LabelMap;
     using LabelType = typename LabelMap::mapped_type;
-    using LabeledNodeContainer = LabeledNodeIterFactory<NodeIterator, std::MapGetter<LabelMap>>;
+    using LabeledNodeContainer = LabeledNodeIterFactory<NodeContainer, std::MapGetter<const LabelMap>>;
     using LabeledNodeContainerRef = LabeledNodeContainer;
+    
+    using LabeledLeafContainer = LabeledNodeIterFactory<LeafContainer, std::MapGetter<const LabelMap>>;
+    using LabeledLeafContainerRef = LabeledLeafContainer;
 
   protected:
     const LabelMap& node_labels;
@@ -77,9 +86,9 @@ namespace PT{
   public:
 
     // =============== variable query ======================
-    const LeafContainerRef leaves() const { return _edges.leaves(); }
-    const NodeContainerRef nodes() const { return _edges.nodes(); }
-    const EdgeContainerRef edges() const { return _edges; }
+    LeafContainerRef leaves() const { return _edges.leaves(); }
+    NodeContainerRef nodes() const { return _edges.nodes(); }
+    EdgeContainerRef edges() const { return _edges; }
     const LabelMap& labels() const { return node_labels; }
     NodeIterator begin() const { return _edges.nodes_begin(); }
     NodeIterator end() const { return _edges.nodes_end(); }
@@ -90,12 +99,9 @@ namespace PT{
     size_t num_edges() const {return _edges.num_edges();}
     const LabelType& get_label(const Node u) const { return node_labels.at(u); }
 
-    //inline NodeVec get_nodes_preorder(const Node u = root()) const { return tree_traversal<preorder>(*this, u); }
-    //inline NodeVec get_nodes_postorder(const Node u = root()) const { return tree_traversal<postorder>(*this, u); }
-    //inline NodeVec get_nodes_inorder(const Node u = root()) const { return tree_traversal<inorder>(*this, u); }
-
-    // Why oh why, C++, can I not initialize with non-static members/methods???
-
+    //inline NodeVec nodes_preorder(const Node u = root()) const { return tree_traversal<preorder>(*this, u); }
+    //inline NodeVec nodes_postorder(const Node u = root()) const { return tree_traversal<postorder>(*this, u); }
+    //inline NodeVec nodes_inorder(const Node u = root()) const { return tree_traversal<inorder>(*this, u); }
 
     // list all nodes below u in order o (preorder, inorder, postorder)
     template<TraversalType o = postorder, class _Container = NodeVec>
@@ -111,7 +117,7 @@ namespace PT{
 #define get_nodes_below_preorder template get_nodes_below<preorder>
 #define get_nodes_below_inorder template get_nodes_below<inorder>
 
-    // list all nodes below u in order o (preorder, inorder, postorder) avoiding the nodes given in except
+    // list all get_nodes below u in order o (preorder, inorder, postorder) avoiding the get_nodes given in except
     template<TraversalType o = postorder, class _Container = NodeVec, class _ExceptContainer = NodeSet>
     inline _Container get_nodes_below_except(const _ExceptContainer& except, const Node u) const
     { return node_traversal<o, _Container, _ExceptContainer>(*this, except, u); }
@@ -157,7 +163,8 @@ namespace PT{
 #define get_edges_below_except_inorder template get_edges_below_except<inorder>
 
 
-    LabeledNodeContainerRef get_nodes_labeled() const { return { get_nodes(), node_labels}; }
+    LabeledNodeContainerRef nodes_labeled() const { return LabeledNodeContainerRef(nodes(), node_labels); }
+    LabeledLeafContainerRef leaves_labeled() const { return LabeledLeafContainerRef(leaves(), node_labels); }
 
 
 
@@ -168,6 +175,7 @@ namespace PT{
     bool edgeless() const { return num_edges() == 0; }
     Degree in_degree(const Node u) const { return _edges.in_degree(u); }
     Degree out_degree(const Node u) const { return _edges.out_degree(u); }
+    InOutDegree in_out_degree(const Node u) const { return _edges.in_out_degree(u); }
     bool is_leaf(const Node u) const { return out_degree(u) == 0; }
     bool is_root(const Node u) const { return u == root(); }
     bool is_tree_node(const Node u) const { return out_degree(u) > 0; }
@@ -314,10 +322,10 @@ namespace PT{
     }
 
     // copy the subtree rooted at u into t
-    template<class __Tree = _Tree<_label_type, _EdgeStorage, _LabelMap, _network_type>>
+    template<class __Tree = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>>
     __Tree get_rooted_subtree(const Node u) const { return {get_edges_below(u), node_labels}; }
     // copy the subtree rooted at u into t, but ignore subtrees rooted at nodes in 'except'
-    template<class __Tree = _Tree<_label_type, _EdgeStorage, _LabelMap, _network_type>>
+    template<class __Tree = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>>
     __Tree get_rooted_subtree_except(const Node u, const NodeContainer& except) const { return {get_edges_below_except(u, except), node_labels}; }
 
 
@@ -360,10 +368,9 @@ namespace PT{
 
     void tree_summary(const std::ostream& os) const
     {
-      DEBUG3(std::cout << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<std::endl);
-
+      DEBUG3(std::cout << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes; leaves: "<<leaves()<<"\n");
       for(const Node i: nodes()){
-        std::cout << i << ":";
+        std::cout << i << ":\n";
         std::cout << " IN: "<< in_edges(i);
         std::cout << " OUT: "<< out_edges(i) << std::endl;
       }
@@ -387,9 +394,9 @@ namespace PT{
     // note: the label-types CAN be different, but you have to make sure that they fit - for example, if you construct a single-labeled
     //       tree as a subtree of a multi-labeled tree, you'll have to make sure that this subtree is indeed single-labeled, as otherwise,
     //       some code later on may fail!
-    // note: Likewise, if you construct a subtree with _network_type = tree_tag of a network, you better make sure there are no "loops" in that subtree!
-    template<class __label_type, class __EdgeStorage, class __network_type>
-    _Tree(const _Tree<__label_type, __EdgeStorage, LabelMap, __network_type>& supertree, const Node _root):
+    // note: Likewise, if you construct a subtree with _NetworkTag = tree_tag of a network, you better make sure there are no "loops" in that subtree!
+    template<class __LabelTag, class __EdgeStorage, class __NetworkTag>
+    _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>& supertree, const Node _root):
       node_labels(supertree.node_labels),
       _edges(supertree.get_edges_below(_root))
     {}
@@ -401,7 +408,7 @@ namespace PT{
     
     void print_subtree(std::ostream& os, const Node u, std::string prefix) const
     {
-      LabelType name = node_labels[u];
+      LabelType name = node_labels.at(u);
       DEBUG3(name += "[" + std::to_string(u) + "]");
       if(name == "") name = "+";
       os << '-' << name;
@@ -428,8 +435,8 @@ namespace PT{
     
   };
   
-  template<class _label_type, class _EdgeStorage, class _LabelMap>
-  std::ostream& operator<<(std::ostream& os, const _Tree<_label_type, _EdgeStorage, _LabelMap>& T)
+  template<class _LabelTag, class _EdgeStorage, class _LabelMap>
+  std::ostream& operator<<(std::ostream& os, const _Tree<_LabelTag, _EdgeStorage, _LabelMap>& T)
   {
     if(!T.empty()){
       std::string prefix = "";
@@ -442,12 +449,13 @@ namespace PT{
 
   template<class _NodeData,
            class _EdgeData = void,
-           class _label_type = single_label_tag,
+           class _LabelTag = single_label_tag,
            class _EdgeStorage = MutableTreeAdjacencyStorage<_EdgeData>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
-  class Tree: public _Tree<_label_type, _EdgeStorage, _LabelMap>
+  class Tree: public _Tree<_LabelTag, _EdgeStorage, _LabelMap>
   {
-    using Parent = _Tree<_label_type, _EdgeStorage, _LabelMap>;
+    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap>;
+  protected:
     using Parent::_edges;
   public:
     using Parent::Parent;
@@ -461,10 +469,10 @@ namespace PT{
     NodeData& operator[](const Node u) { return _edges.get_node_data(u); }
   };
 
-  template<class _EdgeData, class _label_type, class _EdgeStorage, class _LabelMap>
-  class Tree<void, _EdgeData, _label_type, _EdgeStorage, _LabelMap>: public _Tree<_label_type, _EdgeStorage, _LabelMap>
+  template<class _EdgeData, class _LabelTag, class _EdgeStorage, class _LabelMap>
+  class Tree<void, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>: public _Tree<_LabelTag, _EdgeStorage, _LabelMap>
   {
-    using Parent = _Tree<_label_type, _EdgeStorage, _LabelMap>;
+    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap>;
   public:
     using Parent::Parent;
     using Parent::get_label;
@@ -476,15 +484,26 @@ namespace PT{
     const LabelType& operator[](const Node u) const { return get_label(u); }
   };
 
-  // convenience aliases
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
-  using MutableTree = Tree<_NodeData, _EdgeData, _label_type, MutableTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
-  using ConstTree = Tree<_NodeData, _EdgeData, _label_type, ConsecutiveTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
-
   // these two types should cover 95% of all (non-internal) use cases
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
-  using RWTree = MutableTree<_NodeData, _EdgeData, _label_type>;
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
-  using ROTree = ConstTree<_NodeData, _EdgeData, _label_type>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
+  using RWTree = Tree<_NodeData, _EdgeData, _LabelTag, MutableTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
+  using ROTree = Tree<_NodeData, _EdgeData, _LabelTag, ConsecutiveTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+
+  // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)
+  template<class __Tree,
+    class _NodeData = typename __Tree::NodeData,
+    class _EdgeData = typename __Tree::EdgeData,
+    class _LabelTag = typename __Tree::LabelTag,
+    class _LabelMap = typename __Tree::LabelMap>
+  using CompatibleRWTree = RWTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+  template<class __Tree,
+    class _NodeData = typename __Tree::NodeData,
+    class _EdgeData = typename __Tree::EdgeData,
+    class _LabelTag = typename __Tree::LabelTag,
+    class _LabelMap = typename __Tree::LabelMap>
+  using CompatibleROTree = ROTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+
+  template<class __Network>
+  using LabelMapFromNetwork = typename __Network::LabelMap;
 }

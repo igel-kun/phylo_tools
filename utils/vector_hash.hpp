@@ -426,9 +426,9 @@ namespace std{
     template<class ...Args>
 	  insert_result emplace(Args&&... args)
     {
-      assert(is_move_assignable<Key>::value);
+      assert(is_move_assignable_v<Key>);
       if(load_factor() > max_load_factor) rehash();
-      return _insert<Key&&>(static_cast<Key&&>(Key(args...)));
+      return _insert<Key&&>(static_cast<Key&&>(Key(forward<Args>(args)...)));
     }
 
     inline bool erase(const Key& key) {

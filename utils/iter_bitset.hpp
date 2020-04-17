@@ -90,8 +90,8 @@ namespace std {
 
 
     const bucket_map& data() const { return storage; }
-    bool insert(const_reference x) { return set(x); }
     std::pair<iterator,bool> emplace(const_reference x) { const bool res = set(x); return {find(x), res}; }
+    std::pair<iterator,bool> insert(const_reference x) { return emplace(x); }
     bool erase(const_reference x) { return clear(x); }
     bool unset(const_reference x) { return clear(x); }
     bool set(const_reference x, const bool value) { if(value) return set(x); else return clear(x); }
@@ -105,20 +105,19 @@ namespace std {
 
     bool test(const_reference x) const
     {
-      try{
-        return (storage.at(BUCKET_OF(x)) >> POS_OF(x)) & 1;
-      } catch(std::out_of_range& e) {
-        return false;
-      }
+      const auto it = storage.find(BUCKET_OF(x));
+      if(it != storage.end())
+        return (it->second & (1 << POS_OF(x)));
+      else return false;
     }
 
     // set a bit & return whether the size changed (that is, if it wasn't set before)
     bool set(const_reference x)
     {
       bucket_type bit_set = (1ul << POS_OF(x));
-      auto ins_result = storage.emplace(BUCKET_OF(x), bit_set);
+      auto ins_result = storage.try_emplace(BUCKET_OF(x), bit_set);
       if(!ins_result.second){
-        bucket_type& bucket = (*ins_result.first).second;
+        bucket_type& bucket = ins_result.first->second;
         if(bucket & bit_set) return false; else bucket |= bit_set;
       }
       ++_count;
@@ -584,8 +583,8 @@ namespace std {
     using bucket_type = typename Bitset::bucket_type;
     using bucket_iter = typename bucket_map::const_iterator;
     using typename Parent::value_type;
-    using typename Parent::pointer;
-    using typename Parent::reference;
+    using pointer     = self_deref<value_type>;
+    using reference   = value_type;
     using const_reference = const reference;
   protected:
     const bucket_map& storage;
@@ -678,5 +677,10 @@ namespace std {
     else
       return end();
   }
+
+
+  template<class C, class = void> struct is_bitset : false_type {};
+  template<class C> struct is_bitset<C, void_t<typename C::bucket_map>>: true_type {};
+  template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_reference_t<C>>::value;
 
 }

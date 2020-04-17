@@ -16,7 +16,7 @@ namespace PT{
   {
   protected:
     _Item* start;
-    uint32_t count;
+    size_t count;
 
   public:
     using value_type = _Item;
@@ -29,7 +29,7 @@ namespace PT{
       ConsecutiveStorageNoMem(nullptr)
     {}
 
-    ConsecutiveStorageNoMem(_Item* _start, const size_t _count = 1):
+    ConsecutiveStorageNoMem(_Item* _start, const size_t _count = 0):
       start(_start),
       count(_start == nullptr ? 0 : _count)
     {
@@ -92,23 +92,38 @@ namespace PT{
   {
     using Parent = ConsecutiveStorageNoMem<_Item>;
     using Parent::start;
+    using Parent::count;
   public:
 
-    ConsecutiveStorage(const uint32_t _count = 1):
-      Parent::ConsecutiveStorageNoMem((_Item*)malloc(_count * sizeof(_Item)), _count)
+    ConsecutiveStorage(const size_t _count = 0):
+      Parent::ConsecutiveStorageNoMem(_count == 0 ? nullptr : reinterpret_cast<_Item*>(std::malloc(_count * sizeof(_Item))), _count)
     {
+      if(_count && !start) throw std::bad_alloc();
       DEBUG5(std::cout << "creating ConsecutiveStorage at "<<start<<" for "<<_count<<" items of size "<<sizeof(_Item)<<std::endl);
     }
 
-    ~ConsecutiveStorage() { free(start); }
+    void resize(const size_t _count){
+      if(_count){
+        if(start){
+          if((start = reinterpret_cast<_Item*>(std::realloc(start, _count))) == nullptr) throw std::bad_alloc();
+        } else
+          if((start = reinterpret_cast<_Item*>(std::malloc(_count * sizeof(_Item)))) == nullptr) throw std::bad_alloc();
+      } else {
+        std::free(start);
+        start = nullptr;
+      }
+      count = _count;
+    }
+
+    ~ConsecutiveStorage() { std::free(start); }
   };
 
   template<typename _Item>  
   std::ostream& operator<<(std::ostream& os, const ConsecutiveStorageNoMem<_Item>& storage)
   {
     os << '{';
-    for(auto it = storage.begin(); it != storage.end(); ++it) { std::cout << "item at "<<it<<":\n"<<*it<<'\n'; }
-    //for(const auto& i: storage) os << i << ' ';
+    //for(auto it = storage.begin(); it != storage.end(); ++it) { std::cout << "item at "<<it<<":\n"<<*it<<'\n'; }
+    for(const auto& i: storage) os << i << ' ';
     return os << '}';
   }
 

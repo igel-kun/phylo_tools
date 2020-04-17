@@ -12,8 +12,12 @@
 #include <vector>
 
 namespace std{
-  class Symmetric;
-  class Asymmetric;
+  struct Symmetric {};
+  struct Asymmetric {};
+  
+  template<class T> struct is_symmetric: public false_type {};
+  template<> struct is_symmetric<Symmetric>: public false_type {};
+  template<class T> constexpr bool is_symmetric_v = is_symmetric<T>::value;
 
   template<typename Element, typename Something = vector<Element>, typename Symmetry = Asymmetric>
   class Something2d : public Something
@@ -24,16 +28,14 @@ namespace std{
     using Coords = pair<size_t, size_t>;
 
 
-    template<typename Q = Symmetry>
-    typename enable_if<is_same<Q, Asymmetric>::value, size_t>::type
-    linearize(const Coords& coords) const
+    template<enable_if_t<!is_symmetric_v<Symmetry>, int> = 0>
+    size_t linearize(const Coords& coords) const
     {
       return coords.second * columns + coords.first;
     }
 
-    template<typename Q = Symmetry>
-    typename enable_if<is_same<Q, Symmetric>::value, size_t>::type
-    linearize(const Coords& coords) const
+    template<enable_if_t<is_symmetric_v<Symmetry>, int> = 0>
+    size_t linearize(const Coords& coords) const
     {
       if(coords.first <= coords.second)
         return (coords.second * (coords.second + 1)) / 2  + coords.first;
@@ -51,16 +53,14 @@ namespace std{
       Something::resize(linearize({cols - 1, rows - 1}) + 1, element);
     }
 
-    template<typename Q = Symmetry>
-    typename enable_if<is_same<Q, Asymmetric>::value, Coords>::type
-    size() const
+    template<enable_if_t<!is_symmetric_v<Symmetry>, int> = 0>
+    Coords size() const
     {
       assert(columns > 0);
       return {columns, Something::size() / columns};
     }
-    template<typename Q = Symmetry>
-    typename enable_if<is_same<Q, Symmetric>::value, Coords>::type
-    size() const
+    template<enable_if_t<is_symmetric_v<Symmetry>, int> = 0>
+    Coords size() const
     {
       assert(columns > 0);
       return {columns, columns};

@@ -33,8 +33,8 @@ namespace std{
 	  using iterator_category = std::bidirectional_iterator_tag;
 
     template<class... Args>
-    skipping_iterator(Container& _c, const NormalIterator& _i, const bool _fix_index, Args... args):
-      c(_c), i(_i), pred(args...)
+    skipping_iterator(Container& _c, const NormalIterator& _i, const bool _fix_index, Args&&... args):
+      c(_c), i(_i), pred(forward<Args>(args)...)
     { if(_fix_index) fix_index(); }
  
     // copy construction, also construct const_iterators from iterators
@@ -87,9 +87,11 @@ namespace std{
     using reference   = typename Container::reference;
 
     template<class... Args>
-    SkippingIterFactory(const std::shared_ptr<Container>& _c, Args... args): c(_c), p(args...) {}
+    SkippingIterFactory(Container& _c, Args&&... args): c(&_c, std::NoDeleter()), p(forward<Args>(args)...) {}
     template<class... Args>
-    SkippingIterFactory(Container* _c, Args... args): c(_c), p(args...) {}
+    SkippingIterFactory(Container* const _c, Args&&... args): c(_c), p(forward<Args>(args)...) {}
+    template<class... Args>
+    SkippingIterFactory(Container&& _c, Args&&... args): c(new Container(std::forward<Container>(_c))), p(forward<Args>(args)...) {}
 
     iterator begin() { return {*c, BeginEnd::begin(*c), true, p}; }
     iterator end() { return {*c, BeginEnd::end(*c), false, p}; }
@@ -98,9 +100,7 @@ namespace std{
   };
 
   template<class Container, class Predicate, bool reverse = false>
-  SkippingIterFactory<Container, Predicate, reverse> skipping(const std::shared_ptr<Container>& c, Predicate& p) { return {c, p}; }
-  template<class Container, class Predicate, bool reverse = false>
-  SkippingIterFactory<Container, Predicate, reverse> skipping(Container* c, Predicate& p) { return {c, p}; }
+  SkippingIterFactory<Container, Predicate, reverse> skipping(Container* c, const bool del_on_exit, Predicate& p) { return {c, del_on_exit, p}; }
 
 } // namespace std
 

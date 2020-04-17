@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "utils/types.hpp"
+#include "utils/set_interface.hpp"
 #include "utils/iter_bitset.hpp"
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
@@ -65,7 +66,7 @@ namespace PT{
   //! a newick parser
   //NOTE: we parse newick from the back to the front since the node names are _appended_ to the node instead of _prepended_
   // EL can be an EdgeList or a WEdgeList if we are interested in branch-lengths
-  template<class EL = EdgeVec, class LabelMap = ConsecutiveMap<Node, std::string>>
+  template<class EL, class LabelMap>
   class NewickParser
   {
     // a HybridInfo is a name of a hybrid together with it's hybrid-index
@@ -155,64 +156,64 @@ namespace PT{
       while((back >= 0) && std::isspace(newick_string.at(back))) --back;
     }
 
-    inline bool is_reticulation(const IndexAndDegree& root) const
+    inline bool is_reticulation_degree(const Degree root_deg) const
     {
-      return root.second != UINT32_MAX;
+      return root_deg != UINT32_MAX;
     }
 
     // a subtree is a leaf or an internal vertex
-    IndexAndDegree read_subtree()
+    Index read_subtree()
     {
       skip_whitespaces();
 
       // read the name of the root, any non-trailing whitespaces are considered part of the name
       Index root = names.size();
-      names.push_back(read_name());
+      // keep root's name as rvalue in the air - we may or may not insert it into names, depending on its hybrid status
+      const std::string&& root_name = read_name();
 
       // find if root is a hybrid and, if so, it's number
-      const HybridInfo hyb_info = get_hybrid_info(names.back());
+      const HybridInfo hyb_info = get_hybrid_info(root_name);
 
-      // if root is a known hybrid, then remove its name from 'names' and lookup its index in 'hybrids', else register it in 'hybrids'
+      // if root is a known hybrid, then don't add its name to 'names' but lookup its index in 'hybrids', else register it in 'hybrids'
       if(hyb_info.second != UINT32_MAX){
-        const auto hyb_it = hybrids.find(hyb_info.second);
-        if(hyb_it != hybrids.end()){
-          names.pop_back();
-          root = hyb_it->second.first;
-          if(++(hyb_it->second.second) == 3) not_binary();
-        } else {
-          names.back() = hyb_info.first;
-          hybrids.emplace_hint(hyb_it, hyb_info.second, IndexAndDegree(root, 0));
-        }
-      }
-      IndexAndDegree result = {root, hyb_info.second};
+        const auto emp_res = hybrids.try_emplace(hyb_info.second, root, 0);
+        if(!emp_res.second){
+          IndexAndDegree& stored = emp_res.first->second;
+          // we've already seen a hybrid by that name - so don't insert root_name into names, but replace 'root' by the correct index
+          root = stored.first;
+          // increase the registered in-degree of 'root'
+          const Index root_deg = ++stored.second;
+          if((root_deg) == 3) not_binary();
+        } else names.emplace(root, hyb_info.first);
+      } else names.emplace(root, root_name);
 
       // if the subtree dangling from root is non-empty, then recurse
-      if((back > 0) && newick_string.at(back) == ')') read_internal(result);
+      if((back > 0) && newick_string.at(back) == ')') read_internal(root, hyb_info.second);
 
       skip_whitespaces();
-      return result;
+      return root;
     }
 
     // an internal vertex is ( + branchlist + )
-    void read_internal(const IndexAndDegree& root)
+    void read_internal(const Index root, const Degree root_deg)
     {
       assert(back >= 2);
       if(newick_string.at(back) == ')') --back;
       else throw MalformedNewick(newick_string, back, std::string("expected ')' but got '")+(char)(newick_string.at(back))+"'");
 
-      read_branchset(root);
+      read_branchset(root, root_deg);
       
       if(newick_string.at(back) == '(') --back;
       else throw MalformedNewick(newick_string, back, std::string("expected '(' but got '")+(char)newick_string.at(back)+"'");
     }
 
     // a branchset is a comma-separated list of branches
-    void read_branchset(const IndexAndDegree& root)
+    void read_branchset(const Index root, const Degree root_deg)
     {
       std::unordered_set<Index> children_seen;
       children_seen.insert(read_branch(root));
       while(newick_string.at(back) == ',') {
-        if(is_reticulation(root)){
+        if(is_reticulation_degree(root_deg)){
           not_binary();
           if(!allow_junctions)
             throw MalformedNewick(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
@@ -221,19 +222,19 @@ namespace PT{
         --back;
         const Index new_child = read_branch(root);
         if(!children_seen.emplace(new_child).second)
-          throw MalformedNewick(newick_string, back, "read double edge "+ std::to_string(root.first) + " --> "+std::to_string(new_child));
+          throw MalformedNewick(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
         if(back < 0) throw MalformedNewick(newick_string, back, "unmatched ')'");
       }
     }
 
     // a branch is a subtree + a length
     // return the head of the read branch
-    Index read_branch(const IndexAndDegree& root)
+    Index read_branch(const Index root)
     {
       const float len = read_length();
-      const IndexAndDegree child = read_subtree();
-      put_branch_in_edgelist(edges, (Node)(root.first), (Node)(child.first), len);
-      return child.first;
+      const Index child = read_subtree();
+      put_branch_in_edgelist(edges, (Node)(root), (Node)(child), len);
+      return child;
     }
 
     // check if this is a hybrid and return name and hybrid number
@@ -277,19 +278,18 @@ namespace PT{
   };
 
   template<class EdgeList, class LabelMap>
-  void parse_newick_string(const std::string in, EdgeList& el, LabelMap& names)
+  void parse_newick(const std::string in, EdgeList& el, LabelMap& names)
   {
     NewickParser<EdgeList, LabelMap> parser(in, el, names);
     parser.read_tree();
   }
   template<class EdgeList, class LabelMap>
-  void parse_newick_string(std::istream& in, EdgeList& el, LabelMap& names)
+  void parse_newick(std::istream& in, EdgeList& el, LabelMap& names)
   {
     std::string in_line;
     std::getline(in, in_line);
 
-    NewickParser<EdgeList, LabelMap> parser(in_line, el, names);
-    parser.read_tree();
+    NewickParser<EdgeList, LabelMap>(in_line, el, names).read_tree();
   }
 
 }

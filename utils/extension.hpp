@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "set_interface.hpp"
 
 
 namespace PT{
@@ -86,8 +87,7 @@ namespace PT{
 
   };
 
-  template<typename ...Args>
-  inline std::emplace_result<std::vector<Node>> append(Extension& _vec, Args... args) { return {_vec.emplace(_vec.end(), args...), true}; }
-  inline void append(Extension& x, const Extension& y) { x.insert(x.end(), y.begin(), y.end()); }
 }// namespace
-
+namespace std{
+  template<> struct is_vector<PT::Extension>: public true_type {};
+}

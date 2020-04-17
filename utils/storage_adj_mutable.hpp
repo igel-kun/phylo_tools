@@ -30,7 +30,7 @@ namespace PT{
     using Parent = RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
   public:
 
-    using Mutability_Tag = mutable_tag;
+    using MutabilityTag = mutable_tag;
     using typename Parent::Edge;
     using typename Parent::Adjacency;
     using typename Parent::RevEdge;
@@ -40,21 +40,26 @@ namespace PT{
     using NodeMap = HashMap<Node, T>;
   protected:
     using Parent::_successors;
-    using Parent::successors;
     using Parent::_predecessors;
-    using Parent::predecessors;
     using Parent::_root;
     using Parent::_size;
 
   public:
+    using Parent::compute_root;
+    using Parent::successors;
+    using Parent::predecessors;
+
     // Note: we assume that the node u exists already
     bool add_edge(const Edge& uv){ return add_edge(uv.tail(), uv.get_adjacency()); }
     bool add_edge(const Node u, const Adjacency& v)
     {
       if(append(_predecessors[v], u).second){
         // add v to the successors if its a new node
-        _successors.emplace(v);
-        const bool uv_app = append(_successors.at(u), v).second;
+        _successors.try_emplace(v);
+#ifndef NDEBUG
+        const bool uv_app =
+#endif
+        append(_successors.at(u), v).second;
         assert(uv_app);
         ++_size;
         return true;
@@ -95,14 +100,15 @@ namespace PT{
 
 
     //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class NodeContainer, class LeafContainer = NodeVec>
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
     _MutableNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
       Parent()
     {
       for(const auto& uv: given_edges) add_edge(uv);
-      compute_root_and_leaves(old_to_new, leaves);
+      compute_root();
+      compute_translate_and_leaves(*this, old_to_new, leaves);
     }
 
   };
@@ -144,7 +150,7 @@ namespace PT{
   {
     using Parent = RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
   public:
-    using Mutability_Tag = mutable_tag;
+    using MutabilityTag = mutable_tag;
     using Parent::Parent;
     using typename Parent::Edge;
     using typename Parent::Adjacency;
@@ -158,6 +164,7 @@ namespace PT{
     using Parent::_size;
 
   public:
+    using Parent::compute_root;
 
     // the non-secure versions allow any form of edge addition
     // ATTENTION: this will NOT update the root! use set_root() afterwards!
@@ -167,7 +174,7 @@ namespace PT{
       if(append(_successors, u, v).second){
         if(append(_predecessors, v, u).second){
           ++_size;
-        } else throw std::logic_error("cannot create tree with reticulation (edges ("+std::string(front(_predecessors[v]))+","+std::string(v)+") and ("+std::string(u)+","+std::string(v)+") given)");
+        } else throw std::logic_error("cannot create tree with reticulation (edges ("+std::to_string(front(_predecessors[v]))+","+std::to_string(v)+") and ("+std::to_string(u)+","+std::to_string(v)+") given)");
       } else return false;
       return true;
     }
@@ -230,14 +237,14 @@ namespace PT{
 
     //! initialization from edgelist
     template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableTreeAdjacencyStorage(const non_consecutive_tag tag,
-                                 const GivenEdgeContainer& given_edges,
+    _MutableTreeAdjacencyStorage(const GivenEdgeContainer& given_edges,
                                  NodeTranslation* old_to_new = nullptr,
                                  LeafContainer* leaves = nullptr):
       Parent()
     {
-      for(const auto& uv: given_edges)
-      compute_root_and_leaves(old_to_new, leaves);
+      for(const auto& uv: given_edges) add_edge(uv);
+      compute_root();
+      compute_translate_and_leaves(*this, old_to_new, leaves);
     }
   };
 

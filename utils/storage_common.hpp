@@ -56,13 +56,12 @@ namespace PT{
   template<class LeafContainer>
   Node compute_root_and_leaves(const InOutDegreeMap& deg, LeafContainer* leaves = nullptr)
   {
-    char roots = 0;
-    Node _root = 0;
+    Node _root = NoNode;
     for(const auto& ud: deg){
       const Node u = ud.first;
       const auto& u_deg = ud.second;
       if(u_deg.first == 0){
-        if(roots++ == 0)
+        if(_root == NoNode)
           _root = u;
         else throw std::logic_error("cannot create tree/network with multiple roots ("+std::to_string(_root)+" & "+std::to_string(u)+")");
       } else if(leaves && (u_deg.second == 0)) append(*leaves, u);
@@ -71,16 +70,15 @@ namespace PT{
   }
 
   template<class EdgeContainer, class LeafContainer>
-  void compute_root_and_leaves(const EdgeContainer& edges, NodeTranslation* old_to_new, LeafContainer* leaves = nullptr)
+  void compute_translate_and_leaves(const EdgeContainer& edges, NodeTranslation* old_to_new, LeafContainer* leaves = nullptr)
   {
-    edges.compute_root();
     if(leaves)
-      for(const auto& uV: edges.successors())
+      for(const auto& uV: edges.successor_map())
         if(uV.second.empty())
-          append(leaves, uV.first);
+          append(*leaves, uV.first);
     // translate maps are kind of silly for mutable storages, but if the user insists to want one, we'll give her/him one
     if(old_to_new)
-      for(const auto& uV: edges.successors())
+      for(const auto& uV: edges.successor_map())
         append(*old_to_new, uV.first, uV.first);
   }
 

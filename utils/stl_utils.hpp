@@ -10,32 +10,26 @@
 
 
 namespace std{
-
-  template<typename T>
-  struct is_reverse_iterator: public std::false_type {};
-
-  template<typename T>
-  struct is_reverse_iterator<std::reverse_iterator<T>>: public std::true_type {};
-
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
-  template<class Container, bool reverse>
-  struct IteratorOf {
-    using type = std::conditional_t<reverse, std::reverse_iterator<typename Container::iterator>, typename Container::iterator>;
-  };
-  template<class Container, bool reverse>
-  struct IteratorOf<const Container, reverse> {
-    using type = std::conditional_t<reverse, std::reverse_iterator<typename Container::const_iterator>, typename Container::const_iterator>;
-  };
-
+  template<class Container, bool reverse> struct IteratorOf
+  { using type = std::conditional_t<reverse, std::reverse_iterator<typename Container::iterator>, typename Container::iterator>; };
+  template<class Container, bool reverse> struct IteratorOf<const Container, reverse>
+  { using type = std::conditional_t<reverse, std::reverse_iterator<typename Container::const_iterator>, typename Container::const_iterator>; };
   template<class Container, bool reverse = false>
-  using IteratorOf_t = typename IteratorOf<Container, reverse>::type;
+  using IteratorOf_t = typename IteratorOf<remove_reference_t<Container>, reverse>::type;
 
 
   // copy const specifier from T to Q (that is, if T is const, then return const Q, otherwise return Q
-  template<class T, class Q>
-  struct CopyConst { using type = Q; };
-  template<class T, class Q>
-  struct CopyConst<const T, Q> { using type = const Q; };
+  template<class T, class Q> struct CopyConst { using type = Q; };
+  template<class T, class Q> struct CopyConst<const T, Q> { using type = const Q; };
+  template<class T, class Q> using CopyConst_t = typename CopyConst<T, Q>::type;
+
+  // copy reference specifier from T to Q (that is, if T == X&, then return Q&, otherwise return Q
+  template<class T, class Q> struct CopyRef { using type = Q; };
+  template<class T, class Q> struct CopyRef<T&, Q> { using type = Q&; };
+  template<class T, class Q> using CopyRef_t = typename CopyRef<T, Q>::type;
+
+
 
   // a class that returns itself on dereference 
   // (useful for iterators returning constructed things instead of pointers to things - for example producing Edges from a Node and a set of Nodes)
@@ -84,31 +78,6 @@ namespace std{
   inline typename _Container::const_iterator max_element(const _Container& c) { return max_element(c.begin(), c.end()); }
 
 
-  // classes to extract second or first from a pair
-  template<class _Pair, class _ItemType>
-  struct _extract_second{
-    using value_type = _ItemType;
-    using reference = value_type&;
-    const reference operator()(const _Pair& e) const { return e.second; }
-    reference operator()(_Pair& e) const { return e.second; }
-  };
-  template<class _Pair, class _ItemType>
-  struct _extract_first{
-    using value_type = _ItemType;
-    using reference = value_type&;
-    const reference operator()(const _Pair& e) const { return e.first; }
-    reference operator()(_Pair& e) const { return e.first; }
-  };
-  template<class _Pair>
-  struct extract_second: public _extract_second<_Pair, const typename _Pair::second_type> {};
-  template<class _Pair>
-  struct extract_second<const _Pair>: public _extract_second<const _Pair, const typename _Pair::second_type> {};
-  template<class _Pair>
-  struct extract_first: public _extract_first<_Pair, const typename _Pair::first_type> {};
-  template<class _Pair>
-  struct extract_first<const _Pair>: public _extract_first<const _Pair, const typename _Pair::first_type> {};
-
-
 
 
   template<typename T1, typename T2>
@@ -142,21 +111,16 @@ namespace std{
 
 
   //! simple property getter
-  template<class Map, class Key = typename Map::key_type, class Mapped = typename Map::mapped_type>
+  template<class Map, class Key = typename Map::key_type, class Mapped = CopyConst_t<Map, typename Map::mapped_type>>
   struct MapGetter
   {
+    using PropertyType = typename Map::mapped_type;
     Map& m;
     MapGetter(Map& _m): m(_m) {}
 
-    Mapped& operator()(const Key& key) const { return m[key]; }
+    Mapped& operator()(const Key& key) const { return m.at(key); }
   };
 
-  template<class T>
-  struct DerefGetter
-  {
-    template<class Ptr>
-    T& operator()(const Ptr& p) const { return *p; }
-  };
 
   template<class C>
   inline std::ostream& _print(std::ostream& os, const C& objs)
@@ -264,6 +228,19 @@ namespace std{
       return true;
     }
   }
+
+
+  // a deleter that will or will not delete, depeding on its argument upon construction (for shared_ptr's)
+  template<class T>
+  struct SelectiveDeleter {
+    const bool del;
+    SelectiveDeleter(const bool _del): del(_del) {}
+    inline void operator()(T* p) const { if(del) delete p; }
+  };
+  struct NoDeleter {
+    template<class T>
+    inline void operator()(T* p) const {}
+  };
 
 }
 

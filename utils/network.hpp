@@ -10,12 +10,12 @@ namespace PT{
   // note: the order of template arguments is such as to minimize expected number of arguments that have to be given
   template<class _NodeData,
            class _EdgeData,
-           class _label_type = single_label_tag,
+           class _LabelTag = single_label_tag,
            class _EdgeStorage = MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
-  class Network : public Tree<_NodeData, _EdgeData, _label_type, _EdgeStorage, _LabelMap>
+  class Network : public Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>
   {
-    using Parent = Tree<_NodeData, _EdgeData, _label_type, _EdgeStorage, _LabelMap>;
+    using Parent = Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>;
   protected:
     using Parent::node_labels;
     using Parent::_edges;
@@ -29,7 +29,7 @@ namespace PT{
     using Parent::out_degree;
     using Parent::in_degree;
     using Parent::out_edges;
-    using Parent::get_nodes;
+    using Parent::nodes;
     using Parent::num_nodes;
     using Parent::root;
 
@@ -71,7 +71,7 @@ namespace PT{
     NodeVec get_comp_roots() const
     {
       NodeVec comp_roots;
-      for(const Node u: get_nodes()){
+      for(const Node u: nodes()){
         if(is_inner_tree_node(u)){
           const Node v = parents(u).front();
           if(is_reti(v)) comp_roots.push_back(v);
@@ -130,8 +130,8 @@ namespace PT{
     friend class TreeComponentInfo;
   };
 
-  template<class _NodeData, class _EdgeData, class _label_type, class _EdgeStorage, class _LabelMap>
-  std::ostream& operator<<(std::ostream& os, const Network<_NodeData, _EdgeData, _label_type, _EdgeStorage, _LabelMap>& N)
+  template<class _NodeData, class _EdgeData, class _LabelTag, class _EdgeStorage, class _LabelMap>
+  std::ostream& operator<<(std::ostream& os, const Network<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>& N)
   {
     if(!N.empty()){
       N.print_subtree(os, N.root());
@@ -140,18 +140,25 @@ namespace PT{
   }
 
 
-  // convenience aliases
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
-  using MutableNetwork = Network<_NodeData, _EdgeData, _label_type, MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag, class _LabelMap = ConsecutiveMap<Node,std::string>>
-  using ConstNetwork = Network<_NodeData, _EdgeData, _label_type, ConsecutiveNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
-
   // these two types should cover 95% of all (non-internal) use cases
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
-  using RWNetwork = MutableNetwork<_NodeData, _EdgeData, _label_type>;
-  template<class _NodeData = void, class _EdgeData = void, class _label_type = single_label_tag>
-  using RONetwork = ConstNetwork<_NodeData, _EdgeData, _label_type>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
+  using RWNetwork = Network<_NodeData, _EdgeData, _LabelTag, MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = ConsecutiveMap<Node,std::string>>
+  using RONetwork = Network<_NodeData, _EdgeData, _LabelTag, ConsecutiveNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
 
+  // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag,
+    class _LabelMap = typename __Network::LabelMap>
+  using CompatibleRWNetwork = RWNetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag,
+    class _LabelMap = typename __Network::LabelMap>
+  using CompatibleRONetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
 
 
 } // namespace

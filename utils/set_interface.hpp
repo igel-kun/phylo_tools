@@ -12,28 +12,20 @@
 
 namespace std {
 
-  template<class T>
-  struct is_vector: public false_type {};
-  template<class T, class Alloc>
-  struct is_vector<vector<T, Alloc>>: public true_type {};
-  template<class T>
-  static constexpr bool is_vector_v = is_vector<T>::value;
+  template<class T> struct is_vector: public false_type {};
+  template<class T, class Alloc> struct is_vector<vector<T, Alloc>>: public true_type {};
+  template<class T, class Traits, class Alloc> struct is_vector<basic_string<T,Traits,Alloc>>: public true_type {};
+  template<class T> constexpr bool is_vector_v = is_vector<remove_reference_t<T>>::value;
 
   //a container is something we can iterate through, that is, it has an iterator
-  template<class N, class T = void>
-  struct is_container: public false_type {};
-  template<class N>
-  struct is_container<N, void_t<typename N::value_type>>: public true_type {};
-  template<class N>
-  static constexpr bool is_container_v = is_container<remove_reference_t<N>>::value;
+  template<class N, class T = void> struct is_container: public false_type {};
+  template<class N> struct is_container<N, void_t<typename N::value_type>>: public true_type {};
+  template<class N> constexpr bool is_container_v = is_container<remove_reference_t<N>>::value;
   
   // a map is something with a mapped_type in it
-  template<class N, class T = void>
-  struct is_map: public false_type {};
-  template<class N>
-  struct is_map<N, void_t<typename N::mapped_type>>: public true_type {};
-  template<class N>
-  static constexpr bool is_map_v = is_map<remove_reference_t<N>>::value;
+  template<class N, class T = void> struct is_map: public false_type {};
+  template<class N> struct is_map<N, void_t<typename N::mapped_type>>: public true_type {};
+  template<class N> constexpr bool is_map_v = is_map<remove_reference_t<N>>::value;
 
 
 
@@ -47,12 +39,11 @@ namespace std {
   template<class T>
   inline void flip(iterable_bitset<T>& _set, const uintptr_t index) { return _set.flip(index); }
 
-  template<class Set, class Other>
+  template<class Set, class Other, enable_if_t<is_container_v<Set> && !is_bitset_v<Set>, int> = 0>
   inline void intersect(Set& target, const Other& source)
   {
-    static_assert(is_container<Set>::value);
     for(auto target_it = target.begin(); target_it != target.end();)
-      if(!contains(source, *target_it))
+      if(!test(source, *target_it))
         target_it = target.erase(target_it); 
       else ++target_it;
   }
@@ -73,6 +64,20 @@ namespace std {
     return *(_set.rbegin());
   }
 
+  template<class T>
+  inline typename iterator_traits<IteratorOf_t<T>>::value_type&& front(T&& _set)
+  {
+    assert(!_set.empty());
+    return move(*(_set.begin()));
+  }
+
+  template<class T>
+  inline typename iterator_traits<IteratorOf_t<T>>::value_type&& back(T&& _set)
+  {
+    assert(!_set.empty());
+    return move(*(_set.rbegin()));
+  }
+
 
   template<class T>
   using emplace_result = pair<typename T::iterator, bool>;
@@ -81,30 +86,41 @@ namespace std {
   template<class Set, enable_if_t<is_container_v<Set> && !is_map_v<Set> && !is_vector_v<Set>, int> = 0, class ...Args>
   inline emplace_result<Set> append(Set& _set, Args&&... args) { return _set.emplace(forward<Args>(args)...); }
   // on vectors, append =  emplace_back
+  
+  // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
+  // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   template<typename T, class ...Args>
   inline emplace_result<vector<T>> append(vector<T>& _vec, Args&&... args) { return {_vec.emplace(_vec.end(), forward<Args>(args)...), true}; }
   // on maps to primitives, append = try_emplace
-  template<class Map, enable_if_t<!is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
+  template<class Map, enable_if_t<is_map_v<Map> && !is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
   inline emplace_result<Map> append(Map& _map, const typename Map::key_type& _key, Args&&... args)
   {
     return _map.try_emplace(_key, std::forward<Args>(args)...);
   }
   // on maps to sets, append = append to set at map[key]
-  template<class Map, enable_if_t<is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
+  //NOTE: return an iterator to the pair in the map whose second now contains the newly constructed item
+  //      also return a bool indicating whether insertion took place
+  //NOTE: this also works for emplacing a string into a map that maps to strings, the "inserting" appends below are called in this case
+  template<class Map, enable_if_t<is_map_v<Map> && is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
   inline emplace_result<Map> append(Map& _map, const typename Map::key_type& _key, Args&&... args)
   {
-    return append(_map.try_emplace(_key).first.second, forward<Args>(args)...);
+    const auto iter = _map.try_emplace(_key).first;
+    const bool success = append(iter->second, forward<Args>(args)...).second;
+    return {iter, success};
+    //return append(_map.try_emplace(_key).first->second, forward<Args>(args)...);
   }
   // append with 2 containers means to add the second to the end of the first
-  template<class _Container>
-  inline void append(_Container& x, const _Container& y)
+  template<class _Container, enable_if_t<is_container_v<_Container> && !is_vector_v<_Container>, int> = 0>
+  inline emplace_result<_Container> append(_Container& x, const _Container& y)
   {
     x.insert(y.begin(), y.end());
+    return {x.begin(), true};
   }
-  template<class T>
-  inline void append(vector<T>& x, const vector<T>& y)
+  template<class _Container, enable_if_t<is_vector_v<_Container>, int> = 0>
+  inline emplace_result<_Container> append(_Container& x, const _Container& y)
   {
     x.insert(x.end(), y.begin(), y.end());
+    return {x.begin(), true};
   }
 
 
@@ -124,84 +140,51 @@ namespace std {
     y.insert(x.begin(), x.end());
     return y;
   }
-  template<class T, class Set>
-  inline unordered_set<uint32_t>& copy(const iterable_bitset<T>& x, Set& y)
+  template<class T, class Set, enable_if_t<is_container_v<Set>, int> = 0>
+  inline Set& copy(const iterable_bitset<T>& x, Set& y)
   {
-    static_assert(is_container<Set>::value);
     y.clear();
     y.insert(x.begin(), x.end());
     return y;
   }
-  template<class T>
-  inline vector<uint32_t>& copy(const iterable_bitset<T>& x, vector<uint32_t>& y)
+  template<class T, class I, enable_if_t<is_integral_v<I>, int> = 0>
+  inline vector<I>& copy(const iterable_bitset<T>& x, vector<I>& y)
   {
     y.clear();
     y.insert(y.begin(), x.begin(), x.end());
-    //auto x_it = x.begin();
-    //while(x_it) y.emplace_back(*x_it++);
     return y;
   }
   template<class T1, class T2>
   inline iterable_bitset<T2>& copy(const iterable_bitset<T1>& x, iterable_bitset<T2>& y)
-  {
-    return y = x;
-  }
-  template<class Set>
-  inline Set& copy(const Set& x, Set& y)
-  {
-    static_assert(is_container<Set>::value);
-    return y = x;
-  }
+  { return y = x; }
+  template<class Set, enable_if_t<is_container_v<Set>, int> = 0>
+  inline Set& copy(const Set& x, Set& y) { return y = x; }
 
-  template<class Set>
+
+  template<class T, class=void> struct has_pop : false_type {};
+  template<class T> struct has_pop<T, void_t<decltype(declval<T>().pop())>>: std::true_type {};
+  template<class T> constexpr bool has_pop_v = has_pop<T>::value;
+
+  // value-copying pop operations
+  template<class Set, enable_if_t<has_pop_v<Set>, int> = 0>
+  typename Set::value_type value_pop(Set& s){
+    typename Set::value_type t = s.top();
+    s.pop();
+    return t;
+  }
+  template<class Set, enable_if_t<is_container_v<Set>, int> = 0>
   typename Set::value_type pop_front(Set& s){
-    static_assert(is_container<Set>::value);
-    typename Set::value_type t = *(s.begin());
+    typename Set::value_type t = front(s);
     s.erase(s.begin());
     return t;
   }
 
   template<class T>
-  unordered_set<uint32_t> to_set(const iterable_bitset<T>& x)
+  unordered_set<typename iterable_bitset<T>::value_type> to_set(const iterable_bitset<T>& x)
   {
-    unordered_set<uint32_t> result;
+    unordered_set<typename iterable_bitset<T>::value_type> result;
     return copy(x, result);
   }
 
 
-  // a set holding exactly one item, but having a set-interface
-  template<class _Element>
-  class SingletonSet
-  {
-    _Element item;
-
-  public:
-    using iterator = _Element*;
-    using const_iterator = const _Element*;
-    using reverse_iterator = std::reverse_iterator<iterator>;
-    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
-
-    using value_type = _Element;
-    using reference = value_type&;
-    using const_reference = const reference;
-
-    SingletonSet() = delete;
-    SingletonSet(_Element& _item): item(_item) {}
-
-    size_t size() const { return 1; }
-    bool empty() const { return false; }
-    reference       front() { return *item; }
-    const_reference front() const { return *item; }
-    iterator       find(const _Element& x) { return ((x == *item) ? begin() : end()); }
-    const_iterator find(const _Element& x) const { return ((x == *item) ? begin() : end()); }
-    
-    iterator begin() { return &item; }
-    const_iterator begin() const { return &item; }
-    reverse_iterator rbegin() { return &item; }
-    const_reverse_iterator rbegin() const { return &item; }
-    iterator end() { return begin() + 1; }
-    const_iterator end() const { return begin() + 1; }
-    reverse_iterator rend() { return begin() + 1; }
-    const_reverse_iterator rend() const { return begin() + 1; }
-  };
 }

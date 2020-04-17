@@ -9,17 +9,6 @@ using namespace PT;
 using MyNetwork = RONetwork<void, float>;
 using MyLabelMap = typename MyNetwork::LabelMap;
 
-// read a network from an input stream 
-void read_newick_from_stream(std::ifstream& in, WEdgeVec& edges, MyLabelMap& names)
-{
-  std::string in_line;
-  std::getline(in, in_line);
-
-  NewickParser<WEdgeVec, MyLabelMap> parser(in_line, edges, names);
-  parser.read_tree();
-}
-
-
 OptionMap options;
 
 void parse_options(const int argc, const char** argv)
@@ -53,7 +42,7 @@ int main(const int argc, const char** argv)
 
   std::cout << "reading network..."<<std::endl;
   try{
-    read_newick_from_stream(in, weighted_edges, names);
+    parse_newick(in, weighted_edges, names);
   } catch(const std::exception& err){
     std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
@@ -68,7 +57,7 @@ int main(const int argc, const char** argv)
   if(test(options, "-v"))
     std::cout << N << std::endl;
  
-  for(const Node u: N.get_nodes()){
+  for(const Node u: N.nodes()){
     for(const WEdge uv: N.out_edges(u))
       std::cout << "branch "<<u<<"["<<N.get_label(u)<<"] -> "<<head(uv)<<"["<<N.get_label(uv.head())<<"] has length "<<uv.data()<<std::endl;
   }

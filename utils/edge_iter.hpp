@@ -99,8 +99,10 @@ namespace PT{
     std::shared_ptr<_AdjContainer> c;
 
   public:
-    EdgeIterFactory(const Node _u, const std::shared_ptr<_AdjContainer>& _c): u(_u), c(_c) {}
-    EdgeIterFactory(const Node _u, _AdjContainer* _c): u(_u), c(_c) {}
+    // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
+    EdgeIterFactory(const Node _u, _AdjContainer& _c): u(_u), c(&_c, std::NoDeleter()) {}
+    EdgeIterFactory(const Node _u, _AdjContainer* const _c): u(_u), c(_c) {}
+    EdgeIterFactory(const Node _u, _AdjContainer&& _c): u(new _AdjContainer(std::forward<_AdjContainer>(_u))), c(_c) {}
     
     iterator begin() { return {u, c->begin()}; }
     iterator end() { return {u, c->end()}; }
@@ -208,8 +210,11 @@ namespace PT{
     using const_iterator  = _Iterator;
     //using reference       = typename std::iterator_traits<iterator>::reference;
 
-    EdgeMapIterFactory(_Map* _map): map(_map) {}
-    EdgeMapIterFactory(const std::shared_ptr<_Map>& _map): map(_map) {}
+    // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _Map()"), do destruct after use
+    EdgeMapIterFactory(_Map* const _map): map(_map, std::NoDeleter()) {}
+    EdgeMapIterFactory(_Map& _map): map(&_map) {}
+    EdgeMapIterFactory(_Map&& _map): map(new _Map(std::forward<_Map>(_map))) {}
+
     iterator begin() { return {map, map->begin()}; }
     iterator end() { return {map, map->end()}; }
     const_iterator begin() const { return {map, map->begin()}; }

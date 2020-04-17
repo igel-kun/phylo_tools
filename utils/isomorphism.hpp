@@ -2,11 +2,12 @@
 
 #pragma once
 
-#include "utils/utils.hpp"
-#include "utils/network.hpp"
-#include "utils/vector2d.hpp"
-#include "utils/iter_bitset.hpp"
-#include "utils/set_interface.hpp"
+#include "utils.hpp"
+#include "network.hpp"
+#include "vector2d.hpp"
+#include "iter_bitset.hpp"
+#include "set_interface.hpp"
+#include "label_matching.hpp"
 #include <unordered_set>
 
 #define FLAG_MAP_LEAF_LABELS 0x01
@@ -20,44 +21,36 @@ namespace PT{
   {
     const std::string msg;
 
-    NoPoss(const std::string& unmappable_name):
-      msg(unmappable_name + " is unmappable\n")
+    template<class Net>
+    NoPoss(const Net& N, const Node u):
+      msg(N.get_label(u) + '[' + std::to_string(u) + "] is unmappable\n")
     {}
-    const char* what() const throw() {
-      return msg.c_str();
-    }
+    NoPoss(const std::string& _msg): msg(_msg) {}
+    const char* what() const noexcept { return msg.c_str(); }
   };
 
-  template<class NHList>
-  inline uint32_t get_unique_head(const NHList& nh)
-  {
-    return nh.size() == 1 ? head(nh[0]) : UINT32_MAX;
-  }
-  template<class NHList>
-  inline uint32_t get_unique_tail(const NHList& nh)
-  {
-    return nh.size() == 1 ? tail(nh[0]) : UINT32_MAX;
-  }
 
-
-  template<class NetworkA = RONetwork<>, class NetworkB = RONetwork<>, class PossSet = std::unordered_bitset>
+  template<class NetworkA, class NetworkB>
   class IsomorphismMapper
   {
-    using MappingPossibility = std::unordered_map<Node, PossSet>;
-    using UpdateSet = std::unordered_bitset;
+    using PossSet     = std::conditional_t<NetworkB::has_consecutive_nodes, std::ordered_bitset, std::unordered_bitset>;
+    using MappingPossibility = typename NetworkA::template NodeMap<PossSet>;
+    using UpdateSet   = std::unordered_bitset;
     using UpdateOrder = std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair> >;
+    using LabelMatch  = LabelMatchingFromNets<NetworkA, NetworkB>;
+    using LabelType   = typename LabelMatch::LabelType;
 
     const NetworkA& N1;
     const NetworkB& N2;
-    const LabelMap& lmap;
+    const LabelMatch& lmatch; // a label-matching matching nodes of N1 with nodes of N2 if they all have the same label
 
-    const uint32_t size_N;
-    uint32_t nr_fix = 0;
+    const size_t size_N;  // nodes in each of the input networks
+    size_t nr_fix = 0;    // number of fixed nodes
 
-    MappingPossibility mapping;
+    MappingPossibility mapping; // indicates for each node of N1 to which nodes of N2 it may map in an isomorphism
 
-    UpdateSet* update_set;
-    UpdateOrder* update_order;
+    UpdateSet update_set; // set containing all nodes of N1 for which updates are pending
+    UpdateOrder update_order; // a priority-queue containing all pending updates sorted by number of possibilities
    
     const unsigned char flags;
 
@@ -67,97 +60,9 @@ namespace PT{
     // degree distributions don't match
     bool initial_fail; 
 
-    inline std::unordered_bitset* make_new_possset(const std::unordered_bitset* sentinel) const
-    {
-      return new std::unordered_bitset(size_N);
-    }
-    inline std::ordered_bitset* make_new_possset(const std::ordered_bitset* sentinel) const
-    {
-      return new std::ordered_bitset(size_N);
-    }
-    inline std::unordered_set<uint32_t>* make_new_possset(const std::unordered_set<uint32_t>* sentinel) const
-    {
-      return new std::unordered_set<uint32_t>();
-    }
+    inline const size_t num_poss(const Node x) const { return mapping.at(x).size(); }
 
-    inline void mark_update(const uint32_t x, const uint32_t nr_poss)
-    {
-      if(nr_poss == 1) ++nr_fix;
-      if(update_set->insert(x))
-        update_order->emplace(nr_poss, x);
-    }
-    
-    // set the unique mapping possibility of x1 to x2; fail if x1 has already been determined to not map to x2
-    void set_unique_poss(const uint32_t x1, const uint32_t x2)
-    {
-      // there's still a bug in the STL that constructs the mapping element, even if it's thrown away because the key already exists
-      //const <-- lol C++
-      auto hint = mapping.find(x1);
-      if(hint == mapping.end()){
-        // TODO: WTF C++ why is the hint for emplace_hint not freaking const???
-        hint = mapping.emplace_hint(hint, x1, size_N);
-        mark_update(x1, 1);
-      } else if(contains(hint->second, x2)){
-        if(hint->second.size() > 1) mark_update(x1, 1);
-        hint->second.clear();
-      } else throw NoPoss(N1.get_name(x1) + '[' + std::to_string(x1) + ']');
-      hint->second.insert(x2);
-    }
-
-    inline const size_t num_poss(const uint32_t x)
-    {
-      return mapping.at(x).size();
-    }
-
-
-  public:
-
-    ~IsomorphismMapper() { delete update_set; delete update_order; }
-
-    IsomorphismMapper(const NetworkA& _N1,
-                      const NetworkB& _N2,
-                      const uint32_t _size_N,
-                      const LabelMap& _lmap,
-                      const unsigned char _flags,
-                      const MappingPossibility& _mapping = MappingPossibility()):
-      N1(_N1),
-      N2(_N2),
-      lmap(_lmap),
-      size_N(_size_N),
-      mapping(_mapping),
-      update_set(new UpdateSet(size_N)), // <--- be aware that updated is cleared on copy-construct!!!
-      update_order(new UpdateOrder()),
-      flags(_flags),
-      initial_fail(false)
-    {}
-
-    IsomorphismMapper(const NetworkA& _N1,
-                      const NetworkB& _N2,
-                      const LabelMap& _lmap,
-                      const unsigned char _flags):
-      IsomorphismMapper(_N1, _N2, _N1.num_nodes(), _lmap, _flags)
-    {
-      DEBUG3(std::cout << "#nodes: "<<N1.num_nodes()<<" & "<<N2.num_nodes()<<"\t\t#edges: "<<N1.num_edges()<<" & "<<N2.num_edges()<<std::endl;);
-      if((N1.num_nodes() == N2.num_nodes()) && (N1.num_edges() == N2.num_edges())){
-        try{
-          initial_restrict();
-          DEBUG3(std::cout << "done initializing, now working on the updates..."<<std::endl);
-        } catch(const NoPoss& np){
-          DEBUG3(std::cout << np.msg << std::endl);
-          initial_fail = true;
-        } catch(const std::out_of_range& oor){
-          DEBUG3(std::cout << "unable to map a leaf of N0 to N1: "<< oor.what() << std::endl);
-          initial_fail = true;
-        }
-      } else initial_fail = true;        
-    }
-
-    IsomorphismMapper(const IsomorphismMapper& _mapper):
-      IsomorphismMapper(_mapper.N1, _mapper.N2, _mapper.size_N, _mapper.lmap, _mapper.flags, _mapper.mapping)
-    {
-    }
-
-    bool node_is_interesting(const uint32_t v) const
+    bool node_is_interesting(const Node v) const
     {
       switch(N1.type_of(v)){
         case NODE_TYPE_LEAF:
@@ -171,73 +76,171 @@ namespace PT{
       }
     }
 
-    // NOTE: this assumes to be called before any deduction about the mapping is made!
-    template<class NodeFactory>
-    void mapping_from_labels(const NodeFactory& fac)
+
+
+    inline void mark_update(const Node x, const size_t nr_poss)
     {
-      for(const LabeledNode& lv: fac){
-        const uint32_t v1 = lv.first;
-        const std::string& name = lv.second;
+      if(nr_poss == 1) ++nr_fix;
+      if(update_set.set(x))
+        update_order.emplace(nr_poss, x);
+    }
+
+    // set the unique mapping possibility of x1 to x2; fail if x1 has already been determined to not map to x2
+    void set_unique_poss(const Node x1, const Node x2)
+    {
+      auto emp_res = mapping.try_emplace(x1);
+      if(!emp_res.second){
+        PossSet& poss_in_N2 = emp_res.first->second;
+        if(test(poss_in_N2, x2)){
+          if(poss_in_N2.size() > 1) mark_update(x1, 1);
+          poss_in_N2.clear();
+        } else throw NoPoss(N1, x1);
+        poss_in_N2.insert(x2);
+      } else mark_update(x1, 1);
+    }
+
+
+    template<class Something>
+    void restrict_by_something(Something (NetworkA::*node_to_something_N1)(const Node) const, Something (NetworkB::*node_to_something_N2)(const Node) const)
+    {
+      using MySomething = std::remove_const_t<std::remove_reference_t<Something>>;
+      // keep track of nodes in N2 mapping to each something
+      HashMap<MySomething, PossSet> possible_N2_nodes;
+      // also keep a history of how many of each Something we've seen (this should be equal between N1 & N2)
+      HashMap<MySomething, size_t> histogram;
+
+      for(const Node u: N2){
+        const Something s = (N2.*node_to_something_N2)(u);
+        possible_N2_nodes.try_emplace(s, size_N).first->second.set(u);
+        histogram[s]++;
+      }
+      for(const Node u: N1){
+        const Something s = (N1.*node_to_something_N1)(u);
+        const auto it = possible_N2_nodes.find(s);
+        if(it != possible_N2_nodes.end()) {
+          update_poss(u, it->second);
+          size_t& hist = histogram[s];
+          if(hist) --hist; else throw NoPoss("node histograms differ");
+        } else throw NoPoss(N1, u);
+      }
+    }
+
+    // use labels to restrict possibilities
+    template<class NodeLabelMap>
+    void restrict_by_label(const NodeLabelMap& _map)
+    {
+      restrict_by_something<const LabelType&>(&NetworkA::get_label, &NetworkB::get_label);
+/*
+      DEBUG3(std::cout << "restricting by label..."<<std::endl);
+      for(const auto& nl: _map){
+        const Node v1 = nl.first;
+        const LabelType& name = nl.second;
         if((name != "") && ((flags == FLAG_MAP_ALL_LABELS) || node_is_interesting(v1))){
-          const uint32_t v2 = lmap.at(name).second;
+          const Node v2 = lmatch.at(name).second;
           DEBUG4(std::cout << "node "<<v1<<" with label "<<name<<" (same as "<<v2<<")"<<std::endl);
           if(v2 != NO_LABEL)
             set_unique_poss(v1, v2);
-          else
-            throw NoPoss(name + '[' + std::to_string(v1) + ']');
+          else throw NoPoss(N1, v1);
         }
       }
+*/
     }
 
-    void initial_restrict()
+    void restrict_by_degree()
     {
-      DEBUG3(std::cout << "mapping from labels..."<<std::endl);
+      restrict_by_something<InOutDegree>(&NetworkA::in_out_degree, &NetworkB::in_out_degree);
+      /*
+      std::unordered_map<InOutDegree, PossSet> degree_to_possibilities;
+      std::unordered_map<InOutDegree, uint32_t> degree_distribution_N2;
+
+      DEBUG3(std::cout << "restricting by degree..."<<std::endl);
+      for(const Node u: N2){
+        const InOutDegree u_deg = N2.in_out_deg(u);
+        degree_to_possibilities.emplace(u_deg, size_N).first->second.set(u);
+        ++degree_distribution_N2[u_deg];
+      }
+      for(const Node u: N1){
+        const InOutDegree u_deg = N1.in_out_deg(u);
+        degree_to_possibilities.emplace(u2_deg, size_N).first->second.insert(u2);
+        ++degree_distribution_N2[u2_deg];
+
+        const uint64_t u_deg = (((uint64_t)N1.in_degree(u)) << 32) | N1.out_degree(u);
+        // find the set of vertices in N2 with this degree
+        const auto deg_it = degree_to_possibilities.find(u_deg);
+        if(deg_it == degree_to_possibilities.end()) throw NoPoss(N1, u);
+        update_poss(u, deg_it->second);
+        
+        // decrement the count of vertices in N2 with this degree and fail if this would go below 0
+        uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
+        if(u_deg_in_N2 == 0)
+          throw NoPoss("<vertices of indeg " + std::to_string(N1.in_degree(u)) + " & outdeg " + std::to_string(N1.out_degree(u)) + ">");
+        else
+          --u_deg_in_N2;
+      }
+      */
+    }
+
+    // use degrees and labels to restrict possibilities
+    void degree_and_label_restrict()
+    {
       if(flags == FLAG_MAP_LEAF_LABELS)
-        mapping_from_labels(N1.get_leaves_labeled());
+        restrict_by_label(N1.leaves_labeled());
       else
-        mapping_from_labels(N1.get_nodes_labeled());
+        restrict_by_label(N1.nodes_labeled());
 
       // all updated nodes have been fixed
-      treat_updated();
+      treat_pending_updates();
       
-      if(nr_fix < size_N){
-        std::unordered_map<uint64_t, PossSet> degree_to_possibilities;
-        std::unordered_map<uint64_t, uint32_t> degree_distribution_N2;
-
-        DEBUG3(std::cout << "restricting degrees..."<<std::endl);
-        for(uint32_t u2 = 0; u2 < size_N; ++u2){
-          const uint64_t u2_deg = (((uint64_t)N2.in_degree(u2)) << 32) | N2.out_degree(u2);          
-          degree_to_possibilities.emplace(u2_deg, size_N).first->second.insert(u2);
-          ++degree_distribution_N2[u2_deg];
-        }
-        for(uint32_t u = 0; u < size_N; ++u){
-          const uint64_t u_deg = (((uint64_t)N1.in_degree(u)) << 32) | N1.out_degree(u);
-          // find the set of vertices in N2 with this degree
-          const auto deg_it = degree_to_possibilities.find(u_deg);
-          if(deg_it == degree_to_possibilities.end())
-            throw NoPoss(N1.get_name(u) + '[' + std::to_string(u) + ']');
-          update_poss(u, deg_it->second);
-          
-          // decrement the count of vertices in N2 with this degree and fail if this would go below 0
-          uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
-          if(u_deg_in_N2 == 0)
-            throw NoPoss("<vertices of indeg " + std::to_string(N1.in_degree(u)) + " & outdeg " + std::to_string(N1.out_degree(u)) + ">");
-          else
-            --u_deg_in_N2;
-        }
-      }
+      if(nr_fix < size_N)
+        restrict_by_degree();
     }
 
-    void treat_updated()
+
+
+    IsomorphismMapper(const NetworkA& _N1,
+                      const NetworkB& _N2,
+                      const uint32_t _size_N,
+                      const LabelMatch& _lmatch,
+                      const unsigned char _flags,
+                      const MappingPossibility& _mapping = MappingPossibility()):
+      N1(_N1),
+      N2(_N2),
+      lmatch(_lmatch),
+      size_N(_size_N),
+      mapping(_mapping),
+      update_set(size_N), // <--- be aware that update_set and update_order are cleared on construction, even copy-construct!!!
+      update_order(),
+      flags(_flags),
+      initial_fail(false)
+    {}
+
+    // note: copy construct clears certain sets, so needs to be explicit
+    IsomorphismMapper(const IsomorphismMapper& _mapper):
+      IsomorphismMapper(_mapper.N1, _mapper.N2, _mapper.size_N, _mapper.lmatch, _mapper.flags, _mapper.mapping)
+    {}
+
+    IsomorphismMapper(IsomorphismMapper&& _mapper) = default;
+
+  public:
+    IsomorphismMapper(const NetworkA& _N1,
+                      const NetworkB& _N2,
+                      const LabelMatch& _lmatch,
+                      const unsigned char _flags):
+      IsomorphismMapper(_N1, _N2, _N1.num_nodes(), _lmatch, _flags)
     {
-      DEBUG4(std::cout << update_set->size() <<" updates pending:"<<std::endl);
-      DEBUG4(for(const auto& p: *update_set) std::cout << p << " "; std::cout<<std::endl);
-      while(!update_order->empty()){
-        const uint32_t x = update_order->top().second;
-        update_order->pop();
-        update_set->erase(x);
-        update_neighbors(x);
-      }
+      DEBUG3(std::cout << "#nodes: "<<N1.num_nodes()<<" & "<<N2.num_nodes()<<"\t\t#edges: "<<N1.num_edges()<<" & "<<N2.num_edges()<<std::endl;);
+      if((N1.num_nodes() == N2.num_nodes()) && (N1.num_edges() == N2.num_edges())){
+        try{
+          degree_and_label_restrict();
+          DEBUG3(std::cout << "done initializing mapper"<<std::endl);
+        } catch(const NoPoss& np){
+          DEBUG3(std::cout << np.msg << std::endl);
+          initial_fail = true;
+        } catch(const std::out_of_range& oor){
+          DEBUG3(std::cout << "unable to map a leaf of N0 to N1: "<< oor.what() << std::endl);
+          initial_fail = true;
+        }
+      } else initial_fail = true;        
     }
 
     bool check_isomorph()
@@ -246,29 +249,29 @@ namespace PT{
       if(initial_fail) return false;
 
       try{
-        treat_updated();
+        treat_pending_updates();
 
         DEBUG5(std::cout << "possibilities are:" << std::endl;
-            for(uint32_t u = 0; u < size_N; ++u){
+            for(Node u = 0; u < size_N; ++u){
               std::cout << u << "\t"<< to_set(mapping.at(u)) << std::endl;
             })
         DEBUG3(std::cout << "no more pending updated"<<std::endl);
 
         // find a vertex to branch on (minimum # possibilities)
-        uint32_t min = 0;
-        uint32_t min_poss = UINT32_MAX;
-        for(uint32_t i = 0; i < size_N; ++i){
-          const uint32_t np = num_poss(i);
-          if((np > 1) && (np < min_poss)){
+        Node min = 0;
+        size_t min_poss = num_poss(0);
+        for(Node u: N1){
+          const size_t np = num_poss(u);
+          if((np != 1) && (np < min_poss)){
             min_poss = np;
-            min = i;
+            min = u;
           }
         }
 
-        if(min_poss != UINT32_MAX) {
+        if(min_poss != 1) {
           DEBUG4(std::cout << "branching on vertex "<<min<<std::endl);
           // spawn a new checker for each possibility
-          for(uint32_t min2 : mapping.at(min)){
+          for(const Node min2: mapping.at(min)){
             IsomorphismMapper child_im(*this);
             child_im.set_unique_poss(min, min2);
             child_im.mark_update(min, min_poss);
@@ -276,10 +279,7 @@ namespace PT{
           }
           // if none of the branches led to an isomorphism, then there is none
           return false;
-        } else
-          return true;
-          //return check_mapping();
-          //NOTE: check_mapping() is unneccessary since forall x, deg(x) == deg(mapping[x]) & each child of x is mapped to a child of mapping[x]
+        } else return true;
           
       } catch(const NoPoss& np){
         DEBUG3(std::cout << np.msg << std::endl);
@@ -291,91 +291,76 @@ namespace PT{
     }
 
   protected:
-
-    void update_fixed(const uint32_t x1)
+    void treat_pending_updates()
     {
-      const uint32_t x2 = mapping.at(x1).front();
-      PossSet* const possible_nodes = make_new_possset((PossSet*)nullptr);
-      // update children
-      if(!N1.is_leaf(x1)){
-        for(uint32_t i: N2.children(x2)) possible_nodes->insert(i);
-        for(uint32_t i: N1.children(x1)) update_poss(i, *possible_nodes);
+      DEBUG4(std::cout << update_set.size() <<" updates pending:"<<std::endl);
+      DEBUG4(for(const auto& p: update_set) std::cout << p << " "; std::cout<<std::endl);
+      while(!update_order.empty()){
+        const Node x = update_order.top().second;
+        update_order.pop();
+        update_set.erase(x);
+        update_poss(x);
       }
-      // update parents
-      possible_nodes->clear();
-      for(uint32_t i: N2.parents(x2)) possible_nodes->insert(i);
-      for(uint32_t i: N1.parents(x1)) update_poss(i, *possible_nodes);
-      delete possible_nodes;
     }
-
-    void update_non_fixed(const uint32_t x1)
-    {
-      PossSet* const possible_nodes = make_new_possset((PossSet*)nullptr);
-      // update children
-      if(!N1.is_leaf(x1)){
-        for(uint32_t x2 : mapping.at(x1))
-          for(uint32_t i: N2.children(x2))
-            possible_nodes->insert(i);
-        for(uint32_t i: N1.children(x1))
-          update_poss(i, *possible_nodes);
-      }
-      // update parents
-      if(!N1.is_root(x1)){
-        possible_nodes->clear();
-        for(uint32_t x2: mapping.at(x1)){
-          for(uint32_t i: N2.parents(x2))
-            possible_nodes->insert(i);
-        }
-        for(uint32_t i: N1.parents(x1))
-          update_poss(i, *possible_nodes);
-      }
-      delete possible_nodes;
-    }
-
-    void update_neighbors(const uint32_t x)
+    void update_poss(const Node x1)
     {
       DEBUG5(std::cout << "updating "<<x<<" whose mapping is ("<<num_poss(x)<<" possibilities):\n " << to_set(mapping.at(x)) << std::endl);
-
-      // TODO: use a functor to stop code duplication!
-      if(num_poss(x) == 1) // if x maps uniquely and has a unique child, then we can use the cheaper version of update_poss()
-        update_fixed(x);
-      else
-        update_non_fixed(x);
+      PossSet possible_nodes(size_N);
+      // update children
+      if(!N1.is_leaf(x1)){
+        for(const Node x2 : mapping.at(x1))
+          for(const Node i: N2.children(x2)) possible_nodes.set(i);
+        for(const Node i: N1.children(x1)) update_poss(i, possible_nodes);
+      }
+      // update parents
+      possible_nodes.clear();
+      for(const Node x2: mapping.at(x1))
+        for(const Node i: N2.parents(x2)) possible_nodes.set(i);
+      for(const Node i: N1.parents(x1)) update_poss(i, possible_nodes);
     }
 
     // update possibilities, return whether the number of possibilities changed
-    void update_poss(const uint32_t x, const PossSet& new_poss)
+    bool update_poss(const Node x, const PossSet& new_poss)
     {
-      auto x_poss = mapping.find(x);
-      if(x_poss == mapping.end()){
-        DEBUG5(std::cout << "setting poss's of "<< x<<" to\n "<< to_set(new_poss)<<std::endl);
-        x_poss = mapping.emplace_hint(x_poss, x, new_poss);
-        mark_update(x, new_poss.size());
-      } else {
-        const uint32_t old_count = num_poss(x);
-        if(old_count > 1){
-          DEBUG5(std::cout << "updating poss's of "<< x<<" ("<<num_poss(x)<<" poss) from\n " << to_set(mapping.at(x)) << " with\n "<< to_set(new_poss)<<std::endl);
-          intersect(x_poss->second, new_poss);
-          const uint32_t new_count = num_poss(x);
+      const auto emp_res = mapping.try_emplace(x, new_poss);
+      if(!emp_res.second){
+        // if x had a possibility set before, get this PossSet and intersect new_poss with it
+        auto& x_poss = emp_res.first->second;
+        const size_t old_count = x_poss.size();
+        if(old_count != 1){
+          DEBUG5(std::cout << "updating poss's of "<< x<<" ("<<old_count<<" poss) from\n " << to_set(x_poss) << " with\n "<< to_set(new_poss)<<std::endl);
+          intersect(x_poss, new_poss);
+          const size_t new_count = x_poss.size();
           // if something changed, update all parents and children
-          if(new_count > 0){
-            if(new_count != old_count)
-              mark_update(x, new_count);
-          } else throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
-        } else if(!contains(new_poss, front(x_poss->second)))
-          throw NoPoss(N1.get_name(x) + '[' + std::to_string(x) + ']');
-        DEBUG5(std::cout << "done updating "<<x<<" (now "<<num_poss(x)<<" poss: "<< to_set(mapping.at(x))<<")"<<std::endl);
+          if(new_count != old_count){
+            if(new_count == 0) throw NoPoss(N1, x);
+            mark_update(x, new_count);
+            return true;
+          } else return false;
+        } else {
+          if(test(new_poss, front(x_poss)))
+            return false;
+          else throw NoPoss(N1, x);
+        }
+      } else {
+        // if x did not have a possibility set before, default to "size changed"
+        mark_update(x, new_poss.size());
+        return true;
       }
     }
   };
 
 
-  template<class PossSet = std::unordered_bitset, class NetworkA = Network<>, class NetworkB = Network<>>
-  IsomorphismMapper<PossSet, NetworkA, NetworkB>
-  make_iso_mapper(
-                      const NetworkA& _N1,
-                      const NetworkB& _N2,
-                      const LabelMap& _lmap,
-                      const unsigned char _flags)
-  {return IsomorphismMapper<PossSet, NetworkA, NetworkB>(_N1, _N2, _lmap, _flags); }
+  template<class NetworkA, class NetworkB>
+  IsomorphismMapper<NetworkA, NetworkB>
+  make_iso_mapper(const NetworkA& _N1,
+                  const NetworkB& _N2,
+                  const unsigned char _flags,
+                  const LabelMatchingFromNets<NetworkA, NetworkB>* _lmatch = nullptr)
+  {
+    if(_lmatch){
+      return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, *_lmatch, _flags);
+    } else return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, get_label_matching(_N1, _N2), _flags);
+    //} else return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, (_lmatch ? *_lmatch : get_label_matching(_N1, _N2)), _flags);
+  }
 }
