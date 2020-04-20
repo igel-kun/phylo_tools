@@ -24,7 +24,7 @@ namespace PT{
   template<class _EdgeData = void,
            class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
            class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
-  class _MutableNetworkAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
+  class MutableNetworkAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
   {
     using Parent = RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
   public:
@@ -102,7 +102,7 @@ namespace PT{
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges,
+    MutableNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
       Parent()
@@ -117,11 +117,11 @@ namespace PT{
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableNetworkAdjacencyStorage(const non_consecutive_tag_t,
+    MutableNetworkAdjacencyStorage(const non_consecutive_tag_t,
                                     const GivenEdgeContainer& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
-      _MutableNetworkAdjacencyStorage(given_edges, old_to_new, leaves)
+      MutableNetworkAdjacencyStorage(given_edges, old_to_new, leaves)
     {}
 
   };
@@ -130,7 +130,7 @@ namespace PT{
   template<class _EdgeData = void,
            class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
            class _PredecessorMap = DefaultMutableTreePredecessorMap<_EdgeData>>
-  class _MutableTreeAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
+  class MutableTreeAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
   {
     using Parent = RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
   public:
@@ -221,7 +221,7 @@ namespace PT{
 
     //! initialization from edgelist
     template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableTreeAdjacencyStorage(const GivenEdgeContainer& given_edges,
+    MutableTreeAdjacencyStorage(const GivenEdgeContainer& given_edges,
                                  NodeTranslation* old_to_new = nullptr,
                                  LeafContainer* leaves = nullptr):
       Parent()
@@ -233,31 +233,14 @@ namespace PT{
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    _MutableTreeAdjacencyStorage(const non_consecutive_tag_t,
+    MutableTreeAdjacencyStorage(const non_consecutive_tag_t,
                                     const GivenEdgeContainer& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
-      _MutableTreeAdjacencyStorage(given_edges, old_to_new, leaves)
+      MutableTreeAdjacencyStorage(given_edges, old_to_new, leaves)
     {}
 
   };
-
-
-
-
-
-  template<class _NodeData = void,
-           class _EdgeData = void,
-           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
-           class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
-  using MutableNetworkAdjacencyStorage = AddNodeData<_NodeData, _MutableNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
-
-  template<class _NodeData = void,
-           class _EdgeData = void,
-           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
-           class _PredecessorMap = DefaultMutableTreePredecessorMap<_EdgeData>>
-  using MutableTreeAdjacencyStorage = AddNodeData<_NodeData, _MutableTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
-
 
 
 }

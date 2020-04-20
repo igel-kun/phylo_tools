@@ -16,7 +16,7 @@
 
 #include "utils.hpp"
 #include "stl_utils.hpp"
-#include "skipping_iter.hpp"
+#include "filter.hpp"
 #include <vector>
 #ifdef STATISTICS
 #include <unordered_map>
@@ -54,7 +54,7 @@ namespace std{
 
 
   template<class Container, class ParentContainer, bool reverse = false>
-  using linear_vector_hash_iterator = skipping_iterator<
+  using linear_vector_hash_iterator = filtered_iterator<
         Container,
         VacantPredicate<Container>,
         reverse,
@@ -487,7 +487,7 @@ namespace std{
     const_reverse_vector_iterator vector_rend() const { return Parent::rend(); }
   
     template<class Container, class Predicate, bool reverse, class NormalIterator, class BeginEndIters>
-    friend class skipping_iterator;
+    friend class filtered_iterator;
   };
 
 }// namespace

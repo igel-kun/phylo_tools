@@ -2,7 +2,7 @@
 #pragma once
 
 #include "predicates.hpp"
-#include "skipping_iter.hpp"
+#include "filter.hpp"
 #include "edge.hpp"
 #include "edge_iter.hpp"
 #include "storage.hpp"
@@ -54,7 +54,7 @@ namespace PT{
 
     // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
     using MapValueNonEmptyPredicate = std::MapValuePredicate<const SuccessorMap, const std::NonEmptySetPredicate<const ConstSuccContainer>>;
-    using EmptySuccIterFactory  = std::SkippingIterFactory<const SuccessorMap, const MapValueNonEmptyPredicate>;
+    using EmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, const MapValueNonEmptyPredicate>;
     using ConstLeafContainer    = FirstFactory<const EmptySuccIterFactory>;
     using ConstLeafContainerRef = ConstLeafContainer;
 
@@ -151,21 +151,6 @@ namespace PT{
     using NodeData = _NodeData;
     using Parent::Parent;
     static constexpr bool has_node_data = true;
-
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    AddNodeData(const GivenEdgeContainer& given_edges,
-               NodeTranslation* old_to_new = nullptr,
-               LeafContainer* leaves = nullptr):
-      Parent(given_edges, old_to_new, leaves)
-    {}
-
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    AddNodeData(const non_consecutive_tag_t,
-               const GivenEdgeContainer& given_edges,
-               NodeTranslation* old_to_new = nullptr,
-               LeafContainer* leaves = nullptr):
-      Parent(non_consecutive_tag, given_edges, old_to_new, leaves)
-    {}
 
     template<class... Args>
     NodeData& emplace_node_data(const Node u, Args&&... args) { return node_data.try_emplace(u, std::forward<Args>(args)...).first->second; }

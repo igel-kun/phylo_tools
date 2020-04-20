@@ -464,43 +464,13 @@ namespace PT{
            class _EdgeStorage = MutableTreeAdjacencyStorage<_EdgeData>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>,
            class _NetworkTag = tree_tag>
-  class Tree: public _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>
-  {
-    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>;
-  protected:
-    using Parent::_edges;
-  public:
-    using Parent::Parent;
-
-    using NodeData = _NodeData;
-    using EdgeData = _EdgeData;
-
-    const NodeData& get_data(const Node u) const { return _edges.get_node_data(u); }
-    NodeData& get_data(const Node u) { return _edges.get_node_data(u); }
-    const NodeData& operator[](const Node u) const { return _edges.get_node_data(u); }
-    NodeData& operator[](const Node u) { return _edges.get_node_data(u); }
-  };
-
-  template<class _EdgeData, class _LabelTag, class _EdgeStorage, class _LabelMap, class _NetworkTag>
-  class Tree<void, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>: public _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>
-  {
-    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>;
-  public:
-    using Parent::Parent;
-    using Parent::get_label;
-    using typename Parent::LabelType;
-
-    using NodeData = void;
-    using EdgeData = _EdgeData;
-
-    const LabelType& operator[](const Node u) const { return get_label(u); }
-  };
+  using Tree = AddNodeData<_NodeData, _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>>;
 
   // these two types should cover 95% of all (non-internal) use cases
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
-  using RWTree = Tree<_NodeData, _EdgeData, _LabelTag, MutableTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  using RWTree = Tree<_NodeData, _EdgeData, _LabelTag, MutableTreeAdjacencyStorage<_EdgeData>, _LabelMap>;
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
-  using ROTree = Tree<_NodeData, _EdgeData, _LabelTag, ConsecutiveTreeAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  using ROTree = Tree<_NodeData, _EdgeData, _LabelTag, ConsecutiveTreeAdjacencyStorage<_EdgeData>, _LabelMap>;
 
   // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)
   template<class __Tree,

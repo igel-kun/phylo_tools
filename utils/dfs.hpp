@@ -6,6 +6,7 @@
 namespace PT{
   enum TraversalType {preorder, inorder, postorder};
 
+#warning TODO: make dfs iterator
 
   template<TraversalType o,
            bool track_seen,

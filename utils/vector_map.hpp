@@ -7,7 +7,7 @@
 #include "predicates.hpp"
 #include "raw_vector_map.hpp"
 #include "iter_bitset.hpp"
-#include "skipping_iter.hpp"
+#include "filter.hpp"
 
 namespace std{
 
@@ -30,8 +30,8 @@ namespace std{
     using Parent::size;
 
     using AbsentPredicate = const MapKeyPredicate<const Parent, ContainmentPredicate<const ordered_bitset, false>>;
-    using iterator = std::skipping_iterator<Parent, AbsentPredicate>;
-    using const_iterator = std::skipping_iterator<const Parent, AbsentPredicate>;
+    using iterator = std::filtered_iterator<Parent, AbsentPredicate>;
+    using const_iterator = std::filtered_iterator<const Parent, AbsentPredicate>;
 
     void erase(const key_type x) { Parent::erase(x); present.erase(x); } 
     void erase(const iterator& it) { present.erase(it->first); Parent::erase(it); } 

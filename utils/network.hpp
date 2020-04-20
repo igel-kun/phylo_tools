@@ -143,9 +143,9 @@ namespace PT{
 
   // these two types should cover 95% of all (non-internal) use cases
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
-  using RWNetwork = Network<_NodeData, _EdgeData, _LabelTag, MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  using RWNetwork = Network<_NodeData, _EdgeData, _LabelTag, MutableNetworkAdjacencyStorage<_EdgeData>, _LabelMap>;
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = ConsecutiveMap<Node,std::string>>
-  using RONetwork = Network<_NodeData, _EdgeData, _LabelTag, ConsecutiveNetworkAdjacencyStorage<_NodeData, _EdgeData>, _LabelMap>;
+  using RONetwork = Network<_NodeData, _EdgeData, _LabelTag, ConsecutiveNetworkAdjacencyStorage<_EdgeData>, _LabelMap>;
 
   // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)
   template<class __Network,
