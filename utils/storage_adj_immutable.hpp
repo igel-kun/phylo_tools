@@ -56,7 +56,6 @@ namespace PT{
       for(Node u = 0; u != num_nodes; ++u) {
         // note: it is important for the initialization of _predecessors & _successors that we go through the nodes in sorted order here
         const auto u_deg = deg.at(u);
-        std::cout << "node "<<u<<" has deg "<<u_deg<<'\n';
         const Degree u_indeg = u_deg.first;
         const Degree u_outdeg = u_deg.second;
         _successors.try_emplace(u, nh_start, u_outdeg);
@@ -65,11 +64,10 @@ namespace PT{
         rev_nh_start += u_indeg;
       }
       // put the in- and out-edges
-#warning TODO: here, the edge data is copied! Make a version where it is moved instead!
-      for(const auto &uv: given_edges){
+#warning TODO: here, the edge data is copied from the given_edges! Make a version where it is moved instead!
+      for(const auto& uv: given_edges){
         const Node u = old_to_new ? (*old_to_new).at(uv.tail()) : uv.tail();
         const Node v = old_to_new ? (*old_to_new).at(uv.head()) : uv.head();
-
         Adjacency* const position = _successors.at(u).begin() + (--deg.at(u).second);
         DEBUG5(std::cout << "constructing adjacency "<<uv.get_adjacency()<<" at "<<position<<std::endl);
         new(position) Adjacency(uv.get_adjacency());

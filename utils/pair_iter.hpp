@@ -15,9 +15,9 @@ namespace PT{
 
     _Iterator pair_it;
   public:
-    using value_type = typename std::iterator_traits<_Iterator>::value_type;
-    using reference = typename std::iterator_traits<_Iterator>::reference;
-    //using const_reference = typename std::iterator_traits<_Iterator>::const_reference; // why oh why, STL, do you not define that for pointers???
+    using value_type = typename std::my_iterator_traits<_Iterator>::value_type;
+    using reference = typename std::my_iterator_traits<_Iterator>::reference;
+    //using const_reference = typename std::my_iterator_traits<_Iterator>::const_reference; // why oh why, STL, do you not define that for pointers???
     using const_reference = std::const_reference_t<reference>;
 
     PairIterator(const _Iterator& _it): pair_it(_it)
@@ -97,8 +97,8 @@ namespace PT{
   public:
     using iterator = SelectingIterator<_PairContainer, get_num>;
     using const_iterator = SelectingIterator<const _PairContainer, get_num>;
-    using value_type = typename std::iterator_traits<iterator>::value_type;
-    using reference =  typename std::iterator_traits<iterator>::reference;
+    using value_type = typename std::my_iterator_traits<iterator>::value_type;
+    using reference =  typename std::my_iterator_traits<iterator>::reference;
 
     // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
     PairItemIterFactory(_PairContainer* const _c): c(_c)  {}

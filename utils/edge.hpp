@@ -17,6 +17,7 @@ namespace PT{
     using Parent::Parent;
     using Data = _Data;
 
+    __Adjacency(const __Adjacency& adj) : Parent(adj.first, adj.second) {}
     __Adjacency(const Node u, Data& d) : Parent(u, d) {}
 
     // construct an adjacency whose data is a reference to X from an adjacency whose data is X
@@ -30,11 +31,12 @@ namespace PT{
     Data& data() { return Parent::second; }
     const Data& data() const { return Parent::second; }
 
-    // an Adjacencies can be cast to their Node
+    // Adjacencies can be cast to their Node
     operator Node&() { return Parent::first; }
     operator const Node&() const { return Parent::first; }
   };
 
+  // an Adjacency with void data is a Node
   template<class _Data>
   using Adjacency_t = std::conditional_t<std::is_same_v<_Data, void>, Node, __Adjacency<_Data>>;
 
@@ -48,7 +50,8 @@ namespace PT{
     using Parent::Parent;
     
     // construct an edge from a node and whatever is needed to construct an adjacency (for example, an adjacency)
-    template <class... T> AbstractEdge(const Node u, T... t) : Parent(u, Adjacency(t...))
+    template <class... Args> AbstractEdge(const Node u, Args&&... args):
+      Parent(std::piecewise_construct, std::make_tuple(u), std::forward_as_tuple<Args...>(args...))
     {}
     // construct the reverse of an edge in a similar manner as above
     template <class... T> AbstractEdge(const reverse_edge_tag tag, const Node u, T... t) : Parent(u, Adjacency(t...))
@@ -56,7 +59,8 @@ namespace PT{
     // construct from edge with different data; for example, from a ReverseEdge (whose data is a reference)
     template<class _Data>
     AbstractEdge(const AbstractEdge<_Data>& other):
-      Parent(static_cast<typename Parent::first_type>(other.first), static_cast<typename Parent::second_type>(other.second)) {}
+      Parent(static_cast<typename Parent::first_type>(other.first), static_cast<typename Parent::second_type>(other.second))
+    {}
 
     Node& head() { return this->second; }
     Node& tail() { return this->first; }
@@ -88,12 +92,13 @@ namespace PT{
     using Parent::head;
     using Parent::tail;
     using Data = _Data;
-    using Adjacency = Adjacency_t<Data>;
+    using Adjacency = typename Parent::Adjacency;
  
     Data& data() { return Parent::get_adjacency().data(); }
     const Data& data() const { return Parent::get_adjacency().data(); }
 
-    std::ostream& print(std::ostream& os) const { return os << "("<<tail()<<","<<head()<<"):"<<data(); }
+    std::ostream& print(std::ostream& os) const
+    { return os << "("<<tail()<<","<<head()<<"):"<<data(); }
   };
  
   template<>
@@ -118,10 +123,12 @@ namespace PT{
   template<class Data>
   Node& tail(Edge<Data>& e) { return e.tail(); }
 
-  template<class Adjacency> struct __DataFromAdjacency { using type = typename Adjacency::Data; };
+  // the data of a "const Adjacency<float>" should be "const float"
+  template<class Adjacency> struct __DataFromAdjacency { using type = std::copy_cv_t<Adjacency, typename Adjacency::Data>; };
   template<> struct __DataFromAdjacency<Node> { using type = void; };
+  template<> struct __DataFromAdjacency<const Node> { using type = void; };
   template<class Adjacency>
-  using DataFromAdjacency = typename __DataFromAdjacency<std::remove_cvref_t<Adjacency>>::type;
+  using DataFromAdjacency = typename __DataFromAdjacency<std::remove_reference_t<Adjacency>>::type;
 
   template<class Adjacency>
   using EdgeFromAdjacency = Edge<std::copy_cvref_t<Adjacency, DataFromAdjacency<Adjacency>>>;

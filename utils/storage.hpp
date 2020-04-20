@@ -48,8 +48,8 @@ namespace PT{
     {}
 
     // convenience functions to not have to write .start[] all the time
-    inline _Item& operator[](const size_t i) { return start[i]; }
-    inline const _Item& operator[](const size_t i) const { return start[i]; }
+    inline reference operator[](const size_t i) { return start[i]; }
+    inline const_reference operator[](const size_t i) const { return start[i]; }
 
     inline size_t size() const { return count; }
     inline void clear() { start = nullptr; count = 0; }

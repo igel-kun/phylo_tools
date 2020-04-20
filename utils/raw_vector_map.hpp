@@ -20,6 +20,7 @@ namespace std {
   public:
     using value_type  = pair<_Key, _Element>;
     using reference   = pair<_Key, _Element&>;
+    using const_reference = pair<_Key, const _Element&>;
     using pointer     = self_deref<reference>;
     using difference_type = ptrdiff_t;
     using iterator_category = std::random_access_iterator_tag;
@@ -30,10 +31,8 @@ namespace std {
       index(_index)
     {}
 
-    reference operator*() { return {(_Key)index, *(start + index)}; }
-    const reference operator*() const { return {(_Key)index, *(start + index)}; }
-    pointer operator->() { return operator*(); }
-    const pointer operator->() const { return operator*(); }
+    reference operator*() const { return {(_Key)index, *(start + index)}; }
+    pointer operator->() const { return operator*(); }
 
     //! increment & decrement operators
     raw_vector_map_iterator& operator++() { ++index; return *this; }

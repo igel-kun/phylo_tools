@@ -19,7 +19,7 @@ namespace std{
 
     using value_type = _Element;
     using reference = value_type&;
-    using const_reference = const reference;
+    using const_reference = const value_type&;
 
     SingletonSet() = default;
     SingletonSet(const SingletonSet&) = default;

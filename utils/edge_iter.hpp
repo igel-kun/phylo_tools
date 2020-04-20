@@ -12,9 +12,9 @@ namespace PT{
   {
   public:
     using iterator = std::iterator_of_t<_AdjContainer>;
-    using iterator_category = typename std::iterator_traits<iterator>::iterator_category;
-    using Adjacency         = typename std::iterator_traits<iterator>::value_type;
-    using AdjacencyRef      = typename std::iterator_traits<iterator>::reference;
+    using iterator_category = typename std::my_iterator_traits<iterator>::iterator_category;
+    using Adjacency         = typename std::my_iterator_traits<iterator>::value_type;
+    using AdjacencyRef      = typename std::my_iterator_traits<iterator>::reference;
     // NOTE: instead of copying the edge data around, we'd rather keep a reference!
     using Edge = PT::Edge<DataReference<DataFromAdjacency<Adjacency>>>;
     
@@ -69,7 +69,7 @@ namespace PT{
     using Parent::Parent;
     using typename Parent::value_type;
 
-    value_type operator*() const { return value_type(reverse_edge, u, *node_it); }
+    value_type operator*() const { return value_type(reverse_edge, u, node_it->first, node_it->second); }
   };
 
   // make an edge container from a head and a container of tails
@@ -83,15 +83,17 @@ namespace PT{
     using Parent::Parent;
     using typename Parent::value_type;
 
-    value_type operator*() const { return value_type(u, *node_it); }
+    value_type operator*() const {
+      return value_type(u, node_it->first, node_it->second);
+    }
   };
 
   template<class _AdjContainer,
            template<class> class _Iterator>
-  class EdgeIterFactory: public std::iterator_traits<_Iterator<_AdjContainer>>
+  class EdgeIterFactory: public std::my_iterator_traits<_Iterator<_AdjContainer>>
   {
   public:
-    using Adjacency       = typename std::iterator_traits<std::iterator_of_t<_AdjContainer>>::value_type;
+    using Adjacency       = typename std::my_iterator_traits<std::iterator_of_t<_AdjContainer>>::value_type;
     using iterator        = _Iterator<_AdjContainer>;
     using const_iterator  = _Iterator<const _AdjContainer>;
     using const_reference = typename iterator::const_reference;
@@ -128,7 +130,7 @@ namespace PT{
   //! an iterator over a mapping Node->Successors enumerating Edges
   template<class _Map,
            template<class> class _EdgeIterator>
-  class EdgeMapIterator //: public std::iterator_traits<_EdgeIterator<std::copy_cv_t<_Map, typename _Map::mapped_type>>>
+  class EdgeMapIterator //: public std::my_iterator_traits<_EdgeIterator<std::copy_cv_t<_Map, typename _Map::mapped_type>>>
   {
     using Map = _Map;
     using AdjContainer = std::copy_cv_t<_Map, typename _Map::mapped_type>;
@@ -212,7 +214,7 @@ namespace PT{
   };
 
   template<class _Map, template<class> class _Iterator>
-  class EdgeMapIterFactory: public std::iterator_traits<EdgeMapIterator<_Map, _Iterator>>
+  class EdgeMapIterFactory: public std::my_iterator_traits<EdgeMapIterator<_Map, _Iterator>>
   {
   protected:
     std::shared_ptr<_Map> map;

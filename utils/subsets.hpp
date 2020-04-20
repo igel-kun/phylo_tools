@@ -18,7 +18,7 @@ namespace PT{
   public:
     using value_type = _OutPutContainer;
     using reference  = value_type&;
-    using const_reference = const reference;
+    using const_reference = const value_type&;
 
     SubsetIterator(_Container& _c):
       c(_c), bits(_c.size())

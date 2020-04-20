@@ -15,6 +15,15 @@ namespace std{
   template<class T> using remove_cvref_t = remove_cv_t<remove_reference_t<T>>;
 #endif
 
+  // iterator_traits<const T*>::value_type is "T" not "const T"? What the hell, STL?
+  template<typename T>
+  struct my_iterator_traits: public iterator_traits<T>
+  {
+    // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
+    using value_type = remove_reference_t<typename iterator_traits<T>::reference>;
+  };
+
+
   template<typename T,typename U>
   struct copy_cv
   {

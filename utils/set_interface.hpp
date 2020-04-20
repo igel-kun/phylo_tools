@@ -36,14 +36,14 @@ namespace std {
 
   // NOTE: if T is const, then iterator_of_t gives a const_iterator, and the reference of that SHOULD be a const_reference...
   template<class T>
-  inline typename iterator_traits<iterator_of_t<T>>::reference front(T&& _set)
+  inline typename my_iterator_traits<iterator_of_t<T>>::reference front(T&& _set)
   {
     assert(!_set.empty());
     return *(_set.begin());
   }
 
   template<class T>
-  inline typename iterator_traits<iterator_of_t<T>>::reference back(T&& _set)
+  inline typename my_iterator_traits<iterator_of_t<T>>::reference back(T&& _set)
   {
     assert(!_set.empty());
     return *(_set.rbegin());
@@ -52,14 +52,14 @@ namespace std {
 
   /*
   template<class T>
-  inline typename iterator_traits<iterator_of_t<T>>::value_type&& front(T&& _set)
+  inline typename my_iterator_traits<iterator_of_t<T>>::value_type&& front(T&& _set)
   {
     assert(!_set.empty());
     return move(*(_set.begin()));
   }
 
   template<class T>
-  inline typename iterator_traits<iterator_of_t<T>>::value_type&& back(T&& _set)
+  inline typename my_iterator_traits<iterator_of_t<T>>::value_type&& back(T&& _set)
   {
     assert(!_set.empty());
     return move(*(_set.rbegin()));

@@ -23,10 +23,10 @@ namespace std{
     inline bool is_past_begin() const { return i == std::prev(BeginEnd::begin(c)); }
 
   public:
-    using value_type      = typename std::iterator_traits<NormalIterator>::value_type;
-    using reference       = typename std::iterator_traits<NormalIterator>::reference;
-    using pointer         = typename std::iterator_traits<NormalIterator>::pointer;
-    using difference_type = typename std::iterator_traits<NormalIterator>::difference_type;
+    using value_type      = typename std::my_iterator_traits<NormalIterator>::value_type;
+    using reference       = typename std::my_iterator_traits<NormalIterator>::reference;
+    using pointer         = typename std::my_iterator_traits<NormalIterator>::pointer;
+    using difference_type = typename std::my_iterator_traits<NormalIterator>::difference_type;
 	  using iterator_category = std::bidirectional_iterator_tag;
 
     _filtered_iterator(Container& _c, const NormalIterator& _i): c(_c), i(_i) {}

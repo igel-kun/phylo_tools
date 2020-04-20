@@ -123,8 +123,8 @@ namespace PT{
     ConstSuccContainerRef successors(const Node u) const { return _successors.at(u); }
     ConstPredContainerRef predecessors(const Node u) const { return _predecessors.at(u); }
 
-    const SuccessorMap& successor_map() const { return _successors; }
-    const PredecessorMap& predecessor_map() const { return _successors; }
+    const SuccessorMap&   successor_map() const { return _successors; }
+    const PredecessorMap& predecessor_map() const { return _predecessors; }
 
     ConstOutEdgeContainer out_edges(const Node u) const { return {u, successors(u)}; }
     ConstInEdgeContainer  in_edges(const Node u) const { return {u, predecessors(u)}; }
