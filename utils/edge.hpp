@@ -17,9 +17,14 @@ namespace PT{
     using Parent::Parent;
     using Data = _Data;
 
-    // this is the closest we can get to inheriting the parent class' constructors
-    //template <class... T> __Adjacency(const Node u, T... t) : Parent(u, Data(t...))
     __Adjacency(const Node u, Data& d) : Parent(u, d) {}
+
+    // construct an adjacency whose data is a reference to X from an adjacency whose data is X
+    // NOTE: std::enable_if may only depend on immediate template parameters of the function; depending on the class template parameter is not SFINAE
+    template<class __Data, class = std::enable_if_t<std::is_same_v<Data, const __Data&>>>
+    __Adjacency(const __Adjacency<__Data>& adj) : Parent(adj.first, adj.second) {}
+    template<class __Data, class = std::enable_if_t<std::is_same_v<Data, __Data&>>>
+    __Adjacency(__Adjacency<__Data>& adj) : Parent(adj.first, adj.second) {}
 
     // access the adjacency's data
     Data& data() { return Parent::second; }
@@ -31,11 +36,7 @@ namespace PT{
   };
 
   template<class _Data>
-  struct _Adjacency { using type = __Adjacency<_Data>; };
-  template<>
-  struct _Adjacency<void> { using type = Node; };
-  template<class _Data>
-  using Adjacency_t = typename _Adjacency<_Data>::type;
+  using Adjacency_t = std::conditional_t<std::is_same_v<_Data, void>, Node, __Adjacency<_Data>>;
 
 
   // an edge is a node (head) with another node (->tail)
@@ -52,10 +53,10 @@ namespace PT{
     // construct the reverse of an edge in a similar manner as above
     template <class... T> AbstractEdge(const reverse_edge_tag tag, const Node u, T... t) : Parent(u, Adjacency(t...))
       { reverse(); }
-    // construct from edge with different data; for example, from a ReverseEdge (whose data is a reference_wrapper)
+    // construct from edge with different data; for example, from a ReverseEdge (whose data is a reference)
     template<class _Data>
     AbstractEdge(const AbstractEdge<_Data>& other):
-      Parent(static_cast<typename Parent::first>(other.first), static_cast<typename Parent::second>(other.second)) {}
+      Parent(static_cast<typename Parent::first_type>(other.first), static_cast<typename Parent::second_type>(other.second)) {}
 
     Node& head() { return this->second; }
     Node& tail() { return this->first; }
@@ -117,33 +118,34 @@ namespace PT{
   template<class Data>
   Node& tail(Edge<Data>& e) { return e.tail(); }
 
-  template<class Adjacency> struct DataFromAdjacency { using type = typename Adjacency::Data; };
-  template<> struct DataFromAdjacency<Node> { using type = void; };
-  template<> struct DataFromAdjacency<const Node> { using type = void; };
+  template<class Adjacency> struct __DataFromAdjacency { using type = typename Adjacency::Data; };
+  template<> struct __DataFromAdjacency<Node> { using type = void; };
   template<class Adjacency>
-  using DataFromAdjacency_t = typename DataFromAdjacency<Adjacency>::type;
+  using DataFromAdjacency = typename __DataFromAdjacency<std::remove_cvref_t<Adjacency>>::type;
 
   template<class Adjacency>
-  using EdgeFromAdjacency = Edge<DataFromAdjacency_t<Adjacency>>;
+  using EdgeFromAdjacency = Edge<std::copy_cvref_t<Adjacency, DataFromAdjacency<Adjacency>>>;
   template<class EdgeData>
   using AdjacencyFromData = typename Edge<EdgeData>::Adjacency;
 
   template<class Data>
-  using DataReference = std::conditional_t<std::is_same_v<Data, void>, void, std::reference_wrapper<Data>>;
+  using DataReference = std::add_lvalue_reference_t<Data>;
 
   template<class Data>
   using ReverseEdgeFromData = Edge<DataReference<Data>>;
   template<class __Edge>
-  using ReverseEdge = ReverseEdgeFromData<DataFromAdjacency_t<typename __Edge::Adjacency>>;
+  using ReverseEdge = ReverseEdgeFromData<DataFromAdjacency<typename __Edge::Adjacency>>;
 
   template<class Adjacency>
   using ReverseAdjacency = typename ReverseEdge<EdgeFromAdjacency<Adjacency>>::Adjacency;
   template<class EdgeData>
   using ReverseAdjacencyFromData = typename ReverseEdgeFromData<EdgeData>::Adjacency;
 
-  template<class Adjacency, std::enable_if_t<!std::is_same_v<Adjacency, Node>, int> = 0>
-  ReverseAdjacency<Adjacency> get_reverse_adjacency(const Node u, Adjacency& adj) { return {u, adj.data()}; }
-  ReverseAdjacency<Node> get_reverse_adjacency(const Node u, const Node& v) { return u; }
+  template<class Adjacency, class = std::enable_if_t<!std::is_same_v<std::remove_cvref_t<Adjacency>, Node>>>
+  ReverseAdjacency<Adjacency> get_reverse_adjacency(const Node u, Adjacency& adj) { return ReverseAdjacency<Adjacency>(u, adj.data()); }
+  template<class Adjacency, class = std::enable_if_t<!std::is_same_v<std::remove_cvref_t<Adjacency>, Node>>>
+  ReverseAdjacency<const Adjacency> get_reverse_adjacency(const Node u, const Adjacency& adj) { return ReverseAdjacency<Adjacency>(u, adj.data()); }
+  ReverseAdjacency<Node>      get_reverse_adjacency(const Node u, const Node v) { return u; }
 
   // an adjacency for storing weights on edges
   using WEdge = Edge<float>;

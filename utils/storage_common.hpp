@@ -24,18 +24,18 @@ namespace PT{
   }
 
 
-  template<class GivenEdgeContainer>
-  inline void compute_degrees(const GivenEdgeContainer& given_edges, InOutDegreeMap& degrees)
+  template<class GivenEdgeContainer, class DegMap>
+  inline void compute_degrees(const GivenEdgeContainer& given_edges, DegMap& degrees)
   {
     // compute out-degrees
     for(const auto &uv: given_edges){
-      ++degrees[uv.head()].first;
-      ++degrees[uv.tail()].second;
+      ++(append(degrees, uv.head(), 0, 0).first->second.first);
+      ++(append(degrees, uv.tail(), 0, 0).first->second.second);
     }
   }
 
-  template<class GivenEdgeContainer>
-  inline void compute_degrees(const GivenEdgeContainer& given_edges, InOutDegreeMap& degrees, NodeTranslation* old_to_new)
+  template<class GivenEdgeContainer, class DegMap>
+  inline void compute_degrees(const GivenEdgeContainer& given_edges, DegMap& degrees, NodeTranslation* old_to_new)
   {
     if(old_to_new){
       // compute out-degrees and translate
@@ -43,18 +43,18 @@ namespace PT{
       for(const auto &uv: given_edges){
         const auto emp_res = append(*old_to_new, uv.head(), (Node)num_nodes);
         if(emp_res.second) ++num_nodes;
-        ++degrees[emp_res.first->second].first;
+        ++(degrees.try_emplace(emp_res.first->second, 0, 0).first->second.first);
 
         const auto emp_res2 = append(*old_to_new, uv.tail(), (Node)num_nodes);
         if(emp_res2.second) ++num_nodes;
-        ++degrees[emp_res2.first->second].second;
+        ++(degrees.try_emplace(emp_res2.first->second, 0, 0).first->second.second);
       }
     } else compute_degrees(given_edges, degrees);
   }
 
   // compute the root and leaves from a mapping of nodes to (indeg,outdeg)-pairs
-  template<class LeafContainer>
-  Node compute_root_and_leaves(const InOutDegreeMap& deg, LeafContainer* leaves = nullptr)
+  template<class DegMap, class LeafContainer>
+  Node compute_root_and_leaves(const DegMap& deg, LeafContainer* leaves = nullptr)
   {
     Node _root = NoNode;
     for(const auto& ud: deg){

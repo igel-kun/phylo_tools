@@ -11,14 +11,14 @@ namespace PT{
   class PairIterator
   {
   protected:
-    using _Iterator = std::IteratorOf_t<_PairContainer>;
+    using _Iterator = std::iterator_of_t<_PairContainer>;
 
     _Iterator pair_it;
   public:
     using value_type = typename std::iterator_traits<_Iterator>::value_type;
     using reference = typename std::iterator_traits<_Iterator>::reference;
     //using const_reference = typename std::iterator_traits<_Iterator>::const_reference; // why oh why, STL, do you not define that for pointers???
-    using const_reference = const reference;
+    using const_reference = std::const_reference_t<reference>;
 
     PairIterator(const _Iterator& _it): pair_it(_it)
     {}
@@ -50,12 +50,12 @@ namespace PT{
   };
 
   template<class _PairContainer, size_t get_num>
-  class SelectingIterator: public std::IteratorOf_t<_PairContainer>
+  class SelectingIterator: public std::iterator_of_t<_PairContainer>
   {
-    using Parent = std::IteratorOf_t<_PairContainer>;
+    using Parent = std::iterator_of_t<_PairContainer>;
   protected:
-    using PairType = std::CopyConst_t<_PairContainer, typename Parent::value_type>;
-    using PairRefType = std::CopyConst_t<_PairContainer, typename Parent::reference>;
+    using PairType = std::copy_cvref_t<_PairContainer, typename Parent::value_type>;
+    using PairRefType = std::copy_cvref_t<_PairContainer, typename Parent::reference>;
 
     // normally, dereferencing the parent will give us an lvalue reference to a pair,
     // so our dereference can just return a reference to the correct item in that pair.
@@ -108,7 +108,7 @@ namespace PT{
     iterator begin() { return c->begin(); }
     iterator end() { return c->end(); }
     const_iterator begin() const { return const_iterator(c->begin()); }
-    const_iterator end() const { return c->end(); }
+    const_iterator end() const { return const_iterator(c->end()); }
     bool empty() const { return c->empty(); }
     bool size() const { return c->size(); }
   };
@@ -122,6 +122,10 @@ namespace PT{
   constexpr FirstFactory<_PairContainer> firsts(_PairContainer& c) { return c; }
   template<class _PairContainer>
   constexpr SecondFactory<_PairContainer> seconds(_PairContainer& c) { return c; }
+  template<class _PairContainer>
+  constexpr FirstFactory<const _PairContainer> firsts(const _PairContainer& c) { return c; }
+  template<class _PairContainer>
+  constexpr SecondFactory<const _PairContainer> seconds(const _PairContainer& c) { return c; }
 
   template<class _PairContainer, size_t get_num>
   std::ostream& operator<<(std::ostream& os, const PairItemIterFactory<_PairContainer, get_num>& fac)

@@ -26,9 +26,10 @@ namespace PT {
     LabeledNodeIter() = delete; // disallow default construction
   public:
     using PropertyType = typename PropertyGetter::PropertyType;
-    using value_type = LabeledNode<PropertyType>;
-    using reference = value_type&;
-    using pointer = value_type*;
+    using value_type      = LabeledNode<PropertyType>;
+    using reference       = value_type&;
+    using const_reference = const value_type&;
+    using pointer         = value_type*;
     using difference_type = ptrdiff_t;
     using iterator_category = std::random_access_iterator_tag;
 
@@ -57,15 +58,16 @@ namespace PT {
     std::shared_ptr<NodeContainer> c;
     PropertyGetter getter;
   public:
-    using iterator = LabeledNodeIter<std::IteratorOf_t<NodeContainer, false>, PropertyGetter>;
+    using iterator = LabeledNodeIter<std::iterator_of_t<NodeContainer>, PropertyGetter>;
 
     // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
     template<class... Args>
     LabeledNodeIterFactory(NodeContainer& _c, Args&&... args): c(&_c, std::NoDeleter()), getter(std::forward<Args>(args)...) {}
     template<class... Args>
-    LabeledNodeIterFactory(NodeContainer* const _c, Args&&... args): c(&_c), getter(std::forward<Args>(args)...) {}
+    LabeledNodeIterFactory(NodeContainer* const _c, Args&&... args): c(_c), getter(std::forward<Args>(args)...) {}
     template<class... Args>
-    LabeledNodeIterFactory(NodeContainer&& _c, Args&&... args): c(new NodeContainer(std::forward<NodeContainer>(_c))), getter(std::forward<Args>(args)...) {}
+    LabeledNodeIterFactory(NodeContainer&& _c, Args&&... args):
+      c(new NodeContainer(std::forward<NodeContainer>(_c))), getter(std::forward<Args>(args)...) {}
 
     iterator begin() const { return {c->begin(), getter}; }
     iterator end() const { return {c->end(), getter}; }

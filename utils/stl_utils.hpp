@@ -2,32 +2,67 @@
 #pragma once
 
 #include<sstream>
+#include<type_traits>
 #include "hash_utils.hpp"
 
 // circular shift
 #define rotl(x,y) ((x << y) | (x >> (sizeof(x)*CHAR_BIT - y)))
 #define rotr(x,y) ((x >> y) | (x << (sizeof(x)*CHAR_BIT - y)))
 
-
 namespace std{
+
+#if __cplusplus <= 201703L
+  template<class T> using remove_cvref_t = remove_cv_t<remove_reference_t<T>>;
+#endif
+
+  template<typename T,typename U>
+  struct copy_cv
+  {
+    using R =    remove_reference_t<T>;
+    using U1 =   conditional_t<is_const_v<R>, add_const_t<U>, U>;
+    using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
+  };
+  template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
+
+  template<typename T,typename U>
+  struct copy_ref
+  {
+    using R =    remove_reference_t<T>;
+    using U1 =   conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>;
+    using type = conditional_t<is_rvalue_reference_v<T>, add_rvalue_reference_t<U1>, U1>;
+  };
+  template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
+  // NOTE: it is important to copy the const before copying the ref!
+  template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
+
+
+  template<class T> struct is_vector: public false_type {};
+  template<class T, class Alloc> struct is_vector<vector<T, Alloc>>: public true_type {};
+  template<class T, class Traits, class Alloc> struct is_vector<basic_string<T,Traits,Alloc>>: public true_type {};
+  template<class T> constexpr bool is_vector_v = is_vector<remove_cvref_t<T>>::value;
+
+  //a container is something we can iterate through, that is, it has an iterator
+  template<class N, class T = void> struct is_container: public false_type {};
+  template<class N> struct is_container<N, void_t<typename N::value_type>>: public true_type {};
+  template<class N> constexpr bool is_container_v = is_container<remove_cvref_t<N>>::value;
+  
+  // a map is something with a mapped_type in it
+  template<class N, class T = void> struct is_map: public false_type {};
+  template<class N> struct is_map<N, void_t<typename N::mapped_type>>: public true_type {};
+  template<class N> constexpr bool is_map_v = is_map<remove_cvref_t<N>>::value;
+
+
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
-  template<class Container, bool reverse> struct IteratorOf
-  { using type = std::conditional_t<reverse, std::reverse_iterator<typename Container::iterator>, typename Container::iterator>; };
-  template<class Container, bool reverse> struct IteratorOf<const Container, reverse>
-  { using type = std::conditional_t<reverse, std::reverse_iterator<typename Container::const_iterator>, typename Container::const_iterator>; };
-  template<class Container, bool reverse = false>
-  using IteratorOf_t = typename IteratorOf<remove_reference_t<Container>, reverse>::type;
+  template<class T> using iterator_of_t = conditional_t<is_const_v<remove_reference_t<T>>,
+    typename remove_reference_t<T>::const_iterator, typename remove_reference_t<T>::iterator>;
+  template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
 
 
-  // copy const specifier from T to Q (that is, if T is const, then return const Q, otherwise return Q
-  template<class T, class Q> struct CopyConst { using type = Q; };
-  template<class T, class Q> struct CopyConst<const T, Q> { using type = const Q; };
-  template<class T, class Q> using CopyConst_t = typename CopyConst<T, Q>::type;
-
-  // copy reference specifier from T to Q (that is, if T == X&, then return Q&, otherwise return Q
-  template<class T, class Q> struct CopyRef { using type = Q; };
-  template<class T, class Q> struct CopyRef<T&, Q> { using type = Q&; };
-  template<class T, class Q> using CopyRef_t = typename CopyRef<T, Q>::type;
+  // turn a reference into const reference or rvalue into const rvalue
+  template<class T> struct _const_reference { using type = add_const_t<T>; };
+  template<class T> struct _const_reference<T&> { using type = add_const_t<T>&; };
+  template<class T> struct _const_reference<T&&> { using type = add_const_t<T>&&; };
+  template<class T> using const_reference_t = typename _const_reference<T>::type;
 
 
 
@@ -59,14 +94,14 @@ namespace std{
   template<class Container, bool reverse>
   struct BeginEndIters
   {
-    using iterator     = IteratorOf_t<Container, false>;
+    using iterator     = iterator_of_t<Container>;
     static iterator begin(Container& c) { return c.begin(); }
     static iterator end(Container& c) { return c.end(); }
   };
   template<class Container>
   struct BeginEndIters<Container, true>
   {
-    using iterator     = IteratorOf_t<Container, true>;
+    using iterator     = reverse_iterator_of_t<Container>;
     static iterator begin(Container& c) { return c.rbegin(); }
     static iterator end(Container& c) { return c.rend(); }
   };
@@ -111,7 +146,7 @@ namespace std{
 
 
   //! simple property getter
-  template<class Map, class Key = typename Map::key_type, class Mapped = CopyConst_t<Map, typename Map::mapped_type>>
+  template<class Map, class Key = typename Map::key_type, class Mapped = copy_cvref_t<Map, typename Map::mapped_type>>
   struct MapGetter
   {
     using PropertyType = typename Map::mapped_type;
@@ -122,7 +157,7 @@ namespace std{
   };
 
 
-  template<class C>
+  template<class C, class = enable_if_t<is_container_v<C>>>
   inline std::ostream& _print(std::ostream& os, const C& objs)
   {
     os << '[';

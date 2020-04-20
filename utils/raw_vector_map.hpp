@@ -95,7 +95,7 @@ namespace std {
     void erase(const iterator& it) { it->second = _Element(); } 
 
     template<class T>
-    void insert(std::IteratorOf_t<T> _start, const std::IteratorOf_t<T>& _end)
+    void insert(std::iterator_of_t<T> _start, const std::iterator_of_t<T>& _end)
     {
       while(_start != _end){
         if(_start->first >= size()) {

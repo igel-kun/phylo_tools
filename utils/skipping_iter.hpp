@@ -10,7 +10,7 @@ namespace std{
   template<class Container,
            class Predicate,
            bool reverse = false,
-           class NormalIterator = std::IteratorOf_t<Container, reverse>,
+           class NormalIterator = std::conditional_t<reverse, std::reverse_iterator_of_t<Container>, std::iterator_of_t<Container>>,
            class BeginEnd = BeginEndIters<Container, reverse>>
   class skipping_iterator
   {
@@ -46,9 +46,9 @@ namespace std{
     {}
 
     skipping_iterator& operator++() { if(!is_end()) increment_index(); return *this; }
-    skipping_iterator& operator++(int) { skipping_iterator result(*this); ++(*this); return result; }
+    skipping_iterator operator++(int) { skipping_iterator result(*this); ++(*this); return result; }
     skipping_iterator& operator--() { if(!is_past_begin()) decrement_index(); return *this; }
-    skipping_iterator& operator--(int) { skipping_iterator result(*this); --(*this); return result; }
+    skipping_iterator operator--(int) { skipping_iterator result(*this); --(*this); return result; }
 
     operator NormalIterator() const { return i; }
 

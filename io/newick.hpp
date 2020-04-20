@@ -102,6 +102,7 @@ namespace PT{
                  const bool _allow_junctions = true):
       newick_string(_newick_string),
       names(_names),
+      hybrids(),
       back(_newick_string.length() - 1),
       allow_non_binary(_allow_non_binary),
       allow_junctions(_allow_junctions),
@@ -117,13 +118,13 @@ namespace PT{
       return hybrids.empty();
     }
 
-    const size_t num_nodes() const
+    size_t num_nodes() const
     {
       if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
       return names.size();
     }
 
-    const LabelMap& get_names() const
+    LabelMap& get_names() const
     {
       if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
       return names;

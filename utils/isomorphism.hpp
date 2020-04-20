@@ -60,7 +60,7 @@ namespace PT{
     // degree distributions don't match
     bool initial_fail; 
 
-    inline const size_t num_poss(const Node x) const { return mapping.at(x).size(); }
+    inline size_t num_poss(const Node x) const { return mapping.at(x).size(); }
 
     bool node_is_interesting(const Node v) const
     {
@@ -103,7 +103,7 @@ namespace PT{
     template<class Something>
     void restrict_by_something(Something (NetworkA::*node_to_something_N1)(const Node) const, Something (NetworkB::*node_to_something_N2)(const Node) const)
     {
-      using MySomething = std::remove_const_t<std::remove_reference_t<Something>>;
+      using MySomething = std::remove_cvref_t<Something>;
       // keep track of nodes in N2 mapping to each something
       HashMap<MySomething, PossSet> possible_N2_nodes;
       // also keep a history of how many of each Something we've seen (this should be equal between N1 & N2)
@@ -304,7 +304,7 @@ namespace PT{
     }
     void update_poss(const Node x1)
     {
-      DEBUG5(std::cout << "updating "<<x<<" whose mapping is ("<<num_poss(x)<<" possibilities):\n " << to_set(mapping.at(x)) << std::endl);
+      DEBUG5(std::cout << "updating "<<x1<<" whose mapping is ("<<num_poss(x1)<<" possibilities):\n " << to_set(mapping.at(x1)) << std::endl);
       PossSet possible_nodes(size_N);
       // update children
       if(!N1.is_leaf(x1)){

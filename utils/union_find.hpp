@@ -96,7 +96,7 @@ namespace std{
     DSet<T>& add_item_to_set(const T& x, DSet<T>& y_set)
     {
       // assert that y exists
-      assert(contains(*this, *y_set.representative));
+      assert(test(*this, *y_set.representative));
       // insert the item
       auto emp_res = emplace(PWC, std::make_tuple(x), std::make_tuple(y_set.representative));
       if(emp_res.second){
@@ -113,7 +113,7 @@ namespace std{
     // in case of ties, x is merged into y's set
     DSet<T>& merge_sets_of(const T& x, const T& y, const bool respect_sizes = true)
     {
-      assert(contains(*this, x) && contains(*this, y));
+      assert(test(*this, x) && test(*this, y));
 
       DSet<T>& x_set = set_of(x);
       DSet<T>& y_set = set_of(y);

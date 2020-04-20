@@ -13,15 +13,16 @@ namespace PT{
            class _LabelTag = single_label_tag,
            class _EdgeStorage = MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
-  class Network : public Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>
+  class Network : public Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>
   {
-    using Parent = Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>;
+    using Parent = Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>;
   protected:
     using Parent::node_labels;
     using Parent::_edges;
   public:
     using NetworkTypeTag = network_tag;
     using typename Parent::Edge;
+    using typename Parent::EdgeRef;
     using Parent::Parent;
     using Parent::children;
     using Parent::parents;
@@ -150,15 +151,13 @@ namespace PT{
   template<class __Network,
     class _NodeData = typename __Network::NodeData,
     class _EdgeData = typename __Network::EdgeData,
-    class _LabelTag = typename __Network::LabelTag,
-    class _LabelMap = typename __Network::LabelMap>
-  using CompatibleRWNetwork = RWNetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+    class _LabelTag = typename __Network::LabelTag>
+  using CompatibleRWNetwork = RWNetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>;
   template<class __Network,
     class _NodeData = typename __Network::NodeData,
     class _EdgeData = typename __Network::EdgeData,
-    class _LabelTag = typename __Network::LabelTag,
-    class _LabelMap = typename __Network::LabelMap>
-  using CompatibleRONetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+    class _LabelTag = typename __Network::LabelTag>
+  using CompatibleRONetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>;
 
 
 } // namespace

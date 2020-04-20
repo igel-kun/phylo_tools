@@ -10,6 +10,11 @@
 
 namespace PT{
 
+  struct consecutive_tag_t {};
+  struct non_consecutive_tag_t {};
+  constexpr consecutive_tag_t consecutive_tag;
+  constexpr non_consecutive_tag_t non_consecutive_tag;
+
   //note: this should not be a std::vector because we want to be able to point it into a consecutive block of items
   template<typename _Item>
   class ConsecutiveStorageNoMem

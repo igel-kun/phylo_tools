@@ -54,11 +54,12 @@ namespace std{
 
 
   template<class Container, class ParentContainer, bool reverse = false>
-  using linear_vector_hash_iterator = skipping_iterator<Container,
-                                                        VacantPredicate<Container>,
-                                                        reverse,
-                                                        std::IteratorOf_t<typename Container::Parent, reverse>,
-                                                        std::BeginEndIters<typename Container::Parent, reverse>>;
+  using linear_vector_hash_iterator = skipping_iterator<
+        Container,
+        VacantPredicate<Container>,
+        reverse,
+        std::conditional_t<reverse, std::reverse_iterator_of<typename Container::Parent>, std::iterator_of_t<typename Container::Parent>>,
+        std::BeginEndIters<typename Container::Parent, reverse>>;
   //class linear_vector_hash_iterator;
 
   template<

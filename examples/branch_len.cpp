@@ -58,7 +58,7 @@ int main(const int argc, const char** argv)
     std::cout << N << std::endl;
  
   for(const Node u: N.nodes()){
-    for(const WEdge uv: N.out_edges(u))
+    for(const auto uv: N.out_edges(u))
       std::cout << "branch "<<u<<"["<<N.get_label(u)<<"] -> "<<head(uv)<<"["<<N.get_label(uv.head())<<"] has length "<<uv.data()<<std::endl;
   }
 }

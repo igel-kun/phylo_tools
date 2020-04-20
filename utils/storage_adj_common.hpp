@@ -40,8 +40,10 @@ namespace PT{
     // Edges and RevEdges differ in that one of the two should contain a reference to the EdgeData instead of the data itself
     using Adjacency = typename SuccContainer::value_type;
     using Edge = EdgeFromAdjacency<Adjacency>;
+    using EdgeRef = Edge;
     using RevAdjacency = typename PredContainer::value_type;
     using RevEdge = EdgeFromAdjacency<Adjacency>;
+    using RevEdgeRef = RevEdge;
 
     using ConstEdgeContainer    = OutEdgeMapIterFactory<const SuccessorMap>;
     using ConstEdgeContainerRef = ConstEdgeContainer;
@@ -75,12 +77,14 @@ namespace PT{
       for(const auto& uV: _predecessors)
         if(uV.second.empty()){ _root = uV.first; break; }
 #else
-      for(const auto& uV: _predecessors)
+      for(const auto& uV: _predecessors){
+        std::cout << "predecessors of "<<uV.first<<" = "<<uV.second<<"\n";
         if(uV.second.empty()){
           if(_root == NoNode)
             _root = uV.first;
-          else throw std::logic_error("cannot create tree/network with multiple roots ("+std::string(_root)+" & "+std::string(uV.first)+")");
+          else throw std::logic_error("cannot create tree/network with multiple roots ("+std::to_string(_root)+" & "+std::to_string(uV.first)+")");
         }
+      }
 #endif
       if((_root == NoNode) && !_predecessors.empty())
         throw std::logic_error("given edgelist is cyclic (has no root)");
@@ -97,7 +101,7 @@ namespace PT{
     NodeIterator nodes_end() const { return _successors.end(); }
 
     // =============== query ===================
-    size_t num_nodes() const { return _predecessors.size() + 1; }
+    size_t num_nodes() const { return _successors.size(); }
     size_t num_edges() const { return size(); }
     Degree out_degree(const Node u) const { return successors(u).size(); }
     Degree in_degree(const Node u) const { return predecessors(u).size(); }
@@ -111,7 +115,7 @@ namespace PT{
     {
       if(_predecessors.at(u).empty())
         _root = u;
-      else throw std::logic_error("cannot set the root to "+std::string(u)+" as it has at least one predecesor "+std::string(front(_predecessors.at(u))));
+      else throw std::logic_error("cannot set the root to "+std::to_string(u)+" as it has at least one predecesor "+std::to_string(front(_predecessors.at(u))));
     }
 
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
@@ -128,6 +132,65 @@ namespace PT{
 
     ConstLeafContainerRef leaves() const { return ConstLeafContainerRef(new EmptySuccIterFactory(_successors, _successors)); }
   };
+
+
+  // the following classes are for adding (or not) node-data onto any form of _EdgeStorage
+
+  // NOTE: be advised not to interprete default-constructed NodeData as "has already been given data" when using consecutive storages,
+  //       since ConsecutiveMap will default-construct all missing NodeData up to i when constructing NodeData for i (see raw_vector_map.hpp)
+  // NOTE: the weird std::conditional is needed because otherwise, the default template arg cannot be initialized if _NodeData == void
+  template<class _NodeData,
+           class _EdgeStorage,
+           class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_same_v<_NodeData, void>, int, _NodeData>>>
+  class AddNodeData: public _EdgeStorage
+  {
+    using Parent = _EdgeStorage;
+    _NodeDataMap node_data;
+  public:
+    using NodeDataMap = _NodeDataMap;
+    using NodeData = _NodeData;
+    using Parent::Parent;
+    static constexpr bool has_node_data = true;
+
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    AddNodeData(const GivenEdgeContainer& given_edges,
+               NodeTranslation* old_to_new = nullptr,
+               LeafContainer* leaves = nullptr):
+      Parent(given_edges, old_to_new, leaves)
+    {}
+
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    AddNodeData(const non_consecutive_tag_t,
+               const GivenEdgeContainer& given_edges,
+               NodeTranslation* old_to_new = nullptr,
+               LeafContainer* leaves = nullptr):
+      Parent(non_consecutive_tag, given_edges, old_to_new, leaves)
+    {}
+
+    template<class... Args>
+    NodeData& emplace_node_data(const Node u, Args&&... args) { return node_data.try_emplace(u, std::forward<Args>(args)...).first->second; }
+
+    // on const EdgeStorages, use node_data.at(), which will throw an exception if u does not yet have node data
+    const NodeData& get_node_data(const Node u) const { return node_data.at(u); }
+    const NodeData& operator[](const Node u) const { return get_node_data(u); }
+    
+    // on non-const EdgeStorages, operator[] can emplace NodeData...
+    template<class = std::enable_if_t<std::is_default_constructible_v<_NodeData>>, class... Args>
+    NodeData& operator[](const Node u) { return emplace_node_data(u); }
+    // ... but get_node_data() will throw an out_of_range exception
+    NodeData& get_node_data(const Node u) { return node_data.at(u); }
+
+    const NodeDataMap& get_node_data() const { return node_data; }
+  };
+
+  template<class _EdgeStorage, class _NodeDataMap>
+  class AddNodeData<void, _EdgeStorage, _NodeDataMap>: public _EdgeStorage
+  {
+    public:
+      using _EdgeStorage::_EdgeStorage;
+      static constexpr bool has_node_data = false;
+  };
+
 
 
 }// namespace

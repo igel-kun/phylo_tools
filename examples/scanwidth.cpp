@@ -55,9 +55,13 @@ void parse_options(const int argc, const char** argv)
       \t-e\tprint an optimal extension\n\
       \t-et\tprint an optimal extension tree (corresponds to the extension)\n\
       \t-lm\tuse low-memory data structures when doing dynamic programming (uses 25% of the space at the cost of factor |V(N)| running time)\n\
-      \t-m <int>\tmethod to use to compute scanwidth: 0 = brute force all permutations, 1 = dynamic programming on all vertices, 2 = brute force on raising vertices only, 3 = dynamic programming on raising vertices only, 4 = heuristic [default=3]\n\
-      \t-pp\tuse preprocessing\n\
-      \n");
+      \t-m x\tmethod to use to compute scanwidth [default: x = 3]:\n\
+      \t\t\tx = 0: brute force all permutations,\n\
+      \t\t\tx = 1: dynamic programming on all vertices,\n\
+      \t\t\tx = 2: brute force on raising vertices only,\n\
+      \t\t\tx = 3: dynamic programming on raising vertices only,\n\
+      \t\t\tx = 4: heuristic\n\
+      \t-pp\tuse preprocessing\n");
 
   parse_options(argc, argv, description, help_message, options);
 
@@ -68,7 +72,7 @@ void parse_options(const int argc, const char** argv)
     }
 }
 
-const unsigned parse_method()
+unsigned parse_method()
 {
   try{
     const unsigned method = std::stoi(options["-m"][0]);
@@ -129,20 +133,24 @@ int main(const int argc, const char** argv)
 //  if(contains(options, "-pp") sw_preprocess(N);
 
   std::cout << "\n ==== computing silly post-order extension ===\n";
-  Extension ex;
-  for(const auto& u: N.get_nodes<postorder>()) append(ex, u);
-  print_extension(N, ex);
-
-  std::cout << "\n ==== computing optimal extension ===\n";
   
+  Extension ex = N.get_nodes<postorder, Extension>();
+  std::cout << ex << "\n";
+  
+  std::cout << "\n ==== computing optimal extension ===\n";
+
   Extension ex_opt;
   if(test(options, "-lm"))
     compute_min_sw_extension<true>(N, ex_opt);
   else
     compute_min_sw_extension<false>(N, ex_opt);
   
-  std::cout << "\n ==== optimal extension found ===\n";
+  std::cout << "silly extension:\n";
+  print_extension(N, ex);
+
+  std::cout << "optimal extension:\n";
   print_extension(N, ex_opt);
+
 
   std::cout << "The End\n";
 //  if(contains(options, "-e")) sw_print_extension();

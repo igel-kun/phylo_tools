@@ -21,7 +21,7 @@ namespace PT{
     std::istream& edgestream;
     EdgeList& edges;
     LabelMap& names;
-    std::unordered_map<std::string, Node> name_to_node;
+    HashMap<std::string, Node> name_to_node;
 
     EdgeVecParser();
   public:
@@ -30,7 +30,8 @@ namespace PT{
     EdgeVecParser(std::istream& _edgestream, EdgeList& _edges, LabelMap& _names):
       edgestream(_edgestream),
       edges(_edges),
-      names(_names)
+      names(_names),
+      name_to_node()
     {
       names.clear();
       edges.clear();

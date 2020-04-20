@@ -79,16 +79,16 @@ namespace PT {
   };
 
   template<class NetworkA, class NetworkB,
-    std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>, int> = 0>
+    class = std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>>>
   using LabelMatchingFromNets = LabelMatching<typename NetworkA::LabelTag, typename NetworkB::LabelTag, typename NetworkA::LabelType>;
 
   template<class NetworkA, class NetworkB,
-    std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>, int> = 0>
+    class = std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>>>
   LabelMatchingFromNets<NetworkA, NetworkB> get_label_matching(const NetworkA& A, const NetworkB& B)
   { return LabelMatchingFromNets<NetworkA, NetworkB>(A, B); }
 
   template<class NetworkA, class NetworkB,
-    std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>, int> = 0>
+    class = std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>>>
   LabelMatchingFromNets<NetworkA, NetworkB> get_leaf_label_matching(const NetworkA& A, const NetworkB& B)
   { return {leaf_labels_only, A, B}; }
 

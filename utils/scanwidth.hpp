@@ -61,7 +61,7 @@ namespace PT{
       for(auto v: N.parents(u)){
         // ignore deg-2 nodes
         if(ignore_deg2) while(N.is_suppressible(v)) v = std::front(N.parents(v));
-        if(contains(c, v)) return false;
+        if(test(c, v)) return false;
       }
       return true;
     }
@@ -126,7 +126,7 @@ namespace PT{
           // lastly, add the best extension for nodes to the lookup table
           dp_table.emplace(nodes, *best_entry);
         }
-        STAT(uint64_t count_unsupp = 0; for(const auto& u: N.get_nodes()) { if(!N.is_suppressible(u)) ++count_unsupp;})
+        STAT(uint64_t count_unsupp = 0; for(const auto& u: N) { if(!N.is_suppressible(u)) ++count_unsupp;})
         STAT(std::cout << "STAT: " <<N.num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
         // the last extension should be the one we are looking for
         append(ex, best_entry->ex);
@@ -138,21 +138,28 @@ namespace PT{
   template<bool low_memory_version, class _Network, class _Extension>
   void compute_min_sw_extension(const _Network& N, _Extension& ex)
   {
-    using Component = RONetwork<>;
+    using Component = typename BiconnectedComponents<_Network>::Component;
 
-    for(const Component bcc: BiconnectedComponents<_Network, Component>(N)){
+    for(const Component bcc: BiconnectedComponents<_Network>(N)){
       std::cout << "found biconnected component:\n"<< bcc <<"\n";
-      if(bcc.num_edges() == 1){
-        const auto uv = std::front(bcc.get_edges());
-        append(static_cast<NodeVec&>(ex), uv.head());
-      } else {
+      if(bcc.num_edges() != 1){
         ScanwidthDP<low_memory_version, Component, _Extension> dp(bcc);
         dp.compute_min_sw_extension_no_bridges(ex);
         // always remove the root of a component, so the bridge can re-insert it
         ex.pop_back();
+      } else {
+        std::cout << "only 1 edge, so adding its head to ex\n";
+        const typename Component::EdgeContainer E = bcc.edges();
+        std::cout << "getting front of " << E << "\n";
+        const typename Component::Edge uv = std::front(E);
+        //const auto& uv = std::front(bcc.edges());
+        std::cout << "edge is "<<uv<<"\n";
+        append(ex, uv.head());
+        std::cout << "E goes out of scope next\n";
       }
+      std::cout << "done working with\n"<<bcc<<"\n";
     }
-    append(static_cast<NodeVec&>(ex), N.root());
+    append(ex, N.root());
   }
 
 

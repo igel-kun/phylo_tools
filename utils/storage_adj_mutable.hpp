@@ -21,7 +21,6 @@ namespace PT{
   using DefaultMutableTreePredecessorMap = HashMap<Node, std::SingletonSet<ReverseAdjacencyFromData<_EdgeData>>>;
 
 
-
   template<class _EdgeData = void,
            class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
            class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
@@ -53,15 +52,17 @@ namespace PT{
     bool add_edge(const Edge& uv){ return add_edge(uv.tail(), uv.get_adjacency()); }
     bool add_edge(const Node u, const Adjacency& v)
     {
-      if(append(_predecessors[v], u).second){
-        // add v to the successors if its a new node
-        _successors.try_emplace(v);
+      if(append(_predecessors, v, u).second){
 #ifndef NDEBUG
-        const bool uv_app =
-#endif
-        append(_successors.at(u), v).second;
+        const bool uv_app = append(_successors, u, v).second;
         assert(uv_app);
+#else
+        append(_successors, u, v).second;
+#endif
         ++_size;
+        // make sure that both u and v have an entry in both _predecessors and _successors
+        _successors.try_emplace(v);
+        _predecessors.try_emplace(u);
         return true;
       } else return false;
     }
@@ -106,41 +107,24 @@ namespace PT{
                                     LeafContainer* leaves = nullptr):
       Parent()
     {
+      std::cout << "adding edges to the network...\n";
       for(const auto& uv: given_edges) add_edge(uv);
+      std::cout << "computing the root...\n";
       compute_root();
+      std::cout << "computing node translation and leaves...\n";
       compute_translate_and_leaves(*this, old_to_new, leaves);
     }
 
+    //! initialization from edgelist without consecutive nodes
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    _MutableNetworkAdjacencyStorage(const non_consecutive_tag_t,
+                                    const GivenEdgeContainer& given_edges,
+                                    NodeTranslation* old_to_new = nullptr,
+                                    LeafContainer* leaves = nullptr):
+      _MutableNetworkAdjacencyStorage(given_edges, old_to_new, leaves)
+    {}
+
   };
-
-  template<class _NodeData,
-           class _EdgeData = void,
-           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
-           class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
-  class MutableNetworkAdjacencyStorage: public _MutableNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
-  {
-    using Parent = _MutableNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
-  public:
-    using NodeData = _NodeData;
-    using Parent::Parent;
-
-    const NodeData& get_node_data(const Node u) const { return *(static_cast<NodeData*>(u)); }
-    NodeData& get_node_data(const Node u) { return *(static_cast<NodeData*>(u)); }
-    const NodeData& operator[](const Node u) const { return get_node_data(u); }
-    NodeData& operator[](const Node u) { return get_node_data(u); }
-  };
-
-  template<class _EdgeData,
-           class _SuccessorMap,
-           class _PredecessorMap>
-  class MutableNetworkAdjacencyStorage<void, _EdgeData, _SuccessorMap, _PredecessorMap>:
-      public _MutableNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
-  {
-    using Parent = _MutableNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
-  public:
-    using Parent::Parent;
-  };
-
 
 
   template<class _EdgeData = void,
@@ -194,9 +178,9 @@ namespace PT{
           return true;
         } else {
           if(_predecessors.contains(v))
-            throw std::logic_error("cannot create reticulation ("+std::string(v)+") in a tree");
+            throw std::logic_error("cannot create reticulation ("+std::to_string(v)+") in a tree");
           else
-            throw std::logic_error("cannot create isolated edge ("+std::string(u)+","+std::string(v)+") with add_edge_secure() - if you are adding a bunch of edges resulting in a valid tree, use add_edge() + set_root()");
+            throw std::logic_error("cannot create isolated edge ("+std::to_string(u)+","+std::to_string(v)+") with add_edge_secure() - if you are adding a bunch of edges resulting in a valid tree, use add_edge() + set_root()");
         }
       } else {
         auto emp_pred = append(_predecessors, v);
@@ -204,7 +188,7 @@ namespace PT{
           append(*emp_pred.first, u);
           append(*emp_succ.first, v);
           ++_size;
-        } else throw std::logic_error("cannot create reticulation ("+std::string(v)+") in a tree");
+        } else throw std::logic_error("cannot create reticulation ("+std::to_string(v)+") in a tree");
       }
     }
 
@@ -246,37 +230,33 @@ namespace PT{
       compute_root();
       compute_translate_and_leaves(*this, old_to_new, leaves);
     }
+
+    //! initialization from edgelist without consecutive nodes
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    _MutableTreeAdjacencyStorage(const non_consecutive_tag_t,
+                                    const GivenEdgeContainer& given_edges,
+                                    NodeTranslation* old_to_new = nullptr,
+                                    LeafContainer* leaves = nullptr):
+      _MutableTreeAdjacencyStorage(given_edges, old_to_new, leaves)
+    {}
+
   };
 
 
 
-  template<class _NodeData,
+
+
+  template<class _NodeData = void,
            class _EdgeData = void,
            class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
            class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
-  class MutableTreeAdjacencyStorage: public _MutableTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
-  {
-    using Parent = _MutableTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
-  public:
-    using NodeData = _NodeData;
-    using Parent::Parent;
+  using MutableNetworkAdjacencyStorage = AddNodeData<_NodeData, _MutableNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
 
-    const NodeData& get_node_data(const Node u) const { return *(static_cast<NodeData*>(u)); }
-    NodeData& get_node_data(const Node u) { return *(static_cast<NodeData*>(u)); }
-    const NodeData& operator[](const Node u) const { return get_node_data(u); }
-    NodeData& operator[](const Node u) { return get_node_data(u); }
-  };
-
-  template<class _EdgeData,
-           class _SuccessorMap,
-           class _PredecessorMap>
-  class MutableTreeAdjacencyStorage<void, _EdgeData, _SuccessorMap, _PredecessorMap>:
-      public _MutableTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
-  {
-    using Parent = _MutableTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
-  public:
-    using Parent::Parent;
-  };
+  template<class _NodeData = void,
+           class _EdgeData = void,
+           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
+           class _PredecessorMap = DefaultMutableTreePredecessorMap<_EdgeData>>
+  using MutableTreeAdjacencyStorage = AddNodeData<_NodeData, _MutableTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
 
 
 

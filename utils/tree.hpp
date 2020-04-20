@@ -52,6 +52,7 @@ namespace PT{
 
     using EdgeStorage = _EdgeStorage;
     using Edge = typename EdgeStorage::Edge;
+    using EdgeRef = typename EdgeStorage::EdgeRef;
     using EdgeData  = typename EdgeStorage::EdgeData;
 
     using EdgeContainer     = typename EdgeStorage::ConstEdgeContainer;
@@ -88,7 +89,7 @@ namespace PT{
     // =============== variable query ======================
     LeafContainerRef leaves() const { return _edges.leaves(); }
     NodeContainerRef nodes() const { return _edges.nodes(); }
-    EdgeContainerRef edges() const { return _edges; }
+    EdgeContainerRef edges() const { return _edges.successor_map(); }
     const LabelMap& labels() const { return node_labels; }
     NodeIterator begin() const { return _edges.nodes_begin(); }
     NodeIterator end() const { return _edges.nodes_end(); }
@@ -377,13 +378,23 @@ namespace PT{
 
     }
 
-    // read all nodes and prepare the edge storage to receive edges; return the root
-    template<class GivenEdgeContainer = std::vector<Edge>>
+    // initialize tree from any iterable edge-container, for example, std::vector<PT::Edge<>>
+    template<class GivenEdgeContainer>
     _Tree(const GivenEdgeContainer& given_edges, const LabelMap& _node_labels):
       node_labels(_node_labels),
       _edges(given_edges)
     {
-      DEBUG3(std::cout << "init Tree with EdgeContainer "<<given_edges<<std::endl<<" and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
+      DEBUG3(std::cout << "init Tree with edges "<<given_edges<<"\n and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
+      DEBUG2(tree_summary(std::cout));
+    }
+
+    // initialize tree from any iterable edge-container, indicating that the edges in the container do not have consecutive nodes (starting from 0)
+    template<class GivenEdgeContainer>
+    _Tree(const non_consecutive_tag_t, const GivenEdgeContainer& given_edges, const LabelMap& _node_labels):
+      node_labels(_node_labels),
+      _edges(non_consecutive_tag, given_edges)
+    {
+      DEBUG3(std::cout << "init Tree with non-consecutive edges "<<given_edges<<"\n and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
 
@@ -451,10 +462,11 @@ namespace PT{
            class _EdgeData = void,
            class _LabelTag = single_label_tag,
            class _EdgeStorage = MutableTreeAdjacencyStorage<_EdgeData>,
-           class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
-  class Tree: public _Tree<_LabelTag, _EdgeStorage, _LabelMap>
+           class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>,
+           class _NetworkTag = tree_tag>
+  class Tree: public _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>
   {
-    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap>;
+    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>;
   protected:
     using Parent::_edges;
   public:
@@ -469,10 +481,10 @@ namespace PT{
     NodeData& operator[](const Node u) { return _edges.get_node_data(u); }
   };
 
-  template<class _EdgeData, class _LabelTag, class _EdgeStorage, class _LabelMap>
-  class Tree<void, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>: public _Tree<_LabelTag, _EdgeStorage, _LabelMap>
+  template<class _EdgeData, class _LabelTag, class _EdgeStorage, class _LabelMap, class _NetworkTag>
+  class Tree<void, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>: public _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>
   {
-    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap>;
+    using Parent = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>;
   public:
     using Parent::Parent;
     using Parent::get_label;
@@ -494,16 +506,18 @@ namespace PT{
   template<class __Tree,
     class _NodeData = typename __Tree::NodeData,
     class _EdgeData = typename __Tree::EdgeData,
-    class _LabelTag = typename __Tree::LabelTag,
-    class _LabelMap = typename __Tree::LabelMap>
-  using CompatibleRWTree = RWTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+    class _LabelTag = typename __Tree::LabelTag>
+  using CompatibleRWTree = RWTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>;
   template<class __Tree,
     class _NodeData = typename __Tree::NodeData,
     class _EdgeData = typename __Tree::EdgeData,
-    class _LabelTag = typename __Tree::LabelTag,
-    class _LabelMap = typename __Tree::LabelMap>
-  using CompatibleROTree = ROTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+    class _LabelTag = typename __Tree::LabelTag>
+  using CompatibleROTree = ROTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>;
 
   template<class __Network>
-  using LabelMapFromNetwork = typename __Network::LabelMap;
+  using LabelMapFromNetwork = typename std::remove_reference_t<__Network>::LabelMap;
+
+  template<class __TreeA, class __TreeB>
+  constexpr bool are_compatible_v = std::is_same_v<std::remove_cvref_t<LabelMapFromNetwork<__TreeA>>, std::remove_cvref_t<LabelMapFromNetwork<__TreeB>>>;
+
 }

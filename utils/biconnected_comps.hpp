@@ -5,7 +5,11 @@
 
 namespace PT{
 
-  template<class _Network, class _Component = _Network, bool enumerate_trivial = true>
+  // NOTE: the iterator is not publicly constructible, but only by the factory below
+  // NOTE: _Component has to be compatible wo _Network (uses the same LabelMap type)
+  // NOTE: if you insist on using an RONetwork as _Component, make sure that you translate nodes using the old_to_new NodeTranslation
+  template<class _Network, class _Component = CompatibleRWNetwork<_Network>, bool enumerate_trivial = true,
+    class = std::enable_if_t<are_compatible_v<_Network, _Component>>>
   class BiconnectedComponentIter
   {
   public:
@@ -16,64 +20,72 @@ namespace PT{
     using const_reference = _Component;
 
   protected:
-    const _Network& N;              // the network
-    const std::vector<Edge>& bridges;// bridge-container
-    bool is_end_iter;               // indicates whether we reached the end
-    BridgeIter current_bridge;      // iterator into the bridge-container
-    NodeSet seen;  // set of seen nodes
-    EdgeVec current_component;      // the current component to be output on operator*
-    bool bridge_next = false;       // at alternating output, indicate whether to output the next bridge or its biconnected component
+    const _Network& N;          // the network
+    const EdgeVec& bridges;     // bridge-container
+    bool is_end_iter;           // indicates whether we reached the end
+    BridgeIter current_bridge;  // iterator into the bridge-container
+    NodeSet seen;               // set of seen nodes
+    EdgeVec current_edges;  // the current component to be output on operator*
+    bool bridge_next = false;   // at alternating output, indicate whether to output the next bridge or its biconnected component
 
     void next_component()
     {
       if(!is_end_iter){
+        // by presenting the bridges in post-order, we can be sure that no bridge is below the current bridge, so we only split off leaf-components
         if(current_bridge != bridges.end()){
           const Edge& uv = *current_bridge;
           DEBUG4(std::cout << "found bridge "<<uv<<std::endl);
-          // by presenting the bridges in post-order, we can be sure that no bridge is below the current bridge, so we only split off leaf-components
+          //NOTE: any lonely bridge is itself a biconnected component, so after outputting everything below uv, we'll have to also output uv itself
+          //      this behavior can be controled via the "enumerate_trivial" flag
           if(bridge_next){
-            current_component = {uv};
+            // if we are to output a bridge next, then let current_edges be that bridge and get on with it
+            current_edges = {uv};
             bridge_next = false;
             ++current_bridge;
           } else {
-            // if v is a leaf, just add it to the extension; otherwise recurse to add a cheapest sub-extension
+            // if we are to output the component below uv, then get "all edges below v, avoiding nodes that have been seen" from N
             const Node v = uv.head(); 
-            current_component = N.get_edges_below_except(seen, v);
+            current_edges = N.get_edges_below_except(seen, v);
             append(seen, v);
-            if(current_component.empty()){
+            if(current_edges.empty()){
               ++current_bridge;
-              if(!enumerate_trivial)
-                next_component();
-              else
-                append(current_component, uv);
+              if(enumerate_trivial)
+                append(current_edges, uv);
+              else next_component();
             } else {
-              if(!enumerate_trivial)
-                ++current_bridge;
-              else
+              if(enumerate_trivial)
                 bridge_next = true;
+              else ++current_bridge;
             }
           }
         } else {
           // we indicate that we have seen the root component by setting bridge_next = true,
           // this is OK since bridge_next can otherwise only be true if current_bridge != bridges.end()
           if(!bridge_next){
-            current_component = N.get_edges_below_except(seen, N.root());
-            DEBUG4(std::cout << "root component (below "<<N.root()<<"): "<<current_component<<"\n");
+            current_edges = N.get_edges_below_except(seen, N.root());
+            DEBUG4(std::cout << "root component (below "<<N.root()<<"): "<<current_edges<<"\n");
             bridge_next = true;
           } else is_end_iter = true;
         }
       }
     }
 
-  public:
+    // NOTE: bridges MUST be in post-order!
     BiconnectedComponentIter(const _Network& _N, const std::vector<Edge>& _bridges, const bool _construct_end_iterator = false):
       N(_N), bridges(_bridges), is_end_iter(_construct_end_iterator), current_bridge(bridges.begin())
     {
-      std::cout << "computing BCCs of \n"<<N<<"\n with bridges "<<bridges<<" ("<<bridges.size()<<")\n";
-      next_component();
+      if(!_construct_end_iterator){
+        DEBUG4(std::cout << "iterating BCCs of \n"<<N<<"\n with bridges "<<bridges<<" ("<<bridges.size()<<")\n");
+        next_component();
+      }
     }
+
+  public:
     // NOTE: calling operator* is expensive, consider calling it at most once for each item
-    reference operator*() const { return _Component(current_component, N.labels()); }
+    // NOTE: we can't be sure that the vertices of the component are consecutive, so if the user requested consecutive output networks, we need to translate
+    reference operator*() const {
+      return _Component(non_consecutive_tag, current_edges, N.labels());
+    }
     BiconnectedComponentIter& operator++() { next_component(); return *this; }
 
     bool operator==(const BiconnectedComponentIter& _it) const
@@ -85,13 +97,18 @@ namespace PT{
       } else return is_end_iter;
     }
     bool operator!=(const BiconnectedComponentIter& _it) const { return !operator==(_it); }
+
+    template<class, class, bool, class>
+    friend class BiconnectedComponents;
   };
 
-  // factory for biconnected components
-  template<class _Network, class _Component = _Network, bool enumerate_trivial = true>
+  // factory for biconnected components, see notes for BiconnectedComponentIter
+  template<class _Network, class _Component = CompatibleRWNetwork<_Network>, bool enumerate_trivial = true,
+    class = std::enable_if_t<are_compatible_v<_Network, _Component>>>
   class BiconnectedComponents
   {
   public:
+    using Component = _Component;
     using Edge = typename _Network::Edge;
     using EdgeVec = std::vector<Edge>;
     using BridgeIter = typename std::vector<Edge>::const_iterator;

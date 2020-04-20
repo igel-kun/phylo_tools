@@ -38,9 +38,10 @@ namespace std {
     using value_type = uintptr_t;
     // NOTE: bitsets cannot provide meaningful references to their members
     using reference  = value_type;
-    using const_reference = const reference;
+    using const_reference = const value_type;
 
     using iterator = bitset_iterator<bucket_map>;
+    using const_iterator = iterator;
   protected:
     size_t num_bits;
     size_t _count = 0;
@@ -51,7 +52,7 @@ namespace std {
   public:
 
     iterable_bitset(const size_t _num_bits, const bool _set_all):
-      num_bits(_num_bits)
+      num_bits(_num_bits), storage()
     {
       if(_set_all) set_all();
     }
@@ -90,20 +91,20 @@ namespace std {
 
 
     const bucket_map& data() const { return storage; }
-    std::pair<iterator,bool> emplace(const_reference x) { const bool res = set(x); return {find(x), res}; }
-    std::pair<iterator,bool> insert(const_reference x) { return emplace(x); }
-    bool erase(const_reference x) { return clear(x); }
-    bool unset(const_reference x) { return clear(x); }
-    bool set(const_reference x, const bool value) { if(value) return set(x); else return clear(x); }
+    std::pair<iterator,bool> emplace(const value_type x) { const bool res = set(x); return {find(x), res}; }
+    std::pair<iterator,bool> insert(const value_type x) { return emplace(x); }
+    bool erase(const value_type x) { return clear(x); }
+    bool unset(const value_type x) { return clear(x); }
+    bool set(const value_type x, const bool value) { if(value) return set(x); else return clear(x); }
     void invert() { flip_all(); }
     size_t capacity() const { return num_bits; }
     size_t count() const { return _count; }    
     size_t size() const { return count(); }
     bool empty() const { return _count == 0; }
-    reference front() const { return *begin(); }
+    value_type front() const { return *begin(); }
     bool full() const { return num_bits == _count; }
 
-    bool test(const_reference x) const
+    bool test(const value_type x) const
     {
       const auto it = storage.find(BUCKET_OF(x));
       if(it != storage.end())
@@ -112,7 +113,7 @@ namespace std {
     }
 
     // set a bit & return whether the size changed (that is, if it wasn't set before)
-    bool set(const_reference x)
+    bool set(const value_type x)
     {
       bucket_type bit_set = (1ul << POS_OF(x));
       auto ins_result = storage.try_emplace(BUCKET_OF(x), bit_set);
@@ -126,7 +127,7 @@ namespace std {
     }
 
     // clear a bit and return whether the size changed (that is, if it was set before)
-    bool clear(const_reference x)
+    bool clear(const value_type x)
     {
       if(x < num_bits){
         const bucket_iter it = storage.find(BUCKET_OF(x));
@@ -145,7 +146,7 @@ namespace std {
     }
 
     // flip a bit & return whether it is now set
-    bool flip(const_reference x)
+    bool flip(const value_type x)
     {
       if(x < num_bits){
         bucket_type& buffer = storage[BUCKET_OF(x)];
@@ -326,7 +327,7 @@ namespace std {
 
     iterator begin() const;
     iterator end() const;
-    iterator find(const_reference x) const;
+    iterator find(const value_type x) const;
   };
 
   template<typename bucket_map>
@@ -373,6 +374,7 @@ namespace std {
     using Parent::_count;
     using Parent::Parent;
   public:
+    using typename Parent::value_type;
 
     ordered_bitset(const size_t _num_bits, const bool _set_all = 0):
       Parent(_num_bits, 0)
@@ -396,18 +398,18 @@ namespace std {
       _count = 0;
     }
 
-    const_reference min() const
+    value_type min() const
     {
-      reference result = 0;
+      value_type result = 0;
       for(size_t i = 0; i < num_buckets(); ++i)
-        if(storage[i]) 
-          return result + NUM_TRAILING_ZEROSL(storage[i]);
-        else
-          result += BITSET_BITS_IN_BUCKET;
+        if(storage[i]){
+          result += NUM_TRAILING_ZEROSL(storage[i]);
+          return result;
+        } else result += BITSET_BITS_IN_BUCKET;
       throw std::out_of_range("min() on empty bitset");
     }
 
-    const_reference max() const
+    value_type max() const
     {
       if(num_bits == 0) throw std::out_of_range("max() on empty bitset");
       size_t i = num_buckets();
@@ -416,27 +418,27 @@ namespace std {
       return (i * BITSET_BITS_IN_BUCKET) + BITSET_BITS_IN_BUCKET - NUM_LEADING_ZEROSL(storage.at(i)) - 1;
     }
 
-    const_reference front() const { return min(); }
+    value_type front() const { return min(); }
 
     //! set the k'th unset bit (k = 0 corresponding to the first unset bit), and return its index
-    reference set_kth_unset(const_reference k)
+    value_type set_kth_unset(value_type k)
     {
-      reference result = index_of_kth_zero(k);
+      value_type result = index_of_kth_zero(k);
       set(result);
       return result;
       
     }
 
-    reference clear_kth_set(const_reference k)
+    value_type clear_kth_set(value_type k)
     {
-      reference result = index_of_kth_one(k);
+      value_type result = index_of_kth_one(k);
       clear(result);
       return result;
     }
 
     //! get the index of the k'th zero
     //! NOTE: counting starts with 0, so you get the index of the "very first" zero by passing k=0
-    const_reference index_of_kth_zero(value_type k) const
+    value_type index_of_kth_zero(value_type k) const
     {
       size_t i = 0;
       size_t z;
@@ -461,7 +463,7 @@ namespace std {
       return BITSET_BITS_IN_BUCKET * i + j;
     }
     
-    const_reference index_of_kth_one(value_type k) const
+    value_type index_of_kth_one(value_type k) const
     {
       size_t i = 0;
       size_t z;
@@ -507,7 +509,7 @@ namespace std {
     }
 
     //! count the items whose value is at least x
-    size_t count_larger(const_reference x) const
+    size_t count_larger(const value_type x) const
     {
       if(x <= num_bits){
         const size_t first_bucket = BUCKET_OF(x);
@@ -520,7 +522,7 @@ namespace std {
     }
     
     //! count the items whose value is at most x
-    size_t count_smaller(const_reference x) const
+    size_t count_smaller(const value_type x) const
     {
       if(x < num_bits){
         const size_t last_bucket = BUCKET_OF(x);
@@ -585,7 +587,7 @@ namespace std {
     using typename Parent::value_type;
     using pointer     = self_deref<value_type>;
     using reference   = value_type;
-    using const_reference = const reference;
+    using const_reference = const value_type;
   protected:
     const bucket_map& storage;
     bucket_iter index;
@@ -621,9 +623,7 @@ namespace std {
 
     bool is_valid() const { return index != storage.cend(); }
     operator bool() const { return is_valid(); }
-    const_reference operator*() const { 
-      return (*index).first * BITSET_BITS_IN_BUCKET + NUM_TRAILING_ZEROSL(buffer); 
-    }
+    value_type operator*() const { return (*index).first * BITSET_BITS_IN_BUCKET + NUM_TRAILING_ZEROSL(buffer); }
 
     bitset_iterator& operator++()
     {
@@ -670,7 +670,7 @@ namespace std {
   }
 
   template<class bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::find(const_reference x) const
+  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::find(const value_type x) const
   {
     if(test(x))
       return bitset_iterator<bucket_map>(storage, storage.find(x / BITSET_BITS_IN_BUCKET), x % BITSET_BITS_IN_BUCKET);
@@ -681,6 +681,6 @@ namespace std {
 
   template<class C, class = void> struct is_bitset : false_type {};
   template<class C> struct is_bitset<C, void_t<typename C::bucket_map>>: true_type {};
-  template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_reference_t<C>>::value;
+  template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_cvref_t<C>>::value;
 
 }

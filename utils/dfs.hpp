@@ -87,7 +87,7 @@ namespace PT{
         case preorder: do_preorder(u); break;
         case inorder: do_inorder(u); break;
         case postorder: do_postorder(u); break;
-        default: std::cerr<<"this is a bug!"<<std::endl; exit(1);
+        default: std::cerr<<"invalid traversal method: "<<o<<std::endl; exit(1);
       };
       return out;
     }

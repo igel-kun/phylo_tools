@@ -42,7 +42,7 @@ namespace PT{
       }
     }
 
-    inline bool current_state(const Node u) const { return contains(current, u); }
+    inline bool current_state(const Node u) const { return test(current, u); }
     inline void first_subset() {
       size_t time = 0;
       init_DFS(N.root(), time);
@@ -60,7 +60,7 @@ namespace PT{
     {
       //std::cout << "propagating 0 to "<<u<<"\n";
       // if u was available, it no longer is, since a child of u is now 0-fixed
-      for(const Node v: N.parents(u)){
+      for(Node v: N.parents(u)){
         if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
         if(++zero_fixed_children[v] == 1){
           available.erase(po_number.at(v));
@@ -86,7 +86,7 @@ namespace PT{
     // note: no need to change availability since it's already non-available due to its 0-branch
     void branch_to_one(const Node u)
     {
-      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<contains(available, po_number.at(u))<<"] to 1"<<std::endl);
+      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 1"<<std::endl);
       append(current, u);
       propagate_nonzero_up(u);
       DEBUG5(std::cout << "b1("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
@@ -95,7 +95,7 @@ namespace PT{
     // first branch of a node u: mark u unavailable and propagate
     void branch_to_zero(const Node u)
     {
-      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<contains(available, po_number.at(u))<<"] to 0"<<std::endl);
+      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 0"<<std::endl);
       available.erase(po_number.at(u));
       propagate_zero_up(u);
       branched.push(u);

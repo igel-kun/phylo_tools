@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cassert>
 #include "storage_adj_common.hpp"
 
 namespace PT{
@@ -30,6 +31,8 @@ namespace PT{
     template<class T>
     using NodeMap = ConsecutiveMap<Node,T>;
 
+    using DegreeMap = NodeMap<InOutDegree>;
+
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
@@ -43,42 +46,46 @@ namespace PT{
 
 
     // prepare the container and insert a list of edges with given degrees
-    template<class GivenEdgeContainer, class DegMap>
-    void insert_edges(const GivenEdgeContainer& given_edges, DegMap& deg)
+    template<class GivenEdgeContainer>
+    void insert_edges(const GivenEdgeContainer& given_edges, DegreeMap& deg, const NodeTranslation* const old_to_new)
     {
       const size_t num_nodes = deg.size();
      // reserve space for children
       auto nh_start = _succ_storage.begin();
       auto rev_nh_start = _pred_storage.begin();
-      for(uintptr_t u = 0; u != num_nodes; ++u) {
+      for(Node u = 0; u != num_nodes; ++u) {
         // note: it is important for the initialization of _predecessors & _successors that we go through the nodes in sorted order here
-        const auto u_deg = deg.at((Node)u);
+        const auto u_deg = deg.at(u);
+        std::cout << "node "<<u<<" has deg "<<u_deg<<'\n';
         const Degree u_indeg = u_deg.first;
         const Degree u_outdeg = u_deg.second;
-        _successors.emplace((Node)u, nh_start, u_outdeg);
-        _predecessors.emplace((Node)u, rev_nh_start, u_indeg);
+        _successors.try_emplace(u, nh_start, u_outdeg);
+        _predecessors.try_emplace(u, rev_nh_start, u_indeg);
         nh_start += u_outdeg;
         rev_nh_start += u_indeg;
       }
       // put the in- and out-edges
 #warning TODO: here, the edge data is copied! Make a version where it is moved instead!
       for(const auto &uv: given_edges){
-        const Node u = uv.tail();
-        const Node v = uv.head();
+        const Node u = old_to_new ? (*old_to_new).at(uv.tail()) : uv.tail();
+        const Node v = old_to_new ? (*old_to_new).at(uv.head()) : uv.head();
 
         Adjacency* const position = _successors.at(u).begin() + (--deg.at(u).second);
         DEBUG5(std::cout << "constructing adjacency "<<uv.get_adjacency()<<" at "<<position<<std::endl);
         new(position) Adjacency(uv.get_adjacency());
+        (Node&)(*position) = v;
         
         RevAdjacency* const rev_position = &(_predecessors.at(v)[--deg.at(v).first]);
-        DEBUG5(std::cout << "constructing reverse adjacency "<< get_reverse_adjacency(u, *position)<<" at "<<rev_position<<" from adjacency "<<*position<<std::endl);
+        DEBUG5(std::cout<<"constructing rev adjacency "<<get_reverse_adjacency(u, *position)<<" at "<<rev_position<<" from adjacency "<<*position<<std::endl);
         new(rev_position) RevAdjacency(get_reverse_adjacency(u, *position));
       }
       _size = given_edges.size();
     }
 
   public:
-    //! initialization from edgelist without consecutive nodes; as we are a consecutive storage, we will have to translate node indices, so use 'old_to_new'
+
+    //! initialization from edgelist
+    //NOTE: if old_to_new == nullptr, we will assume that the edgelist is already consecutive, otherwise, we will translate to consecutive vertices
     template<class GivenEdgeContainer, class LeafContainer = std::vector<Node> >
     _ConsecutiveNetworkAdjacencyStorage(const GivenEdgeContainer& given_edges,
                                         NodeTranslation* old_to_new = nullptr,
@@ -86,19 +93,28 @@ namespace PT{
       _succ_storage(given_edges.size()),
       _pred_storage(given_edges.size())
     {
-      DEBUG3(std::cout << "initializing ConsecutiveNetworkAdjacencyStorage with leaf storage at "<<leaves<<" and "<<given_edges.size()<<" consecutive edges:\n" << given_edges<<std::endl);
-      InOutDegreeMap deg;
+      DEBUG3(std::cout << "initializing ConsecutiveNetworkAdjacencyStorage with leaf storage at "<<leaves<<", translate at "<<old_to_new<<" and "<<given_edges.size()<<" consecutive edges:\n" << given_edges<<std::endl);
+      ConsecutiveMap<Node, InOutDegree> deg;
       compute_degrees(given_edges, deg, old_to_new);
       
       std::cout << "computed degrees:\n" << deg << '\n';
-
       _root = compute_root_and_leaves(deg, leaves);
-      insert_edges(given_edges, deg);
+      std::cout << "inserting edges...\n";
+      insert_edges(given_edges, deg, old_to_new);
 
       std::cout << "computed   successors:\n" << _successors <<'\n';
       std::cout << "computed predecessors:\n" << _predecessors <<'\n';
-
     }
+
+    //! initialization from explicitly non-consecutive edgelist
+    //NOTE: if old_to_new == nullptr, we will create a temporary translate map and delete it when finishing construction
+    template<class GivenEdgeContainer, class LeafContainer = std::vector<Node> >
+    _ConsecutiveNetworkAdjacencyStorage(const non_consecutive_tag_t,
+                                        const GivenEdgeContainer& given_edges,
+                                        NodeTranslation* old_to_new = nullptr,
+                                        LeafContainer* leaves = nullptr):
+      _ConsecutiveNetworkAdjacencyStorage(given_edges, old_to_new ? old_to_new : std::unique_ptr<NodeTranslation>(new NodeTranslation()).get(), leaves)
+    {}
 
   };
 
@@ -119,6 +135,7 @@ namespace PT{
     template<class T>
     using NodeMap = ConsecutiveMap<Node,T>;
 
+    using DegreeMap = NodeMap<InOutDegree>;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
@@ -129,14 +146,15 @@ namespace PT{
     ConsecutiveStorage<Adjacency> _succ_storage;
 
 
-    template<class GivenEdgeContainer, class DegMap>
-    void insert_edges(const GivenEdgeContainer& given_edges, DegMap& deg)
+    template<class GivenEdgeContainer>
+    void insert_edges(const GivenEdgeContainer& given_edges, DegreeMap& deg)
     {
+      const size_t num_nodes = deg.size();
       auto nh_start = _succ_storage.begin();
-      for(const auto& u_deg: deg){
-        const auto u = u_deg.first;
-        const uint32_t u_outdeg = u_deg.second.second;
-        _successors.emplace(u, nh_start, u_outdeg);
+      for(Node u = 0; u != num_nodes; ++u){
+        // note: it is important for the initialization of _successors that we go through the nodes in sorted order here
+        const OutDegree u_outdeg = deg.at(u).second;
+        _successors.try_emplace(u, nh_start, u_outdeg);
         nh_start += u_outdeg;
       }
       // put the edges
@@ -165,62 +183,35 @@ namespace PT{
       _succ_storage(given_edges.size())
     {
       DEBUG3(std::cout << "initializing ConsecutiveTreeAdjacencyStorage with "<<given_edges.size()<<" edges & leaf storage "<<leaves<<std::endl);
-      InOutDegreeMap deg;
+      DegreeMap deg;
       compute_degrees(given_edges, deg, old_to_new);
       _root = compute_root_and_leaves(deg, leaves);
       insert_edges(given_edges, deg);
     }
 
+    //! initialization from explicitly non-consecutive edgelist
+    //NOTE: if old_to_new == nullptr, we will create a temporary translate map and delete it when finishing construction
+    template<class GivenEdgeContainer, class LeafContainer = std::vector<Node> >
+    _ConsecutiveTreeAdjacencyStorage(const non_consecutive_tag_t,
+                                        const GivenEdgeContainer& given_edges,
+                                        NodeTranslation* old_to_new = nullptr,
+                                        LeafContainer* leaves = nullptr):
+      _ConsecutiveTreeAdjacencyStorage(given_edges, old_to_new ? old_to_new : std::unique_ptr<NodeTranslation>().get(), leaves)
+    {}
   };
-
-
-
-
-  template<class _NodeData,
-           class _EdgeStorage>
-  class AddConsecutiveNodeData: public _EdgeStorage
-  {
-    using Parent = _EdgeStorage;
-    ConsecutiveMap<Node, _NodeData> node_data;
-  public:
-    using NodeData = _NodeData;
-    using Parent::Parent;
-
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
-    AddConsecutiveNodeData(const GivenEdgeContainer& given_edges,
-                           NodeTranslation* old_to_new = nullptr,
-                           LeafContainer* leaves = nullptr):
-      Parent(given_edges, old_to_new, leaves)
-    {
-      node_data.resize(Parent::num_nodes());
-    }
-
-    const NodeData& get_node_data(const Node u) const { return node_data[u]; }
-    NodeData& get_node_data(const Node u) { return node_data[u]; }
-    const NodeData& operator[](const Node u) const { return get_node_data(u); }
-    NodeData& operator[](const Node u) { return get_node_data(u); }
-  };
-
-  template<class _EdgeStorage>
-  class AddConsecutiveNodeData<void, _EdgeStorage>: public _EdgeStorage
-  {
-    public:
-      using _EdgeStorage::_EdgeStorage;
-  };
-
-
 
   template<class _NodeData = void,
            class _EdgeData = void,
            class _SuccessorMap = DefaultConsecutiveSuccessorMap<_EdgeData>,
            class _PredecessorMap = DefaultConsecutivePredecessorMap<_EdgeData>>
-  using ConsecutiveNetworkAdjacencyStorage = AddConsecutiveNodeData<_NodeData, _ConsecutiveNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
+  using ConsecutiveNetworkAdjacencyStorage = AddNodeData<_NodeData, _ConsecutiveNetworkAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
 
   template<class _NodeData = void,
            class _EdgeData = void,
            class _SuccessorMap = DefaultConsecutiveSuccessorMap<_EdgeData>,
            class _PredecessorMap = DefaultConsecutiveTreePredecessorMap<_EdgeData>>
-  using ConsecutiveTreeAdjacencyStorage = AddConsecutiveNodeData<_NodeData, _ConsecutiveTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
+  using ConsecutiveTreeAdjacencyStorage = AddNodeData<_NodeData, _ConsecutiveTreeAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>>;
+
 
 
 }

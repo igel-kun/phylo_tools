@@ -52,7 +52,7 @@ namespace PT{
   using ConsecutiveMap = std::raw_vector_map<Key, Value>;
 
   using Node = uintptr_t;
-  static constexpr Node NoNode = static_cast<const Node>(-1);
+  constexpr Node NoNode = static_cast<Node>(-1);
 
   using NodeTranslation = HashMap<Node, Node>;
   using ConsecutiveLabelMap = ConsecutiveMap<Node, std::string>;

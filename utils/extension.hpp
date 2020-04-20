@@ -49,11 +49,12 @@ namespace PT{
                    std::DisjointSetForest<typename Network::Edge>& weak_components,
                    _Container& out) const
     {
+      using EdgeRef = typename Network::EdgeRef;
       try{
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         if(!N.is_leaf(u)) {
           // step 1: merge all in-edges to the same weak component
-          const auto& uv = std::front(N.out_edges(u));
+          const EdgeRef uv = std::front(N.out_edges(u));
           for(const auto& wu: N.in_edges(u)) weak_components.add_item_to_set_of(wu, uv);
           // step 2: merge all weak components of out-edges of u & remove all out-edges from the component
           for(const auto& uw: N.out_edges(u)) {
