@@ -38,7 +38,8 @@ namespace PT {
       Parent()
     {
       // step 1: create a mapping of labels to nodes in N
-      for(const auto& p: Nfac){
+      for(const auto& p: Nfac) if(!p.second.empty()){
+        std::cout << "found labeled node "<<p<<"\n";
         // the factory Nfac gives us pairs of (node, label)
         // find entry for p's label or construct it by matching p to the default constructed (empty LabelNodeStorage)
         // (if the entry was already there, then we have 2 nodes of the same label, so throw an exception)
@@ -50,7 +51,7 @@ namespace PT {
         append(emp_res.first->second.first, p.first);
       }
       // step 2: for each node u with label l in T, add u to the set of T-nodes mapped to l
-      for(const auto& p: Tfac){
+      for(const auto& p: Tfac) if(!p.second.empty()){
         // the factory Tfac gives us pairs of (node, label)
         auto& matched_pair = Parent::try_emplace(p.second).first->second;
         // if B is single-label and the second part of the pair already contains a node, then we have to bail...

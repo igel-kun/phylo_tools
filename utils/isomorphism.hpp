@@ -327,8 +327,8 @@ namespace PT{
         // if x had a possibility set before, get this PossSet and intersect new_poss with it
         auto& x_poss = emp_res.first->second;
         const size_t old_count = x_poss.size();
+        DEBUG5(std::cout << "updating poss's of "<< x<<" ("<<old_count<<" poss) from\n " << to_set(x_poss) << " with\n "<< to_set(new_poss)<<std::endl);
         if(old_count != 1){
-          DEBUG5(std::cout << "updating poss's of "<< x<<" ("<<old_count<<" poss) from\n " << to_set(x_poss) << " with\n "<< to_set(new_poss)<<std::endl);
           intersect(x_poss, new_poss);
           const size_t new_count = x_poss.size();
           // if something changed, update all parents and children

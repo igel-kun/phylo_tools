@@ -379,20 +379,22 @@ namespace PT{
     }
 
     // initialize tree from any iterable edge-container, for example, std::vector<PT::Edge<>>
+    // NOTE: this will move edge data out of your container! If you want to copy it instead, pass a const container (e.g. using std::as_const())
     template<class GivenEdgeContainer>
-    _Tree(const GivenEdgeContainer& given_edges, const LabelMap& _node_labels):
+    _Tree(GivenEdgeContainer&& given_edges, const LabelMap& _node_labels):
       node_labels(_node_labels),
-      _edges(given_edges)
+      _edges(std::forward<GivenEdgeContainer>(given_edges))
     {
       DEBUG3(std::cout << "init Tree with edges "<<given_edges<<"\n and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
 
     // initialize tree from any iterable edge-container, indicating that the edges in the container do not have consecutive nodes (starting from 0)
+    // NOTE: this will move edge data out of your container! If you want to copy it instead, pass a const container (e.g. using std::as_const())
     template<class GivenEdgeContainer>
-    _Tree(const non_consecutive_tag_t, const GivenEdgeContainer& given_edges, const LabelMap& _node_labels):
+    _Tree(const non_consecutive_tag_t, GivenEdgeContainer&& given_edges, const LabelMap& _node_labels):
       node_labels(_node_labels),
-      _edges(non_consecutive_tag, given_edges)
+      _edges(non_consecutive_tag, std::forward<GivenEdgeContainer>(given_edges))
     {
       DEBUG3(std::cout << "init Tree with non-consecutive edges "<<given_edges<<"\n and "<<_node_labels.size()<<" node_labels: "<<_node_labels<<std::endl);
       DEBUG2(tree_summary(std::cout));
@@ -485,9 +487,9 @@ namespace PT{
   using CompatibleROTree = ROTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>;
 
   template<class __Network>
-  using LabelMapFromNetwork = typename std::remove_reference_t<__Network>::LabelMap;
+  using LabelMapOf = typename std::remove_reference_t<__Network>::LabelMap;
 
   template<class __TreeA, class __TreeB>
-  constexpr bool are_compatible_v = std::is_same_v<std::remove_cvref_t<LabelMapFromNetwork<__TreeA>>, std::remove_cvref_t<LabelMapFromNetwork<__TreeB>>>;
+  constexpr bool are_compatible_v = std::is_same_v<std::remove_cvref_t<LabelMapOf<__TreeA>>, std::remove_cvref_t<LabelMapOf<__TreeB>>>;
 
 }
