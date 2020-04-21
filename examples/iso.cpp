@@ -66,8 +66,8 @@ int main(const int argc, const char** argv)
   std::ifstream in(options[""][0]);
 
   PT::EdgeVec el0,el1;
-  PT::LabelMapFromNetwork<NetworkA> names0;
-  PT::LabelMapFromNetwork<NetworkB> names1;
+  PT::LabelMapOf<NetworkA> names0;
+  PT::LabelMapOf<NetworkB> names1;
 
   std::cout << "reading networks..."<<std::endl;
   if(!read_from_stream(in, el0, names0)){

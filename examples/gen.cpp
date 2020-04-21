@@ -37,7 +37,7 @@ void parse_options(const int argc, const char** argv)
 void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves)
 {
   //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
-  const int total_input = contains(options, "-n") + contains(options, "-r") + contains(options, "-l");
+  const int total_input = test(options, "-n") + test(options, "-r") + test(options, "-l");
   try{
     if(total_input == 0){
       num_nodes = 99;
@@ -45,11 +45,11 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves)
       num_leaves = l_from_nr(num_nodes, num_retis);
     } else if(total_input == 1){
       // if we only have one input, we assume that 10r = n and, thus, 9r = t + l and l + r - 1 = t (togeher 8r = 2l - 1)
-      if(contains(options, "-n")){
+      if(test(options, "-n")){
         num_nodes = std::stol(options["-n"][0]);
         num_retis = num_nodes / 10;
         num_leaves = l_from_nr(num_nodes, num_retis);
-      } else if(contains(options, "-r")){
+      } else if(test(options, "-r")){
         num_retis = std::stol(options["-r"][0]);
         num_nodes = 10 * num_retis + 1;
         num_leaves = l_from_nr(num_nodes, num_retis);
@@ -59,11 +59,11 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves)
         num_nodes = n_from_rl(num_retis, num_leaves);
       }
     } else if(total_input == 2){
-      if(!contains(options, "-l")){
+      if(!test(options, "-l")){
         num_retis = std::stol(options["-r"][0]);
         num_nodes = std::stol(options["-n"][0]);
         num_leaves = l_from_nr(num_nodes, num_retis);
-      } else if(!contains(options, "-n")){
+      } else if(!test(options, "-n")){
         num_retis = std::stol(options["-r"][0]);
         num_leaves = std::stol(options["-l"][0]);
         num_nodes = n_from_rl(num_retis, num_leaves);
@@ -105,18 +105,18 @@ int main(const int argc, const char** argv)
   std::cout << "constructing network with "<<num_nodes<<" vertices: "<<num_tree_nodes<<" tree nodes, "<<num_retis<<" reticulations and "<<num_leaves<<" leaves"<<std::endl;
 
   EdgeVec el;
-  std::vector<std::string> names;
+  LabelMapOf<RONetwork<>> names;
   generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, 0);
 
   DEBUG5(std::cout << "building N from "<<el<< std::endl);
-  Network<> N(el, names);
+  RONetwork<> N(el, names);
 
-  if(contains(options, "-v")) std::cout << N << std::endl;
+  if(test(options, "-v")) std::cout << N << std::endl;
 
   const std::string nw_string = get_extended_newick(N);
   if(!options[""].empty()){
-    std::ofstream out(options[""][0], (contains(options,"-a") ? std::ios::app : std::ios::out));
-    out << nw_string;
+    std::ofstream out(options[""][0], (test(options,"-a") ? std::ios::app : std::ios::out));
+    out << nw_string << '\n';
   } else std::cout << nw_string;
 
 }

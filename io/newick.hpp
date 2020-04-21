@@ -37,7 +37,7 @@ namespace PT{
       accu.pop_back();
       if(!N.is_leaf(sub_root)) accu += ")";
     }
-    accu += N.get_name(sub_root);
+    accu += N.get_label(sub_root);
     if(N.is_reti(sub_root)) {
       accu += "#H" + std::to_string(sub_root);
       retis_seen.set((Index)(sub_root));
