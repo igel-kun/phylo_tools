@@ -173,6 +173,7 @@ namespace PT{
   {
     public:
       using _EdgeStorage::_EdgeStorage;
+      using NodeData = void;
       static constexpr bool has_node_data = false;
   };
 

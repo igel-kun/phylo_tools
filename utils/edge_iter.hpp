@@ -69,7 +69,7 @@ namespace PT{
     using Parent::Parent;
     using typename Parent::value_type;
 
-    value_type operator*() const { return value_type(reverse_edge, u, node_it->first, node_it->second); }
+    value_type operator*() const { return value_type(reverse_edge, u, *node_it); }
   };
 
   // make an edge container from a head and a container of tails
@@ -83,9 +83,7 @@ namespace PT{
     using Parent::Parent;
     using typename Parent::value_type;
 
-    value_type operator*() const {
-      return value_type(u, node_it->first, node_it->second);
-    }
+    value_type operator*() const { return value_type(u, *node_it); }
   };
 
   template<class _AdjContainer,
