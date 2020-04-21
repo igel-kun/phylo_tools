@@ -8,8 +8,8 @@
 #include "utils.hpp"
 #include "raw_vector_map.hpp"
 
-#define BITSET_FULL_BUCKET (~(bucket_type(0)))
 #define BITSET_BUCKET_TYPE bucket_type
+#define BITSET_FULL_BUCKET (~(BITSET_BUCKET_TYPE(0)))
 #define BITSET_BYTES_IN_BUCKET (sizeof(BITSET_BUCKET_TYPE))
 #define BITSET_BITS_IN_BUCKET (CHAR_BIT * BITSET_BYTES_IN_BUCKET)
 #define BUCKET_OF(x) (((x) / BITSET_BITS_IN_BUCKET))
@@ -106,10 +106,12 @@ namespace std {
 
     bool test(const value_type x) const
     {
+      std::cout << "finding "<<x<<" in "<<to_set(*this)<<"\n";
       const auto it = storage.find(BUCKET_OF(x));
       if(it != storage.end())
-        return (it->second & (1 << POS_OF(x)));
-      else return false;
+        return TEST_IN_BUCKET(it->second, x);
+      else
+        return false;
     }
 
     // set a bit & return whether the size changed (that is, if it wasn't set before)
