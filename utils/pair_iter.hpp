@@ -101,9 +101,9 @@ namespace PT{
     using reference =  typename std::my_iterator_traits<iterator>::reference;
 
     // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
-    PairItemIterFactory(_PairContainer* const _c): c(_c)  {}
+    PairItemIterFactory(std::shared_ptr<_PairContainer> _c): c(_c)  {}
     PairItemIterFactory(_PairContainer& _c): c(&_c, std::NoDeleter()) {}
-    PairItemIterFactory(_PairContainer&& _c): c(new _PairContainer(std::forward<_PairContainer>(_c))) {}
+    PairItemIterFactory(_PairContainer&& _c): c(std::make_shared<_PairContainer>(std::forward<_PairContainer>(_c))) {}
 
     iterator begin() { return c->begin(); }
     iterator end() { return c->end(); }

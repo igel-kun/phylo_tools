@@ -31,6 +31,7 @@ namespace PT{
     void next_component()
     {
       if(!is_end_iter){
+        current_edges.clear();
         // by presenting the bridges in post-order, we can be sure that no bridge is below the current bridge, so we only split off leaf-components
         if(current_bridge != bridges.end()){
           const Edge& uv = *current_bridge;
@@ -39,13 +40,13 @@ namespace PT{
           //      this behavior can be controled via the "enumerate_trivial" flag
           if(bridge_next){
             // if we are to output a bridge next, then let current_edges be that bridge and get on with it
-            current_edges = {uv};
+            append(current_edges, uv);
             bridge_next = false;
             ++current_bridge;
           } else {
             // if we are to output the component below uv, then get "all edges below v, avoiding nodes that have been seen" from N
             const Node v = uv.head(); 
-            current_edges = N.get_edges_below_except(seen, v);
+            current_edges = EdgeVec(N.edge_dfs_except(seen).postorder(v)); // move assignment
             append(seen, v);
             if(current_edges.empty()){
               ++current_bridge;
@@ -58,11 +59,11 @@ namespace PT{
               else ++current_bridge;
             }
           }
-        } else {
+        } else { // current_bridge == bridges.end()
           // we indicate that we have seen the root component by setting bridge_next = true,
           // this is OK since bridge_next can otherwise only be true if current_bridge != bridges.end()
           if(!bridge_next){
-            current_edges = N.get_edges_below_except(seen, N.root());
+            current_edges = EdgeVec(N.edge_dfs_except(seen).postorder());
             DEBUG4(std::cout << "root component (below "<<N.root()<<"): "<<current_edges<<"\n");
             bridge_next = true;
           } else is_end_iter = true;

@@ -67,7 +67,7 @@ namespace std {
 */
 
   template<class T>
-  using emplace_result = pair<typename T::iterator, bool>;
+  using emplace_result = pair<typename remove_reference_t<T>::iterator, bool>;
 
   // on non-map containers, append = emplace
   template<class Set, class = enable_if_t<is_container_v<Set> && !is_map_v<Set> && !is_vector_v<Set>>, class ...Args>
@@ -77,9 +77,12 @@ namespace std {
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
-  template<typename T, typename First, class = enable_if_t<!is_convertible_v<First, vector<T>>>, class ...Args>
+  template<typename T, typename First, class = enable_if_t<!is_convertible_v<remove_cvref_t<First>, vector<T>>>, class ...Args>
   inline emplace_result<vector<T>> append(vector<T>& _vec, First&& first, Args&&... args)
-  { return {_vec.emplace(_vec.end(), forward<First>(first), forward<Args>(args)...), true}; }
+  { // NOTE: as we want an iterator back, I'd much rather say "emplace(end()..)"; however, that will not compile for Adjacencies with "const Node"
+    _vec.emplace_back(forward<First>(first), forward<Args>(args)...);
+    return {std::prev(_vec.end()), true};
+  }
   
   // on maps to primitives, append = try_emplace
   template<class Map, enable_if_t<is_map_v<Map> && !is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
@@ -111,7 +114,22 @@ namespace std {
     x.insert(x.end(), y.begin(), y.end());
     return {x.begin(), true};
   }
-
+/*
+  template<class Target, class Source, enable_if_t<is_container_v<Target> && !is_vector_v<Target> && is_container_v<Source>, int> = 0>
+  Target convert(Source&& s)
+  {
+    Target t;
+    t.insert(s.begin(), s.end());
+    return t;
+  }
+  template<class Target, class Source, enable_if_t<is_vector_v<Target> && is_container_v<Source>, int> = 0>
+  Target convert(Source&& s)
+  {
+    Target t;
+    t.insert(t.end(), s.begin(), s.end());
+    return t;
+  }
+*/
 
   // all this BS with containers supporting contains() or not is really unnerving
   template<class T>

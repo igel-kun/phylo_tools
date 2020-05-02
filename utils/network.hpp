@@ -18,7 +18,6 @@ namespace PT{
     using Parent = Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>;
   protected:
     using Parent::node_labels;
-    using Parent::_edges;
   public:
     using NetworkTypeTag = network_tag;
     using typename Parent::Edge;
@@ -33,6 +32,7 @@ namespace PT{
     using Parent::nodes;
     using Parent::num_nodes;
     using Parent::root;
+    using Parent::is_tree;
 
     // =================== information query ==============
 
@@ -62,6 +62,18 @@ namespace PT{
     }
 
   public:
+
+    // if the edges currently in the network actually describe a tree, we can cast it down to tree
+    // NOTE: the EdgeStorage will be unaffected, potentially allowing you to insert edges that could not be inserted into a normal Tree
+    //       (unless your network has been declared with a Tree Storage in the first place, which is uncommon, but possible)
+    Parent& use_as_tree() {
+      assert(is_tree());
+      return *(reinterpret_cast<Parent*>(*this));
+    }
+    const Parent& use_as_tree() const {
+      assert(is_tree());
+      return *(reinterpret_cast<const Parent*>(*this));
+    }
 
     inline std::vector<Edge> get_bridges_below(const Node u) const { return list_bridges(*this, u); }
     inline std::vector<Edge> get_bridges() const { return list_bridges(*this, root()); }
@@ -146,6 +158,12 @@ namespace PT{
   using RWNetwork = Network<_NodeData, _EdgeData, _LabelTag, MutableNetworkAdjacencyStorage<_EdgeData>, _LabelMap>;
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = ConsecutiveMap<Node,std::string>>
   using RONetwork = Network<_NodeData, _EdgeData, _LabelTag, ConsecutiveNetworkAdjacencyStorage<_EdgeData>, _LabelMap>;
+
+  // here's 2 for multi-label convenience
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = multi_label_tag, class _LabelMap = HashMap<Node, std::string>>
+  using RWMulNetwork = RWNetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = multi_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
+  using ROMulNetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
 
   // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)
   template<class __Network,

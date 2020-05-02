@@ -37,7 +37,7 @@ namespace PT{
       accu.pop_back();
       if(!N.is_leaf(sub_root)) accu += ")";
     }
-    accu += N.get_label(sub_root);
+    accu += N.label(sub_root);
     if(N.is_reti(sub_root)) {
       accu += "#H" + std::to_string(sub_root);
       retis_seen.set((Index)(sub_root));
@@ -107,28 +107,11 @@ namespace PT{
       allow_non_binary(_allow_non_binary),
       allow_junctions(_allow_junctions),
       edges(_edges)
-    {
-      names.clear();
-      edges.clear();
-    }
+    { read_tree(); }
 
-    bool is_tree() const
-    {
-      if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
-      return hybrids.empty();
-    }
-
-    size_t num_nodes() const
-    {
-      if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
-      return names.size();
-    }
-
-    LabelMap& get_names() const
-    {
-      if(!parsed) throw std::logic_error("need to parse a newick string before testing anything");
-      return names;
-    }
+    bool is_tree() const { return hybrids.empty(); }
+    size_t num_nodes() const { return names.size(); }
+    LabelMap& get_names() const { return names; }
 
     // a tree is a branch followed by a semicolon
     void read_tree()
@@ -170,7 +153,7 @@ namespace PT{
       // read the name of the root, any non-trailing whitespaces are considered part of the name
       Index root = names.size();
       // keep root's name as rvalue in the air - we may or may not insert it into names, depending on its hybrid status
-      const std::string&& root_name = read_name();
+      std::string&& root_name = read_name();
 
       // find if root is a hybrid and, if so, it's number
       const HybridInfo hyb_info = get_hybrid_info(root_name);
@@ -186,7 +169,7 @@ namespace PT{
           const Index root_deg = ++stored.second;
           if((root_deg) == 3) not_binary();
         } else names.emplace(root, hyb_info.first);
-      } else names.emplace(root, root_name);
+      } else names.emplace(root, std::forward<std::string>(root_name));
 
       // if the subtree dangling from root is non-empty, then recurse
       if((back > 0) && newick_string.at(back) == ')') read_internal(root, hyb_info.second);
@@ -281,16 +264,14 @@ namespace PT{
   template<class EdgeList, class LabelMap>
   void parse_newick(const std::string in, EdgeList& el, LabelMap& names)
   {
-    NewickParser<EdgeList, LabelMap> parser(in, el, names);
-    parser.read_tree();
+    NewickParser<EdgeList, LabelMap>(in, el, names);
   }
   template<class EdgeList, class LabelMap>
   void parse_newick(std::istream& in, EdgeList& el, LabelMap& names)
   {
     std::string in_line;
     std::getline(in, in_line);
-
-    NewickParser<EdgeList, LabelMap>(in_line, el, names).read_tree();
+    NewickParser<EdgeList, LabelMap>(in_line, el, names);
   }
 
 }

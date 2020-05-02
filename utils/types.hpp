@@ -58,6 +58,7 @@ namespace PT{
   using ConsecutiveLabelMap = ConsecutiveMap<Node, std::string>;
   using ConsecutiveNodeSet = std::ordered_bitset;
 
+  using sw_t = uint32_t;
   using Degree = uint_fast32_t;
   using InDegree = Degree;
   using OutDegree = Degree;

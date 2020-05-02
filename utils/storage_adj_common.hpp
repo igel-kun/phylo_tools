@@ -22,46 +22,62 @@ namespace PT{
     using SuccessorMap = _SuccessorMap;
     using PredecessorMap = _PredecessorMap;
       
-    using NodeContainer = FirstFactory<const SuccessorMap>;
+    using NodeContainer = FirstFactory<SuccessorMap>;
     using NodeContainerRef = NodeContainer;
-    using ConstNodeContainer = NodeContainer;
-    using ConstNodeContainerRef = NodeContainerRef;
-    using NodeIterator = typename NodeContainer::iterator;
+    using ConstNodeContainer = FirstFactory<const SuccessorMap>;
+    using ConstNodeContainerRef = ConstNodeContainer;
+    
+    using NodeIterator = std::iterator_of_t<NodeContainer>;
+    using ConstNodeIterator = std::iterator_of_t<ConstNodeContainer>;
 
+  protected:
     using SuccContainer         = typename SuccessorMap::mapped_type;
-    using SuccContainerRef      = SuccContainer&;
-    using ConstSuccContainer    = const SuccContainer;
-    using ConstSuccContainerRef = const SuccContainer&;
     using PredContainer         = typename PredecessorMap::mapped_type;
-    using PredContainerRef      = PredContainer&;
+  public:
+    // NOTE: okay, so C++ doesn't allow const containers of non-const objects, so if we want the user to be anble to change the edge-data of an adjacency,
+    //       we'll have to return an IterFactory-wrapper around the internal container, thus keeping the latter hidden/unmodified
+    //       This problem does not occur for constant successor containers, so we can just return a const reference to the internal storage
+    using SuccContainerRef      = std::IterFactory<SuccContainer>;
+    using ConstSuccContainer    = const SuccContainer;
+    using ConstSuccContainerRef = ConstSuccContainer&;
+    using PredContainerRef      = std::IterFactory<PredContainer>;
     using ConstPredContainer    = const PredContainer;
-    using ConstPredContainerRef = const PredContainer&;
+    using ConstPredContainerRef = ConstPredContainer&;
    
     // Edges and RevEdges differ in that one of the two should contain a reference to the EdgeData instead of the data itself
-    using Adjacency = typename SuccContainer::value_type;
-    using Edge = EdgeFromAdjacency<Adjacency>;
-    using EdgeRef = Edge;
-    using RevAdjacency = typename PredContainer::value_type;
-    using RevEdge = EdgeFromAdjacency<Adjacency>;
-    using RevEdgeRef = RevEdge;
+    using Adjacency     = typename SuccContainer::value_type;
+    using Edge          = EdgeFromAdjacency<Adjacency>;
+    using EdgeRef       = Edge;
+    using RevAdjacency  = typename PredContainer::value_type;
+    using RevEdge       = EdgeFromAdjacency<Adjacency>;
+    using RevEdgeRef    = RevEdge;
 
+    using EdgeContainer         = OutEdgeMapIterFactory<SuccessorMap>;
+    using EdgeContainerRef      = EdgeContainer;
     using ConstEdgeContainer    = OutEdgeMapIterFactory<const SuccessorMap>;
     using ConstEdgeContainerRef = ConstEdgeContainer;
-    using ConstOutEdgeContainer = OutEdgeFactory<const ConstSuccContainer>;
+    using OutEdgeContainer      = OutEdgeFactory<SuccContainer>;
+    using OutEdgeContainerRef   = OutEdgeContainer;
+    using ConstOutEdgeContainer = OutEdgeFactory<const SuccContainer>;
     using ConstOutEdgeContainerRef = ConstOutEdgeContainer;
-    using ConstInEdgeContainer  = InEdgeFactory<const ConstPredContainer>;
-    using ConstInEdgeContainerRef = ConstInEdgeContainer;
+    using InEdgeContainer       = InEdgeFactory<PredContainer>;
+    using InEdgeContainerRef    = InEdgeContainer;
+    using ConstInEdgeContainer  = InEdgeFactory<const PredContainer>;
+    using ConstInEdgeContainerRef  = ConstInEdgeContainer;
 
     // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
     using MapValueNonEmptyPredicate = std::MapValuePredicate<const SuccessorMap, const std::NonEmptySetPredicate<const ConstSuccContainer>>;
-    using EmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, const MapValueNonEmptyPredicate>;
-    using ConstLeafContainer    = FirstFactory<const EmptySuccIterFactory>;
+    using EmptySuccIterFactory  = std::FilteredIterFactory<SuccessorMap, const MapValueNonEmptyPredicate>;
+    using LeafContainer         = FirstFactory<EmptySuccIterFactory>;
+    using LeafContainerRef      = LeafContainer;
+    using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, const MapValueNonEmptyPredicate>;
+    using ConstLeafContainer    = FirstFactory<const ConstEmptySuccIterFactory>;
     using ConstLeafContainerRef = ConstLeafContainer;
 
-    using value_type = Edge;
-    using reference = Edge;
-    using iterator        = typename ConstEdgeContainer::iterator;
-    using const_iterator  = typename ConstEdgeContainer::const_iterator;
+    using value_type      = Node;
+    using reference       = Node;
+    using iterator        = NodeIterator;
+    using const_iterator  = ConstNodeIterator;
   protected:
     SuccessorMap _successors;
     PredecessorMap _predecessors;
@@ -93,12 +109,12 @@ namespace PT{
   public:
 
     // =============== iteration ================
-    // iterate over edges
-    const_iterator begin() const { return const_iterator(_successors); }
-    const_iterator end() const { return const_iterator(_successors, _successors.end()); }
+
     // iterator over nodes
-    NodeIterator nodes_begin() const { return _successors.begin(); }
-    NodeIterator nodes_end() const { return _successors.end(); }
+    ConstNodeIterator begin() const { return _successors.begin(); }
+    ConstNodeIterator end() const { return _successors.end(); }
+    NodeIterator begin() { return _successors.begin(); }
+    NodeIterator end() { return _successors.end(); }
 
     // =============== query ===================
     size_t num_nodes() const { return _successors.size(); }
@@ -119,18 +135,38 @@ namespace PT{
     }
 
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
-    ConstNodeContainerRef nodes() const { return FirstFactory<const SuccessorMap>(_successors); } //ConstNodeContainerRef(_successors); }
+    ConstNodeContainerRef nodes() const { return _successors; }
+    NodeContainerRef      nodes()       { return _successors; } 
+    ConstLeafContainerRef leaves() const { return ConstLeafContainerRef(ConstEmptySuccIterFactory(_successors, _successors.end(), _successors)); }
+    LeafContainerRef      leaves()       { return LeafContainerRef(EmptySuccIterFactory(_successors, _successors.end(), _successors)); }
+
+    // iterate over adjacencies
+    //NOTE: in order to allow the user to modify the edge-data associated with an adjacency, we give him/her a proxy container
+    //      that only allows access to the items in the container, but not the container itself
     ConstSuccContainerRef successors(const Node u) const { return _successors.at(u); }
+    SuccContainerRef      successors(const Node u) { return _successors.at(u); }
+    // successors are also called "children"
+    ConstSuccContainerRef children(const Node u) const { return _successors.at(u); }
+    SuccContainerRef      children(const Node u) { return _successors.at(u); }
+
     ConstPredContainerRef predecessors(const Node u) const { return _predecessors.at(u); }
+    PredContainerRef      predecessors(const Node u) { return _predecessors.at(u); }
+    // predecessors are also called "parents"
+    ConstPredContainerRef parents(const Node u) const { return _predecessors.at(u); }
+    PredContainerRef      parents(const Node u) { return _predecessors.at(u); }
 
     const SuccessorMap&   successor_map() const { return _successors; }
     const PredecessorMap& predecessor_map() const { return _predecessors; }
 
-    ConstOutEdgeContainer out_edges(const Node u) const { return {u, successors(u)}; }
-    ConstInEdgeContainer  in_edges(const Node u) const { return {u, predecessors(u)}; }
-    ConstEdgeContainer    edges() const { return _successors; }
+    ConstOutEdgeContainer out_edges(const Node u) const { return ConstOutEdgeContainer(_successors.at(u), u); }
+    OutEdgeContainer      out_edges(const Node u) { return OutEdgeContainer(_successors.at(u), u); }
+    
+    ConstInEdgeContainer  in_edges(const Node u) const { return ConstInEdgeContainer(predecessors(u), u); }
+    InEdgeContainer       in_edges(const Node u) { return InEdgeContainer(_predecessors.at(u), u); }
+    
+    ConstEdgeContainer    edges() const { return ConstEdgeContainer(_successors); }
+    EdgeContainer         edges() { return EdgeContainer(_successors); }
 
-    ConstLeafContainerRef leaves() const { return ConstLeafContainerRef(new EmptySuccIterFactory(_successors, _successors)); }
   };
 
 
@@ -141,7 +177,7 @@ namespace PT{
   // NOTE: the weird std::conditional is needed because otherwise, the default template arg cannot be initialized if _NodeData == void
   template<class _NodeData,
            class _EdgeStorage,
-           class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_same_v<_NodeData, void>, int, _NodeData>>>
+           class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_void_v<_NodeData>, int, _NodeData>>>
   class AddNodeData: public _EdgeStorage
   {
     using Parent = _EdgeStorage;

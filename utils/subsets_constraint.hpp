@@ -144,32 +144,22 @@ namespace PT{
     const _Container& operator*() { return current; }
 
     //! increment operator
-    NetworkConstraintSubsetIterator& operator++()
-    {
-      next_subset();
-      return *this;
-    }
-
+    NetworkConstraintSubsetIterator& operator++() { next_subset(); return *this; }
     //! post-increment
-    NetworkConstraintSubsetIterator operator++(int)
-    {
-      NetworkConstraintSubsetIterator tmp(*this);
-      ++(*this);
-      return tmp;
-    }
+    NetworkConstraintSubsetIterator operator++(int) { NetworkConstraintSubsetIterator tmp(*this); ++(*this); return tmp; }
   
   };
 
 
   template<class _Network, class _Container = std::ordered_bitset>
-  struct NetworkConstraintSubsets
+  struct NetworkConstraintSubsetFactory
   {
     using iterator = NetworkConstraintSubsetIterator<_Network, _Container>;
     using const_iterator = iterator;
 
     const _Network& N;
 
-    NetworkConstraintSubsets(const _Network& _N): N(_N) {}
+    NetworkConstraintSubsetFactory(const _Network& _N): N(_N) {}
 
     iterator begin() const { return iterator(N); }
     iterator end() const { return iterator(N, true); }

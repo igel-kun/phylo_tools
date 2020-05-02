@@ -22,6 +22,8 @@
 #include "debug_utils.hpp"
 #include "stl_utils.hpp"
 
+#warning TODO: sanitize namespaces using a subnamespace "details"
+
 #define NUM_BYTES_IN_INT (sizeof(unsigned int))
 #define NUM_BITS_IN_INT (CHAR_BIT * NUM_BYTES_IN_INT)
 #define NUM_BYTES_IN_LONG (sizeof(unsigned long))

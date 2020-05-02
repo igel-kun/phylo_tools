@@ -8,7 +8,7 @@
 namespace PT{
   // by default, save the edge data in the successor map and provide a reference in each "reverse adjacency" of the predecessor map
   template<class EdgeData>
-  using DefaultConsecutiveSuccessorMap = ConsecutiveMap<Node, ConsecutiveStorageNoMem<Adjacency_t<EdgeData>>>;
+  using DefaultConsecutiveSuccessorMap = ConsecutiveMap<Node, ConsecutiveStorageNoMem<AdjacencyFromData<EdgeData>>>;
   template<class EdgeData>
   using DefaultConsecutivePredecessorMap = DefaultConsecutiveSuccessorMap<DataReference<EdgeData>>;
   template<class EdgeData>
@@ -70,12 +70,11 @@ namespace PT{
         const Node v = old_to_new ? (*old_to_new).at(uv.head()) : uv.head();
         Adjacency* const position = _successors.at(u).begin() + (--deg.at(u).second);
         DEBUG5(std::cout << "constructing adjacency "<<uv.get_adjacency()<<" at "<<position<<std::endl);
-        new(position) Adjacency(std::move(uv.get_adjacency())); // move the edge data if given_edges is not const
-        (Node&)(*position) = v;
-        
+        emplace_new_adjacency(position, std::move(uv.get_adjacency()), v);
+
         RevAdjacency* const rev_position = &(_predecessors.at(v)[--deg.at(v).first]);
         DEBUG5(std::cout<<"constructing rev adjacency "<<get_reverse_adjacency(u, *position)<<" at "<<rev_position<<" from adjacency "<<*position<<std::endl);
-        new(rev_position) RevAdjacency(get_reverse_adjacency(u, *position));
+        emplace_new_adjacency(rev_position, std::move(get_reverse_adjacency(u, *position)));
       }
       _size = given_edges.size();
     }
@@ -112,7 +111,7 @@ namespace PT{
                                         NodeTranslation* old_to_new = nullptr,
                                         LeafContainer* leaves = nullptr):
       ConsecutiveNetworkAdjacencyStorage(std::forward<GivenEdgeContainer>(given_edges),
-                                         old_to_new ? old_to_new : std::unique_ptr<NodeTranslation>(new NodeTranslation()).get(),
+                                         old_to_new ? old_to_new : std::make_unique<NodeTranslation>().get(),
                                          leaves)
     {}
 

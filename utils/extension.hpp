@@ -13,7 +13,7 @@ namespace PT{
     // import constructors
     using Parent::Parent;
 
-    void get_inverse(std::unordered_map<Node, uint32_t>& inverse) const
+    void get_inverse(std::unordered_map<Node, sw_t>& inverse) const
     { for(unsigned i = 0; i < this->size(); ++i) inverse.emplace(this->at(i), i); }
 
     // return if the extension is valid for a given network
@@ -21,7 +21,7 @@ namespace PT{
     bool is_valid_for(const Network& N)
     {
       // construct inverse of the extension, mapping each node to its position
-      std::unordered_map<Node, uint32_t> inverse;
+      std::unordered_map<Node, sw_t> inverse;
       get_inverse(inverse);
 
       // check if all arcs in the network go backwards in the extension
@@ -33,7 +33,7 @@ namespace PT{
 
     // return the scanwidth of the extension in the network N
     template<class Network>
-    uint32_t scanwidth(const Network& N) const
+    sw_t scanwidth(const Network& N) const
     {
       if(N.empty())
         return 0;
@@ -44,7 +44,7 @@ namespace PT{
     // add a node u and update sw using the set forest representing the current weak components in the extension
     // return the scanwidth of the given node
     template<class Network, class _Container>
-    uint32_t update_sw(const Network& N,
+    sw_t update_sw(const Network& N,
                    const Node u,
                    std::DisjointSetForest<typename Network::Edge>& weak_components,
                    _Container& out) const
@@ -78,7 +78,7 @@ namespace PT{
       for(const Node u: *this) update_sw(N, u, weak_components, out);
     }
 
-    template<class Network, class _Container = std::unordered_map<Node, uint32_t>>
+    template<class Network, class _Container = std::unordered_map<Node, sw_t>>
     _Container sw_map(const Network& N) const
     {
       _Container result;

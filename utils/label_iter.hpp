@@ -64,10 +64,10 @@ namespace PT {
     template<class... Args>
     LabeledNodeIterFactory(NodeContainer& _c, Args&&... args): c(&_c, std::NoDeleter()), getter(std::forward<Args>(args)...) {}
     template<class... Args>
-    LabeledNodeIterFactory(NodeContainer* const _c, Args&&... args): c(_c), getter(std::forward<Args>(args)...) {}
+    LabeledNodeIterFactory(std::shared_ptr<NodeContainer> _c, Args&&... args): c(_c), getter(std::forward<Args>(args)...) {}
     template<class... Args>
     LabeledNodeIterFactory(NodeContainer&& _c, Args&&... args):
-      c(new NodeContainer(std::forward<NodeContainer>(_c))), getter(std::forward<Args>(args)...) {}
+      c(std::make_shared<NodeContainer>(std::forward<NodeContainer>(_c))), getter(std::forward<Args>(args)...) {}
 
     iterator begin() const { return {c->begin(), getter}; }
     iterator end() const { return {c->end(), getter}; }

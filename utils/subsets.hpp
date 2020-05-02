@@ -74,7 +74,7 @@ namespace PT{
 
 
   template<class _Container, class _OutPutContainer = _Container>
-  class Subsets
+  class SubsetFactory
   {
   protected:
     _Container& c;
@@ -83,7 +83,7 @@ namespace PT{
     using iterator = SubsetIterator<_Container, _OutPutContainer>;
     using const_iterator = SubsetIterator<const _Container, _OutPutContainer>;
 
-    Subsets(_Container& _c): c(_c) {}
+    SubsetFactory(_Container& _c): c(_c) {}
 
     iterator begin() { return {c}; }
     iterator end() { return {c, c.size()}; }

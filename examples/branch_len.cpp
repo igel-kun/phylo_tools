@@ -59,7 +59,7 @@ int main(const int argc, const char** argv)
  
   for(const Node u: N.nodes()){
     for(const auto uv: N.out_edges(u))
-      std::cout << "branch "<<u<<"["<<N.get_label(u)<<"] -> "<<head(uv)<<"["<<N.get_label(uv.head())<<"] has length "<<uv.data()<<std::endl;
+      std::cout << "branch "<<u<<"["<<N.label(u)<<"] -> "<<head(uv)<<"["<<N.label(uv.head())<<"] has length "<<uv.data()<<std::endl;
   }
 }
 

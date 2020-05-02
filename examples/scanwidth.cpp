@@ -134,7 +134,7 @@ int main(const int argc, const char** argv)
 
   std::cout << "\n ==== computing silly post-order extension ===\n";
   
-  Extension ex = N.get_nodes<postorder, Extension>();
+  const Extension ex(N.dfs().postorder());
   std::cout << ex << "\n";
   
   std::cout << "\n ==== computing optimal extension ===\n";

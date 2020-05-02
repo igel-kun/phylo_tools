@@ -1,7 +1,11 @@
 
 #pragma once
 
+#include<climits>
 #include<sstream>
+#include<deque>
+#include<vector>
+#include<stack>
 #include<type_traits>
 #include "hash_utils.hpp"
 
@@ -13,14 +17,30 @@ namespace std{
 
 #if __cplusplus <= 201703L
   template<class T> using remove_cvref_t = remove_cv_t<remove_reference_t<T>>;
+  constexpr auto identity = [](auto i){return i;};
+#else
+  #include<functional>
 #endif
+
+  // don't add const to void...
+  template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
+
+  template<class N, class T = void> struct get_const_ptr { using type = add_pointer<my_add_const_t<typename iterator_traits<N>::value_type>>; };
+  template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
+  template<class N> using get_const_ptr_t = typename get_const_ptr<remove_cvref_t<N>>::type;
+
+  template<class N, class T = void> struct get_const_ref { using type = add_lvalue_reference<my_add_const_t<typename iterator_traits<N>::value_type>>; };
+  template<class N> struct get_const_ref<N, void_t<typename N::const_reference>> { using type = typename N::const_reference; };
+  template<class N> using get_const_ref_t = typename get_const_ref<remove_cvref_t<N>>::type;
 
   // iterator_traits<const T*>::value_type is "T" not "const T"? What the hell, STL?
   template<typename T>
   struct my_iterator_traits: public iterator_traits<T>
   {
     // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
-    using value_type = remove_reference_t<typename iterator_traits<T>::reference>;
+    using value_type      = conditional_t<!is_pointer_v<T>, typename iterator_traits<T>::value_type, remove_reference_t<typename iterator_traits<T>::reference>>;
+    using const_reference = get_const_ref_t<T>;
+    using const_pointer   = get_const_ptr_t<T>;
   };
 
 
@@ -28,7 +48,7 @@ namespace std{
   struct copy_cv
   {
     using R =    remove_reference_t<T>;
-    using U1 =   conditional_t<is_const_v<R>, add_const_t<U>, U>;
+    using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
     using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
   };
   template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
@@ -68,9 +88,9 @@ namespace std{
 
 
   // turn a reference into const reference or rvalue into const rvalue
-  template<class T> struct _const_reference { using type = add_const_t<T>; };
-  template<class T> struct _const_reference<T&> { using type = add_const_t<T>&; };
-  template<class T> struct _const_reference<T&&> { using type = add_const_t<T>&&; };
+  template<class T> struct _const_reference { using type = my_add_const_t<T>; };
+  template<class T> struct _const_reference<T&> { using type = my_add_const_t<T>&; };
+  template<class T> struct _const_reference<T&&> { using type = my_add_const_t<T>&&; };
   template<class T> using const_reference_t = typename _const_reference<T>::type;
 
 
@@ -100,19 +120,36 @@ namespace std{
   bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
   
   // begin() and end() for forward and reverse iterators
-  template<class Container, bool reverse>
+  template<class Container,
+           bool reverse = false,
+           template<class> class Iterator = iterator_of_t>
   struct BeginEndIters
   {
-    using iterator     = iterator_of_t<Container>;
-    static iterator begin(Container& c) { return c.begin(); }
-    static iterator end(Container& c) { return c.end(); }
+    using iterator = Iterator<Container>;
+    using const_iterator = Iterator<const Container>;
+    template<class... Args>
+    static iterator begin(remove_cv_t<Container>& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static iterator end(remove_cv_t<Container>& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator begin(const Container& c, Args&&... args) { return const_iterator(std::begin(c), forward<Args>(args)...); }
+    template<class... Args>
+    static const_iterator end(const Container& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
   };
-  template<class Container>
-  struct BeginEndIters<Container, true>
+  template<class Container, template<class> class Iterator>
+  struct BeginEndIters<Container, true, Iterator>
   {
-    using iterator     = reverse_iterator_of_t<Container>;
-    static iterator begin(Container& c) { return c.rbegin(); }
-    static iterator end(Container& c) { return c.rend(); }
+    using iterator = reverse_iterator<Iterator<Container>>;
+    using const_iterator = reverse_iterator<Iterator<const Container>>;
+    template<class... Args>
+    static iterator rbegin(remove_cv_t<Container>& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static iterator rend(remove_cv_t<Container>& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator rbegin(const Container& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator rend(const Container& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
+
   };
 
 
@@ -121,6 +158,21 @@ namespace std{
   template<class _Container>
   inline typename _Container::const_iterator max_element(const _Container& c) { return max_element(c.begin(), c.end()); }
 
+
+  // deferred function call for emplacements, thx @ Arthur O'Dwyer
+  // emplace(f(x)) = construct + move (assuming f does copy elision)
+  // emplace(deferred_call(f(x))) = (in-place) construct (assuming f does copy elision)
+  template<class F>
+  struct deferred_call_t
+  {
+    using T = invoke_result_t<F>;
+    const F f;
+
+    explicit deferred_call_t(F&& _f): f(forward<F>(_f)) {}
+    operator T() { return f(); }
+  };
+  template<typename F>
+  inline auto deferred_call(F&& f) { return deferred_call_t<F>(forward<F>(f)); }
 
 
 
@@ -139,10 +191,10 @@ namespace std{
     }
   };
 
-  template<class T, class Container = std::deque<T>>
-  class iterable_stack: public std::stack<T, Container>
+  template<class T, class Container = deque<T>>
+  class iterable_stack: public stack<T, Container>
   {
-    using std::stack<T, Container>::c;
+    using stack<T, Container>::c;
   public:
     using iterator = typename Container::iterator;
     using const_iterator = typename Container::const_iterator;
@@ -166,23 +218,13 @@ namespace std{
   };
 
 
-  template<class C, class = enable_if_t<is_container_v<C>>>
-  inline std::ostream& _print(std::ostream& os, const C& objs)
+  template<class C, class = enable_if_t<is_container_v<C> && !is_convertible_v<C, std::string>>>
+  inline std::ostream& operator<<(std::ostream& os, const C& objs)
   {
     os << '[';
     for(auto const& obj : objs) os << obj << ' ';
     return os << ']';
   }
-  template<class T> std::ostream& operator<<(std::ostream& os, const vector<T>& x) { return _print(os, x); }
-  template<class T> std::ostream& operator<<(std::ostream& os, const list<T>& x) { return _print(os, x); }
-  template<class T> std::ostream& operator<<(std::ostream& os, const set<T>& x) { return _print(os, x); }
-  template<class T> std::ostream& operator<<(std::ostream& os, const unordered_set<T>& x) { return _print(os, x); }
-  template<class T> std::ostream& operator<<(std::ostream& os, const iterable_stack<T>& x) { return _print(os, x); }
-//  template<class T> std::ostream& operator<<(std::ostream& os, const vector_map<T>& x) { return _print(os, x); }
-//  template<class T> std::ostream& operator<<(std::ostream& os, const vector_hash<T>& x) { return _print(os, x); }
-  template<class P, class Q> std::ostream& operator<<(std::ostream& os, const map<P,Q>& x) { return _print(os, x); }
-  template<class P, class Q> std::ostream& operator<<(std::ostream& os, const unordered_map<P,Q>& x) { return _print(os, x); }
-
 
   template<class T> std::string to_string(const T& x) { std::stringstream out; out << x; return out.str(); }
 

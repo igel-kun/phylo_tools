@@ -50,21 +50,20 @@ namespace PT{
 
     void read_tree()
     {
-      Edge e;
       while(!edgestream.eof()){
         std::string name;
         
         edgestream >> name;
-        e.tail() = get_id(name);
+        const Node u = get_id(name);
         if(edgestream.bad() || edgestream.eof() || edgestream.fail() || !std::isblank(edgestream.peek()))
           throw MalformedEdgeVec();
 
         edgestream >> name;
-        e.head() = get_id(name);
+        const Node v = get_id(name);
         if(edgestream.bad() || (!edgestream.eof() && edgestream.fail()) || !std::isspace(edgestream.peek()))
           throw MalformedEdgeVec();
         
-        edges.push_back(e);
+        edges.emplace_back(u, v);
         while(edgestream.peek() == 10) edgestream.get();
       }
     }

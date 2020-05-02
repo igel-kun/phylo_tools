@@ -27,12 +27,11 @@ namespace std{
 
     template<class... Args>
     pair<iterator, bool> emplace(Args&&... args) {
-      _Element* p = new _Element(forward<Args>(args)...);
       if(empty()){
-        element.reset(p);
+        element = make_unique<_Element>(forward<Args>(args)...);
         return {element.get(), true};
       } else {
-        if(*element == *p)
+        if(*element == _Element(forward<Args>(args)...))
           return {element.get(), false};
         else throw logic_error("trying to add second element to singleton set");
       }

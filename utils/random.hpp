@@ -14,7 +14,7 @@ namespace PT{
   //! return the result of throwing a die with 'sides' sides [0,sides-1]
   inline uint32_t throw_die(const uint32_t sides = 6)
   {
-    return rand() % sides; // yadda yadda, it's not 100% uniform
+    return rand() % sides; // yadda yadda, it's not 100% uniform for tiny values of RAND_MAX...
   }
   //! return the result of a 0/1-die with 'good_sides' good sides among its 'sides' sides
   inline bool throw_bw_die(const uint32_t good_sides, const uint32_t sides)

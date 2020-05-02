@@ -23,7 +23,7 @@ namespace PT{
 
     template<class Net>
     NoPoss(const Net& N, const Node u):
-      msg(N.get_label(u) + '[' + std::to_string(u) + "] is unmappable\n")
+      msg(N.label(u) + '[' + std::to_string(u) + "] is unmappable\n")
     {}
     NoPoss(const std::string& _msg): msg(_msg) {}
     const char* what() const noexcept { return msg.c_str(); }
@@ -119,8 +119,7 @@ namespace PT{
         const auto it = possible_N2_nodes.find(s);
         if(it != possible_N2_nodes.end()) {
           update_poss(u, it->second);
-          size_t& hist = histogram[s];
-          if(hist) --hist; else throw NoPoss("node histograms differ");
+          if(histogram[s]-- == 0) throw NoPoss("node histograms differ");
         } else throw NoPoss(N1, u);
       }
     }
@@ -129,55 +128,12 @@ namespace PT{
     template<class NodeLabelMap>
     void restrict_by_label(const NodeLabelMap& _map)
     {
-      restrict_by_something<const LabelType&>(&NetworkA::get_label, &NetworkB::get_label);
-/*
-      DEBUG3(std::cout << "restricting by label..."<<std::endl);
-      for(const auto& nl: _map){
-        const Node v1 = nl.first;
-        const LabelType& name = nl.second;
-        if((name != "") && ((flags == FLAG_MAP_ALL_LABELS) || node_is_interesting(v1))){
-          const Node v2 = lmatch.at(name).second;
-          DEBUG4(std::cout << "node "<<v1<<" with label "<<name<<" (same as "<<v2<<")"<<std::endl);
-          if(v2 != NO_LABEL)
-            set_unique_poss(v1, v2);
-          else throw NoPoss(N1, v1);
-        }
-      }
-*/
+      restrict_by_something<const LabelType&>(&NetworkA::label, &NetworkB::label);
     }
 
     void restrict_by_degree()
     {
       restrict_by_something<InOutDegree>(&NetworkA::in_out_degree, &NetworkB::in_out_degree);
-      /*
-      std::unordered_map<InOutDegree, PossSet> degree_to_possibilities;
-      std::unordered_map<InOutDegree, uint32_t> degree_distribution_N2;
-
-      DEBUG3(std::cout << "restricting by degree..."<<std::endl);
-      for(const Node u: N2){
-        const InOutDegree u_deg = N2.in_out_deg(u);
-        degree_to_possibilities.emplace(u_deg, size_N).first->second.set(u);
-        ++degree_distribution_N2[u_deg];
-      }
-      for(const Node u: N1){
-        const InOutDegree u_deg = N1.in_out_deg(u);
-        degree_to_possibilities.emplace(u2_deg, size_N).first->second.insert(u2);
-        ++degree_distribution_N2[u2_deg];
-
-        const uint64_t u_deg = (((uint64_t)N1.in_degree(u)) << 32) | N1.out_degree(u);
-        // find the set of vertices in N2 with this degree
-        const auto deg_it = degree_to_possibilities.find(u_deg);
-        if(deg_it == degree_to_possibilities.end()) throw NoPoss(N1, u);
-        update_poss(u, deg_it->second);
-        
-        // decrement the count of vertices in N2 with this degree and fail if this would go below 0
-        uint32_t& u_deg_in_N2 = degree_distribution_N2[u_deg];
-        if(u_deg_in_N2 == 0)
-          throw NoPoss("<vertices of indeg " + std::to_string(N1.in_degree(u)) + " & outdeg " + std::to_string(N1.out_degree(u)) + ">");
-        else
-          --u_deg_in_N2;
-      }
-      */
     }
 
     // use degrees and labels to restrict possibilities
