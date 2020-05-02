@@ -169,7 +169,8 @@ namespace PT{
   };
 
   // for EdgeMapIterators, we need to slightly modify how the factory constructs them...
-  template<class _Map, template<class> class _Iterator> struct BeginEndEdgeMapIters
+  template<class _Map, template<class> class _Iterator>
+  struct BeginEndEdgeMapIters
   {
     using iterator = EdgeMapIterator<_Map, _Iterator>;
     using const_iterator = EdgeMapIterator<const _Map, _Iterator>;

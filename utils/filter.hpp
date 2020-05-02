@@ -61,6 +61,7 @@ namespace std{
   protected:
     using Parent::is_invalid;
     using Parent::i;
+    using Parent::first_invalid;
 
     Predicate pred;
 
@@ -68,7 +69,7 @@ namespace std{
   public:
     
     struct IteratorData {
-      const NormalIterator& first_invalid;
+      NormalIterator first_invalid;
       Predicate pred;
       template<class... Args>
       IteratorData(const NormalIterator& fi, Args&&... args): first_invalid(fi), pred(forward<Args>(args)...) {}
@@ -124,10 +125,7 @@ namespace std{
 
   // std::BeginEndIters wants an iterator that can be instanciated with only a container, so here we go...
   template<class Predicate, bool reverse>
-  struct ConstOrNoConst{
-    template<class Container>
-    using filtered_iter = std::filtered_iterator<Container, Predicate, reverse>;
-  };
+  struct FilteredIterFor{ template<class Container> using type = std::filtered_iterator<Container, Predicate, reverse>; };
 
   // We want a specialization for static predicates in order to save the instanciation...
   /* while the check for static predicates doesn't work, this should be commented out
@@ -140,16 +138,14 @@ namespace std{
   };
   */
 
-  // as a factory, use an IterFactory with the predicate as local data
+  // as a factory, use an IterFactory with the predicate and end-iterator as factory data
   template<class Container,
            class Predicate,
            bool reverse = false>
   using FilteredIterFactory = IterFactory<Container,
-                                          typename filtered_iterator<Container, Predicate, reverse>::IteratorData,
-                                          BeginEndIters<Container, reverse, ConstOrNoConst<Predicate, reverse>::template filtered_iter>>;
+                                          const typename filtered_iterator<Container, Predicate, reverse>::IteratorData,
+                                          BeginEndIters<Container, reverse, FilteredIterFor<Predicate, reverse>::template type>>;
 
-  template<class Container, class Predicate, bool reverse = false>
-  FilteredIterFactory<Container, Predicate, reverse> filtered_iter(Container* c, const bool del_on_exit, Predicate& p) { return {c, del_on_exit, p}; }
 
 } // namespace std
 

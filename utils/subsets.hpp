@@ -7,8 +7,9 @@
 
 namespace PT{
 
-  //! note: if you want to modify the original container, set _OutPutContainer = std::reference_wrapper<_Container::value_type> 
-  template<class _Container, class _OutPutContainer = _Container>
+  //! note: if you want to modify the original container, set the _OutputContainer to contain std::reference_wrapper<_Container::value_type> 
+  //NOTE: this assumes that the underlying container's order does not change!
+  template<class _Container, class _OutputContainer = _Container>
   class SubsetIterator
   {
   protected:
@@ -16,9 +17,10 @@ namespace PT{
     std::ordered_bitset bits;
 
   public:
-    using value_type = _OutPutContainer;
-    using reference  = value_type&;
-    using const_reference = const value_type&;
+    using value_type = _OutputContainer;
+    using reference  = value_type;
+    using const_reference = const value_type;
+    using pointer    = std::self_deref<_OutputContainer>;
 
     SubsetIterator(_Container& _c):
       c(_c), bits(_c.size())
@@ -37,16 +39,11 @@ namespace PT{
 */
     SubsetIterator(_Container& _c, const uint64_t item):
       c(_c), bits(_c.size())
-    {
-      bits.set(item);
-    }
+    { bits.set(item); }
 
     //! increment operator
-    SubsetIterator& operator++()
-    {
-      ++bits;
-      return *this;
-    }
+    SubsetIterator& operator++() { ++bits; return *this; }
+    SubsetIterator& operator--() { --bits; return *this; }
 
     bool operator==(const SubsetIterator& it) const { return bits == it.bits; }
     bool operator!=(const SubsetIterator& it) const { return !operator==(it); }
@@ -72,16 +69,32 @@ namespace PT{
 
   };
 
+  template<class Container, class _OutputContainer = Container>
+  struct SubsetBeginEndIters
+  {
+    using iterator = SubsetIterator<Container, _OutputContainer>;
+    using const_iterator = SubsetIterator<const Container, _OutputContainer>;
+    static iterator begin(remove_cv_t<Container>& c) { return c; }
+    static iterator end(remove_cv_t<Container>& c) { return {c, c.size() }; }
+    static const_iterator begin(const Container& c) { return c; }
+    static const_iterator end(const Container& c) { return {c, c.size() }; }
+  };
 
-  template<class _Container, class _OutPutContainer = _Container>
+
+
+  template<class _Container, class _OutputContainer = _Container>
+  using SubsetFactory = IterFactory<_Container, void, SubsetBeginEndIters<_Container, _OutputContainer>>;
+
+  /*
+  template<class _Container, class _OutputContainer = _Container>
   class SubsetFactory
   {
   protected:
     _Container& c;
 
   public:
-    using iterator = SubsetIterator<_Container, _OutPutContainer>;
-    using const_iterator = SubsetIterator<const _Container, _OutPutContainer>;
+    using iterator = SubsetIterator<_Container, _OutputContainer>;
+    using const_iterator = SubsetIterator<const _Container, _OutputContainer>;
 
     SubsetFactory(_Container& _c): c(_c) {}
 
@@ -91,6 +104,6 @@ namespace PT{
     const_iterator end() const { return {c, c.size()}; }
 
   };
-
+  */
 
 }// namespace

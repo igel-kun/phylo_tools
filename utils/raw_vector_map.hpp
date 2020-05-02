@@ -44,7 +44,8 @@ namespace std {
     raw_vector_map_iterator& operator-=(const size_t x) { index -= x; return *this; }
     raw_vector_map_iterator  operator+(const size_t x) { return {start, index + x}; }
     raw_vector_map_iterator  operator-(const size_t x) { return {start, index - x}; }
-    
+
+    difference_type operator-(const raw_vector_map_iterator& it) { return (start + index) - (it.start + it.index); }
 
     template<class __Key, class __Element>
     bool operator==(const raw_vector_map_iterator<__Key, __Element>& x) const { return index == x.index; }

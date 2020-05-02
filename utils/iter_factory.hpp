@@ -49,7 +49,7 @@ namespace std {
 
   // same as above, but we allow storing local data with the factory that is passed to each created iterator
   template<class Container,
-           class LocalData = void,
+           class FactoryData = void,
            class BeginEnd = BeginEndIters<Container>,
            class Iterator = typename BeginEnd::iterator,
            class ConstIterator = typename BeginEnd::const_iterator>
@@ -58,7 +58,7 @@ namespace std {
     using Parent = _IterFactory<Container, BeginEnd, Iterator, ConstIterator>;
   protected:
     using Parent::container;
-    LocalData _data;
+    FactoryData _data;
   public:
     using iterator = Iterator;
     using const_iterator = ConstIterator;
@@ -75,11 +75,11 @@ namespace std {
     IterFactory(remove_cv_t<Container>&& _c, Args&&... args): Parent(forward<remove_cv_t<Container>>(_c)), _data(forward<Args>(args)...) {}
 
     iterator begin() { return BeginEnd::begin(*container, _data); }
-    iterator end() { return BeginEnd::end(*container, _data); }
-    const_iterator begin() const { return BeginEnd::begin(*container, _data); }
-    const_iterator end() const { return BeginEnd::end(*container, _data); }
+    iterator end()   { return BeginEnd::end(*container, _data); }
+    const_iterator begin()  const { return BeginEnd::begin(*container, _data); }
+    const_iterator end()    const { return BeginEnd::end(*container, _data); }
     const_iterator cbegin() const { return BeginEnd::begin(*container, _data); }
-    const_iterator cend() const { return BeginEnd::end(*container, _data); }
+    const_iterator cend()   const { return BeginEnd::end(*container, _data); }
   };
 
   // the factory specialization for void local data just falls back to _IterFactory
@@ -92,9 +92,9 @@ namespace std {
 
   // a convenience alias taking an iterator template mask instead of 2 iterator types
   template<class Container,
-           class LocalData,
+           class FactoryData,
            class BeginEnd,
            template<class> class IteratorTpl>
-  using IterTplIterFactory = IterFactory<Container, LocalData, BeginEnd, IteratorTpl<Container>, IteratorTpl<const Container>>;
+  using IterTplIterFactory = IterFactory<Container, FactoryData, BeginEnd, IteratorTpl<Container>, IteratorTpl<const Container>>;
 
 }

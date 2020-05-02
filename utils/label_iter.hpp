@@ -17,9 +17,10 @@ namespace PT {
 
   // an iterator producing pairs of (Node, Property), where the property is produced by the getter
   // Note: the getter should have a type called 'Property'
-  template<class Iter, class PropertyGetter>
+  template<class Container, class PropertyGetter>
   class LabeledNodeIter
   {
+    using Iter = std::iterator_of_t<Container>;
     Iter it;
     const PropertyGetter& getter;
 
@@ -40,7 +41,7 @@ namespace PT {
     // dereference
     value_type operator*() const
     {
-      const Node x = deref<Iter>::do_deref(it);
+      const Node x = *it; // deref<Iter>::do_deref(it);
       return value_type(x, getter(x));
     }
 
@@ -52,6 +53,15 @@ namespace PT {
     bool operator!=(const LabeledNodeIter& _it) const { return _it.it != it; }
   };
 
+  template<class PropertyGetter>
+  struct LabeledNodeIterFor { template<class Container> using type = LabeledNodeIter<Container, PropertyGetter>; };
+
+  template<class NodeContainer, class PropertyGetter>
+  using LabeledNodeIterFactory = std::IterFactory<NodeContainer,
+                                                  const PropertyGetter,
+                                                  std::BeginEndIters<NodeContainer, false,LabeledNodeIterFor<PropertyGetter>::template type>>;
+
+  /*
   template<class NodeContainer, class PropertyGetter>
   class LabeledNodeIterFactory
   {
@@ -78,6 +88,6 @@ namespace PT {
   template<class NodeContainer, class PropertyGetter>
   LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(NodeContainer* const c, const PropertyGetter& pg, const bool del_on_exit = false)
     { return {c, pg, del_on_exit}; }
-
+  */  
 }// namespace
 

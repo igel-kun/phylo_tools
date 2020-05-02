@@ -5,7 +5,7 @@
 #include "stl_utils.hpp"
 
 namespace PT{
-
+/*
   // spew out all first/second in a container of pairs
   template<class _PairContainer>
   class PairIterator
@@ -48,6 +48,7 @@ namespace PT{
     bool operator!=(const _Iterator& it) const { return !operator==(it); }
 
   };
+*/
 
   template<class _PairContainer, size_t get_num>
   class SelectingIterator: public std::iterator_of_t<_PairContainer>
@@ -65,7 +66,6 @@ namespace PT{
     static constexpr bool dereferences_to_lvalref = std::is_lvalue_reference_v<PairRefType> || 
                                                     std::is_lvalue_reference_v<std::tuple_element_t<get_num, std::remove_reference_t<PairType>>>;
 
-
     PairRefType parent_deref() const { return Parent::operator*(); }
   public:
     using Parent::Parent;
@@ -73,7 +73,6 @@ namespace PT{
     using value_type  = std::tuple_element_t<get_num, PairType>;
     using reference   = std::conditional_t<dereferences_to_lvalref, value_type&, value_type>;
     using pointer     = std::conditional_t<dereferences_to_lvalref, value_type*, std::self_deref<reference>>;
-    using difference_type = ptrdiff_t;
     
     SelectingIterator(const Parent& p): Parent(p) {}
 
@@ -88,30 +87,11 @@ namespace PT{
 
 
   // factories
-  template<class _PairContainer, size_t get_num>
-  class PairItemIterFactory
-  {
-  protected:
-    std::shared_ptr<_PairContainer> c;
+  template<bool get_num> // helper struct to be able to use std::IterTplIterFactory
+  struct SelectingIteratorFor { template<class Container> using type = SelectingIterator<Container, get_num>; };
 
-  public:
-    using iterator = SelectingIterator<_PairContainer, get_num>;
-    using const_iterator = SelectingIterator<const _PairContainer, get_num>;
-    using value_type = typename std::my_iterator_traits<iterator>::value_type;
-    using reference =  typename std::my_iterator_traits<iterator>::reference;
-
-    // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
-    PairItemIterFactory(std::shared_ptr<_PairContainer> _c): c(_c)  {}
-    PairItemIterFactory(_PairContainer& _c): c(&_c, std::NoDeleter()) {}
-    PairItemIterFactory(_PairContainer&& _c): c(std::make_shared<_PairContainer>(std::forward<_PairContainer>(_c))) {}
-
-    iterator begin() { return c->begin(); }
-    iterator end() { return c->end(); }
-    const_iterator begin() const { return const_iterator(c->begin()); }
-    const_iterator end() const { return const_iterator(c->end()); }
-    bool empty() const { return c->empty(); }
-    bool size() const { return c->size(); }
-  };
+  template<class _PairContainer, bool get_num>
+  using PairItemIterFactory = std::IterTplIterFactory<_PairContainer, void, std::BeginEndIters<_PairContainer>, SelectingIteratorFor<get_num>::template type>;
 
   template<class _PairContainer>
   using FirstFactory = PairItemIterFactory<_PairContainer, 0>;
@@ -119,20 +99,10 @@ namespace PT{
   using SecondFactory = PairItemIterFactory<_PairContainer, 1>;
 
   template<class _PairContainer>
-  constexpr FirstFactory<_PairContainer> firsts(_PairContainer& c) { return c; }
+  constexpr FirstFactory<std::remove_reference_t<_PairContainer>> firsts(_PairContainer&& c) { return c; }
   template<class _PairContainer>
-  constexpr SecondFactory<_PairContainer> seconds(_PairContainer& c) { return c; }
-  template<class _PairContainer>
-  constexpr FirstFactory<const _PairContainer> firsts(const _PairContainer& c) { return c; }
-  template<class _PairContainer>
-  constexpr SecondFactory<const _PairContainer> seconds(const _PairContainer& c) { return c; }
+  constexpr SecondFactory<std::remove_reference_t<_PairContainer>> seconds(_PairContainer&& c) { return c; }
 
-  template<class _PairContainer, size_t get_num>
-  std::ostream& operator<<(std::ostream& os, const PairItemIterFactory<_PairContainer, get_num>& fac)
-  {
-    for(const auto& i: fac) os << i << ' ';
-    return os;
-  }
 
 }
 

@@ -83,7 +83,8 @@ namespace std{
 
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
   template<class T> using iterator_of_t = conditional_t<is_const_v<remove_reference_t<T>>,
-    typename remove_reference_t<T>::const_iterator, typename remove_reference_t<T>::iterator>;
+                                                        typename remove_reference_t<T>::const_iterator,
+                                                        typename remove_reference_t<T>::iterator>;
   template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
 
 
@@ -119,10 +120,15 @@ namespace std{
   template<typename T>
   bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
   
+  template<bool condition, template<class> class X, template<class> class Y>
+  struct conditional_template { template<class Z> using type = X<Z>; };
+  template<template<class> class X, template<class> class Y>
+  struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
+
   // begin() and end() for forward and reverse iterators
   template<class Container,
            bool reverse = false,
-           template<class> class Iterator = iterator_of_t>
+           template<class> class Iterator = conditional_template<reverse, reverse_iterator_of_t, iterator_of_t>::template type>
   struct BeginEndIters
   {
     using iterator = Iterator<Container>;

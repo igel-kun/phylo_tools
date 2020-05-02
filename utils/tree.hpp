@@ -286,7 +286,8 @@ namespace PT{
 
     void tree_summary(const std::ostream& os) const
     {
-      DEBUG3(std::cout << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes; leaves: "<<leaves()<<"\n");
+      DEBUG3(std::cout << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<"\n");
+      
       for(const Node i: nodes()){
         std::cout << i << ":\n";
         std::cout << " IN: "<< in_edges(i);
