@@ -66,11 +66,11 @@ namespace PT{
     using ConstInEdgeContainerRef  = ConstInEdgeContainer;
 
     // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
-    using MapValueNonEmptyPredicate = std::MapValuePredicate<const SuccessorMap, const std::NonEmptySetPredicate<const ConstSuccContainer>>;
-    using EmptySuccIterFactory  = std::FilteredIterFactory<SuccessorMap, const MapValueNonEmptyPredicate>;
+    using MapValueNonEmptyPredicate = std::MapValuePredicate<std::NonEmptySetPredicate>;
+    using EmptySuccIterFactory  = std::FilteredIterFactory<SuccessorMap, MapValueNonEmptyPredicate>;
     using LeafContainer         = FirstFactory<EmptySuccIterFactory>;
     using LeafContainerRef      = LeafContainer;
-    using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, const MapValueNonEmptyPredicate>;
+    using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, MapValueNonEmptyPredicate>;
     using ConstLeafContainer    = FirstFactory<const ConstEmptySuccIterFactory>;
     using ConstLeafContainerRef = ConstLeafContainer;
 
@@ -137,8 +137,8 @@ namespace PT{
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
     ConstNodeContainerRef nodes() const { return _successors; }
     NodeContainerRef      nodes()       { return _successors; } 
-    ConstLeafContainerRef leaves() const { return ConstLeafContainerRef(ConstEmptySuccIterFactory(_successors, _successors.end(), _successors)); }
-    LeafContainerRef      leaves()       { return LeafContainerRef(EmptySuccIterFactory(_successors, _successors.end(), _successors)); }
+    ConstLeafContainerRef leaves() const { return ConstLeafContainerRef(ConstEmptySuccIterFactory(_successors, _successors.end())); }
+    LeafContainerRef      leaves()       { return LeafContainerRef(EmptySuccIterFactory(_successors, _successors.end())); }
 
     // iterate over adjacencies
     //NOTE: in order to allow the user to modify the edge-data associated with an adjacency, we give him/her a proxy container

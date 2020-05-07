@@ -74,7 +74,9 @@ namespace PT{
     using reference   = std::conditional_t<dereferences_to_lvalref, value_type&, value_type>;
     using pointer     = std::conditional_t<dereferences_to_lvalref, value_type*, std::self_deref<reference>>;
     
+    SelectingIterator(const SelectingIterator& iter): Parent(iter) {}
     SelectingIterator(const Parent& p): Parent(p) {}
+    SelectingIterator& operator=(const SelectingIterator& iter) { Parent::operator=(iter); return *this;}
 
     reference operator*() const { return std::get<get_num>(parent_deref()); }
     pointer operator->() const { return operator*(); }

@@ -231,7 +231,7 @@ namespace PT{
     { 
       std::cout << "making new non-end DFS iterator starting at "<<_root<<" (tracking? "<<track_seen<<")\n";
       std::cout << "root is seen? "<<is_seen(root)<<"\n";
-      if(track_seen && !is_seen(root)) dive(root);
+      if(!track_seen || !is_seen(root)) dive(root);
     }
 
 
@@ -411,9 +411,9 @@ namespace PT{
 
     // so STL containers provide construction by a pair of iterators; unfortunately, it's not a "pair of iterators" but two separate iterators,
     // so we cannot have a function returning two seperate iterators :( thus, we'll just have to do it this way:
-    template<class Container, class = std::enable_if<std::is_container_v<Container>>>
+    template<class Container, class = std::enable_if_t<std::is_container_v<Container>>>
     operator Container() const { std::cout << "const-casting to container\n"; return {begin(), end()}; }
-    template<class Container, class = std::enable_if<std::is_container_v<Container>>>
+    template<class Container, class = std::enable_if_t<std::is_container_v<Container>>>
     operator Container() { std::cout << "casting to container\n"; return {begin(), end()}; }
     template<class Container>
     Container& append_to(Container& c) { std::cout << "appending to container\n"; for(auto uv: *this) append(c, uv); return c; }

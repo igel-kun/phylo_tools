@@ -103,11 +103,12 @@ void print_extension(const MyNetwork& N, const Extension& ex)
   ext_to_tree(N, ex, gamma_el);
 
   std::cout << "constructing extension tree\n";
-  CompatibleROTree<MyNetwork> Gamma(gamma_el, N.labels());
-  const auto gamma_sw = ext_tree_sw_map(Gamma, N);
- 
-  std::cout << std::is_container_v<CompatibleROTree<MyNetwork>> << "\n";
+  const CompatibleROTree<MyNetwork> Gamma(gamma_el, N.labels());
   std::cout << "extension tree:\n" << Gamma << std::endl;
+  
+  const auto gamma_sw = ext_tree_sw_map(Gamma, N);
+  std::cout << "sw map: " << gamma_sw << std::endl;
+
   std::cout << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
 }
 

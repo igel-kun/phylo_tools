@@ -31,9 +31,9 @@ namespace PT{
     template<class T, class InvalidElement = void, uintptr_t Invalid = -1ul>
     using NodeMap = ConsecutiveMap<Node, T, InvalidElement, Invalid>;
 
-    using DegreeMap     = RawConsecutiveMap<Node, InOutDegree>;
-    using OutDegreeMap  = RawConsecutiveMap<Node, OutDegree>;
-    using InDegreeMap   = RawConsecutiveMap<Node, InDegree>;
+    using DegreeMap     = NodeMap<InOutDegree>;
+    using OutDegreeMap  = NodeMap<OutDegree>;
+    using InDegreeMap   = NodeMap<InDegree>;
     using NodeSet = ConsecutiveNodeSet;
 
   protected:
@@ -51,7 +51,7 @@ namespace PT{
     // prepare the container and insert a list of edges with given degrees
     // NOTE: this effectively destroys (not destructs) the DegreeMap
     template<class GivenEdgeContainer>
-    void setup_edges(GivenEdgeContainer&& given_edges, DegreeMap& deg, const NodeTranslation* const old_to_new)
+    void setup_edges(GivenEdgeContainer&& given_edges, RawConsecutiveMap<Node, InOutDegree>& deg, const NodeTranslation* const old_to_new)
     {
       const size_t num_nodes = deg.size();
      // reserve space for children
@@ -137,9 +137,9 @@ namespace PT{
     template<class T, class InvalidElement = void, uintptr_t Invalid = -1ul>
     using NodeMap = ConsecutiveMap<Node, T, InvalidElement, Invalid>;
 
-    using DegreeMap     = RawConsecutiveMap<Node, InOutDegree>;
-    using OutDegreeMap  = RawConsecutiveMap<Node, OutDegree>;
-    using InDegreeMap   = RawConsecutiveMap<Node, InDegree>;
+    using DegreeMap     = NodeMap<InOutDegree>;
+    using OutDegreeMap  = NodeMap<OutDegree>;
+    using InDegreeMap   = NodeMap<InDegree>;
     using NodeSet = ConsecutiveNodeSet;
   protected:
     using Parent::_successors;
@@ -152,7 +152,7 @@ namespace PT{
 
 
     template<class GivenEdgeContainer>
-    void setup_edges(GivenEdgeContainer&& given_edges, DegreeMap& deg)
+    void setup_edges(GivenEdgeContainer&& given_edges, RawConsecutiveMap<Node, InOutDegree>& deg)
     {
       const size_t num_nodes = deg.size();
       auto nh_start = _succ_storage.begin();
@@ -188,7 +188,7 @@ namespace PT{
       _succ_storage(given_edges.size())
     {
       DEBUG3(std::cout << "initializing ConsecutiveTreeAdjacencyStorage with "<<given_edges.size()<<" edges & leaf storage "<<leaves<<std::endl);
-      DegreeMap deg;
+      RawConsecutiveMap<Node, InOutDegree> deg;
       compute_degrees(given_edges, deg, old_to_new);
       _root = compute_root_and_leaves(deg, leaves);
       setup_edges(std::forward<GivenEdgeContainer>(given_edges), deg);

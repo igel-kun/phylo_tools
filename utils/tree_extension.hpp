@@ -52,16 +52,17 @@ namespace PT{
       for(const Node v: ext.children(u))
         sw_u += out.at(v);
       sw_u -= N.out_degree(u);
-      out[u] = sw_u;
+      append(out, u, sw_u);
       DEBUG3(std::cout << "found sw("<<u<<") = "<<sw_u<<std::endl);
     }
   }
+
   template<class _Network, class _Tree, class _Container = typename _Network::OutDegreeMap>
   _Container ext_tree_sw_map(const _Tree& ext, const _Network& N)
   {
     _Container result;
     ext_tree_sw_map(ext, N, result);
-    return result;
+    return result; // hopefully we'll get return-value optimization here ^^
   }
 
 

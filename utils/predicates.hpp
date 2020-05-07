@@ -3,81 +3,76 @@
 
 namespace std{
   // Predicates
+#warning "TODO: automatically detect static and dynamic predicates"
+  struct StaticPredicate { inline static constexpr bool is_static = true; };
+  struct DynamicPredicate { inline static constexpr bool is_static = false; };
   // note: for an iterator it, use pred.value(it) to get the value of the predicate for the item at position it
   template<class Predicate>
-  struct NotPredicate: public Predicate
+  struct StaticNotPredicate: public Predicate
   { template<class X> static bool value(const X& x) { return !Predicate::value(x); } };
-  struct TruePredicate{ template<class X> static bool value(const X& x) { return true; } };
+  template<class Predicate>
+  struct DynamicNotPredicate: public Predicate
+  {
+    using Predicate::Predicate;
+    template<class X> bool value(const X& x) const { return !Predicate::value(x); }
+  };
+  template<class Predicate>
+  using NotPredicate = conditional_t<Predicate::is_static, StaticNotPredicate<Predicate>, DynamicNotPredicate<Predicate>>;
+
+  struct TruePredicate: public StaticPredicate { template<class X> static bool value(const X& x) { return true; } };
   using FalsePredicate = NotPredicate<TruePredicate>;
 
   template<class T, T t>
-  struct StaticEqualPredicate
-  {
-    template<class Iter>
-    static bool value(const Iter& it) { return *it == t; }
-  };
+  struct StaticEqualPredicate: public StaticPredicate
+  { static bool value(const T& x) { return t == x; } };
   template<class T, T* t>
-  struct StaticEqualPtrPredicate
-  {
-    template<class Iter>
-    static bool value(const Iter& it) { return *it == *t; }
-  };
+  struct StaticEqualPtrPredicate: public StaticPredicate
+  { static bool value(const T& x) { return *t == x; } };
 
   template<class T>
-  struct DynamicEqualPredicate
+  struct DynamicEqualPredicate: public DynamicPredicate
   {
-    const T t;
+    T t;
     template<class... Args>
     DynamicEqualPredicate(Args&&... args): t(forward<Args>(args)...) {}
-    template<class Iter>
-    bool value(const Iter& it) const { return *it == t; }
+    bool value(const T& x) const { return t == x; }
   };
 
-  // predicate for maps, applying a predicate to the values
-  template<class _Map, class _ItemPredicate>
-  struct MapPredicate
+  template<class _ItemPredicate, size_t get_num>
+  struct StaticSelectingPredicate: public _ItemPredicate
+  { template<class Pair> bool value(const Pair& p) const { return _ItemPredicate::value(std::get<get_num>(p)); } };
+
+  template<class _ItemPredicate, size_t get_num>
+  struct DynamicSelectingPredicate: public _ItemPredicate
   {
-    using value_type = typename _Map::value_type;
-    const _Map& X;
-    const _ItemPredicate it_pred;
-    
-    template<class... Args>
-    MapPredicate(const _Map& _X, Args&&... args): X(_X), it_pred(forward<Args>(args)...) {}
-  };
+    using _ItemPredicate::_ItemPredicate;
 
-  template<class _Map, class _ItemPredicate>
-  struct MapValuePredicate: public MapPredicate<_Map, _ItemPredicate>{
-    using Parent = MapPredicate<_Map, _ItemPredicate>;
-    using Parent::Parent;
-    template<class MapIter>
-    bool value(const MapIter& it) const { return Parent::it_pred.value(&(it->second)); }
+    template<class Pair> 
+    bool value(const Pair& p) const { return _ItemPredicate::value(std::get<get_num>(p)); }
   };
-  
-  template<class _Map, class _ItemPredicate>
-  struct MapKeyPredicate: public MapPredicate<_Map, _ItemPredicate>{
-    using Parent = MapPredicate<_Map, _ItemPredicate>;
-    using Parent::Parent;
-    template<class MapIter>
-    bool value(const MapIter& it) const { return Parent::it_pred.value(&(it->first)); }
-  };
+  template<class _ItemPred, size_t get_num>
+  using SelectingPredicate = conditional_t<_ItemPred::is_static, StaticSelectingPredicate<_ItemPred, get_num>, DynamicSelectingPredicate<_ItemPred, get_num>>;
+
+  template<class _ItemPredicate>
+  using MapKeyPredicate = SelectingPredicate<_ItemPredicate, 0>;
+  template<class _ItemPredicate>
+  using MapValuePredicate = SelectingPredicate<_ItemPredicate, 1>;
+
 
   // predicate for containers of sets, returning whether the given set is empty
-  template<class _Set>
-  struct EmptySetPredicate {
-    template<class _SetIter = _Set*>
-    static bool value(const _SetIter& x) {return x->empty();}
-  };
-  template<class _Set>
-  using NonEmptySetPredicate = NotPredicate<EmptySetPredicate<_Set>>;
+  struct EmptySetPredicate: public StaticPredicate
+  { template<class _Set> static bool value(const _Set& x) {return x.empty();} };
+  using NonEmptySetPredicate = NotPredicate<EmptySetPredicate>;
 
   // a predicate returning true/or false depending whether the query is in a given set
   template<class Container, bool is_in = true>
-  struct ContainmentPredicate{
+  struct ContainmentPredicate: public DynamicPredicate
+  {
     using Item = typename Container::value_type;
-    const Container& c;
-    ContainmentPredicate(const Container& _c): c(_c) {}
-    template<class ContainerIter>
-    bool value(const ContainerIter& it) const { return test(c, reinterpret_cast<const Item>(*it)) == is_in; }
+    const Container* c;
+    ContainmentPredicate(const Container& _c): c(&_c) {}
+    template<class Item>
+    bool value(const Item& x) const { return test(*c, x) == is_in; }
   };
 
   /* THIS DOESN'T WORK YET... ULTIMATELY, I WANT TWO DIFFERENT filter_iterators DEPENDING ON WHETHER THE predicate IS STATIC

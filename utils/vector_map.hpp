@@ -18,14 +18,14 @@ namespace std{
 
   public:
     using Parent::Parent;
-    using typename Parent::insert_result;
     using typename Parent::key_type;
     using Parent::data;
     using Parent::size;
 
     using AbsentPredicate = _AbsentPredicate;
     using iterator = std::filtered_iterator<Parent, AbsentPredicate>;
-    using const_iterator = std::filtered_iterator<const Parent, AbsentPredicate>;
+    using const_iterator = filtered_iterator<const Parent, AbsentPredicate>;
+    using insert_result = pair<iterator, bool>;
   protected:
     void raw_resize(const key_type new_size) { Parent::resize(new_size); }
 
@@ -57,12 +57,12 @@ namespace std{
         Parent::reserve(key + 1);
         resize(key);
         Parent::emplace_back(forward<Args>(args)...);
-        set_present(key);
       } else if(!contains(key)){
         _Element* const val = data() + key;
         val->~_Element();  // destruct invalid element
         new (val) _Element(forward<Args>(args)...); // construct new _Element in place
       } else return { make_iterator(do_not_fix_index, {data(), key}), false };
+      set_present(key);
       return { make_iterator(do_not_fix_index, {data(), key}), true };
     }
 
@@ -153,9 +153,9 @@ namespace std{
   // for types that cannot have an invalid state, we'll have to keep a bitset around, indicating whether or not a key is present
   template<class _Key, class _Element>
   class bitset_vector_map:
-    public _vector_map<_Key, _Element, const MapKeyPredicate<const raw_vector_map<_Key, _Element>, ContainmentPredicate<const ordered_bitset, false>>>
+    public _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset, false>>>
   {
-    using Parent = _vector_map<_Key, _Element, const MapKeyPredicate<const raw_vector_map<_Key, _Element>, ContainmentPredicate<const ordered_bitset, false>>>;
+    using Parent = _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset, false>>>;
 
     // use a bitset to check who is present - NOTE: internally, ordered_bitset uses a raw_vector_map, which forces this separation of header files
     // into raw_vector_map.hpp and vector_map.hpp
@@ -171,11 +171,11 @@ namespace std{
   protected:
     void set_present(const key_type key) { present.set(key); }
     void set_absent(const key_type key) { present.unset(key); }
-    AbsentPredicate make_predicate() const { return AbsentPredicate(*this, present); }
+    AbsentPredicate make_predicate() const { return AbsentPredicate(present); }
   public:
     void resize(const key_type new_size) { Parent::raw_resize(new_size); }
 
-    virtual bool contains(const key_type key) const { return present.test(key); }
+    bool contains(const key_type key) const { cout << "checking containment of "<<key<<" in "<<present<<"\n"; return present.test(key); }
 
     void clear()
     {

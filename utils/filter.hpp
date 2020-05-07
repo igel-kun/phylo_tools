@@ -66,7 +66,7 @@ namespace std{
 
     Predicate pred;
 
-    inline void fix_index() { while(!it.is_invalid() && pred.value(it)) ++it; }
+    inline void fix_index() { while(!it.is_invalid() && pred.value(*it)) ++it; }
   public:
     
     struct IteratorData {
@@ -92,13 +92,13 @@ namespace std{
     {}
 
     // make a filtered iterator from a start iterator and an Iteratordata, that is { end iterator, arguments to build the predicate }
-    template<class _IteratorData, class = enable_if<is_same_v<remove_cvref_t<_IteratorData>, IteratorData>>>
+    template<class _IteratorData, class = enable_if_t<is_same_v<remove_cvref_t<_IteratorData>, IteratorData>>>
     filtered_iterator(const NormalIterator& _i, _IteratorData&& data):
       filtered_iterator(_i, data.first_invalid, move(data.pred))
     {}
 
     // make a filtered iterator from a start iterator and an Iteratordata, that is { end iterator, arguments to build the predicate }
-    template<class _IteratorData, class = enable_if<is_same_v<remove_cvref_t<_IteratorData>, IteratorData>>>
+    template<class _IteratorData, class = enable_if_t<is_same_v<remove_cvref_t<_IteratorData>, IteratorData>>>
     filtered_iterator(const do_not_fix_index_tag, const NormalIterator& _i, _IteratorData&& data):
       filtered_iterator(do_not_fix_index, _i, data.first_invalid, move(data.pred))
     {}
@@ -107,6 +107,9 @@ namespace std{
     template<class _Container, class _Predicate, class _NormalIterator>
     filtered_iterator(const filtered_iterator<_Container, _Predicate, reverse, _NormalIterator, Category>& other):
       Parent(other), pred(other.pred) {}
+
+    filtered_iterator(const filtered_iterator& iter) = default;
+    filtered_iterator& operator=(const filtered_iterator& iter) = default;
 
     filtered_iterator& operator++()    { if(!it.is_invalid()) {++it; fix_index();} return *this; }
     filtered_iterator  operator++(int) { _filtered_iterator result(*this); ++(*this); return result; }
@@ -138,6 +141,14 @@ namespace std{
     template<class, class, bool, class, class>
     friend class filtered_iterator;
   };
+
+  template<class Container,
+           class Predicate,
+           bool reverse,
+           class NormalIterator>
+  class filtered_iterator<Container, Predicate, reverse, NormalIterator, random_access_iterator_tag>:
+    public filtered_iterator<Container, Predicate, reverse, NormalIterator, bidirectional_iterator_tag>
+  { using filtered_iterator<Container, Predicate, reverse, NormalIterator, bidirectional_iterator_tag>::filtered_iterator; };
 
   // std::BeginEndIters wants an iterator that can be instanciated with only a container, so here we go...
   template<class Predicate, bool reverse>
