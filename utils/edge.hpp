@@ -64,10 +64,6 @@ namespace PT{
     template<class... Args> AbstractEdge(const Node u, Args&&... args):
       Parent(std::piecewise_construct, std::make_tuple(u), std::forward_as_tuple<Args...>(args...))
     {}
-    // construct the reverse of an edge in a similar manner as above
-    template<class Adjacency> AbstractEdge(const reverse_edge_tag, const Node u, Adjacency&& adj):
-      AbstractEdge(u, std::forward<Adjacency>(adj))
-    {}
     // construct from edge with different data; for example, from a ReverseEdge (whose data is a reference)
     template<class _Data>
     AbstractEdge(const AbstractEdge<_Data>& other):
@@ -101,6 +97,11 @@ namespace PT{
     using Data = _Data;
     using Adjacency = typename Parent::Adjacency;
  
+    // construct the reverse of an edge
+    template<class Adjacency> Edge(const reverse_edge_tag, const Node u, Adjacency&& adj):
+      Parent((Node)adj, u, adj.data())
+    {}
+
     Data& data() { return Parent::get_adjacency().data(); }
     const Data& data() const { return Parent::get_adjacency().data(); }
 
@@ -109,7 +110,15 @@ namespace PT{
   };
  
   template<> class Edge<void>: public AbstractEdge<Node>
-  { public: using AbstractEdge<Node>::AbstractEdge; };
+  {
+    using Parent = AbstractEdge<Node>;
+  public:
+    using Parent::Parent;
+
+    // construct the reverse of an edge
+    Edge(const reverse_edge_tag, const Node u, const Node v): Parent(v, u) {}
+
+  };
   
   template<class _Data>
   std::ostream& operator<<(std::ostream& os, const Edge<_Data>& e) {

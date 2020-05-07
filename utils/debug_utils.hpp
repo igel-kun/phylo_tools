@@ -3,6 +3,7 @@
 
 // on debuglevel 3 all DEBUG1, DEBUG2, and DEBUG3 statements are evaluated
 #ifndef NDEBUG
+#warning "compiling with debug output"
   #ifndef debuglevel
     #define debuglevel 5
   #endif
@@ -48,6 +49,7 @@
 #endif
 
 #ifdef STATISTICS
+#warning "compiling with statistics gathering/output"
 #define STAT(x) x
 #else
 #define STAT(x) 

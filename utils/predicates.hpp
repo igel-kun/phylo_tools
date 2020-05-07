@@ -1,4 +1,5 @@
 
+#pragma once
 
 namespace std{
   // Predicates
@@ -8,6 +9,29 @@ namespace std{
   { template<class X> static bool value(const X& x) { return !Predicate::value(x); } };
   struct TruePredicate{ template<class X> static bool value(const X& x) { return true; } };
   using FalsePredicate = NotPredicate<TruePredicate>;
+
+  template<class T, T t>
+  struct StaticEqualPredicate
+  {
+    template<class Iter>
+    static bool value(const Iter& it) { return *it == t; }
+  };
+  template<class T, T* t>
+  struct StaticEqualPtrPredicate
+  {
+    template<class Iter>
+    static bool value(const Iter& it) { return *it == *t; }
+  };
+
+  template<class T>
+  struct DynamicEqualPredicate
+  {
+    const T t;
+    template<class... Args>
+    DynamicEqualPredicate(Args&&... args): t(forward<Args>(args)...) {}
+    template<class Iter>
+    bool value(const Iter& it) const { return *it == t; }
+  };
 
   // predicate for maps, applying a predicate to the values
   template<class _Map, class _ItemPredicate>
@@ -20,6 +44,7 @@ namespace std{
     template<class... Args>
     MapPredicate(const _Map& _X, Args&&... args): X(_X), it_pred(forward<Args>(args)...) {}
   };
+
   template<class _Map, class _ItemPredicate>
   struct MapValuePredicate: public MapPredicate<_Map, _ItemPredicate>{
     using Parent = MapPredicate<_Map, _ItemPredicate>;
@@ -27,6 +52,7 @@ namespace std{
     template<class MapIter>
     bool value(const MapIter& it) const { return Parent::it_pred.value(&(it->second)); }
   };
+  
   template<class _Map, class _ItemPredicate>
   struct MapKeyPredicate: public MapPredicate<_Map, _ItemPredicate>{
     using Parent = MapPredicate<_Map, _ItemPredicate>;

@@ -21,7 +21,8 @@ namespace std {
     using value_type  = pair<_Key, _Element>;
     using reference   = pair<_Key, _Element&>;
     using const_reference = pair<_Key, const _Element&>;
-    using pointer     = self_deref<reference>;
+    using pointer       = self_deref<reference>;
+    using const_pointer = self_deref<const_reference>;
     using difference_type = ptrdiff_t;
     using iterator_category = std::random_access_iterator_tag;
 
@@ -122,7 +123,13 @@ namespace std {
     }
     template<class ...Args>
 	  insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, forward<Args>(args)...); }
-	  insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
+    // emplace_hint, ignoring the hint
+    template<class Iter, class ...Args>
+	  iterator emplace_hint(const Iter&, const key_type x, Args&&... args) { return try_emplace(x, forward<Args>(args)...).first; }
+	  
+    insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
+
+
 
     mapped_type& operator[](const key_type& key) { return Parent::operator[]((size_t)key); }
     const mapped_type& operator[](const key_type& key) const { return Parent::operator[]((size_t)key); }

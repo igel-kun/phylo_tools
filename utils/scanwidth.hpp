@@ -99,7 +99,7 @@ namespace PT{
 
           STAT(++num_subsets);
           DEBUG5(
-              std::cout << "computing best partial extension for node-set "<<nodes << "\n";
+              std::cout << "computing best partial extension for node-set "<<last_iter->first<< "\n";
               std::cout << "....::::: best extensions ::::....\n";
               for(const auto& x: dp_table) std::cout << x.first << ":\t"<<x.second.ex<<"\n";
               );

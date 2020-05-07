@@ -104,9 +104,11 @@ void print_extension(const MyNetwork& N, const Extension& ex)
 
   std::cout << "constructing extension tree\n";
   CompatibleROTree<MyNetwork> Gamma(gamma_el, N.labels());
-  const OutDegreeMap gamma_sw = ext_tree_sw_map(Gamma, N);
-  
-  std::cout << "extension tree:\n" << Gamma << std::endl << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
+  const auto gamma_sw = ext_tree_sw_map(Gamma, N);
+ 
+  std::cout << std::is_container_v<CompatibleROTree<MyNetwork>> << "\n";
+  std::cout << "extension tree:\n" << Gamma << std::endl;
+  std::cout << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
 }
 
 int main(const int argc, const char** argv)
@@ -134,7 +136,12 @@ int main(const int argc, const char** argv)
 
   std::cout << "\n ==== computing silly post-order extension ===\n";
   
-  const Extension ex(N.dfs().postorder());
+  //const Extension ex(N.dfs().postorder());
+  Extension ex;
+  auto PO = N.dfs().postorder();
+  auto it = PO.begin();
+  while(it != PO.end()) { ex.push_back(*it); ++it; }
+
   std::cout << ex << "\n";
   
   std::cout << "\n ==== computing optimal extension ===\n";

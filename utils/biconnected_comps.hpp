@@ -45,9 +45,16 @@ namespace PT{
             ++current_bridge;
           } else {
             // if we are to output the component below uv, then get "all edges below v, avoiding nodes that have been seen" from N
-            const Node v = uv.head(); 
-            current_edges = EdgeVec(N.edge_dfs_except(seen).postorder(v)); // move assignment
+            const Node v = uv.head();
+
+            std::cout << "collecting edges of BCC below "<<v<<", seen = "<<seen<<"\n";
+            current_edges.clear();
+            auto my_dfs = N.all_edges_dfs_except(seen);
+            auto traversal = my_dfs.postorder(v);
+            for(auto it = traversal.begin(); it != traversal.end(); ++it) append(current_edges, *it);
+
             append(seen, v);
+
             if(current_edges.empty()){
               ++current_bridge;
               if(enumerate_trivial)
@@ -63,7 +70,14 @@ namespace PT{
           // we indicate that we have seen the root component by setting bridge_next = true,
           // this is OK since bridge_next can otherwise only be true if current_bridge != bridges.end()
           if(!bridge_next){
-            current_edges = EdgeVec(N.edge_dfs_except(seen).postorder());
+            std::cout << "collecting edges of BCC below the root, seen = "<<seen<<"\n";
+            current_edges.clear();
+            auto my_dfs = N.all_edges_dfs_except(seen);
+            auto traversal = my_dfs.postorder();
+            for(auto it = traversal.begin(); it != traversal.end(); ++it) append(current_edges, *it);
+            //current_edges = EdgeVec(N.edge_dfs_except(seen).postorder());
+
+
             DEBUG4(std::cout << "root component (below "<<N.root()<<"): "<<current_edges<<"\n");
             bridge_next = true;
           } else is_end_iter = true;

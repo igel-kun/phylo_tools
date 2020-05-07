@@ -45,7 +45,7 @@ namespace PT{
     //       but is_declared_tree allows setting reasonable defaults (for example, for DFSIterators)
     static constexpr bool is_declared_tree = std::is_same_v<NetworkTypeTag, tree_tag>;
     static constexpr bool is_declared_network = std::is_same_v<NetworkTypeTag, network_tag>;
-    
+
     using MutabilityTag = typename _EdgeStorage::MutabilityTag;
     static constexpr bool is_mutable = std::is_same_v<MutabilityTag, mutable_tag>;
     static constexpr bool has_consecutive_nodes = is_mutable;
@@ -54,6 +54,9 @@ namespace PT{
     using LabelMap = _LabelMap;
     using LabelType = typename LabelMap::mapped_type;
     static constexpr bool is_single_labeled = std::is_same_v<LabelTag, single_label_tag>;
+
+    // we don't want to use the generic container-operator<< for trees, even though we provide an "iterator" type
+    using custom_output = std::true_type;
 
     using EdgeStorage = _EdgeStorage;
 
@@ -117,6 +120,8 @@ namespace PT{
     MetaTraversal<const _Tree, DefaultSeen, NodeTraversal> dfs() const { return *this; }
     MetaTraversal<      _Tree, DefaultSeen, EdgeTraversal> edge_dfs() { return *this; }
     MetaTraversal<const _Tree, DefaultSeen, EdgeTraversal> edge_dfs() const { return *this; }
+    MetaTraversal<      _Tree, DefaultSeen, AllEdgesTraversal> all_edges_dfs() { return *this; }
+    MetaTraversal<const _Tree, DefaultSeen, AllEdgesTraversal> all_edges_dfs() const { return *this; }
 
     //NOTE: SeenSet must support "append(set, node)" and "test(set, node)" - any set of nodes will do, even (un)ordered_bitset, but not vector<Node> (no test)
     template<class ExceptSet, class SeenSet = std::remove_reference_t<ExceptSet>>
@@ -127,6 +132,10 @@ namespace PT{
     MetaTraversal<      _Tree, SeenSet, EdgeTraversal> edge_dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
     template<class ExceptSet, class SeenSet = std::remove_reference_t<ExceptSet>>
     MetaTraversal<const _Tree, SeenSet, EdgeTraversal> edge_dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
+    template<class ExceptSet, class SeenSet = std::remove_reference_t<ExceptSet>>
+    MetaTraversal<      _Tree, SeenSet, AllEdgesTraversal> all_edges_dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
+    template<class ExceptSet, class SeenSet = std::remove_reference_t<ExceptSet>>
+    MetaTraversal<const _Tree, SeenSet, AllEdgesTraversal> all_edges_dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
 
 
 
@@ -241,46 +250,21 @@ namespace PT{
 
     // copy the subtree rooted at u into t
     template<class __Tree = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>>
-    __Tree get_rooted_subtree(const Node u) const { return {get_edges_below(u), node_labels}; }
+    __Tree get_rooted_subtree(const Node u) const
+    { return {get_edges_below(u), node_labels}; }
     // copy the subtree rooted at u into t, but ignore subtrees rooted at nodes in 'except'
     template<class __Tree = _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>, class ExceptContainer>
-    __Tree get_rooted_subtree_except(const Node u, ExceptContainer&& except) const { return {get_edges_below_except(u, except), node_labels}; }
+    __Tree get_rooted_subtree_except(const Node u, ExceptContainer&& except) const
+    { return {get_edges_below_except(u, except), node_labels}; }
 
 
     template<class _Edgelist>
     _Edgelist& get_edges_below(const Node u, _Edgelist& el) const
-    {
-      for(const auto& uv: out_edges(u)){
-        append(el, uv);
-        get_edges_below(uv.head(), el);
-      }
-      return el;
-    }
-
-    template<class _Edgelist = std::vector<Edge>>
-    _Edgelist get_edges_below(const Node u) const
-    {
-      _Edgelist result;
-      return get_edges_below(u, result);
-    }
+    { return all_edges_dfs().postorder(u).append_to(el); }
 
     template<class _Edgelist, class _NodeContainer>
     _Edgelist& get_edges_below_except(const Node u, _Edgelist& el, const _NodeContainer& except) const
-    {
-      for(const auto& uv: out_edges(u)) if(!contains(except, uv.head())) {
-        append(el, uv);
-        get_edges_below_except(uv.head(), el, except);
-      }
-      return el;
-    }
-
-    template<class _Edgelist = std::vector<Edge>, class _NodeContainer>
-    _Edgelist get_edges_below_except(const Node u, const _NodeContainer& except) const
-    {
-      _Edgelist result;
-      return get_edges_below_except(u, result, except);
-    }
-
+    { return all_edges_dfs_except(except).postorder(u).append_to(el); }
 
     // ================== construction =====================
 
@@ -389,13 +373,13 @@ namespace PT{
   // these two types should cover 95% of all (non-internal) use cases
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = HashMap<Node, std::string>>
   using RWTree = Tree<_NodeData, _EdgeData, _LabelTag, MutableTreeAdjacencyStorage<_EdgeData>, _LabelMap>;
-  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = RawConsecutiveMap<Node, std::string>>
   using ROTree = Tree<_NodeData, _EdgeData, _LabelTag, ConsecutiveTreeAdjacencyStorage<_EdgeData>, _LabelMap>;
 
   // here's 2 for multi-label convenience
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = multi_label_tag, class _LabelMap = HashMap<Node, std::string>>
   using RWMulTree = RWTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
-  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = multi_label_tag, class _LabelMap = ConsecutiveMap<Node, std::string>>
+  template<class _NodeData = void, class _EdgeData = void, class _LabelTag = multi_label_tag, class _LabelMap = RawConsecutiveMap<Node, std::string>>
   using ROMulTree = ROTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
 
   // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)

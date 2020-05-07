@@ -25,11 +25,11 @@ namespace std{
   // don't add const to void...
   template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
 
-  template<class N, class T = void> struct get_const_ptr { using type = add_pointer<my_add_const_t<typename iterator_traits<N>::value_type>>; };
+  template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
   template<class N> using get_const_ptr_t = typename get_const_ptr<remove_cvref_t<N>>::type;
 
-  template<class N, class T = void> struct get_const_ref { using type = add_lvalue_reference<my_add_const_t<typename iterator_traits<N>::value_type>>; };
+  template<class N, class T = void> struct get_const_ref { using type = add_lvalue_reference_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ref<N, void_t<typename N::const_reference>> { using type = typename N::const_reference; };
   template<class N> using get_const_ref_t = typename get_const_ref<remove_cvref_t<N>>::type;
 
@@ -38,11 +38,17 @@ namespace std{
   struct my_iterator_traits: public iterator_traits<T>
   {
     // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
-    using value_type      = conditional_t<!is_pointer_v<T>, typename iterator_traits<T>::value_type, remove_reference_t<typename iterator_traits<T>::reference>>;
+    using value_type = conditional_t<!is_pointer_v<T>, typename iterator_traits<T>::value_type, remove_reference_t<typename iterator_traits<T>::reference>>;
     using const_reference = get_const_ref_t<T>;
     using const_pointer   = get_const_ptr_t<T>;
   };
 
+  template<class _Iterator>
+  constexpr bool is_forward_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, forward_iterator_tag>;
+  template<class _Iterator>
+  constexpr bool is_bidirectional_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, bidirectional_iterator_tag>;
+  template<class _Iterator>
+  constexpr bool is_random_access_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, random_access_iterator_tag>;
 
   template<typename T,typename U>
   struct copy_cv
@@ -72,13 +78,19 @@ namespace std{
 
   //a container is something we can iterate through, that is, it has an iterator
   template<class N, class T = void> struct is_container: public false_type {};
-  template<class N> struct is_container<N, void_t<typename N::value_type>>: public true_type {};
+  template<class N> struct is_container<N, void_t<typename N::iterator>>: public true_type {};
   template<class N> constexpr bool is_container_v = is_container<remove_cvref_t<N>>::value;
   
   // a map is something with a mapped_type in it
   template<class N, class T = void> struct is_map: public false_type {};
   template<class N> struct is_map<N, void_t<typename N::mapped_type>>: public true_type {};
   template<class N> constexpr bool is_map_v = is_map<remove_cvref_t<N>>::value;
+
+  // have a way for a container to tell us not to use the generic operator<< for it; to avoid the generic operator<<, alias "custom_output" to "std::true_type"
+  template<class N, class T = void> struct has_custom_output: public false_type {};
+  template<class N> struct has_custom_output<N, void_t<typename N::custom_output>>: public N::custom_output {};
+  template<class N> struct has_custom_output<N, enable_if_t<is_convertible_v<N, std::string>>>: public true_type {}; // std::string gets a custom output
+  template<class N> constexpr bool has_custom_output_v = has_custom_output<remove_cvref_t<N>>::value;
 
 
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
@@ -224,7 +236,7 @@ namespace std{
   };
 
 
-  template<class C, class = enable_if_t<is_container_v<C> && !is_convertible_v<C, std::string>>>
+  template<class C, class = enable_if_t<is_container_v<C> && !has_custom_output_v<C>>>
   inline std::ostream& operator<<(std::ostream& os, const C& objs)
   {
     os << '[';
@@ -244,32 +256,6 @@ namespace std{
   {
     return os << r.get();
   }
-
-  //! a hash computation for a set, XORing its members
-  template<typename _Container>
-  struct set_hash{
-    size_t operator()(const _Container& S) const
-    {
-      size_t result = 0;
-      static const std::hash<typename _Container::value_type> Hasher;
-      for(const auto& i : S)
-        result ^= Hasher(i);
-      return result;
-    }
-  };
-
-  //! a hash computation for a list, XORing and cyclic shifting its members (such that the order matters)
-  template<typename _Container>
-  struct list_hash{
-    size_t operator()(const _Container& S) const
-    {
-      size_t result = 0;
-      static const std::hash<typename _Container::value_type> Hasher;
-      for(const auto& i : S)
-        result = rotl(result, 1) ^ Hasher(i);
-      return result;
-    }
-  };
 
   //! add two pairs of things
   template <typename A, typename B>

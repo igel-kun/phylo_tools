@@ -37,6 +37,11 @@ namespace PT{
 
     template<class T>
     using NodeMap = HashMap<Node, T>;
+    
+    using DegreeMap = NodeMap<InOutDegree>;
+    using OutDegreeMap = NodeMap<OutDegree>;
+    using InDegreeMap = NodeMap<InDegree>;
+    using NodeSet = PT::NodeSet;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
@@ -145,6 +150,11 @@ namespace PT{
 
     template<class T>
     using NodeMap = HashMap<Node, T>;
+
+    using DegreeMap = NodeMap<InOutDegree>;
+    using OutDegreeMap = NodeMap<OutDegree>;
+    using InDegreeMap = NodeMap<InDegree>;
+    using NodeSet = PT::NodeSet;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;

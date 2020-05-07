@@ -43,11 +43,12 @@
 #define PWC std::piecewise_construct
 #define SIZE_T_BITS ((unsigned)(CHAR_BIT*sizeof(size_t)))
 
-
+/*
 #if __cplusplus < 201703L
 	//! a more readable containment check
 	#define contains(x,y) ((x).find(y) != (x).end())
 #endif
+*/
 
 // find x in the container "list" and, ONLY IF NOT FOUND, execute constructor, assign findings to result (which should be a reference to value_type)
 #define FIND_OR_CONSTRUCT(result,x,list,constructor) {auto ___it = list.find(x); if(___it == list.end()) ___it = list.insert(___it, {x, constructor}); result = ___it->second;}

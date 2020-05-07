@@ -71,7 +71,7 @@ namespace PT{
   // make an edge container from a head and a container of tails
   template<class _AdjContainer>
   using InEdgeIterator = InOutEdgeIterator<_AdjContainer, ReverseEdgeMaker>;
-  // make an edge container from a head and a container of tails
+  // make an edge container from a tail and a container of heads
   template<class _AdjContainer>
   using OutEdgeIterator = InOutEdgeIterator<_AdjContainer>;
 

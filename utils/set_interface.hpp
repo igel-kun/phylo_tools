@@ -194,4 +194,35 @@ namespace std {
   }
 
 
+  //! a hash computation for a set, XORing its members
+  template<typename _Container>
+  struct set_hash{
+    inline static constexpr std::hash<typename _Container::value_type> Hasher{};
+    size_t operator()(const _Container& S) const
+    {
+      size_t result = 0;
+      for(const auto& i : S)
+        result ^= Hasher(i);
+      return result;
+    }
+  };
+  // iterable bitset can be hashed faster
+  template<> struct set_hash<ordered_bitset>: public hash<ordered_bitset> {};
+  template<> struct set_hash<unordered_bitset>: public hash<unordered_bitset> {};
+
+  //! a hash computation for a list, XORing and cyclic shifting its members (such that the order matters)
+  template<typename _Container>
+  struct list_hash{
+    inline static constexpr std::hash<typename _Container::value_type> Hasher{};
+    size_t operator()(const _Container& S) const
+    {
+      size_t result = 0;
+      for(const auto& i : S)
+        result = rotl(result, 1) ^ Hasher(i);
+      return result;
+    }
+  };
+
+
+
 }

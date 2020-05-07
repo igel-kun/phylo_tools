@@ -38,7 +38,9 @@ namespace std {
     using value_type = uintptr_t;
     // NOTE: bitsets cannot provide meaningful references to their members
     using reference  = value_type;
-    using const_reference = const value_type;
+    using const_reference = reference;
+    using pointer = std::self_deref<value_type>;
+    using const_pointer = pointer;
 
     using iterator = bitset_iterator<bucket_map>;
     using const_iterator = iterator;
@@ -106,7 +108,6 @@ namespace std {
 
     bool test(const value_type x) const
     {
-      std::cout << "finding "<<x<<" in "<<to_set(*this)<<"\n";
       const auto it = storage.find(BUCKET_OF(x));
       if(it != storage.end())
         return TEST_IN_BUCKET(it->second, x);
@@ -335,9 +336,8 @@ namespace std {
   template<typename bucket_map>
   struct hash<iterable_bitset<bucket_map>>{
     size_t operator()(const iterable_bitset<bucket_map>& bs) const{
-      const bucket_map& storage = bs.data();
       size_t result = 0;
-      for(const auto& item: storage) has_combine(result, item);
+      for(const auto& item: bs.data()) result ^= item;
       return result;
     }
   };
@@ -569,6 +569,7 @@ namespace std {
     for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
     return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
   }
+
 
   // ========================= iterators =====================================
   

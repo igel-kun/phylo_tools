@@ -99,9 +99,9 @@ namespace PT{
   using SecondFactory = PairItemIterFactory<_PairContainer, 1>;
 
   template<class _PairContainer>
-  constexpr FirstFactory<std::remove_reference_t<_PairContainer>> firsts(_PairContainer&& c) { return c; }
+  constexpr FirstFactory<std::remove_reference_t<_PairContainer>> firsts(_PairContainer&& c) { return std::forward<_PairContainer>(c); }
   template<class _PairContainer>
-  constexpr SecondFactory<std::remove_reference_t<_PairContainer>> seconds(_PairContainer&& c) { return c; }
+  constexpr SecondFactory<std::remove_reference_t<_PairContainer>> seconds(_PairContainer&& c) { return std::forward<_PairContainer>(c); }
 
 
 }

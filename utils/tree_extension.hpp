@@ -56,7 +56,7 @@ namespace PT{
       DEBUG3(std::cout << "found sw("<<u<<") = "<<sw_u<<std::endl);
     }
   }
-  template<class _Network, class _Tree, class _Container = OutDegreeMap>
+  template<class _Network, class _Tree, class _Container = typename _Network::OutDegreeMap>
   _Container ext_tree_sw_map(const _Tree& ext, const _Network& N)
   {
     _Container result;

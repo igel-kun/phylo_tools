@@ -169,11 +169,21 @@ namespace PT{
 
   };
 
+  template<class _Store>
+  using SuccContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstSuccContainerRef, typename _Store::SuccContainerRef>;
+  template<class _Store>
+  using PredContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstPredContainerRef, typename _Store::PredContainerRef>;
+  template<class _Store>
+  using LeafContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstLeafContainerRef, typename _Store::LeafContainerRef>;
+  template<class _Store>
+  using OutEdgeContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstOutEdgeContainerRef, typename _Store::OutEdgeContainerRef>;
+  template<class _Store>
+  using InEdgeContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstInEdgeContainerRef, typename _Store::InEdgeContainerRef>;
+  template<class _Store>
+  using EdgeContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstEdgeContainerRef, typename _Store::EdgeContainerRef>;
 
   // the following classes are for adding (or not) node-data onto any form of _EdgeStorage
 
-  // NOTE: be advised not to interprete default-constructed NodeData as "has already been given data" when using consecutive storages,
-  //       since ConsecutiveMap will default-construct all missing NodeData up to i when constructing NodeData for i (see raw_vector_map.hpp)
   // NOTE: the weird std::conditional is needed because otherwise, the default template arg cannot be initialized if _NodeData == void
   template<class _NodeData,
            class _EdgeStorage,

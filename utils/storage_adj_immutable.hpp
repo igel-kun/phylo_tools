@@ -8,11 +8,11 @@
 namespace PT{
   // by default, save the edge data in the successor map and provide a reference in each "reverse adjacency" of the predecessor map
   template<class EdgeData>
-  using DefaultConsecutiveSuccessorMap = ConsecutiveMap<Node, ConsecutiveStorageNoMem<AdjacencyFromData<EdgeData>>>;
+  using DefaultConsecutiveSuccessorMap = RawConsecutiveMap<Node, ConsecutiveStorageNoMem<AdjacencyFromData<EdgeData>>>;
   template<class EdgeData>
   using DefaultConsecutivePredecessorMap = DefaultConsecutiveSuccessorMap<DataReference<EdgeData>>;
   template<class EdgeData>
-  using DefaultConsecutiveTreePredecessorMap = ConsecutiveMap<Node, std::SingletonSet<ReverseAdjacencyFromData<EdgeData>>>;
+  using DefaultConsecutiveTreePredecessorMap = RawConsecutiveMap<Node, std::SingletonSet<ReverseAdjacencyFromData<EdgeData>>>;
 
 
   template<class _EdgeData = void,
@@ -28,10 +28,13 @@ namespace PT{
     using typename Parent::RevEdge;
     using typename Parent::RevAdjacency;
 
-    template<class T>
-    using NodeMap = ConsecutiveMap<Node,T>;
+    template<class T, class InvalidElement = void, uintptr_t Invalid = -1ul>
+    using NodeMap = ConsecutiveMap<Node, T, InvalidElement, Invalid>;
 
-    using DegreeMap = NodeMap<InOutDegree>;
+    using DegreeMap     = RawConsecutiveMap<Node, InOutDegree>;
+    using OutDegreeMap  = RawConsecutiveMap<Node, OutDegree>;
+    using InDegreeMap   = RawConsecutiveMap<Node, InDegree>;
+    using NodeSet = ConsecutiveNodeSet;
 
   protected:
     using Parent::_successors;
@@ -91,7 +94,7 @@ namespace PT{
       _pred_storage(given_edges.size())
     {
       DEBUG3(std::cout << "initializing ConsecutiveNetworkAdjacencyStorage with leaf storage at "<<leaves<<", translate at "<<old_to_new<<" and "<<given_edges.size()<<" consecutive edges:\n" << given_edges<<std::endl);
-      ConsecutiveMap<Node, InOutDegree> deg;
+      RawConsecutiveMap<Node, InOutDegree> deg;
       compute_degrees(given_edges, deg, old_to_new);
       
       std::cout << "computed degrees:\n" << deg << '\n';
@@ -131,10 +134,13 @@ namespace PT{
     using typename Parent::Edge;
     using typename Parent::Adjacency;
 
-    template<class T>
-    using NodeMap = ConsecutiveMap<Node,T>;
+    template<class T, class InvalidElement = void, uintptr_t Invalid = -1ul>
+    using NodeMap = ConsecutiveMap<Node, T, InvalidElement, Invalid>;
 
-    using DegreeMap = NodeMap<InOutDegree>;
+    using DegreeMap     = RawConsecutiveMap<Node, InOutDegree>;
+    using OutDegreeMap  = RawConsecutiveMap<Node, OutDegree>;
+    using InDegreeMap   = RawConsecutiveMap<Node, InDegree>;
+    using NodeSet = ConsecutiveNodeSet;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
