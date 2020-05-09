@@ -24,6 +24,8 @@ namespace std{
 
   // don't add const to void...
   template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
+  // is_arithmetic is false for pointers.... why?
+  template<class T> constexpr bool is_really_arithmetic_v = is_arithmetic_v<T> || is_pointer_v<T>;
 
   template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
@@ -109,8 +111,8 @@ namespace std{
 
 
   // a class that returns itself on dereference 
-  // (useful for iterators returning constructed things instead of pointers to things - for example producing Edges from a Node and a set of Nodes)
-  template<class T>
+  // useful for iterators returning rvalues instead of lvalue references
+  template<class T, bool = is_really_arithmetic_v<remove_reference_t<T>>>
   struct self_deref: public T
   {
     using T::T;
@@ -119,6 +121,16 @@ namespace std{
     const T& operator*() const { return *this; }
     T* operator->() { return this; }
     const T* operator->() const { return this; }
+  };
+  template<class T>
+  struct self_deref<T, true>
+  {
+    T value;
+    self_deref(const T& x): value(x) {}
+    T& operator*() { return value; }
+    const T& operator*() const { return value; }
+    T* operator->() { return &value; }
+    const T* operator->() const { return &value; }
   };
 
 
@@ -318,6 +330,24 @@ namespace std{
   struct NoDeleter {
     template<class T>
     inline void operator()(T* p) const {}
+  };
+
+  // a constexpr_factory churns out constpxr objects initialized with given template arguments
+  //NOTE: this is useful to pass static constexpr objects such as passing an "invalid" state to singleton_set or simple_vector_map
+  template<class Invalid, class... Args>
+  struct constexpr_fac
+  {
+    template<Args... args>
+    struct factory
+    {
+      static constexpr Invalid value() { return Invalid(args...); }
+    };
+  };
+  // for integral type, specialize the factory to construct -1
+  template<class Invalid>
+  struct invalid_fac
+  {
+    static constexpr Invalid value() { return Invalid(-1u); }
   };
 
 }

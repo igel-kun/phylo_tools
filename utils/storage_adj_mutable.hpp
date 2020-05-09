@@ -18,7 +18,7 @@ namespace PT{
   template<class _EdgeData>
   using DefaultMutablePredecessorMap = DefaultMutableSuccessorMap<DataReference<_EdgeData>>;
   template<class _EdgeData>
-  using DefaultMutableTreePredecessorMap = HashMap<Node, std::SingletonSet<ReverseAdjacencyFromData<_EdgeData>>>;
+  using DefaultMutableTreePredecessorMap = HashMap<Node, std::singleton_set<ReverseAdjacencyFromData<_EdgeData>, std::invalid_fac<Node>>>;
 
 
   template<class _EdgeData = void,
@@ -38,9 +38,9 @@ namespace PT{
     template<class T>
     using NodeMap = HashMap<Node, T>;
     
-    using DegreeMap = NodeMap<InOutDegree>;
-    using OutDegreeMap = NodeMap<OutDegree>;
-    using InDegreeMap = NodeMap<InDegree>;
+    using Translation   = NodeMap<Node>;
+    using InOutDegreeMap = NodeMap<InOutDegree>;
+    using DegreeMap = NodeMap<Degree>;
     using NodeSet = PT::NodeSet;
   protected:
     using Parent::_successors;
@@ -110,7 +110,7 @@ namespace PT{
 
 
     //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     MutableNetworkAdjacencyStorage(GivenEdgeContainer&& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
@@ -125,7 +125,7 @@ namespace PT{
     }
 
     //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     MutableNetworkAdjacencyStorage(const non_consecutive_tag_t,
                                     GivenEdgeContainer&& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
@@ -151,9 +151,9 @@ namespace PT{
     template<class T>
     using NodeMap = HashMap<Node, T>;
 
-    using DegreeMap = NodeMap<InOutDegree>;
-    using OutDegreeMap = NodeMap<OutDegree>;
-    using InDegreeMap = NodeMap<InDegree>;
+    using Translation   = NodeMap<Node>;
+    using InOutDegreeMap = NodeMap<InOutDegree>;
+    using DegreeMap = NodeMap<Degree>;
     using NodeSet = PT::NodeSet;
   protected:
     using Parent::_successors;
@@ -235,8 +235,30 @@ namespace PT{
       } else return false;
     }
 
+  protected:
+    //! insert a new node with the given adjacencies
+    //NOTE: with the knowledge that nodes will be consecutive, you can insert adjacencies involving nodes that have not been inserted yet (this can break!)
+    template<class AdjacencyContainer>
+    Node construct_new_node(AdjacencyContainer&& children)
+    {
+      const Node u = _successors.size();
+      auto& adj_storage = append(_successors, u).first->second;
+      // insert adjacencies by moving from the adjacencies in the given container
+      for(auto&& in_adj: children){
+        auto& adj_in_storage = *(append(adj_storage, std::move(in_adj)).first);
+        if(!append(_predecessors, (Node)in_adj, get_reverse_adjacency(u, adj_in_storage)).second)
+          throw std::logic_error("cannot create tree with reticulation (" + std::to_string((Node)in_adj) + ")");
+      }
+      return u;
+    }
+
+  public:
+
+    //! this allows construction of an empty storage, for compatibility with the Immutable one, it takes a size_t
+    MutableTreeAdjacencyStorage(size_t = 0) {}
+
     //! initialization from edgelist
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     MutableTreeAdjacencyStorage(GivenEdgeContainer&& given_edges,
                                  NodeTranslation* old_to_new = nullptr,
                                  LeafContainer* leaves = nullptr):
@@ -248,7 +270,7 @@ namespace PT{
     }
 
     //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec>
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     MutableTreeAdjacencyStorage(const non_consecutive_tag_t,
                                     const GivenEdgeContainer& given_edges,
                                     NodeTranslation* old_to_new = nullptr,

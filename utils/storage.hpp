@@ -30,22 +30,32 @@ namespace PT{
     using iterator = _Item*;
     using const_iterator = const _Item*;
 
-    ConsecutiveStorageNoMem():
-      ConsecutiveStorageNoMem(nullptr)
-    {}
 
-    ConsecutiveStorageNoMem(_Item* _start, const size_t _count = 0):
+    ConsecutiveStorageNoMem(_Item* const _start, const size_t _count = 0):
       start(_start),
       count(_start == nullptr ? 0 : _count)
     {
       std::cout << "constructing new storage in pre-allocated memory at "<<start<<" (space for "<<_count<<" items)\n";
     }
 
+    ConsecutiveStorageNoMem(): ConsecutiveStorageNoMem(nullptr) {}
+
     template<class __Item>
     ConsecutiveStorageNoMem(const ConsecutiveStorageNoMem<__Item>& storage):
       start((_Item*)(storage.cbegin())),
       count(storage.size())
     {}
+
+    // copy/move items from another container into us
+    template<class Iterator>
+    ConsecutiveStorageNoMem(_Item* _start, Iterator first, const Iterator& last):
+      start(_start), count(0)
+    {
+      if(first != last)
+        do{
+          new(_start++) _Item(std::move(*first));
+        } while(++first != last);  // this looks a bit weird because I want to avoid (possibly) expensive post-increments of Iterator
+    }
 
     // convenience functions to not have to write .start[] all the time
     inline reference operator[](const size_t i) { return start[i]; }
@@ -62,8 +72,6 @@ namespace PT{
     inline iterator rend() { return begin() - 1; }
     inline const_iterator rbegin() const { return end() - 1; }
     inline const_iterator rend() const { return begin() - 1; }
-    inline const_iterator cbegin() const { return start; }
-    inline const_iterator cend() const { return start + count; }
     inline reference       back()       { return *rbegin(); }
     inline const_reference back() const { return *rbegin(); }
     inline reference       front()       { return *begin(); }
@@ -96,6 +104,7 @@ namespace PT{
   class ConsecutiveStorage: public ConsecutiveStorageNoMem<_Item>
   {
     using Parent = ConsecutiveStorageNoMem<_Item>;
+  protected:
     using Parent::start;
     using Parent::count;
   public:
@@ -107,7 +116,8 @@ namespace PT{
       DEBUG5(std::cout << "creating ConsecutiveStorage at "<<start<<" for "<<_count<<" items of size "<<sizeof(_Item)<<std::endl);
     }
 
-    void resize(const size_t _count){
+    void resize(const size_t _count)
+    {
       if(_count){
         if(start){
           if((start = reinterpret_cast<_Item*>(std::realloc(start, _count))) == nullptr) throw std::bad_alloc();
@@ -119,6 +129,7 @@ namespace PT{
       }
       count = _count;
     }
+    void extend(const size_t _count) { resize(count + _count); }
 
     ~ConsecutiveStorage() { std::free(start); }
   };

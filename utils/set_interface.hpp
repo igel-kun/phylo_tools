@@ -133,11 +133,9 @@ namespace std {
 
   // all this BS with containers supporting contains() or not is really unnerving
   template<class T>
-  inline bool test(const T& _set, const typename T::value_type& key) { return _set.find(key) != _set.end(); }
+  inline bool test(const T& _set, const typename T::value_type& key) { return _set.count(key); }
   template<class T, class = enable_if_t<is_map_v<T>>>
-  inline bool test(const T& _map, const typename T::key_type& key) { return _map.find(key) != _map.end(); }
-  template<class T>
-  inline bool test(const iterable_bitset<T>& bs, const uintptr_t key) { return bs.test(key); }
+  inline bool test(const T& _map, const typename T::key_type& key) { return _map.count(key); }
 
   // I would write an operator= to assign unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
   template<class T>

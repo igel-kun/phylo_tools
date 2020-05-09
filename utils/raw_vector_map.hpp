@@ -129,8 +129,6 @@ namespace std {
 	  
     insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
-
-
     mapped_type& operator[](const key_type& key) { return Parent::operator[]((size_t)key); }
     const mapped_type& operator[](const key_type& key) const { return Parent::operator[]((size_t)key); }
     mapped_type& at(const key_type& key) { return Parent::at((size_t)key); }
@@ -143,8 +141,11 @@ namespace std {
     const_iterator end() const { return {data(), size()}; }
     const_iterator cend() const { return {data(), size()}; }
 
-    iterator find(const _Key& x) { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
-    const_iterator find(const _Key& x) const { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
+    iterator find(const key_type x) { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
+    const_iterator find(const key_type x) const { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
+    
+    bool contains(const key_type x) const { return x < size(); }
+    bool count(const key_type x) const { return contains(x); }
   };
 
 

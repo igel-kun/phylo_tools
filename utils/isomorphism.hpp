@@ -30,10 +30,14 @@ namespace PT{
   };
 
 
-  template<class NetworkA, class NetworkB>
+  //NOTE: you may customize the possibility-set type to your needs:
+  //    for example, for single-labeled trees, we recommend a singleton_set,
+  //    for low-multiply labeled trees & low-level networks an unordered_set<Node> should be good
+  template<class NetworkA, class NetworkB,
+    class _PossSet = std::conditional_t<NetworkB::has_consecutive_nodes, std::ordered_bitset, std::unordered_bitset>>
   class IsomorphismMapper
   {
-    using PossSet     = std::conditional_t<NetworkB::has_consecutive_nodes, std::ordered_bitset, std::unordered_bitset>;
+    using PossSet     = _PossSet;
     using MappingPossibility = typename NetworkA::template NodeMap<PossSet>;
     using UpdateSet   = std::unordered_bitset;
     using UpdateOrder = std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair> >;
@@ -105,21 +109,22 @@ namespace PT{
     {
       using MySomething = std::remove_cvref_t<Something>;
       // keep track of nodes in N2 mapping to each something
-      HashMap<MySomething, PossSet> possible_N2_nodes;
       // also keep a history of how many of each Something we've seen (this should be equal between N1 & N2)
-      HashMap<MySomething, size_t> histogram;
+      using PossAndHist = std::pair<PossSet, size_t>;
+      HashMap<MySomething, PossAndHist> poss_and_hist;
 
       for(const Node u: N2){
         const Something s = (N2.*node_to_something_N2)(u);
-        possible_N2_nodes.try_emplace(s, size_N).first->second.set(u);
-        histogram[s]++;
+        PossAndHist& ph = poss_and_hist.try_emplace(s, size_N, 0).first->second
+        ph.first.set(u);
+        ph.second++;
       }
       for(const Node u: N1){
         const Something s = (N1.*node_to_something_N1)(u);
-        const auto it = possible_N2_nodes.find(s);
-        if(it != possible_N2_nodes.end()) {
-          update_poss(u, it->second);
-          if(histogram[s]-- == 0) throw NoPoss("node histograms differ");
+        const auto it = poss_and_hist.find(s);
+        if(it != poss_and_hist.end()) {
+          update_poss(u, it->second.first);
+          if((it->second.second)-- == 0) throw NoPoss("node histograms differ");
         } else throw NoPoss(N1, u);
       }
     }
@@ -127,14 +132,10 @@ namespace PT{
     // use labels to restrict possibilities
     template<class NodeLabelMap>
     void restrict_by_label(const NodeLabelMap& _map)
-    {
-      restrict_by_something<const LabelType&>(&NetworkA::label, &NetworkB::label);
-    }
+    { restrict_by_something<const LabelType&>(&NetworkA::label, &NetworkB::label); }
 
     void restrict_by_degree()
-    {
-      restrict_by_something<InOutDegree>(&NetworkA::in_out_degree, &NetworkB::in_out_degree);
-    }
+    { restrict_by_something<InOutDegree>(&NetworkA::in_out_degree, &NetworkB::in_out_degree); }
 
     // use degrees and labels to restrict possibilities
     void degree_and_label_restrict()
@@ -145,10 +146,10 @@ namespace PT{
         restrict_by_label(N1.nodes_labeled());
 
       // all updated nodes have been fixed
-      treat_pending_updates();
-      
-      if(nr_fix < size_N)
+      if(nr_fix < size_N){
+        treat_pending_updates();
         restrict_by_degree();
+      }
     }
 
 
@@ -203,6 +204,7 @@ namespace PT{
     {
       // if we determined already that those will not be isomorphic, just fail here too
       if(initial_fail) return false;
+      if(nr_fix == size_N) return true;
 
       try{
         treat_pending_updates();

@@ -53,19 +53,11 @@ namespace PT{
   }
 
 
-  // helper functions to be able to transparently use weights or not
-  template<template<class,class...> class _Container, class... Args>
-  inline void put_branch_in_edgelist(_Container<Edge<>,Args...>& container, const Node x, const Node y, const float len)
-  { append(container, x, y); }
-  template<template<class,class...> class _Container, class... Args>
-  inline void put_branch_in_edgelist(_Container<WEdge,Args...>& container, const Node x, const Node y, const float len)
-  { append(container, x, y, len); }
-
-
-
   //! a newick parser
   //NOTE: we parse newick from the back to the front since the node names are _appended_ to the node instead of _prepended_
-  // EL can be an EdgeList or a WEdgeList if we are interested in branch-lengths
+  //NOTE: node numbers will be consecutive (0 = root) and follow a pre-order numbering of a spanning-tree
+  //      this allows you to use RONetworks and anything needing pre-order numbers
+  //NOTE: if EL::value_type is WEdge, we will store branch-lengths
   template<class EL, class LabelMap>
   class NewickParser
   {
@@ -217,7 +209,7 @@ namespace PT{
     {
       const float len = read_length();
       const Index child = read_subtree();
-      put_branch_in_edgelist(edges, (Node)(root), (Node)(child), len);
+      append(edges, (Node)root, (Node)child, len);
       return child;
     }
 

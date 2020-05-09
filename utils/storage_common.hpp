@@ -34,8 +34,8 @@ namespace PT{
     }
   }
 
-  template<class GivenEdgeContainer, class DegMap>
-  inline void compute_degrees(const GivenEdgeContainer& given_edges, DegMap& degrees, NodeTranslation* old_to_new)
+  template<class GivenEdgeContainer, class DegMap, class Translate = HashMap<Node,Node>>
+  inline void compute_degrees(const GivenEdgeContainer& given_edges, DegMap& degrees, Translate* old_to_new)
   {
     if(old_to_new){
       // compute out-degrees and translate
@@ -69,7 +69,7 @@ namespace PT{
     return _root;
   }
 
-  template<class EdgeContainer, class LeafContainer>
+  template<class EdgeContainer, class LeafContainer, class NodeTranslation>
   void compute_translate_and_leaves(const EdgeContainer& edges, NodeTranslation* old_to_new, LeafContainer* leaves = nullptr)
   {
     if(leaves)

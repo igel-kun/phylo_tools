@@ -359,7 +359,6 @@ namespace std{
       Parent::swap(other);
     }
 
-#if __cplusplus > 201703L
     bool contains(const Key& key) const { 
       if(empty()) return false;
       STAT(count = 0);
@@ -368,7 +367,8 @@ namespace std{
       STAT(cout << count << "hops\n");
       return result;
     }
-#endif
+
+    bool count(const Key& key) const { return contains(key); }
 
     iterator find(const Key& key)
     {

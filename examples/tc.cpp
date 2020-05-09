@@ -49,6 +49,7 @@ bool read_from_stream(std::ifstream& in, EdgeVec& el, LabelMap& node_labels)
       return false;
     }
   }
+  std::cout << "read edges: "<<el<<"\n";
   return true;
 }
 
@@ -91,6 +92,7 @@ int main(const int argc, const char** argv)
         exit(EXIT_FAILURE);
       }
     } else {
+      while(std::isspace(in.peek())) in.get();
       // if we have only a single filename, try to continue reading the same file
       if((in.bad() || in.eof() || !read_from_stream(in, el[1], node_labels[1]))){
         std::cerr << "could not read 2 networks from "<<options[""][0]<<" but no other useable source was found"<<std::endl;

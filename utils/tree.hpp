@@ -44,7 +44,6 @@ namespace PT{
     // NOTE: something that is declared a network might actually be a tree (is_tree() will reveal the truth),
     //       but is_declared_tree allows setting reasonable defaults (for example, for DFSIterators)
     static constexpr bool is_declared_tree = std::is_same_v<NetworkTypeTag, tree_tag>;
-    static constexpr bool is_declared_network = std::is_same_v<NetworkTypeTag, network_tag>;
 
     using MutabilityTag = typename _EdgeStorage::MutabilityTag;
     static constexpr bool is_mutable = std::is_same_v<MutabilityTag, mutable_tag>;
@@ -302,6 +301,18 @@ namespace PT{
       DEBUG2(tree_summary(std::cout));
     }
 
+    // initialize a tree induced by a list L of leaves
+    //NOTE: if L is given in left-to-right or right-to-left order (which it is if L is in pre-, post-, or in-order),
+    //      then this runs in O(|L| * LCA-query in supertree), otherwise, it runs in O(|L|^2 * LCA-query in supertree)
+    //NOTE: it should go without saying that you don't want to pass your ordered nodes in some unordered container, like a HashSet...
+    //NOTE: we force the given __Tree to be declared a tree (tree_tag)
+    template<class __LabelTag, class __EdgeStorage, class LeafList = NodeVec>
+    _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, tree_tag>& supertree, const LeafList& _leaves):
+      Parent((leaves.size() - 1) * 2), // we will surely never have more than 2n-2 edges in a tree with n leaves (worse-case is met by binary trees)
+      node_labels(supertree.node_labels)
+    {
+#warning TODO: do the right thing!
+    }
 
 
     // initialize a subtree rooted at a node of the given tree

@@ -50,19 +50,17 @@ namespace PT{
 
   template<class Key, class Value>
   using RawConsecutiveMap = std::raw_vector_map<Key, Value>;
-  template<class Key, class Value, class InvalidElement = void, uintptr_t Invalid = -1ul>
-  using ConsecutiveMap = std::vector_map<Key, Value, InvalidElement, Invalid>;
+  template<class Key, class Value, class InvalidElement = void>
+  using ConsecutiveMap = std::vector_map<Key, Value, InvalidElement>;
 
   using Node = uintptr_t;
-  constexpr Node NoNode = static_cast<Node>(-1);
+  constexpr Node NoNode = static_cast<Node>(-1ul);
 
-  using NodeTranslation = HashMap<Node, Node>;
-  using ConsecutiveLabelMap = ConsecutiveMap<Node, std::string>;
+  template<class Network>
+  using NodeTranslation = typename Network::template NodeSet<Node>;
   using ConsecutiveNodeSet = std::ordered_bitset;
 
   using Degree = uint_fast32_t;
-  using InDegree = Degree;
-  using OutDegree = Degree;
   using sw_t = Degree;
   using NodeWithDegree = std::pair<Node, Degree>;
   using InOutDegree = std::pair<Degree, Degree>;

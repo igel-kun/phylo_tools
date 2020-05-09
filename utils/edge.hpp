@@ -62,7 +62,7 @@ namespace PT{
     
     // construct an edge from a node and whatever is needed to construct an adjacency (for example, an adjacency)
     template<class... Args> AbstractEdge(const Node u, Args&&... args):
-      Parent(std::piecewise_construct, std::make_tuple(u), std::forward_as_tuple<Args...>(args...))
+      Parent(std::piecewise_construct, std::forward_as_tuple(u), std::forward_as_tuple(std::forward<Args>(args)...))
     {}
     // construct from edge with different data; for example, from a ReverseEdge (whose data is a reference)
     template<class _Data>
@@ -114,6 +114,9 @@ namespace PT{
     using Parent = AbstractEdge<Node>;
   public:
     using Parent::Parent;
+
+    // construct an edge from two nodes and ignore whatever else is given
+    template<class... Args> Edge(const Node u, const Node v, Args&&...): Parent(u, v) {}
 
     // construct the reverse of an edge
     Edge(const reverse_edge_tag, const Node u, const Node v): Parent(v, u) {}

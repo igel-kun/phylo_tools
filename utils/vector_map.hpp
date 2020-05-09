@@ -28,6 +28,7 @@ namespace std{
     using insert_result = pair<iterator, bool>;
   protected:
     void raw_resize(const key_type new_size) { Parent::resize(new_size); }
+    void resize(const key_type new_size, const _Element& fill) { Parent::resize(new_size, fill); }
 
     virtual void set_present(const key_type) = 0;
     virtual void set_absent(const key_type) = 0;
@@ -37,6 +38,8 @@ namespace std{
     virtual void resize(const key_type) = 0;
     virtual ~_vector_map() = 0;
    
+    bool count(const key_type x) const { return contains(x); }
+
     void erase(const key_type x) { Parent::erase(x); set_absent(x); } 
     void erase(const iterator& it) { erase(it->first); }
     
@@ -83,12 +86,13 @@ namespace std{
   template<class _Key, class _Element, class _AbsentPredicate>
   _vector_map<_Key, _Element, _AbsentPredicate>::~_vector_map() {};
 
-  // if _Element is integral, we can use a given constexpr as "invalid element" instead of adding a bitset mask
+  // if _Element is simple, we can use a given constexpr as "invalid element" instead of adding a bitset mask
   //NOTE: _Element must be constructible from and comparable to InvalidElement
-  template<class _Key, class _Element, class InvalidElement = _Element, InvalidElement _invalid_element = -1>
-  class integral_vector_map: public _vector_map<_Key, _Element, StaticEqualPredicate<_Element, _invalid_element>>
+  template<class _Key, class _Element, class InvalidElement>
+  class simple_vector_map: public _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, InvalidElement::value()>>>
   {
-    using Parent = _vector_map<_Key, _Element, StaticEqualPredicate<_Element, _invalid_element>>;
+    static constexpr _Element _invalid_element = InvalidElement::value();
+    using Parent = _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, _invalid_element>>>;
   public:
     using Parent::Parent;
     using Parent::data;
@@ -98,7 +102,7 @@ namespace std{
   protected:
     using typename Parent::AbsentPredicate;
 
-    void set_present(const key_type key) {}
+    void set_present(const key_type key){}
     
     AbsentPredicate make_predicate() const { return AbsentPredicate(); }
     
@@ -112,41 +116,10 @@ namespace std{
   public:
     void resize(const key_type new_size) { Parent::resize(new_size, _invalid_element); }
 
-    bool contains(const key_type key) const {
-      assert(key < size());
-      return *(data() + key) != _invalid_element;
-    }
-  };
-
-  // for non-integral types, a pointer to a constexpr object can be used as "invalid_element"
-  template<class _Key, class _Element, class InvalidElement, InvalidElement* _invalid_element>
-  class non_integral_vector_map: public _vector_map<_Key, _Element, StaticEqualPtrPredicate<_Element, _invalid_element>>
-  {
-    using Parent = _vector_map<_Key, _Element, StaticEqualPtrPredicate<_Element, _invalid_element>>;
-  public:
-    using Parent::Parent;
-    using Parent::data;
-    using Parent::size;
-    using typename Parent::key_type;
-  protected:
-    using typename Parent::AbsentPredicate;
-
-    void set_present(const key_type key) {}
-    
-    AbsentPredicate make_predicate() const { return AbsentPredicate(); }
-    
-    void set_absent(const key_type key)
+    bool contains(const key_type key) const
     {
       assert(key < size());
-      _Element* const val = data() + key;
-      val->~_Element();
-      new (val) _Element(*_invalid_element);
-    }
-  public:
-    void resize(const key_type new_size) { Parent::resize(new_size, *_invalid_element); }
-    bool contains(const key_type key) const {
-      assert(key < size());
-      return *(data() + key) != *_invalid_element;
+      return *(data() + key) != _invalid_element;
     }
   };
 
@@ -175,7 +148,7 @@ namespace std{
   public:
     void resize(const key_type new_size) { Parent::raw_resize(new_size); }
 
-    bool contains(const key_type key) const { cout << "checking containment of "<<key<<" in "<<present<<"\n"; return present.test(key); }
+    bool contains(const key_type key) const { return present.test(key); }
 
     void clear()
     {
@@ -186,16 +159,14 @@ namespace std{
   };
 
   // select the correct vector_map, depending on whether an invalid element is given/given as pointer/not given
-  template<class _Key, class _Value, class InvalidElement, uintptr_t Invalid>
-  struct __vector_map { using type = conditional_t<is_arithmetic_v<InvalidElement>,
-        integral_vector_map<_Key, _Value, InvalidElement, static_cast<InvalidElement>(Invalid)>,  // if InvalidElement is integral, use integral_vector_map
-        non_integral_vector_map<_Key, _Value, InvalidElement, static_cast<InvalidElement*>(Invalid)>>; }; // otherwise, non_integral_vector_map
+  template<class _Key, class _Value, class InvalidElement = void>
+  struct __vector_map { using type = simple_vector_map<_Key, _Value, InvalidElement>; }; // if InvalidElement is given, use simple_vector_map
   // if InvalidElement is void, use the bitset vector_map
-  template<class _Key, class _Value, uintptr_t Invalid>
-  struct __vector_map<_Key, _Value, void, Invalid> { using type = bitset_vector_map<_Key, _Value>; };
+  template<class _Key, class _Value>
+  struct __vector_map<_Key, _Value, void> { using type = bitset_vector_map<_Key, _Value>; };
 
   // NOTE: if we just have key and value, better play it safe and use the bitset version...
-  template<class Key, class Value, class InvalidElement = void, uintptr_t Invalid = -1ul>
-  using vector_map = typename __vector_map<Key, Value, InvalidElement, Invalid>::type;
+  template<class Key, class Value, class InvalidElement = void>
+  using vector_map = typename __vector_map<Key, Value, InvalidElement>::type;
 }
 

@@ -48,7 +48,7 @@ namespace PT{
   void ext_tree_sw_map(const _Tree& ext, const _Network& N, _Container& out)
   {
     for(const Node u: ext.dfs().postorder()){
-      InDegree sw_u = N.in_degree(u);
+      Degree sw_u = N.in_degree(u);
       for(const Node v: ext.children(u))
         sw_u += out.at(v);
       sw_u -= N.out_degree(u);
@@ -57,7 +57,7 @@ namespace PT{
     }
   }
 
-  template<class _Network, class _Tree, class _Container = typename _Network::OutDegreeMap>
+  template<class _Network, class _Tree, class _Container = typename _Network::DegreeMap>
   _Container ext_tree_sw_map(const _Tree& ext, const _Network& N)
   {
     _Container result;

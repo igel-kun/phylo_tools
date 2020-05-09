@@ -16,16 +16,16 @@ namespace PT {
   static constexpr bool _single_label_v = std::is_same_v<_LabelTag, single_label_tag>;
 
   template<class _LabelTag>
-  using _LabelNodeStorage = std::conditional_t<_single_label_v<_LabelTag>, std::SingletonSet<Node>, HashSet<Node>>;
+  using LabelNodeStorage = std::conditional_t<_single_label_v<_LabelTag>, std::singleton_set<Node>, HashSet<Node>>;
 
 
   // a label matching maps labels (strings) to pairs of node-storages (Node for single-labeled networks, NodeSet for multi-labeled networks)
   // NOTE: N and T must have compatible LabelTypes (f.ex. both std::string with/without wchar etc)
   template<class _LabelTagA, class _LabelTagB, class _LabelType = std::string>
-  class LabelMatching: public HashMap<_LabelType, std::pair<_LabelNodeStorage<_LabelTagA>, _LabelNodeStorage<_LabelTagB>>>
+  class LabelMatching: public HashMap<_LabelType, std::pair<LabelNodeStorage<_LabelTagA>, LabelNodeStorage<_LabelTagB>>>
   {
-    using StorageA = _LabelNodeStorage<_LabelTagA>;
-    using StorageB = _LabelNodeStorage<_LabelTagB>;
+    using StorageA = LabelNodeStorage<_LabelTagA>;
+    using StorageB = LabelNodeStorage<_LabelTagB>;
     using Parent = HashMap<_LabelType, std::pair<StorageA, StorageB>>;
 
   public:

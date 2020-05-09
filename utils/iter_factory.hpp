@@ -27,14 +27,14 @@ namespace std {
     using iterator = Iterator;
     using const_iterator = ConstIterator;
 
-    _IterFactory(Container& _c): container(&_c, std::NoDeleter()) {}
-    _IterFactory(shared_ptr<Container> _c): container(move(_c)) {}
-    _IterFactory(unique_ptr<Container> _c): container(move(_c)) {}
-
     // allow move-construction from a container
     // however since C++ has no way of verifying if a container truely is move constructible (is_move_constructible is true for copy constructibles),
     //    the user better be sure that the Container has a move constructor!!!
     _IterFactory(remove_cv_t<Container>&& _c): container(make_shared<Container>(forward<remove_cv_t<Container>>(_c))) {}
+
+    _IterFactory(Container& _c): container(&_c, std::NoDeleter()) {}
+    _IterFactory(shared_ptr<Container> _c): container(move(_c)) {}
+    _IterFactory(unique_ptr<Container> _c): container(move(_c)) {}
 
     iterator begin() { return BeginEnd::begin(*container); }
     iterator end() { return BeginEnd::end(*container); }

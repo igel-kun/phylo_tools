@@ -101,6 +101,8 @@ namespace std {
     void invert() { flip_all(); }
     size_t capacity() const { return num_bits; }
     size_t count() const { return _count; }    
+    bool count(const value_type x) const { return test(x); }
+    bool contains(const value_type x) const { return test(x); }
     size_t size() const { return count(); }
     bool empty() const { return _count == 0; }
     value_type front() const { return *begin(); }
@@ -317,7 +319,7 @@ namespace std {
       const auto _end = end();
       while(_iter != _end){
         const value_type i = *_iter;
-        if(!contains(c, i)) clear(i);
+        if(!c.count(i)) clear(i);
         ++_iter;
       }
       return *this;

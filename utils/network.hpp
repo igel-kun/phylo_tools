@@ -33,6 +33,8 @@ namespace PT{
     using Parent::num_nodes;
     using Parent::root;
     using Parent::is_tree;
+    
+    static constexpr bool is_declared_network = std::is_same_v<NetworkTypeTag, network_tag>;
 
     // =================== information query ==============
 
@@ -177,5 +179,21 @@ namespace PT{
     class _LabelTag = typename __Network::LabelTag>
   using CompatibleRONetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>;
 
+  // get compatible tree or network, depending on the first template parameter
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag>
+  using CompatibleRO = std::conditional_t<__Network::is_declared_tree,
+                                  ROTree<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>,
+                                  RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>>;
+
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag>
+  using CompatibleRW = std::conditional_t<__Network::is_declared_tree,
+                                  RWTree<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>,
+                                  RWNetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>>;
 
 } // namespace
