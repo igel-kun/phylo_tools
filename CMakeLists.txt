@@ -6,7 +6,7 @@ set (phylo_tools_VERSION_MINOR 0)
 
 if(POLICY CMP0012)
   CMAKE_POLICY(SET CMP0012 NEW)
-endif(POLICY CMP0012)
+endif()
 
 
 option (GRAPHITE "build with graphite loop analysis" OFF)
@@ -33,7 +33,7 @@ if(${GRAPHITE} STREQUAL ON)
   message("setting graphite flags...")
   #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
   set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
-endif(${GRAPHITE} STREQUAL ON)
+endif()
 
 message("GRAPHITE_CXX_FLAGS is ${GRAPHITE_CXX_FLAGS}")
 
@@ -56,10 +56,10 @@ endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
 
-if((${STATISTICS} EQUAL 1) OR (${STATISTICS} STREQUAL ON))
+if((${STATISTICS} EQUAL "1") OR (${STATISTICS} STREQUAL "ON"))
   MESSAGE("adding support for collecting statistics...")
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
-endif((${STATISTICS} EQUAL 1) OR (${STATISTICS} STREQUAL ON))
+endif()
 
 if((${DEBUG} EQUAL 0) OR (${DEBUG} STREQUAL OFF))
   set(CMAKE_BUILD_TYPE RELEASE)
@@ -67,7 +67,7 @@ else((${DEBUG} EQUAL 0) OR (${DEBUG} STREQUAL OFF))
   MESSAGE("building DEBUG version...")
   set(CMAKE_BUILD_TYPE DEBUG)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Ddebuglevel=${DEBUG}")
-endif((${DEBUG} EQUAL 0) OR (${DEBUG} STREQUAL OFF))
+endif()
 
 ADD_EXECUTABLE( iso examples/iso.cpp )
 ADD_EXECUTABLE( tc examples/tc.cpp )

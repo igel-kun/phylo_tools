@@ -58,6 +58,7 @@ namespace PT{
   //NOTE: node numbers will be consecutive (0 = root) and follow a pre-order numbering of a spanning-tree
   //      this allows you to use RONetworks and anything needing pre-order numbers
   //NOTE: if EL::value_type is WEdge, we will store branch-lengths
+#warning TODO: turn this into an iterator in order to avoid carrying around edgesets!
   template<class EL, class LabelMap>
   class NewickParser
   {
