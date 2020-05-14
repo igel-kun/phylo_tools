@@ -30,6 +30,9 @@ namespace PT{
     using NodeIterator = std::iterator_of_t<NodeContainer>;
     using ConstNodeIterator = std::iterator_of_t<ConstNodeContainer>;
 
+    using NodeData = void;
+    static constexpr bool has_node_data = false;
+
   protected:
     using SuccContainer         = typename SuccessorMap::mapped_type;
     using PredContainer         = typename PredecessorMap::mapped_type;
@@ -94,7 +97,6 @@ namespace PT{
         if(uV.second.empty()){ _root = uV.first; break; }
 #else
       for(const auto& uV: _predecessors){
-        std::cout << "predecessors of "<<uV.first<<" = "<<uV.second<<"\n";
         if(uV.second.empty()){
           if(_root == NoNode)
             _root = uV.first;
@@ -188,7 +190,7 @@ namespace PT{
   template<class _NodeData,
            class _EdgeStorage,
            class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_void_v<_NodeData>, int, _NodeData>>>
-  class AddNodeData: public _EdgeStorage
+  class __AddNodeData: public _EdgeStorage
   {
     using Parent = _EdgeStorage;
     _NodeDataMap node_data;
@@ -214,16 +216,17 @@ namespace PT{
     const NodeDataMap& get_node_data() const { return node_data; }
   };
 
+  template<class _NodeData,
+           class _EdgeStorage,
+           class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_void_v<_NodeData>, int, _NodeData>>>
+  struct _AddNodeData { using type = _AddNodeData<_NodeData, _EdgeStorage, _NodeDataMap>; };
   template<class _EdgeStorage, class _NodeDataMap>
-  class AddNodeData<void, _EdgeStorage, _NodeDataMap>: public _EdgeStorage
-  {
-    public:
-      using _EdgeStorage::_EdgeStorage;
-      using NodeData = void;
-      static constexpr bool has_node_data = false;
-  };
+  struct _AddNodeData<void, _EdgeStorage, _NodeDataMap> { using type = _EdgeStorage; };
 
-
+  template<class _NodeData,
+           class _EdgeStorage,
+           class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_void_v<_NodeData>, int, _NodeData>>>
+  using AddNodeData = typename _AddNodeData<_NodeData, _EdgeStorage, _NodeDataMap>::type;
 
 }// namespace
 

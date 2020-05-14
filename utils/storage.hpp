@@ -29,7 +29,8 @@ namespace PT{
     using const_reference = const _Item&;
     using iterator = _Item*;
     using const_iterator = const _Item*;
-
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using reverse_const_iterator = std::reverse_iterator<const_iterator>;
 
     ConsecutiveStorageNoMem(_Item* const _start, const size_t _count = 0):
       start(_start),
@@ -67,11 +68,11 @@ namespace PT{
     inline iterator begin() { return start; }
     inline iterator end() { return start + count; }
     inline const_iterator begin() const { return start; }
-    inline const_iterator end() const { return start + count; }
-    inline iterator rbegin() { return end() - 1; }
-    inline iterator rend() { return begin() - 1; }
-    inline const_iterator rbegin() const { return end() - 1; }
-    inline const_iterator rend() const { return begin() - 1; }
+    inline const_iterator end() const   { return start + count; }
+    inline reverse_iterator rbegin() { return make_reverse_iterator(end()); }
+    inline reverse_iterator rend()   { return make_reverse_iterator(begin()); }
+    inline reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }
+    inline reverse_const_iterator rend() const { return make_reverse_iterator(begin()); }
     inline reference       back()       { return *rbegin(); }
     inline const_reference back() const { return *rbegin(); }
     inline reference       front()       { return *begin(); }

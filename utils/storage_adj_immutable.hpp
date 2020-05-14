@@ -177,30 +177,8 @@ namespace PT{
       _size = given_edges.size();
     }
 
-    //! initialize storage for m edges that are to be inserted at a later point using construct_new_node
-    ConsecutiveTreeAdjacencyStorage(const size_t max_num_edges):
-      _succ_storage(max_num_edges)
-    {}
-    //! insert a new node with the given adjacencies
-    //NOTE: with the knowledge that nodes will be consecutive, you can insert adjacencies involving nodes that have not been inserted yet (this can break!)
-    template<class AdjacencyContainer>
-    Node construct_new_node(AdjacencyContainer&& children)
-    {
-      const Node u = _successors.size();
-      Adjacency* out_adj = (u == 0) ? _succ_storage.begin() : _successors.at(u - 1).end();
-      // tell the storage where we want it to live, as well as its size
-      _successors.emplace_back(out_adj, children.size());
-      // insert adjacencies by moving from the adjacencies in the given container
-      for(auto&& in_adj: children){
-        new(out_adj) Adjacency(std::move(in_adj));
-        if(!append(_predecessors, (Node)in_adj, get_reverse_adjacency(u, *out_adj)).second)
-          throw std::logic_error("cannot create tree with reticulation (" + std::to_string((Node)in_adj) + ")");
-        ++out_adj;
-      }
-      return u;
-    }
-
   public:
+    
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>

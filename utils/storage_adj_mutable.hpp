@@ -171,11 +171,9 @@ namespace PT{
     template<class _Adjacency> // for universal reference
     bool add_edge(const Node u, _Adjacency&& v)
     {
-      if(append(_successors, u, std::move(v)).second){
-        if(append(_predecessors, v, u).second){
-          ++_size;
-        } else throw std::logic_error("cannot create tree with reticulation (edges ("+std::to_string(front(_predecessors[v]))+","+std::to_string(v)+") and ("+std::to_string(u)+","+std::to_string(v)+") given)");
-      } else return false;
+      if(!append(_successors, u, std::move(v)).second) return false;
+      if(!append(_predecessors, (Node)v, u).second) throw std::logic_error("cannot create tree with reticulation (edges ("+std::to_string(front(_predecessors[v]))+","+std::to_string(v)+") and ("+std::to_string(u)+","+std::to_string(v)+") given)");
+      ++_size;
       return true;
     }
 
@@ -235,28 +233,6 @@ namespace PT{
       } else return false;
     }
 
-  protected:
-    //! insert a new node with the given adjacencies
-    //NOTE: with the knowledge that nodes will be consecutive, you can insert adjacencies involving nodes that have not been inserted yet (this can break!)
-    template<class AdjacencyContainer>
-    Node construct_new_node(AdjacencyContainer&& children)
-    {
-      const Node u = _successors.size();
-      auto& adj_storage = append(_successors, u).first->second;
-      // insert adjacencies by moving from the adjacencies in the given container
-      for(auto&& in_adj: children){
-        auto& adj_in_storage = *(append(adj_storage, std::move(in_adj)).first);
-        if(!append(_predecessors, (Node)in_adj, get_reverse_adjacency(u, adj_in_storage)).second)
-          throw std::logic_error("cannot create tree with reticulation (" + std::to_string((Node)in_adj) + ")");
-      }
-      return u;
-    }
-
-  public:
-
-    //! this allows construction of an empty storage, for compatibility with the Immutable one, it takes a size_t
-    MutableTreeAdjacencyStorage(size_t = 0) {}
-
     //! initialization from edgelist
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     MutableTreeAdjacencyStorage(GivenEdgeContainer&& given_edges,
@@ -264,9 +240,29 @@ namespace PT{
                                  LeafContainer* leaves = nullptr):
       Parent()
     {
-      for(auto&& uv: given_edges) add_edge(uv);
-      compute_root();
-      compute_translate_and_leaves(*this, old_to_new, leaves);
+      if(given_edges.size()){
+        for(auto&& uv: given_edges) {
+          _predecessors.try_emplace(uv.tail());
+          _successors.try_emplace(uv.head());
+          add_edge(uv);
+        }
+        // get a root
+        const Node u = front(_predecessors).first;
+        assert(!_predecessors.at(u).empty());
+        Node v = u;
+        do v = front(_predecessors.at(v)); while((v != u) && !_predecessors[v].empty()); //NOTE: we're using operator[] to create empty predecessors for root!
+        if(u == v) throw std::logic_error("given edgelist is cyclic");
+#ifndef NDEBUG
+        compute_root(); // verify that we don't have multiple roots
+#else
+        _root = v;
+#endif
+        compute_translate_and_leaves(*this, old_to_new, leaves);
+      } else {
+        append(_successors, 0);
+        append(_predecessors, 0);
+        if(leaves) append(*leaves, 0);
+      }
     }
 
     //! initialization from edgelist without consecutive nodes

@@ -116,7 +116,7 @@ int main(const int argc, const char** argv)
 
   if(T.is_tree()) {
     if(N.is_tree()){
-
+      std::cout << "testing induced subtree by leaves 5, 6, 8, 10:\n"<<CompatibleRWTree<MyTree>(T, std::list<Node>{5,6,8,10})<<"\n";
     } else {
       std::cout << "sorry, can't check network-tree containment yet...\n";
     }

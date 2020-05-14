@@ -51,6 +51,8 @@ namespace std{
   constexpr bool is_bidirectional_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, bidirectional_iterator_tag>;
   template<class _Iterator>
   constexpr bool is_random_access_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, random_access_iterator_tag>;
+  template<class _Container> // sort requires random-access iterators
+  constexpr bool is_sortable = std::is_random_access_iterator<typename _Container::iterator>;
 
   template<typename T,typename U>
   struct copy_cv

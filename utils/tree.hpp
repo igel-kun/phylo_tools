@@ -11,6 +11,7 @@
 #include "set_interface.hpp"
 #include "storage_adj_mutable.hpp"
 #include "storage_adj_immutable.hpp"
+#include "induced_tree.hpp"
 
 namespace PT{
 
@@ -160,11 +161,8 @@ namespace PT{
     // helper function for the LCA
     inline bool update_for_LCA(std::unordered_bitset& seen, Node& z) const
     {
-      if((z != root) && !test(seen, z)){
-        seen.set(z);
-        z = parent(z);
-        return test(seen, z);
-      } else return false;
+      if(z == root()) return false;
+      return !seen.set(z = parent(z));
     }
   public:
 
@@ -301,18 +299,22 @@ namespace PT{
       DEBUG2(tree_summary(std::cout));
     }
 
+
     // initialize a tree induced by a list L of leaves
-    //NOTE: if L is given in left-to-right or right-to-left order (which it is if L is in pre-, post-, or in-order),
-    //      then this runs in O(|L| * LCA-query in supertree), otherwise, it runs in O(|L|^2 * LCA-query in supertree)
-    //NOTE: it should go without saying that you don't want to pass your ordered nodes in some unordered container, like a HashSet...
+    //NOTE: we'll need to know for each node u its distance to the root, and we'd also like L to be in some order (any of pre-/in-/post- will do)
+    //      so if the caller doesn't provide them, we'll compute them from the given supertree
+    //NOTE: if the infos are provided, then this runs in O(|L| * LCA-query in supertree), otherwise, an O(|supertree|) DFS is prepended
+    //NOTE: a slight speedup may be attained by passing the leaves in order (obviously in an ordered container)
     //NOTE: we force the given __Tree to be declared a tree (tree_tag)
-    template<class __LabelTag, class __EdgeStorage, class LeafList = NodeVec>
-    _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, tree_tag>& supertree, const LeafList& _leaves):
-      Parent((leaves.size() - 1) * 2), // we will surely never have more than 2n-2 edges in a tree with n leaves (worse-case is met by binary trees)
-      node_labels(supertree.node_labels)
-    {
-#warning TODO: do the right thing!
-    }
+    template<class __Tree, class LeafList, class NodeInfoMap = LeavesInducedSubtreeInfoMap<__Tree>,
+            class = std::enable_if_t<std::is_same_v<typename __Tree::LabelMap, LabelMap>>,
+            class = std::enable_if_t<__Tree::is_declared_tree>>
+    _Tree(const __Tree& supertree,
+          LeafList&& _leaves,
+          std::shared_ptr<NodeInfoMap> _node_infos = std::make_shared<NodeInfoMap>()):
+      Parent(leaves_induced_subtree_edges(supertree, std::forward<LeafList>(_leaves), _node_infos).get_edges()),
+      node_labels(supertree.labels())
+    {}
 
 
     // initialize a subtree rooted at a node of the given tree
@@ -324,7 +326,7 @@ namespace PT{
     template<class __LabelTag, class __EdgeStorage, class __NetworkTag>
     _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>& supertree, const Node _root):
       Parent(supertree.get_edges_below(_root)),
-      node_labels(supertree.node_labels)
+      node_labels(supertree.labels())
     {}
 
   public:

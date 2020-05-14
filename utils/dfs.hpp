@@ -215,8 +215,6 @@ namespace PT{
     }
 
   public:
-    
-    
     // construct with a given root node
     // NOTE: use this to construct an end-iterator
     DFSIterator(Network& _N):
@@ -239,8 +237,6 @@ namespace PT{
     {
       std::cout << "++DFS, stack-size: "<<child_history.size()<<" top node: "<<node_on_top()<<" finished? "<<current_node_finished()<<"\n";
       if(current_node_finished()){
-        // there are no more children; this cannot happen unless postorder is requested
-        assert(o & postorder);
         // since we're done with the node_on_top now, go backtrack()
         backtrack();
       } else {
@@ -248,7 +244,7 @@ namespace PT{
         //  (b) either we're doing pre-order and we're currently diving
         //  (a) or we're doing inorder and we just returned from a subtree with backtrack()
         // in both cases, we continue with a dive()
-        dive(node_on_top());
+        dive(get_node(*(child_history.back())));
       }
       return *this;
     }

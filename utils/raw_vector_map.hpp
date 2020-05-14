@@ -77,9 +77,13 @@ namespace std {
   public:
     using key_type = const _Key;
     using mapped_type = _Element;
+    using value_type = pair<key_type, _Element>;
+
     using iterator = raw_vector_map_iterator<_Key, _Element>;
     using const_iterator = raw_vector_map_iterator<const _Key, const _Element>;
-    using value_type = pair<key_type, _Element>;
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using reverse_const_iterator = std::reverse_iterator<const_iterator>;
+
     using insert_result = pair<iterator, bool>;
 
     using Parent::data;
@@ -135,11 +139,13 @@ namespace std {
     const mapped_type& at(const key_type& key) const { return Parent::at((size_t)key); }
 
     iterator begin() { return {data()}; }
-    const_iterator begin() const { return {data()}; }
-    const_iterator cbegin() const { return {data()}; }
     iterator end() { return {data(), size()}; }
+    const_iterator begin() const { return {data()}; }
     const_iterator end() const { return {data(), size()}; }
-    const_iterator cend() const { return {data(), size()}; }
+    reverse_iterator rbegin() { return make_reverse_iterator(end()); }
+    reverse_iterator rend() { return make_reverse_iterator(begin()); }
+    reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }
+    reverse_const_iterator rend() const { return make_reverse_iterator(begin()); }
 
     iterator find(const key_type x) { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
     const_iterator find(const key_type x) const { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
