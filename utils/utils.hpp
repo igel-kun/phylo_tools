@@ -60,6 +60,9 @@
 // a map lookup that returns a value z on unsuccessful lookups
 #define return_map_lookup(x,y,z) {const auto _iter = (x).find(y); return (_iter != (x).end()) ? _iter->second : (z); }
 
+// data transfer policies
+enum data_policy_tag { policy_move, policy_copy, policy_inplace };
+
 // rotation
 uint32_t rotl32(uint32_t x, uint32_t n){
   assert (n<32);

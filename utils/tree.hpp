@@ -162,15 +162,14 @@ namespace PT{
     inline bool update_for_LCA(std::unordered_bitset& seen, Node& z) const
     {
       if(z == root()) return false;
-      return !seen.set(z = parent(z));
+      if(!seen.set(z)) return true;
+      z = parent(z);
+      return false;
     }
   public:
 
-    Node LCA(const Node x, const Node y) const
-    {
 #warning TODO: use more efficient LCA
-      return naiveLCA(x,y);
-    }
+    Node LCA(const Node x, const Node y) const { return naiveLCA(x,y); }
 
     //! return if there is a directed path from x to y in the tree; requires the tree to be pre-ordered
     bool has_path(Node x, const Node y) const
@@ -300,19 +299,26 @@ namespace PT{
     }
 
 
-    // initialize a tree induced by a list L of leaves
+    // initialize a tree as the smallest subtree spanning a list L of nodes in a given supertree
     //NOTE: we'll need to know for each node u its distance to the root, and we'd also like L to be in some order (any of pre-/in-/post- will do)
     //      so if the caller doesn't provide them, we'll compute them from the given supertree
     //NOTE: if the infos are provided, then this runs in O(|L| * LCA-query in supertree), otherwise, an O(|supertree|) DFS is prepended
-    //NOTE: a slight speedup may be attained by passing the leaves in order (obviously in an ordered container)
+    //NOTE: when passed as a const container, the nodes are assumed to be in order; ATTENTION: this is not verified!
     //NOTE: we force the given __Tree to be declared a tree (tree_tag)
-    template<class __Tree, class LeafList, class NodeInfoMap = LeavesInducedSubtreeInfoMap<__Tree>,
+    template<class __Tree, class LeafList, class NodeInfoMap = InducedSubtreeInfoMap<__Tree>,
             class = std::enable_if_t<std::is_same_v<typename __Tree::LabelMap, LabelMap>>,
             class = std::enable_if_t<__Tree::is_declared_tree>>
-    _Tree(const __Tree& supertree,
-          LeafList&& _leaves,
-          std::shared_ptr<NodeInfoMap> _node_infos = std::make_shared<NodeInfoMap>()):
-      Parent(leaves_induced_subtree_edges(supertree, std::forward<LeafList>(_leaves), _node_infos).get_edges()),
+    _Tree(const __Tree& supertree, LeafList&& _leaves, std::shared_ptr<NodeInfoMap> _node_infos = std::make_shared<NodeInfoMap>()):
+      Parent(get_induced_edges(supertree, std::forward<LeafList>(_leaves), std::move(_node_infos))),
+      node_labels(supertree.labels())
+    {}
+    // the caller can be explicit about the data transfer policy (policy_move, policy_copy, policy_inplace)
+    template<class __Tree, class LeafList, class NodeInfoMap = InducedSubtreeInfoMap<__Tree>,
+            class = std::enable_if_t<std::is_same_v<typename __Tree::LabelMap, LabelMap>>,
+            class = std::enable_if_t<__Tree::is_declared_tree>>
+    _Tree(const data_policy_tag policy, const __Tree& supertree,
+        LeafList&& _leaves, std::shared_ptr<NodeInfoMap> _node_infos = std::make_shared<NodeInfoMap>()):
+      Parent(get_induced_edges(policy, supertree, std::forward<LeafList>(_leaves), std::move(_node_infos))),
       node_labels(supertree.labels())
     {}
 

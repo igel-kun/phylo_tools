@@ -248,14 +248,15 @@ namespace PT{
         }
         // get a root
         const Node u = front(_predecessors).first;
-        assert(!_predecessors.at(u).empty());
-        Node v = u;
-        do v = front(_predecessors.at(v)); while((v != u) && !_predecessors[v].empty()); //NOTE: we're using operator[] to create empty predecessors for root!
-        if(u == v) throw std::logic_error("given edgelist is cyclic");
+        if(!_predecessors.at(u).empty()){
+          Node v = u;
+          //NOTE: we're using operator[] to create empty predecessors for root!
+          do v = front(_predecessors.at(v)); while((v != u) && !_predecessors[v].empty());
+          if(u == v) throw std::logic_error("given edgelist is cyclic");
+          _root = v;
+        } else _root = u;
 #ifndef NDEBUG
         compute_root(); // verify that we don't have multiple roots
-#else
-        _root = v;
 #endif
         compute_translate_and_leaves(*this, old_to_new, leaves);
       } else {

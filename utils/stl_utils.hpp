@@ -4,9 +4,10 @@
 #include<climits>
 #include<sstream>
 #include<deque>
-#include<vector>
-#include<stack>
-#include<type_traits>
+#include<vector> // appending to vectors
+#include<stack> // deal with container-adaptors not being iterable...
+#include<type_traits> // deal with STL's missing type checks
+#include<algorithm> // deal with STL's sort problems
 #include "hash_utils.hpp"
 
 // circular shift
@@ -21,6 +22,8 @@ namespace std{
 #else
   #include<functional>
 #endif
+
+  template<class T> constexpr bool is_const_ref = is_const_v<remove_reference_t<T>>;
 
   // don't add const to void...
   template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
@@ -51,8 +54,6 @@ namespace std{
   constexpr bool is_bidirectional_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, bidirectional_iterator_tag>;
   template<class _Iterator>
   constexpr bool is_random_access_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, random_access_iterator_tag>;
-  template<class _Container> // sort requires random-access iterators
-  constexpr bool is_sortable = std::is_random_access_iterator<typename _Container::iterator>;
 
   template<typename T,typename U>
   struct copy_cv
@@ -134,6 +135,61 @@ namespace std{
     T* operator->() { return &value; }
     const T* operator->() const { return &value; }
   };
+
+
+  // facepalm-time: the STL can only sort 2 things: random-access containers & std::list, that's it. So this mergesort can sort with bidirectional iters
+  // based on a post othx to @TemplateRex: https://stackoverflow.com/questions/24650626/how-to-implement-classic-sorting-algorithms-in-modern-c
+
+  // advance iter num_steps steps and return the size of the sorted prefix (number of elements in order following (including) iter)
+  //NOTE: is_sorted_until() *almost* does what we want, but not quite
+  template<class FwdIt, class Compare = std::less<>>
+  size_t sorted_prefix(FwdIt& iter, ssize_t num_steps, Compare cmp = Compare{})
+  {
+    if(!num_steps) return 0;
+    size_t result = 1; // 1 element is always sorted
+    FwdIt last = iter;
+    for(++iter, --num_steps; num_steps; ++iter, --num_steps) {
+      if(std::is_sorted(last, iter, cmp)){
+        ++result;
+        last = iter;
+      } else break;
+    }
+    while(num_steps--) ++iter;
+    return result;
+  }
+
+  template<class FwdIt, class Compare = std::less<>>
+  void inplace_merge_fwd(FwdIt first, FwdIt second, const FwdIt last, Compare cmp = Compare{})
+  {
+#warning write me
+  }
+
+  template<class FwdIt, class Compare = std::less<>>
+  void merge_sort_fwd(FwdIt first, const FwdIt last, const typename my_iterator_traits<FwdIt>::difference_type N, Compare cmp = Compare{})
+  {
+    if (N <= 1) return;
+    FwdIt middle = first;
+    const size_t prefix = sorted_prefix(middle, N / 2);
+    
+    if(prefix < (size_t)(N/2)) merge_sort_fwd(first, middle, N/2, cmp);
+    assert(std::is_sorted(first, middle, cmp));
+    
+    merge_sort_fwd(middle, last, N - N/2, cmp);
+    assert(std::is_sorted(middle, last, cmp));
+    
+    if(std::is_forward_iterator<FwdIt>){
+      //inplace_merge_fwd(first, middle, last, cmp);
+      assert(false && "not implemented");
+    } else std::inplace_merge(first, middle, last, cmp);
+    assert(std::is_sorted(first, last, cmp));
+  }
+  // N log N sort, no matter what kind of iterator we get...
+  template<class FwdIt, class Compare = std::less<>, class category = typename my_iterator_traits<FwdIt>::iterator_category>
+  struct flexible_sort
+  { flexible_sort(FwdIt first, FwdIt last, Compare cmp = Compare{}) { merge_sort_fwd(first, last, std::distance(first, last), cmp); } };
+  template<class FwdIt, class Compare>
+  struct flexible_sort<FwdIt, Compare, random_access_iterator_tag>
+  { flexible_sort(FwdIt first, FwdIt last, Compare cmp = Compare{}) { std::sort(first, last, cmp); } };
 
 
   // compare iterators with their reverse versions

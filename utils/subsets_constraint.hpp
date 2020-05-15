@@ -4,7 +4,7 @@
 // note that we always have to branch on the node with the lowest post-order number
 #pragma once
 
-#include <stack>
+#include "stl_utils.hpp" // iterable_stack
 
 namespace PT{
 
