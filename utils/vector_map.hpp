@@ -89,10 +89,10 @@ namespace std{
   // if _Element is simple, we can use a given constexpr as "invalid element" instead of adding a bitset mask
   //NOTE: _Element must be constructible from and comparable to InvalidElement
   template<class _Key, class _Element, class InvalidElement>
-  class simple_vector_map: public _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, InvalidElement::value()>>>
+  class simple_vector_map: public _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, InvalidElement>>>
   {
-    static constexpr _Element _invalid_element = InvalidElement::value();
-    using Parent = _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, _invalid_element>>>;
+    static constexpr auto _invalid_element = InvalidElement::value();
+    using Parent = _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, InvalidElement>>>;
   public:
     using Parent::Parent;
     using Parent::data;
@@ -119,7 +119,7 @@ namespace std{
     bool contains(const key_type key) const
     {
       assert(key < size());
-      return *(data() + key) != _invalid_element;
+      return !StaticEqualPredicate<_Element, InvalidElement>::value(*(data() + key));
     }
   };
 

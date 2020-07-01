@@ -26,8 +26,8 @@ namespace PT {
     {
       const Node u = uV.first;
       for(const Node v: uV.second){
-        if(left_match.emplace(u, v).second) {
-          right_match.emplace(v, u);
+        if(right_match.emplace(v, u).second) {
+          left_match.emplace(u, v);
           return;
         }
       }

@@ -9,7 +9,7 @@ namespace std{
   // note: for an iterator it, use pred.value(it) to get the value of the predicate for the item at position it
   template<class Predicate>
   struct StaticNotPredicate: public Predicate
-  { template<class X> static bool value(const X& x) { return !Predicate::value(x); } };
+  { template<class X> static constexpr bool value(const X& x) { return !Predicate::value(x); } };
   template<class Predicate>
   struct DynamicNotPredicate: public Predicate
   {
@@ -19,15 +19,12 @@ namespace std{
   template<class Predicate>
   using NotPredicate = conditional_t<Predicate::is_static, StaticNotPredicate<Predicate>, DynamicNotPredicate<Predicate>>;
 
-  struct TruePredicate: public StaticPredicate { template<class X> static bool value(const X& x) { return true; } };
+  struct TruePredicate: public StaticPredicate { template<class X> static constexpr bool value(const X& x) { return true; } };
   using FalsePredicate = NotPredicate<TruePredicate>;
 
-  template<class T, T t>
+  template<class T, class X> // give X as std::constexpr_fac<...>::factory< >, or anything else that has a static "value()"
   struct StaticEqualPredicate: public StaticPredicate
-  { static bool value(const T& x) { return t == x; } };
-  template<class T, T* t>
-  struct StaticEqualPtrPredicate: public StaticPredicate
-  { static bool value(const T& x) { return *t == x; } };
+  { static constexpr bool value(const T& x) { return x == static_cast<T>(X::value()); } };
 
   template<class T>
   struct DynamicEqualPredicate: public DynamicPredicate
@@ -40,7 +37,7 @@ namespace std{
 
   template<class _ItemPredicate, size_t get_num>
   struct StaticSelectingPredicate: public _ItemPredicate
-  { template<class Pair> bool value(const Pair& p) const { return _ItemPredicate::value(std::get<get_num>(p)); } };
+  { template<class Pair> static constexpr bool value(const Pair& p) { return _ItemPredicate::value(std::get<get_num>(p)); } };
 
   template<class _ItemPredicate, size_t get_num>
   struct DynamicSelectingPredicate: public _ItemPredicate
@@ -61,7 +58,7 @@ namespace std{
 
   // predicate for containers of sets, returning whether the given set is empty
   struct EmptySetPredicate: public StaticPredicate
-  { template<class _Set> static bool value(const _Set& x) {return x.empty();} };
+  { template<class _Set> static constexpr bool value(const _Set& x) {return x.empty();} };
   using NonEmptySetPredicate = NotPredicate<EmptySetPredicate>;
 
   // a predicate returning true/or false depending whether the query is in a given set

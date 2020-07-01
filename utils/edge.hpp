@@ -72,6 +72,7 @@ namespace PT{
 
     const Node& head() const { return this->second; }
     const Node& tail() const { return this->first; }
+    std::pair<const Node&, const Node&> as_pair() const { return { this->first, this->second }; }
 
     bool operator<(const AbstractEdge& e) const
     {
@@ -80,6 +81,8 @@ namespace PT{
       else 
         return this->second < e.second;
     }
+    template<class __Adjacency>
+    bool operator==(const AbstractEdge<__Adjacency>& other) const { return (head() == other.head()) && (tail() == other.tail()); }
 
     Adjacency& get_adjacency() { return Parent::second; }
     const Adjacency& get_adjacency() const { return Parent::second; }

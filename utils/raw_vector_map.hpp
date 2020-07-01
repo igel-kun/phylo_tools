@@ -73,7 +73,7 @@ namespace std {
   template<class _Key, class _Element>
   class raw_vector_map: public _vector<_Element>
   {
-    using Parent = vector<_Element>;
+    using Parent = _vector<_Element>;
   public:
     using key_type = const _Key;
     using mapped_type = _Element;
@@ -92,6 +92,19 @@ namespace std {
     friend iterator;
 
   public:
+    // inherit some, but not all constructors
+    raw_vector_map(): Parent() {}
+    raw_vector_map(const raw_vector_map<_Key, _Element>& x): Parent((const Parent&)x) {}
+    raw_vector_map(const raw_vector_map<_Key, _Element>&& x): Parent(move((Parent&&)x)) {}
+
+    template<class InputIt>
+    raw_vector_map(InputIt first, const InputIt& last): Parent()
+    {
+      DEBUG4(std::cout << "constructing raw vector map from range...\n");
+      if(is_same_v<typename iterator_traits<InputIt>::iterator_category, random_access_iterator_tag>)
+        Parent::reserve(distance(first, last));
+      insert(first, last);
+    }
 
     // ATTENTION: ERASE DOES NOT NECCESSARILY DO WHAT YOU EXPECT!
     // erase will just reinisialize x to the default element
@@ -99,16 +112,16 @@ namespace std {
     void erase(const key_type x) { data()[x] = _Element(); }
     void erase(const iterator& it) { it->second = _Element(); } 
 
-    template<class T>
-    void insert(std::iterator_of_t<T> _start, const std::iterator_of_t<T>& _end)
+    template<class InputIt>
+    void insert(InputIt first, const InputIt& last)
     {
-      while(_start != _end){
-        if(_start->first >= size()) {
-          Parent::reserve(_start->first + 1);
-          Parent::resize(_start->first);
-          Parent::emplace_back(_start->second);
-        } else operator[](_start->first) = _start->second;
-        ++_start;
+      while(first != last){
+        if(first->first >= size()) {
+          Parent::reserve(first->first + 1);
+          Parent::resize(first->first);
+          Parent::emplace_back(first->second);
+        } else operator[](first->first) = first->second;
+        ++first;
       }
     }
     // ATTENTION: THIS EMPLACE DOES NOT ALWAYS DO WHAT YOU WOULD EXPECT!

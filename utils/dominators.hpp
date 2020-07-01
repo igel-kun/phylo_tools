@@ -10,38 +10,44 @@
 
 namespace PT{
 
+  template<class Network>
   class LSATree{
     /* computation of the LSA tree follows [Lengauer & Tarjan, 1979]
-     * it runs in O((n+m)*alpha(n,m)) which is as good as linear time for all intends an purposes
+     * it runs in O((n+m)*alpha(n,m)) which is as good as linear time for all intends and purposes
      */
     const Network& N;
 
-    uint32_t* DFS_parent;
-    uint32_t* DFS_vertex;
-    uint32_t* semi_dominator;
-    uint32_t* dominator;
-    std::unordered_map<uint32_t, std::vector<uint32_t>> bucket;
+    using DFS_num = size_t;
+
+    template<class T>
+    using NodeMap = typename Network::template NodeMap<T>;
+    using Bucket = NodeMap<std::vector<Node>>;
+
+    NodeMap<Node> DFS_parent; // indicate the parent in the DFS-tree
+    NodeMap<Node> dominator; // map each node to its dominator
+    NodeMap<DFS_num> semi_dominator; // map each node to the DFS_num of its semi dominator
+    RawConsecutiveMap<DFS_num, Node> DFS_vertex; // DFS node order
+
+    Bucket bucket;
 
     // arrays used in LINK & EVAL
-    uint32_t* best_ancestor; //<-- this is called "label" in LT'79
-    uint32_t* ancestor;
-    uint32_t* size;
-    uint32_t* child;
+    NodeMap<Node> ancestor, best_ancestor; //<-- this is called "label" in LT'79
+    NodeMap<size_t> size;
 
-    void initial_DFS(const uint32_t v, uint32_t& dfs_num)
+    void initial_DFS(const Node v, DFS_num& dfs_num)
     {
       semi_dominator[v] = dfs_num;
       DFS_vertex[dfs_num++] = v;
-      for(uint32_t succ: N[v].children())
+      for(const Node succ: N.children(v))
         if(semi_dominator[succ] == 0){
           DFS_parent[succ] = v;
           initial_DFS(succ, dfs_num);
         }
     }
 
-    void link(const uint32_t v, const uint32_t w)
+    void link(const Node v, const Node w, NodeMap<Node>& child)
     {
-      uint32_t s = w;
+      Node s = w;
       while(semi_dominator[best_ancestor[w]] < semi_dominator[best_ancestor[child[s]]]){
         if(size[s] + size[child[child[s]]] >= 2 * size[child[s]]){
           DFS_parent[child[s]] = s;
@@ -62,11 +68,11 @@ namespace PT{
       }
     }
 
-    void compress(const uint32_t v)
+    void compress(const Node v)
     {
       if(ancestor[ancestor[v]] != 0){
         compress(ancestor[v]);
-        uint32_t& v_anc = ancestor[v];
+        Node& v_anc = ancestor[v];
         if(semi_dominator[best_ancestor[v_anc]] < semi_dominator[best_ancestor[v]])
           best_ancestor[v] = best_ancestor[v_anc];
         v_anc = ancestor[v_anc];
@@ -74,7 +80,7 @@ namespace PT{
     }
 
     // this is called "EVAL" in LT'79
-    uint32_t ancestor_with_min_semi_dominator(const uint32_t v)
+    Node ancestor_with_min_semi_dominator(const Node v)
     {
       if(ancestor[v] != 0){
         compress(v);
@@ -87,21 +93,22 @@ namespace PT{
 
     void compute_semi_dominator()
     {
-      for(uint32_t i = N.num_nodes(); i != 0; --i){
+      NodeMap<Node> child(N.num_nodes());
+      for(DFS_num i = N.num_nodes(); i != 0; --i){
         // step 2
-        const uint32_t w = DFS_vertex[i];
-        uint32_t& semi_dom_w = semi_dominator[w];
-        for(uint32_t parent: N[w].parents()){
-          const uint32_t u = semi_dominator[ancestor_with_min_semi_dominator(parent)];
+        const Node w = DFS_vertex[i];
+        DFS_num& semi_dom_w = semi_dominator[w];
+        for(const Node parent: N.parents(w)){
+          const DFS_num u = semi_dominator[ancestor_with_min_semi_dominator(parent)];
           semi_dom_w = std::min(semi_dom_w, u);
         }
         bucket[DFS_vertex[semi_dom_w]].push_back(w);
-        link(DFS_parent[w], w);
+        link(DFS_parent[w], w, child);
         
         // step 3
-        std::vector<uint32_t>& parent_bucket = bucket[DFS_parent[w]];
-        for(uint32_t v: parent_bucket){
-          const uint32_t u = ancestor_with_min_semi_dominator(v);
+        std::vector<Node>& parent_bucket = bucket[DFS_parent[w]];
+        for(const Node v: parent_bucket){
+          const Node u = ancestor_with_min_semi_dominator(v);
           dominator[v] = (semi_dominator[u] < semi_dominator[v]) ? u : DFS_parent[w];
         }
         parent_bucket.clear();        
@@ -110,8 +117,8 @@ namespace PT{
 
     void compute_dominators()
     {
-      for(uint32_t i = 1; i < N.num_nodes(); ++i){
-        const uint32_t w = DFS_vertex[i];
+      for(DFS_num i = 1; i < N.num_nodes(); ++i){
+        const Node w = DFS_vertex[i];
         if(dominator[w] != DFS_vertex[semi_dominator[w]])
           dominator[w] = dominator[dominator[w]];
       }
@@ -123,19 +130,21 @@ namespace PT{
       N(_N),
       DFS_parent((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t))),
       DFS_vertex((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t))),
-      semi_dominator((uint32_t*)calloc(_N.num_nodes(), sizeof(uint32_t))),
+      semi_dominator((uint32_t*)calloc(_N.num_nodes(), sizeof(uint32_t))), // NOTE the calloc
       dominator((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t))),
       best_ancestor((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t))),
-      ancestor((uint32_t*)calloc(_N.num_nodes(), sizeof(uint32_t))),
+      ancestor((uint32_t*)calloc(_N.num_nodes(), sizeof(uint32_t))), // NOTE the calloc
       size((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t))),
-      child((uint32_t*)calloc(_N.num_nodes(), sizeof(uint32_t)))
     {
+      std::cout << "computing LSA-tree for network with "<<N.num_nodes()<<" nodes & "<<N.num_edges()<<" edges ...\n";
       // step 0: initialization
-      for(uint32_t v = 0; v < N.num_nodes(); ++v) size[v] = 1;
-      for(uint32_t v = 0; v < N.num_nodes(); ++v) best_ancestor[v] = v;
+      for(const Node v: N) {
+        size[v] = 1;
+        best_ancestor[v] = v;
+      }
       // step 1: DFS
       uint32_t dfs_num = 0;
-      initial_DFS(N.get_root(), dfs_num);
+      initial_DFS(N.root(), dfs_num);
       assert(dfs_num == N.num_nodes());
       // step 2: compute semi-dominators
       // step 3: indicate (implicitly) dominators
@@ -145,23 +154,7 @@ namespace PT{
       compute_dominators();
     }
 
-    ~LSATree()
-    {
-      free(child);
-      free(size);
-      free(ancestor);
-      free(best_ancestor);
-
-      free(dominator);
-      free(semi_dominator);
-      free(DFS_vertex);
-      free(DFS_parent);
-    }
-
-    uint32_t operator[](const uint32_t v) const
-    {
-      return dominator[v];
-    }
+    Node operator[](const Node v) const { return dominator[v]; }
 
   };
 }

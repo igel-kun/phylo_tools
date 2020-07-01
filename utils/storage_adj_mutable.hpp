@@ -18,7 +18,7 @@ namespace PT{
   template<class _EdgeData>
   using DefaultMutablePredecessorMap = DefaultMutableSuccessorMap<DataReference<_EdgeData>>;
   template<class _EdgeData>
-  using DefaultMutableTreePredecessorMap = HashMap<Node, std::singleton_set<ReverseAdjacencyFromData<_EdgeData>, std::invalid_fac<Node>>>;
+  using DefaultMutableTreePredecessorMap = HashMap<Node, std::singleton_set<ReverseAdjacencyFromData<_EdgeData>, std::default_invalid_t<Node>>>;
 
 
   template<class _EdgeData = void,
@@ -41,7 +41,7 @@ namespace PT{
     using Translation   = NodeMap<Node>;
     using InOutDegreeMap = NodeMap<InOutDegree>;
     using DegreeMap = NodeMap<Degree>;
-    using NodeSet = PT::NodeSet;
+    using NodeSet = HashSet<Node>;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
@@ -79,16 +79,18 @@ namespace PT{
     bool remove_edge(const Edge& uv) { return remove_edge(uv.tail(), uv.head()); }
     bool remove_edge(const Node u, const Node v)
     {
-      const auto v_pre = _predecessors.find(v);
-      if(v_pre != _predecessors.end()){
+      DEBUG4(std::cout << "trying to remove edge "<<u<<"->"<<v<<"\n");
+      const auto v_pre_iter = _predecessors.find(v);
+      if(v_pre_iter != _predecessors.end()){
+        auto& v_pred_container = v_pre_iter->second;
         // NOTE: make sure two edges with equal head & tail compare true wrt. operator==() (they should if they are derived from std::pair<Node, Node>
-        const auto uv_pre = v_pre.first->find(u);
-        if(uv_pre != v_pre->end()){
+        const auto uv_iter = v_pred_container.find(u);
+        if(uv_iter != v_pred_container.end()){
           // the data structure better be consistent
-          assert(*uv_pre == u);
+          assert(*uv_iter == u);
           // remove uv from both containers
-          _successors.at(u).erase(u);
-          v_pre->erase(uv_pre);
+          _successors.at(u).erase(v);
+          v_pred_container.erase(uv_iter);
           --_size;
           return true;
         } else return false;
@@ -97,13 +99,18 @@ namespace PT{
 
     bool remove_node(const Node v)
     {
-      if((v == _root) && (_size != 0)) throw(std::logic_error("cannot remove the root from a non-empty rooted storage"));
+      DEBUG4(std::cout << "trying to remove node "<<v<<"\n");
+      if((v == _root) && (_size != 0)) throw(std::logic_error("cannot remove the root from a networks/tree unless it's edgeless"));
       const auto v_pre = _predecessors.find(v);
       if(v_pre != _predecessors.end()){
-        for(const auto& u: *v_pre)
+        _size -= v_pre->second.size();
+        for(const auto& u: v_pre->second){
           _successors.at(u).erase(v);
-        _predecessors.erase(v);
-        _successors.erase(v);
+        }
+        _predecessors.erase(v_pre);
+        const auto v_succ = _successors.find(v);
+        _size -= v_succ->second.size();
+        _successors.erase(v_succ);
         return true;
       } else return false;
     }
@@ -111,7 +118,8 @@ namespace PT{
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableNetworkAdjacencyStorage(GivenEdgeContainer&& given_edges,
+    MutableNetworkAdjacencyStorage(const edgelist_tag_t,
+                                    GivenEdgeContainer&& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
       Parent()
@@ -130,7 +138,7 @@ namespace PT{
                                     GivenEdgeContainer&& given_edges,
                                     NodeTranslation* old_to_new = nullptr,
                                     LeafContainer* leaves = nullptr):
-      MutableNetworkAdjacencyStorage(std::forward<GivenEdgeContainer>(given_edges), old_to_new, leaves)
+      MutableNetworkAdjacencyStorage(edgelist_tag, std::forward<GivenEdgeContainer>(given_edges), old_to_new, leaves)
     {}
 
   };
@@ -154,7 +162,7 @@ namespace PT{
     using Translation   = NodeMap<Node>;
     using InOutDegreeMap = NodeMap<InOutDegree>;
     using DegreeMap = NodeMap<Degree>;
-    using NodeSet = PT::NodeSet;
+    using NodeSet = HashSet<Node>;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
@@ -226,18 +234,22 @@ namespace PT{
       if((v == _root) && (_size != 0)) throw(std::logic_error("cannot remove the root from a non-empty rooted storage"));
       const auto v_pre = _predecessors.find(v);
       if(v_pre != _predecessors.end()){
-        _successors.at(*v_pre).erase(v);
-        _predecessors.erase(v);
-        _successors.erase(v);
+        _successors.at(front(v_pre->second)).erase(v);
+        _predecessors.erase(v_pre);
+
+        const auto v_succ = _successors.find(v);
+        _size -= v_succ->second.size() + 1;
+        _successors.erase(v_succ);
         return true;
       } else return false;
     }
 
     //! initialization from edgelist
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableTreeAdjacencyStorage(GivenEdgeContainer&& given_edges,
-                                 NodeTranslation* old_to_new = nullptr,
-                                 LeafContainer* leaves = nullptr):
+    MutableTreeAdjacencyStorage(const edgelist_tag_t,
+                                GivenEdgeContainer&& given_edges,
+                                NodeTranslation* old_to_new = nullptr,
+                                LeafContainer* leaves = nullptr):
       Parent()
     {
       if(given_edges.size()){
@@ -270,7 +282,7 @@ namespace PT{
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     MutableTreeAdjacencyStorage(const non_consecutive_tag_t,
                                     const GivenEdgeContainer& given_edges,
-                                    NodeTranslation* old_to_new = nullptr,
+                                    NodeTranslation* old_to_new,
                                     LeafContainer* leaves = nullptr):
       MutableTreeAdjacencyStorage(given_edges, old_to_new, leaves)
     {}

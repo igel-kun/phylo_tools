@@ -78,9 +78,9 @@ namespace PT{
   // factories
   template<class _AdjContainer, template<class> class _Iterator>
   using EdgeIterFactory = std::IterTplIterFactory<_AdjContainer, Node, std::BeginEndIters<_AdjContainer, false, _Iterator>, _Iterator>;
-  template<class _AdjContainer = NodeSet>
+  template<class _AdjContainer>
   using InEdgeFactory = EdgeIterFactory<_AdjContainer, InEdgeIterator>;
-  template<class _AdjContainer = NodeSet>
+  template<class _AdjContainer>
   using OutEdgeFactory = EdgeIterFactory<_AdjContainer, OutEdgeIterator>;
 
   // go one step further and enumerate edges from a mapping of nodes to nodes

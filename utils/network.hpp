@@ -16,12 +16,14 @@ namespace PT{
   class Network : public Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>
   {
     using Parent = Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>;
+    template<class, class, class, class> friend class _Tree;
   protected:
     using Parent::node_labels;
   public:
-    using NetworkTypeTag = network_tag;
+    using NetworkTag = network_tag;
     using typename Parent::Edge;
     using typename Parent::EdgeRef;
+    
     using Parent::Parent;
     using Parent::children;
     using Parent::parents;
@@ -34,8 +36,11 @@ namespace PT{
     using Parent::root;
     using Parent::is_tree;
     
-    static constexpr bool is_declared_network = std::is_same_v<NetworkTypeTag, network_tag>;
+    static constexpr bool is_declared_network = std::is_same_v<NetworkTag, network_tag>;
 
+    // ================== cast back to tree (f.ex. to use Tree::LCA on a network without reticulation) ===============
+    Parent& as_tree() { return *this; }
+    const Parent& as_tree() const { return *this; }
     // =================== information query ==============
 
     inline bool is_tree_node(const Node u) const { return in_degree(u) == 1; }
@@ -105,7 +110,7 @@ namespace PT{
     
     void print_subtree(std::ostream& os, const Node u, std::string prefix, std::unordered_bitset& seen) const
     {
-      std::string name = node_labels.at(u);
+      std::string name = node_labels->at(u);
       if(name == "") name = (is_reti(u)) ? std::string("(R" + std::to_string(u) + ")") : std::string("+");
       DEBUG3(name += "[" + std::to_string(u) + "]");
       os << '-' << name;
@@ -171,29 +176,71 @@ namespace PT{
   template<class __Network,
     class _NodeData = typename __Network::NodeData,
     class _EdgeData = typename __Network::EdgeData,
-    class _LabelTag = typename __Network::LabelTag>
-  using CompatibleRWNetwork = RWNetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>;
-  template<class __Network,
-    class _NodeData = typename __Network::NodeData,
-    class _EdgeData = typename __Network::EdgeData,
-    class _LabelTag = typename __Network::LabelTag>
-  using CompatibleRONetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>;
-
-  // get compatible tree or network, depending on the first template parameter
-  template<class __Network,
-    class _NodeData = typename __Network::NodeData,
-    class _EdgeData = typename __Network::EdgeData,
-    class _LabelTag = typename __Network::LabelTag>
-  using CompatibleRO = std::conditional_t<__Network::is_declared_tree,
-                                  ROTree<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>,
-                                  RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>>;
+    class _LabelTag = typename __Network::LabelTag,
+    class _MutabilityTag = typename __Network::MutabilityTag>
+  using CompatibleNetwork = std::conditional_t<std::is_same_v<_MutabilityTag, mutable_tag>,
+                                RWNetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>,
+                                RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>>;
 
   template<class __Network,
     class _NodeData = typename __Network::NodeData,
     class _EdgeData = typename __Network::EdgeData,
     class _LabelTag = typename __Network::LabelTag>
-  using CompatibleRW = std::conditional_t<__Network::is_declared_tree,
-                                  RWTree<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>,
-                                  RWNetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>>;
+  using CompatibleRWNetwork = CompatibleNetwork<__Network, _NodeData, _EdgeData, _LabelTag, mutable_tag>;
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag>
+  using CompatibleRONetwork = CompatibleNetwork<__Network, _NodeData, _EdgeData, _LabelTag, immutable_tag>;
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _MutabilityTag = typename __Network::MutabilityTag>
+  using CompatibleMulNetwork = CompatibleNetwork<__Network, _NodeData, _EdgeData, multi_label_tag, _MutabilityTag>;
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _MutabilityTag = typename __Network::MutabilityTag>
+  using CompatibleSilNetwork = CompatibleNetwork<__Network, _NodeData, _EdgeData, single_label_tag, _MutabilityTag>;
+
+
+
+                                  
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag,
+    class _NetworkTag = typename __Network::NetworkTag>
+  using CompatibleRO = std::conditional_t<std::is_same_v<_NetworkTag, tree_tag>,
+                                  CompatibleROTree<__Network, _NodeData, _EdgeData, _LabelTag>,
+                                  CompatibleRONetwork<__Network, _NodeData, _EdgeData, _LabelTag>>;
+
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _LabelTag = typename __Network::LabelTag,
+    class _NetworkTag = typename __Network::NetworkTag>
+  using CompatibleRW = std::conditional_t<std::is_same_v<_NetworkTag, tree_tag>,
+                                  CompatibleRWTree<__Network, _NodeData, _EdgeData, _LabelTag>,
+                                  CompatibleRWNetwork<__Network, _NodeData, _EdgeData, _LabelTag>>;
+
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _MutabilityTag = typename __Network::MutabilityTag,
+    class _NetworkTag = typename __Network::NetworkTag>
+  using CompatibleMul = std::conditional_t<std::is_same_v<_NetworkTag, tree_tag>,
+                                  CompatibleMulTree<__Network, _NodeData, _EdgeData, _MutabilityTag>,
+                                  CompatibleMulNetwork<__Network, _NodeData, _EdgeData, _MutabilityTag>>;
+
+  template<class __Network,
+    class _NodeData = typename __Network::NodeData,
+    class _EdgeData = typename __Network::EdgeData,
+    class _MutabilityTag = typename __Network::MutabilityTag,
+    class _NetworkTag = typename __Network::NetworkTag>
+  using CompatibleSil = std::conditional_t<std::is_same_v<_NetworkTag, tree_tag>,
+                                  CompatibleSilTree<__Network, _NodeData, _EdgeData, _MutabilityTag>,
+                                  CompatibleSilNetwork<__Network, _NodeData, _EdgeData, _MutabilityTag>>;
+
 
 } // namespace

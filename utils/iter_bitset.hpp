@@ -6,6 +6,7 @@
 #include <set>
 #include <initializer_list>
 #include "utils.hpp"
+#include "stl_utils.hpp"
 #include "raw_vector_map.hpp"
 
 #define BITSET_BUCKET_TYPE bucket_type
@@ -63,10 +64,11 @@ namespace std {
     {}
     
     // construct with some items
-    iterable_bitset(std::initializer_list<value_type> init_list, const size_t _num_bits = 0):
+    template<class Container, class = enable_if_t<is_container_v<Container>>>
+    iterable_bitset(Container&& init, const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {
-      for(const value_type x: init_list) set(x);
+      for(const auto& x: init) set(x);
     }
 
     template<class _InitSet>
@@ -121,9 +123,9 @@ namespace std {
     bool set(const value_type x)
     {
       bucket_type bit_set = (1ul << POS_OF(x));
-      auto ins_result = storage.try_emplace(BUCKET_OF(x), bit_set);
-      if(!ins_result.second){
-        bucket_type& bucket = ins_result.first->second;
+      auto [iter, success] = storage.try_emplace(BUCKET_OF(x), bit_set);
+      if(!success){
+        bucket_type& bucket = iter->second;
         if(bucket & bit_set) return false; else bucket |= bit_set;
       }
       ++_count;
@@ -639,13 +641,7 @@ namespace std {
       }
       return *this;
     }
-
-    bitset_iterator operator++(int)
-    {
-      bitset_iterator result(*this);
-      ++(*this);
-      return result;
-    }
+    bitset_iterator operator++(int) { bitset_iterator result(*this); ++(*this); return result; }
 
     bool operator==(const bitset_iterator& it) const
     {

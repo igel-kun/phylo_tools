@@ -29,6 +29,8 @@ namespace std{
   template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
   // is_arithmetic is false for pointers.... why?
   template<class T> constexpr bool is_really_arithmetic_v = is_arithmetic_v<T> || is_pointer_v<T>;
+  // anything that can be converted from and to int is considered "basically arithmetic"
+  template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
 
   template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
@@ -63,6 +65,10 @@ namespace std{
     using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
   };
   template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
+
+  //NOTE: add_rvalue_reference<A&> = A& that's not very intuitive...
+  template<class T>
+  using make_rvalue_reference = std::add_rvalue_reference_t<std::remove_reference_t<T>>;
 
   template<typename T,typename U>
   struct copy_ref
@@ -306,7 +312,7 @@ namespace std{
   };
 
 
-  template<class C, class = enable_if_t<is_container_v<C> && !has_custom_output_v<C>>>
+  template<class C, class = enable_if_t<is_container_v<C> && !is_same_v<C,string_view> && !has_custom_output_v<C>>>
   inline std::ostream& operator<<(std::ostream& os, const C& objs)
   {
     os << '[';
@@ -392,21 +398,25 @@ namespace std{
 
   // a constexpr_factory churns out constpxr objects initialized with given template arguments
   //NOTE: this is useful to pass static constexpr objects such as passing an "invalid" state to singleton_set or simple_vector_map
-  template<class Invalid, class... Args>
+  template<class T, class... Args>
   struct constexpr_fac
   {
     template<Args... args>
-    struct factory
-    {
-      static constexpr Invalid value() { return Invalid(args...); }
-    };
+    struct factory { static constexpr T value() { return T(args...); } };
   };
-  // for integral type, specialize the factory to construct -1
-  template<class Invalid>
-  struct invalid_fac
+  // for number-types, always return ints and let the constructors sort them out :)
+  template<class T>
+  struct constexpr_fac<T>
   {
-    static constexpr Invalid value() { return Invalid(-1u); }
+    template<int init = -1>
+    struct factory { static constexpr int value() { return init; } };
   };
 
+  // specialize to your hearts desire
+  template<class T> struct default_invalid
+  {
+    using type = conditional_t<is_basically_arithmetic_v<T>, typename constexpr_fac<int>::template factory<-1>, void>;
+  };
+  template<class T> using default_invalid_t = typename default_invalid<T>::type;
 }
 

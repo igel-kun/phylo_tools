@@ -180,7 +180,6 @@ namespace PT{
     void backtrack()
     {
       assert(current_node_finished());
-      std::cout << "removing last stack-element\n";
       child_history.pop_back();
       // if we're not at the end, increment the parent iterator and proceed
       if(!child_history.empty()){
@@ -227,15 +226,14 @@ namespace PT{
       Traits(std::forward<Args>(args)...),
       N(_N), root(_root)
     { 
-      std::cout << "making new non-end DFS iterator starting at "<<_root<<" (tracking? "<<track_seen<<")\n";
-      std::cout << "root is seen? "<<is_seen(root)<<"\n";
+      std::cout << "making new non-end DFS iterator (type "<< o <<") starting at "<<_root<<" (tracking? "<<track_seen<<")\n";
       if(!track_seen || !is_seen(root)) dive(root);
     }
 
 
     DFSIterator& operator++()
     {
-      std::cout << "++DFS, stack-size: "<<child_history.size()<<" top node: "<<node_on_top()<<" finished? "<<current_node_finished()<<"\n";
+      //std::cout << "++DFS, stack-size: "<<child_history.size()<<" top node: "<<node_on_top()<<" finished? "<<current_node_finished()<<"\n";
       if(current_node_finished()){
         // since we're done with the node_on_top now, go backtrack()
         backtrack();
@@ -284,8 +282,8 @@ namespace PT{
     using typename Parent::reference;
     using typename Parent::pointer;
 
-    pointer operator->() const { std::cout << "\nemitting ptr to node "<<node_on_top()<<"\n\n"; return node_on_top(); }
-    reference operator*() const { std::cout << "\nemitting node "<< node_on_top()<<"\n\n"; return node_on_top(); }
+    pointer operator->() const { std::cout << "\temitting ptr to node "<<node_on_top()<<"\n"; return node_on_top(); }
+    reference operator*() const { std::cout << "\temitting node "<< node_on_top()<<"\n"; return node_on_top(); }
   };
 
   template<TraversalType o,
@@ -303,9 +301,10 @@ namespace PT{
     using typename Parent::pointer;
     using Parent::child_history;
     
-    pointer operator->() const {
+    pointer operator->() const
+    {
       assert(child_history.size() > 1);
-      std::cout << "\nemitting edge "<<*(child_history[child_history.size() - 2])<<"\n\n";
+      std::cout << "\temitting edge "<<*(child_history[child_history.size() - 2])<<"\n";
       return *(child_history[child_history.size() - 2]);
     }
     reference operator*() const { return *(operator->()); }
@@ -440,7 +439,7 @@ namespace PT{
     std::shared_ptr<SeenSet> c;
 
     // if given no argument, construct a default SeenSet
-    fake_wrapper(): c(std::make_shared<SeenSet>()) { std::cout << "set-wrapper\n";}
+    fake_wrapper(): c(std::make_shared<SeenSet>()) {}
     // if given a single argument, do copy/move construct
     fake_wrapper(fake_wrapper&&) = default;
     fake_wrapper(const fake_wrapper&) = default;
@@ -459,7 +458,7 @@ namespace PT{
   template<>
   struct fake_wrapper<void>
   {
-    template<class... Args> fake_wrapper(Args&&... args) { std::cout << "void-wrapper\n"; } // construct however, fake_wrapper<void> don't give a sh1t :)
+    template<class... Args> fake_wrapper(Args&&... args) {} // construct however, fake_wrapper<void> don't give a sh1t :)
     static bool test(const Node u) { return false; }
     static void append(const Node u) {}
     static void get() {};

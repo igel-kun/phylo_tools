@@ -1,4 +1,3 @@
-
 #pragma once
 
 /* compute the smallest subtree spanning a list L of nodes in O(|L|) LCA-queries, see Cole et al., SIAM J. Comput., 1996 */
@@ -9,29 +8,28 @@
 
 namespace PT{
 
-  // for each node, we'll need its number in any ordering (pre-/in-/post-)order, as well as its distance to the root
-  struct InducedSubtreeInfo{
+  struct SparseInducedSubtreeInfo
+  {
     size_t dist_to_root;
+    SparseInducedSubtreeInfo(const size_t _dtr = 0, const size_t _ignore = 0):
+      dist_to_root(_dtr)
+    {}
+    operator size_t() const { return dist_to_root; }
+  };
+  template<class Tree>
+  using SparseInducedSubtreeInfoMap = typename Tree::template NodeMap<SparseInducedSubtreeInfo>;
+
+  // for each node, we'll need its number in any ordering (pre-/in-/post-)order, as well as its distance to the root
+  struct InducedSubtreeInfo: public SparseInducedSubtreeInfo
+  {
     size_t order_number;
     InducedSubtreeInfo(const size_t _dtr = 0, const size_t _on = 0):
-      dist_to_root(_dtr), order_number(_on)
-    {
-      std::cout << "using larger infos\n";
-    }
+      SparseInducedSubtreeInfo(_dtr), order_number(_on)
+    {}
   };
   template<class Tree>
   using InducedSubtreeInfoMap = typename Tree::template NodeMap<InducedSubtreeInfo>;
 
-  struct SparseInducedSubtreeInfo{
-    size_t dist_to_root;
-    SparseInducedSubtreeInfo(const size_t _dtr = 0, const size_t _ignore = 0):
-      dist_to_root(_dtr)
-    {
-      std::cout << "using smaller infos\n";
-    }
-  };
-  template<class Tree>
-  using SparseInducedSubtreeInfoMap = typename Tree::template NodeMap<SparseInducedSubtreeInfo>;
 
   // compute necessary information from a tree
   template<class Tree, class NodeInfoMap = InducedSubtreeInfoMap<Tree>>
@@ -46,7 +44,6 @@ namespace PT{
       const Node u = *iter;
       node_infos.try_emplace(u, node_infos.at(t.parent(u)).dist_to_root + 1, ++counter);
     }
-    std::cout << "done node-traversing\n";
   }
 
   template<class Tree, class NodeInfoMap>
@@ -76,8 +73,8 @@ namespace PT{
   public:
 
     _induced_subtree_edges(const Tree& _supertree,
-        std::shared_ptr<const LeafList>&& _leaves_sorted,
-        std::shared_ptr<NodeInfoMap>&& _node_infos):
+        std::shared_ptr<const LeafList> _leaves_sorted,
+        std::shared_ptr<NodeInfoMap> _node_infos):
       supertree(_supertree),
       node_infos(std::move(_node_infos)),
       leaves_sorted(std::move(_leaves_sorted))
@@ -167,7 +164,7 @@ namespace PT{
   };
 
   template<class LeafList, class NodeInfoMap>
-  void sort_incoming_leaves(LeafList&& _leaves, const NodeInfoMap& node_infos)
+  void sort_by_order_number(LeafList&& _leaves, const NodeInfoMap& node_infos)
   {
     auto sort_by_order = [&](const auto& a, const auto& b) -> bool {  return node_infos.at(a).order_number > node_infos.at(b).order_number; };
     // move the given leaflist into a sortable range & sort
@@ -176,63 +173,52 @@ namespace PT{
 
 
   // the following functions manage the, frankly, complicated construction variants for the induced-suptree computation class
-
   // NOTE: in all variants, the caller can give us an empty shared_ptr to node_infos and we'll fill it
 
-  // construct from lvalue-referenced nodes - use them as is, assume they are sorted
-  //NOTE: be sure that your nodes are sorted; ATTENTION: this is not verified!
+  // policy_noop - assume the leaves are already sorted
+  //NOTE: most efficient, but the caller has to make sure that they really are sorted (this is not verified by the algorithm)
   //NOTE: this also permits the user to instanciate the whole class with a sparse NodeInfoMap (does not store order_numbers)
   template<class Tree, class LeafList, class NodeInfoMap = SparseInducedSubtreeInfoMap<Tree>>
-  EdgeVec get_induced_edges(const Tree& supertree, const LeafList& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
+  EdgeVec get_induced_edges(const policy_noop_t, const Tree& supertree, const LeafList& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
   {
     make_node_infos(supertree, node_infos);
     return _induced_subtree_edges<Tree, LeafList, NodeInfoMap>
       (supertree, std::shared_ptr<const LeafList>(&leaves, std::NoDeleter()), std::move(node_infos)).get_edges();
   }
 
-  // construct from rvalue-referenced nodes - move them into local storage after sorting
-  //NOTE: if your nodes are already sorted, use the const-reference version instead (remember: "[doing] nothing is better than moving")
-  //NOTE: if your leaf-container is not sortable (has no random access), we have to revert to copying instead of moving!
+  // policy_copy - make a copy of the leaves (into a vector) and sort them
+  //NOTE: slowest version, but the caller might not have a choice (f.ex. if only an assorted const container is available)
   template<class Tree, class LeafList, class NodeInfoMap = InducedSubtreeInfoMap<Tree>>
-  EdgeVec get_induced_edges(const Tree& supertree, std::add_rvalue_reference<LeafList> leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
+  EdgeVec get_induced_edges(const policy_copy_t, const Tree& supertree, const LeafList& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
   {
-    make_node_infos(supertree, node_infos);
-    sort_incoming_leaves(leaves, *node_infos);
-    return _induced_subtree_edges<Tree, LeafList, NodeInfoMap>
-      (supertree, std::make_shared<LeafList>(std::move(leaves)), std::move(node_infos)).get_edges();
+    NodeVec leaves_local; // we could call the range constructor, but it would have no idea of the target size; it's more efficient to reserve first
+    leaves_local.reserve(leaves.size());
+    leaves_local.insert(leaves_local.end(), leaves.begin(), leaves.end());
+    return get_induced_edges(policy_inplace, supertree, leaves_local, std::move(node_infos));
   }
 
-  // construct from lvalue-referenced nodes - sort them in-place
-  //NOTE: if your leaf-container is not sortable (has no random access), we have to make a copy
-  template<class Tree, class LeafList, class NodeInfoMap = InducedSubtreeInfoMap<Tree>>
-  EdgeVec get_induced_edges(const Tree& supertree, LeafList& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
+  // policy_inplace - sort the leaves in-place
+  //NOTE: needs write access to the leaf-container
+  //NOTE: on some containers, sort is more efficient than on others...
+  template<class Tree, class LeafList, class NodeInfoMap = InducedSubtreeInfoMap<Tree>, class = std::enable_if_t<!std::is_const_ref<LeafList>>>
+  EdgeVec get_induced_edges(const policy_inplace_t, const Tree& supertree, LeafList&& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
   {
     make_node_infos(supertree, node_infos);
-    sort_incoming_leaves(leaves, *node_infos);
+    sort_by_order_number(leaves, *node_infos);
     return _induced_subtree_edges<Tree, LeafList, NodeInfoMap>
-      (supertree, std::shared_ptr<LeafList>(&leaves, std::NoDeleter()), std::move(node_infos)).get_edges();
+      (supertree, std::shared_ptr<const std::remove_cvref_t<LeafList>>(&leaves, std::NoDeleter()), std::move(node_infos)).get_edges();
   }
 
 
-  // allow the caller to be explicit about the data-policy by prepending policy_inplace, policy_move, or policy_copy
-  template<class Tree, class LeafList, class NodeInfoMap = InducedSubtreeInfoMap<Tree>>
-  EdgeVec get_induced_edges(const data_policy_tag policy, const Tree& supertree, LeafList&& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
+  // general function, guessing the data_policy (pessimistically!)
+  //NOTE: in particular, this assumees that your leaves ARE NOT SORTED! If they are, call the policy_noop version for more speed :)
+  template<class Tree, class LeafList, class NodeInfoMap = SparseInducedSubtreeInfoMap<Tree>>
+  EdgeVec get_induced_edges(const Tree& supertree, LeafList&& leaves, std::shared_ptr<NodeInfoMap> node_infos = {})
   {
-    switch(policy){
-      case policy_move:
-        return get_induced_edges(supertree, std::move(leaves), std::move(node_infos));
-      case policy_copy:{
-          NodeVec leaves_local(leaves.begin(), leaves.end());
-          return get_induced_edges(policy_inplace, supertree, leaves_local, std::move(node_infos));
-        }
-      case policy_inplace:
-        if(std::is_const_ref<LeafList>)
-          return get_induced_edges(supertree, static_cast<const LeafList&>(leaves), std::move(node_infos));
-        else
-          return get_induced_edges(supertree, static_cast<LeafList&>(leaves), std::move(node_infos));
-      default:
-        throw std::logic_error("invalid data_policy: " + std::to_string(policy));
-    }
+    if(std::is_const_ref<LeafList>)
+      return get_induced_edges(policy_copy, supertree, leaves, std::move(node_infos));
+    else
+      return get_induced_edges(policy_inplace, supertree, leaves, std::move(node_infos));
   }
 
 }

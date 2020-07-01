@@ -61,7 +61,10 @@
 #define return_map_lookup(x,y,z) {const auto _iter = (x).find(y); return (_iter != (x).end()) ? _iter->second : (z); }
 
 // data transfer policies
-enum data_policy_tag { policy_move, policy_copy, policy_inplace };
+struct policy_move_t {} policy_move;
+struct policy_copy_t {} policy_copy;
+struct policy_inplace_t {} policy_inplace;
+struct policy_noop_t {} policy_noop;
 
 // rotation
 uint32_t rotl32(uint32_t x, uint32_t n){

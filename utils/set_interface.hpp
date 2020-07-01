@@ -72,8 +72,8 @@ namespace std {
   // on non-map containers, append = emplace
   template<class Set, class = enable_if_t<is_container_v<Set> && !is_map_v<Set> && !is_vector_v<Set>>, class ...Args>
   inline emplace_result<Set> append(Set& _set, Args&&... args) { return _set.emplace(forward<Args>(args)...); }
-  // on vectors, append =  emplace_back
-  
+
+  // on vectors, append =  emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
@@ -83,7 +83,9 @@ namespace std {
     _vec.emplace_back(forward<First>(first), forward<Args>(args)...);
     return {std::prev(_vec.end()), true};
   }
-  
+  // dummy function to not insert anything into an appended vector
+  template<typename T> inline emplace_result<vector<T>> append(vector<T>& _vec) { return {_vec.begin(), true}; }
+ 
   // on maps to primitives, append = try_emplace
   template<class Map, enable_if_t<is_map_v<Map> && !is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
   inline emplace_result<Map> append(Map& _map, const typename Map::key_type& _key, Args&&... args)

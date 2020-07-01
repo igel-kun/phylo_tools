@@ -12,7 +12,7 @@ namespace PT{
   template<class EdgeData>
   using DefaultConsecutivePredecessorMap = DefaultConsecutiveSuccessorMap<DataReference<EdgeData>>;
   template<class EdgeData>
-  using DefaultConsecutiveTreePredecessorMap = RawConsecutiveMap<Node, std::singleton_set<ReverseAdjacencyFromData<EdgeData>, std::invalid_fac<Node>>>;
+  using DefaultConsecutiveTreePredecessorMap = RawConsecutiveMap<Node, std::singleton_set<ReverseAdjacencyFromData<EdgeData>, std::default_invalid_t<Node>>>;
 
 
   template<class _EdgeData = void,
@@ -28,12 +28,12 @@ namespace PT{
     using typename Parent::RevEdge;
     using typename Parent::RevAdjacency;
 
-    template<class T, class InvalidElement = void>
+    template<class T, class InvalidElement = std::default_invalid_t<T>>
     using NodeMap = ConsecutiveMap<Node, T, InvalidElement>;
 
-    using Translation   = NodeMap<Node, std::invalid_fac<Node>>;
+    using Translation   = NodeMap<Node, std::default_invalid_t<Node>>;
     using InOutDegreeMap= NodeMap<InOutDegree, std::constexpr_fac<InOutDegree, Degree, Degree>::factory<-1u, -1u>>;
-    using DegreeMap     = NodeMap<Degree, std::invalid_fac<Degree>>;
+    using DegreeMap     = NodeMap<Degree, std::default_invalid_t<Degree>>;
     using NodeSet = ConsecutiveNodeSet;
 
   protected:
@@ -83,11 +83,12 @@ namespace PT{
     }
 
   public:
-
+#warning TODO: let the user choose 0,1, or 2 of {old->new, new->old}-translation, use shared_ptrs, and port this to the tree constructors!
     //! initialization from edgelist
     //NOTE: if old_to_new == nullptr, we will assume that the edgelist is already consecutive, otherwise, we will translate to consecutive vertices
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    ConsecutiveNetworkAdjacencyStorage(GivenEdgeContainer&& given_edges, // universal reference
+    ConsecutiveNetworkAdjacencyStorage(const edgelist_tag_t,
+                                       GivenEdgeContainer&& given_edges, // universal reference
                                        NodeTranslation* old_to_new = nullptr,
                                        LeafContainer* leaves = nullptr):
       _succ_storage(given_edges.size()),
@@ -134,12 +135,12 @@ namespace PT{
     using typename Parent::Edge;
     using typename Parent::Adjacency;
 
-    template<class T, class InvalidElement = void>
+    template<class T, class InvalidElement = std::default_invalid_t<T>>
     using NodeMap = ConsecutiveMap<Node, T, InvalidElement>;
 
-    using Translation   = NodeMap<Node, std::invalid_fac<Node>>;
+    using Translation   = NodeMap<Node, std::default_invalid_t<Node>>;
     using InOutDegreeMap= NodeMap<InOutDegree, std::constexpr_fac<InOutDegree, Degree, Degree>::factory<-1u, -1u>>;
-    using DegreeMap     = NodeMap<Degree, std::invalid_fac<Degree>>;
+    using DegreeMap     = NodeMap<Degree, std::default_invalid_t<Degree>>;
     using NodeSet = ConsecutiveNodeSet;
   protected:
     using Parent::_successors;
@@ -182,9 +183,10 @@ namespace PT{
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    ConsecutiveTreeAdjacencyStorage(GivenEdgeContainer&& given_edges,
-                                     NodeTranslation* old_to_new = nullptr,
-                                     LeafContainer* leaves = nullptr):
+    ConsecutiveTreeAdjacencyStorage(const edgelist_tag_t,
+                                    GivenEdgeContainer&& given_edges,
+                                    NodeTranslation* old_to_new = nullptr,
+                                    LeafContainer* leaves = nullptr):
       _succ_storage(given_edges.size())
     {
       DEBUG3(std::cout << "initializing ConsecutiveTreeAdjacencyStorage with "<<given_edges.size()<<" edges & leaf storage "<<leaves<<std::endl);
@@ -198,9 +200,9 @@ namespace PT{
     //NOTE: if old_to_new == nullptr, we will create a temporary translate map and delete it when finishing construction
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
     ConsecutiveTreeAdjacencyStorage(const non_consecutive_tag_t,
-                                        GivenEdgeContainer&& given_edges,
-                                        NodeTranslation* old_to_new = nullptr,
-                                        LeafContainer* leaves = nullptr):
+                                    GivenEdgeContainer&& given_edges,
+                                    NodeTranslation* old_to_new = nullptr,
+                                    LeafContainer* leaves = nullptr):
       ConsecutiveTreeAdjacencyStorage(std::forward<GivenEdgeContainer>(given_edges), old_to_new? old_to_new: std::unique_ptr<NodeTranslation>().get(), leaves)
     {}
 

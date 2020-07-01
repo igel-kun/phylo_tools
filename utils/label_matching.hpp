@@ -15,21 +15,25 @@ namespace PT {
   template<class _LabelTag>
   static constexpr bool _single_label_v = std::is_same_v<_LabelTag, single_label_tag>;
 
-  template<class _LabelTag>
-  using LabelNodeStorage = std::conditional_t<_single_label_v<_LabelTag>, std::singleton_set<Node>, HashSet<Node>>;
+  template<class _LabelTag, template<class> class Set = HashSet>
+  using LabelNodeStorage = std::conditional_t<_single_label_v<_LabelTag>, std::singleton_set<Node, std::default_invalid_t<Node>>, Set<Node>>;
 
 
   // a label matching maps labels (strings) to pairs of node-storages (Node for single-labeled networks, NodeSet for multi-labeled networks)
   // NOTE: N and T must have compatible LabelTypes (f.ex. both std::string with/without wchar etc)
-  template<class _LabelTagA, class _LabelTagB, class _LabelType = std::string>
-  class LabelMatching: public HashMap<_LabelType, std::pair<LabelNodeStorage<_LabelTagA>, LabelNodeStorage<_LabelTagB>>>
+  template<class _LabelTagA, class _LabelTagB, template<class> class Set = HashSet, class _LabelType = std::string>
+  class LabelMatching: public HashMap<_LabelType, std::pair<LabelNodeStorage<_LabelTagA, Set>, LabelNodeStorage<_LabelTagB, Set>>>
   {
-    using StorageA = LabelNodeStorage<_LabelTagA>;
-    using StorageB = LabelNodeStorage<_LabelTagB>;
-    using Parent = HashMap<_LabelType, std::pair<StorageA, StorageB>>;
-
   public:
+    using StorageA = LabelNodeStorage<_LabelTagA, Set>;
+    using StorageB = LabelNodeStorage<_LabelTagB, Set>;
     using LabelType  = _LabelType;
+  protected:
+    using Parent = HashMap<_LabelType, std::pair<StorageA, StorageB>>;
+  public:
+
+    // allow empty label matchings
+    LabelMatching() {}
 
     // build a label matching from 2 iterator factories (one for each network) yielding (node, label) pairs
     template<class NodeIteratorN, class PropertyGetterN, class NodeIteratorT, class PropertyGetterT>
@@ -39,7 +43,6 @@ namespace PT {
     {
       // step 1: create a mapping of labels to nodes in N
       for(const auto& p: Nfac) if(!p.second.empty()){
-        std::cout << "found labeled node "<<p<<"\n";
         // the factory Nfac gives us pairs of (node, label)
         // find entry for p's label or construct it by matching p to the default constructed (empty LabelNodeStorage)
         // (if the entry was already there, then we have 2 nodes of the same label, so throw an exception)
@@ -64,33 +67,33 @@ namespace PT {
 
 
     template<class NetworkA, class NetworkB,
-      class Enabler = typename NetworkA::NetworkTypeTag, // enable only if NetworkA has a NetworkTypeTag (that is, it's a network or a tree)
-      class Enabler2 = typename NetworkB::NetworkTypeTag>  // same for NetworkB
+      class Enabler = typename NetworkA::NetworkTag, // enable only if NetworkA has a NetworkTag (that is, it's a network or a tree)
+      class Enabler2 = typename NetworkB::NetworkTag>  // same for NetworkB
     LabelMatching(const NetworkA& A, const NetworkB& B):
       LabelMatching(A.nodes_labeled(), B.nodes_labeled())
     {}
 
     // prepend 'leaf_labels_only' to the argument list to construct label-maps only for the leaf-labels
     template<class NetworkA, class NetworkB,
-      class Enabler = typename NetworkA::NetworkTypeTag, // enable only if NetworkA has a NetworkTypeTag (that is, it's a network or a tree)
-      class Enabler2 = typename NetworkB::NetworkTypeTag>  // same for NetworkB
+      class Enabler = typename NetworkA::NetworkTag, // enable only if NetworkA has a NetworkTag (that is, it's a network or a tree)
+      class Enabler2 = typename NetworkB::NetworkTag>  // same for NetworkB
     LabelMatching(const LeafLabelsOnlyT& sentinel, const NetworkA& A, const NetworkB& B):
       LabelMatching(A.leaves_labeled(), B.leaves_labeled())
     {}
   };
 
-  template<class NetworkA, class NetworkB,
+  template<class NetworkA, class NetworkB, template<class> class Set = HashSet,
     class = std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>>>
-  using LabelMatchingFromNets = LabelMatching<typename NetworkA::LabelTag, typename NetworkB::LabelTag, typename NetworkA::LabelType>;
+  using LabelMatchingFromNets = LabelMatching<typename NetworkA::LabelTag, typename NetworkB::LabelTag, Set, typename NetworkA::LabelType>;
 
-  template<class NetworkA, class NetworkB,
+  template<class NetworkA, class NetworkB, template<class> class Set = HashSet,
     class = std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>>>
-  LabelMatchingFromNets<NetworkA, NetworkB> get_label_matching(const NetworkA& A, const NetworkB& B)
-  { return LabelMatchingFromNets<NetworkA, NetworkB>(A, B); }
+  LabelMatchingFromNets<NetworkA, NetworkB, Set> get_label_matching(const NetworkA& A, const NetworkB& B)
+  { return {A, B}; }
 
-  template<class NetworkA, class NetworkB,
+  template<class NetworkA, class NetworkB, template<class> class Set = HashSet,
     class = std::enable_if_t<std::is_same_v<typename NetworkA::LabelType, typename NetworkB::LabelType>>>
-  LabelMatchingFromNets<NetworkA, NetworkB> get_leaf_label_matching(const NetworkA& A, const NetworkB& B)
+  LabelMatchingFromNets<NetworkA, NetworkB, Set> get_leaf_label_matching(const NetworkA& A, const NetworkB& B)
   { return {leaf_labels_only, A, B}; }
 
 

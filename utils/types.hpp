@@ -8,6 +8,7 @@
 #include "utils.hpp"
 #include "iter_bitset.hpp"
 #include "vector_map.hpp"
+#include "stl_utils.hpp"
 
 namespace PT{
 
@@ -50,11 +51,11 @@ namespace PT{
 
   template<class Key, class Value>
   using RawConsecutiveMap = std::raw_vector_map<Key, Value>;
-  template<class Key, class Value, class InvalidElement = void>
+  template<class Key, class Value, class InvalidElement = std::default_invalid_t<Value>>
   using ConsecutiveMap = std::vector_map<Key, Value, InvalidElement>;
 
   using Node = uintptr_t;
-  constexpr Node NoNode = static_cast<Node>(-1ul);
+  constexpr Node NoNode = std::default_invalid_t<Node>::value();
 
   template<class Network>
   using NodeTranslation = typename Network::template NodeSet<Node>;
@@ -81,7 +82,6 @@ namespace PT{
 
   using NodePair = std::pair<Node, Node>;
   using NodeVec = std::vector<Node>;
-  using NodeSet = HashSet<Node>;
 
  
   template<class Network>

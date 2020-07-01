@@ -40,13 +40,13 @@ namespace PT{
     }
 
     ConsecutiveStorageNoMem(): ConsecutiveStorageNoMem(nullptr) {}
-
+/*
     template<class __Item>
     ConsecutiveStorageNoMem(const ConsecutiveStorageNoMem<__Item>& storage):
-      start((_Item*)(storage.cbegin())),
+      start((_Item*)(storage.begin())),
       count(storage.size())
     {}
-
+*/
     // copy/move items from another container into us
     template<class Iterator>
     ConsecutiveStorageNoMem(_Item* _start, Iterator first, const Iterator& last):
@@ -101,20 +101,43 @@ namespace PT{
   };
 
   // ConsecutiveStorage with memory management; other ConsecutiveStorage's can point into this one
+  //NOTE: this uses raw pointers because we're trying to re-use the -NoMem variant (which HAS TO use raw pointers by design, pointing INTO allocated memory)
+  //NOTE: we use malloc/free over new/delete because there is no realloc()-equivalent for new/delete
   template<class _Item>
   class ConsecutiveStorage: public ConsecutiveStorageNoMem<_Item>
   {
     using Parent = ConsecutiveStorageNoMem<_Item>;
   protected:
+    using Parent::Parent;
     using Parent::start;
     using Parent::count;
   public:
 
     ConsecutiveStorage(const size_t _count = 0):
-      Parent::ConsecutiveStorageNoMem(_count == 0 ? nullptr : reinterpret_cast<_Item*>(std::malloc(_count * sizeof(_Item))), _count)
+      Parent(_count == 0 ? nullptr : reinterpret_cast<_Item*>(std::malloc(_count * sizeof(_Item))), _count)
     {
       if(_count && !start) throw std::bad_alloc();
-      DEBUG5(std::cout << "creating ConsecutiveStorage at "<<start<<" for "<<_count<<" items of size "<<sizeof(_Item)<<std::endl);
+      DEBUG5(std::cout << "creating ConsecutiveStorage at "<<start<<" for "<<count<<" items of size "<<sizeof(_Item)<<std::endl);
+    }
+
+    // copy construction
+    ConsecutiveStorage(const ConsecutiveStorage& cs):
+      Parent(cs.count == 0 ? nullptr : reinterpret_cast<_Item*>(std::malloc(cs.count * sizeof(_Item))), cs.count)
+    {
+      if(cs.count && !start) throw std::bad_alloc();
+      DEBUG5(std::cout << "creating ConsecutiveStorage at "<<start<<" for "<<count<<" items of size "<<sizeof(_Item)<<std::endl);
+      // copy the items using placement-new and the item's copy constructor
+      _Item* tmp = start;
+      for(const _Item& i: cs) new(tmp++) _Item(i);
+    }
+
+    // move construction
+    ConsecutiveStorage(ConsecutiveStorage&& cs):
+      Parent(cs.start, cs.count)
+    {
+      cs.start = nullptr;
+      cs.count = 0;
+      DEBUG5(std::cout << "using existing ConsecutiveStorage at "<<start<<" for "<<count<<" items of size "<<sizeof(_Item)<<std::endl);
     }
 
     void resize(const size_t _count)

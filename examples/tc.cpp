@@ -7,6 +7,8 @@
 #include "utils/mul_wrapper.hpp" // treat networks as multi-labeled trees
 //#include "utils/tc_preprocess.hpp" // preprocessing
 
+#include "utils/containment.hpp"
+
 using namespace PT;
 
 OptionMap options;
@@ -29,7 +31,7 @@ void parse_options(const int argc, const char** argv)
 // if we declare the network to be compatible without ROTree, then we get a vector_map label-map in both
 // if we declare the network first, as RWNetwork<> and the tree to be CompatibleROTree<...>, then the label maps will both be unordered_map
 using MyTree = ROTree<>;
-using MyNet = CompatibleRWNetwork<MyTree>;
+using MyNet = CompatibleRW<CompatibleMulNetwork<MyTree>>;
 // in any case, both label maps have the same type
 using LabelMap = typename MyTree::LabelMap;
 static_assert(std::is_same_v<LabelMap, typename MyNet::LabelMap>);
@@ -106,19 +108,26 @@ int main(const int argc, const char** argv)
   // choose which index corresponds to the host and which to the guest (we try to embed guest into host)
   const bool first_is_tree = (el[0].size() == node_labels[0].size() - 1);
   const bool second_is_tree= (el[1].size() == node_labels[1].size() - 1);
+  // if we've been given 2 trees, the first is considered the host, otherwise, the network is considered the host :)
   const bool host_net_index = (first_is_tree && !second_is_tree);
   const bool guest_net_index = 1 - host_net_index;
   MyNet  N(el[host_net_index], node_labels[host_net_index]);
   MyTree T(el[guest_net_index], node_labels[guest_net_index]);
-
+      
   if(test(options, "-v"))
     std::cout << N << std::endl << T << std::endl;
 
   if(T.is_tree()) {
     if(N.is_tree()){
-      std::cout << "testing induced subtree by leaves 3, 4, 5, 7:\n"<<CompatibleRWTree<MyTree>(policy_inplace, T, (std::list<Node>{3,4,7,5}))<<"\n";
+      TreeInTreeContainment tc(N.as_tree(), T);
+      if(tc.displayed())
+        std::cout << "displayed by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
+      else std::cout << "not displayed\n";
     } else {
-      std::cout << "sorry, can't check network-tree containment yet...\n";
+      TreeInNetContainment tc(std::move(N), std::move(T));
+      if(tc.displayed())
+        std::cout << "displayed\n"; // by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
+      else std::cout << "not displayed\n";
     }
   } else std::cout << "sorry, can't check network-network containment yet...\n";
 

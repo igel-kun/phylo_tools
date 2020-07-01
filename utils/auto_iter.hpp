@@ -45,7 +45,8 @@ namespace std{
   };
 
   template<class _Iterator, class _EndIterator = _Iterator>
-  struct ra_auto_iter: public bd_auto_iter<_Iterator, _EndIterator> {
+  struct ra_auto_iter: public bd_auto_iter<_Iterator, _EndIterator>
+  {
     using Parent = bd_auto_iter<_Iterator, _EndIterator>;
     using Parent::Parent;
     using Parent::first;

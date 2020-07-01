@@ -51,7 +51,8 @@ namespace std{
     iterator       find(const _Element& x) { return (!empty() && (x == *element)) ? begin() : end(); }
     const_iterator find(const _Element& x) const { return (!empty() && (x == *element)) ? begin() : end(); }
     bool contains(const _Element& x) const { return empty() ? false : x == front(); }
-  
+    void reserve(const size_t) {} // compatibility with vector
+
     virtual iterator begin() = 0;
     virtual const_iterator begin() const = 0;
   
@@ -82,6 +83,7 @@ namespace std{
     using typename Parent::iterator;
     using typename Parent::const_iterator;
     using Parent::Parent;
+    using Parent::clear;
 
     singleton_set(): Parent(_invalid_element) {}
 
@@ -98,6 +100,17 @@ namespace std{
       }
     }
 
+    template<class... Args>
+    pair<iterator, bool> emplace_back(Args&&... args) { emplace(std::forward<Args>(args)...); }
+    
+    template<class Iter>
+    void insert(const iterator _ins, Iter src_begin, const Iter& src_end)
+    { while(src_begin != src_end) emplace(*src_begin); }
+    
+    singleton_set& operator=(const _Element& e) { clear(); emplace(e); return *this; }
+    singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
+
+    void push_back(const _Element& el) { emplace(el); }
     bool empty() const { return *element == _invalid_element; }
     iterator begin() { return addr(); }
     const_iterator begin() const { return addr(); }
@@ -105,9 +118,9 @@ namespace std{
 
   // if we have no invalid element, we'll store a pointer instead and use nullptr to represent the empty singleton_set
   template<class _Element>
-  class singleton_set<_Element, void>: public _singleton_set<_Element, unique_ptr<_Element>>
+  class singleton_set<_Element, void>: public _singleton_set<_Element, shared_ptr<_Element>>
   {
-    using Parent = _singleton_set<_Element, unique_ptr<_Element>>;
+    using Parent = _singleton_set<_Element, shared_ptr<_Element>>;
   protected:
     using Parent::element;
 
@@ -116,6 +129,7 @@ namespace std{
     using typename Parent::iterator;
     using typename Parent::const_iterator;
     using Parent::Parent;
+    using Parent::clear;
 
     template<class... Args>
     pair<iterator, bool> emplace(Args&&... args) 
@@ -129,6 +143,18 @@ namespace std{
         else throw logic_error("trying to add second element to singleton set");
       }
     }
+
+    template<class... Args>
+    pair<iterator, bool> emplace_back(Args&&... args) { emplace(std::forward<Args>(args)...); }
+
+    template<class Iter>
+    void insert(const iterator _ins, Iter src_begin, const Iter& src_end)
+    { while(src_begin != src_end) emplace(*src_begin); }
+
+    singleton_set& operator=(const _Element& e) { clear(); emplace(e); return *this; }
+    singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
+
+    void push_back(const _Element& el) { emplace(el); }
     bool empty() const { return !element; }
     iterator begin() { return element.get(); }
     const_iterator begin() const { return element.get(); }

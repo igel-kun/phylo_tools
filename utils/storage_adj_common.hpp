@@ -13,6 +13,7 @@
 #warning TODO: implement move constructors for edge storages and adjacency storages!!!
 namespace PT{
 
+  struct edgelist_tag_t {} edgelist_tag;
 
   template<class _EdgeData, class _SuccessorMap, class _PredecessorMap>
   class RootedAdjacencyStorage
@@ -219,7 +220,7 @@ namespace PT{
   template<class _NodeData,
            class _EdgeStorage,
            class _NodeDataMap = typename _EdgeStorage::template NodeMap<std::conditional_t<std::is_void_v<_NodeData>, int, _NodeData>>>
-  struct _AddNodeData { using type = _AddNodeData<_NodeData, _EdgeStorage, _NodeDataMap>; };
+  struct _AddNodeData { using type = __AddNodeData<_NodeData, _EdgeStorage, _NodeDataMap>; };
   template<class _EdgeStorage, class _NodeDataMap>
   struct _AddNodeData<void, _EdgeStorage, _NodeDataMap> { using type = _EdgeStorage; };
 
