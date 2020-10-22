@@ -53,14 +53,14 @@ namespace PT{
     using DPEntry = typename std::conditional_t<low_memory_version, _DPEntryLowMem<_Network>, _DPEntry<_Network>>;
  
   protected:
-    using DPTable = std::unordered_map<NodeSet, DPEntry, std::set_hash<NodeSet>>;
+    using DPTable = std::unordered_map<HashSet<Node>, DPEntry, std::set_hash<HashSet<Node>>>;
     
     const _Network& N;
     const bool ignore_deg2;
     DPTable dp_table;
 
     // return whether u is a root in N[c], that is, if u has parents in c
-    inline bool is_root_in_set(const Node u, const NodeSet& c)
+    inline bool is_root_in_set(const Node u, const HashSet<Node>& c)
     {
       for(auto v: N.parents(u)){
         // ignore deg-2 nodes
@@ -92,7 +92,7 @@ namespace PT{
         DEBUG5(std::cout << "======= checking constraint node subsets ========\n");
         // check all node-subsets constraint by the arcs in N
         STAT(uint64_t num_subsets = 0;)
-        for(auto&& nodes: NetworkConstraintSubsetFactory<_Network, NodeSet>(N)){
+        for(auto&& nodes: NetworkConstraintSubsetFactory<_Network, HashSet<Node>>(N)){
           sw_t best_sw = N.num_nodes() + 1;
           last_iter = append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
           DPEntry& best_entry = last_iter->second;
@@ -109,7 +109,7 @@ namespace PT{
             // first, make sure that u is a root in N[nodes]
             if(is_root_in_set(u, nodes)){
               // look-up the best extension for nodes - u
-              NodeSet lookup_set(nodes);
+              HashSet<Node> lookup_set(nodes);
               lookup_set.erase(u);
               // copy the dp-table entry at lookup_set
               DPEntry entry = dp_table.at(lookup_set);

@@ -218,13 +218,12 @@ namespace PT{
     // satisfy all using the leaves
     sequential_taxon_name sqn;
     for(uint32_t i = num_internal; i < num_nodes; ++i){
-
       // WTF stl, why is there no front() / pop_front() for unordered_maps??? (see https://stackoverflow.com/questions/16981600/why-no-front-method-on-stdmap-and-other-associative-containers-from-the-stl)
       const uint32_t parent = dangling.begin()->first;
       
       edges.emplace_back(parent, i);
       decrease_or_remove(dangling, dangling.begin());
-      append(names, i, sqn(i - num_internal));
+      names.emplace(i, sqn(i - num_internal));
       
       DEBUG5(std::cout << " node #"<<i<<" is a leaf with name "<<names[i]<<" - adding edge "<<edges.back()<<std::endl);
     }

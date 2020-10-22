@@ -9,9 +9,9 @@
 namespace PT{
 
 
-  // conost _Container& will be the return type of the dereference operator
+  // const _Container& will be the return type of the dereference operator
   // for performance reasons, it should support fast std::test() queries, as well as insert() and erase()
-  template<class _Network, class _Container = NodeSet>
+  template<class _Network, class _Container = HashSet<Node>>
   class NetworkConstraintSubsetIterator
   {
   protected:

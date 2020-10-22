@@ -115,7 +115,7 @@ namespace PT{
 
       for(const Node u: N2){
         const Something s = (N2.*node_to_something_N2)(u);
-        PossAndHist& ph = poss_and_hist.try_emplace(s, size_N, 0).first->second
+        PossAndHist& ph = poss_and_hist.try_emplace(s, size_N, 0).first->second;
         ph.first.set(u);
         ph.second++;
       }

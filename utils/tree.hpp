@@ -474,7 +474,8 @@ namespace PT{
     class _NodeData = typename __Tree::NodeData,
     class _EdgeData = typename __Tree::EdgeData,
     class _LabelTag = typename __Tree::LabelTag,
-    class _MutabilityTag = typename __Tree::MutabilityTag>
+    class _MutabilityTag = typename __Tree::MutabilityTag,
+    class _LabelMap = std::conditional_t<std::is_const_v<__Tree>, typename __Tree::LabelMap, const typename __Tree::LabelMap>>
   using CompatibleTree = std::conditional_t<std::is_same_v<_MutabilityTag, mutable_tag>,
                                 RWTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>,
                                 ROTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>>;

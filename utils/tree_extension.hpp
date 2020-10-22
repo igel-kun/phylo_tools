@@ -23,7 +23,7 @@ namespace PT{
       highest.add_new_set({u});
       DEBUG3(std::cout << "highest ancestors of node "<<u<<": "<<highest<<std::endl);
       // step 2: establish u as the parent in Gamma of all highest nodes in all weakly connected components (in G[ex[1..u]]) of its children in N
-      NodeSet new_children;
+      NodeVec new_children;
       for(const Node v: N.children(u)){
         try{
           const Node x = highest.set_of(v).get_representative();

@@ -6,9 +6,11 @@
 namespace PT{
 
   // NOTE: the iterator is not publicly constructible, but only by the factory below
-  // NOTE: _Component has to be compatible wo _Network (uses the same LabelMap type)
+  // NOTE: _Component has to be compatible to _Network (uses the same LabelMap type, but const (!))
   // NOTE: if you insist on using an RONetwork as _Component, make sure that you translate nodes using the old_to_new NodeTranslation
-  template<class _Network, class _Component = CompatibleRWNetwork<_Network>, bool enumerate_trivial = true,
+  template<class _Network,
+    bool enumerate_trivial = true,
+    class _Component = CompatibleRWNetwork<const _Network, void, void>,
     class = std::enable_if_t<are_compatible_v<_Network, _Component>>>
   class BiconnectedComponentIter
   {
@@ -24,8 +26,8 @@ namespace PT{
     const EdgeVec& bridges;     // bridge-container
     bool is_end_iter;           // indicates whether we reached the end
     BridgeIter current_bridge;  // iterator into the bridge-container
-    NodeSet seen;               // set of seen nodes
-    EdgeVec current_edges;  // the current component to be output on operator*
+    HashSet<Node> seen;         // set of seen nodes
+    EdgeVec current_edges;      // the current component to be output on operator*
     bool bridge_next = false;   // at alternating output, indicate whether to output the next bridge or its biconnected component
 
     void next_component()
@@ -129,8 +131,8 @@ namespace PT{
     using BridgeIter = typename std::vector<Edge>::const_iterator;
     using reference = _Component;
     using const_reference = _Component;
-    using iterator = BiconnectedComponentIter<_Network, _Component, enumerate_trivial>;
-    using const_iterator = BiconnectedComponentIter<_Network, _Component, enumerate_trivial>;
+    using iterator = BiconnectedComponentIter<_Network, enumerate_trivial, _Component>;
+    using const_iterator = BiconnectedComponentIter<_Network, enumerate_trivial, _Component>;
 
   protected:
     const _Network& N;

@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include<cassert>
 #include<climits>
 #include<sstream>
 #include<deque>

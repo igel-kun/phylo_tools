@@ -173,14 +173,16 @@ namespace PT{
   using ROMulNetwork = RONetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>;
 
   // use these two if you have declared a tree and need a different type of tree which should interact with the first one (i.e. needs the same label-map)
+  //NOTE: if __Network is const, then this gets a const LabelMap
   template<class __Network,
     class _NodeData = typename __Network::NodeData,
     class _EdgeData = typename __Network::EdgeData,
     class _LabelTag = typename __Network::LabelTag,
-    class _MutabilityTag = typename __Network::MutabilityTag>
+    class _MutabilityTag = typename __Network::MutabilityTag,
+    class _LabelMap = std::conditional_t<std::is_const_v<__Network>, typename __Network::LabelMap, const typename __Network::LabelMap>>
   using CompatibleNetwork = std::conditional_t<std::is_same_v<_MutabilityTag, mutable_tag>,
-                                RWNetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>,
-                                RONetwork<_NodeData, _EdgeData, _LabelTag, typename __Network::LabelMap>>;
+                                RWNetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>,
+                                RONetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>>;
 
   template<class __Network,
     class _NodeData = typename __Network::NodeData,
