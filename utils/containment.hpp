@@ -363,7 +363,6 @@ namespace PT {
         const auto& hC = host.children(u);
         while(!hC.empty()) {
           const Node x = front(hC);
-          std::cout << "removing "<<x<<"\n";
           if(host.is_reti(x)) host.remove_edge(u, x); else host.remove_subtree(x);
         }
         std::cout << "pruned host:\n"<<host<<"\n";

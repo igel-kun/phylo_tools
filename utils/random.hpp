@@ -17,7 +17,7 @@ namespace PT{
     return rand() % sides; // yadda yadda, it's not 100% uniform for tiny values of RAND_MAX...
   }
   //! return the result of a 0/1-die with 'good_sides' good sides among its 'sides' sides
-  inline bool throw_bw_die(const uint32_t good_sides, const uint32_t sides)
+  inline bool throw_bw_die(const uint32_t good_sides = 1, const uint32_t sides = 2)
   {
     return throw_die(sides) < good_sides;
   }

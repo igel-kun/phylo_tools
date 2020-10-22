@@ -93,18 +93,17 @@ namespace PT{
     void compute_root()
     {
       _root = NoNode;
-#ifdef NDEBUG
       for(const auto& uV: _predecessors)
-        if(uV.second.empty()){ _root = uV.first; break; }
+        if(uV.second.empty()) {
+#ifdef NDEBUG
+          _root = uV.first;
+          return;
 #else
-      for(const auto& uV: _predecessors){
-        if(uV.second.empty()){
-          if(_root == NoNode)
-            _root = uV.first;
-          else throw std::logic_error("cannot create tree/network with multiple roots ("+std::to_string(_root)+" & "+std::to_string(uV.first)+")");
-        }
-      }
+          if(_root != NoNode) 
+            throw std::logic_error("cannot create tree/network with multiple roots ("+std::to_string(_root)+" & "+std::to_string(uV.first)+")");
+          _root = uV.first;
 #endif
+        }
       if((_root == NoNode) && !_predecessors.empty())
         throw std::logic_error("given edgelist is cyclic (has no root)");
     }

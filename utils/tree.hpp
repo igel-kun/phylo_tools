@@ -225,10 +225,8 @@ namespace PT{
       return false;
     }
 
-    bool is_edge(const Node u, const Node v) const 
-    {
-      return test(out_edges(u), v);
-    }
+    bool is_edge(const Node u, const Node v) const  { return test(children(u), v); }
+    bool adjacent(const Node u, const Node v) const { return is_edge(u,v) || is_edge(v,u); }
 
     //! for sanity checks: test if there is a directed cycle in the data structure (more useful for networks, but definable for trees too)
     bool has_cycle() const

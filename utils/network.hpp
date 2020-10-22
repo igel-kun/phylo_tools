@@ -115,11 +115,11 @@ namespace PT{
       DEBUG3(name += "[" + std::to_string(u) + "]");
       os << '-' << name;
       
-      const bool u_seen = test(seen, (size_t)u);
+      const bool u_seen = test(seen, u);
       const auto& u_childs = children(u);
       if(!u_seen || !is_reti(u)){
-        if(!u_seen) append(seen, (size_t)u);
-        switch(out_degree(u)){
+        if(!u_seen) append(seen, u);
+        switch(u_childs.size()){
           case 0:
             os << std::endl;
             break;

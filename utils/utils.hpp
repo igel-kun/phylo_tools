@@ -126,5 +126,13 @@ inline void move_item(const typename std::vector<_Item>::iterator& dest,
     std::move_backward(source, std::next(source, num_items), std::next(dest, num_items));
 }
 
+// an out-stream indicating failure and exiting on destruction
+struct cfail
+{
+  template<class T>
+  cfail& operator<<(const T& t) { std::cerr << t; return *this; }
+
+  ~cfail() { exit(EXIT_FAILURE); }
+};
 
 

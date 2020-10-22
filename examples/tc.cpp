@@ -4,6 +4,7 @@
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
+#include "utils/generator.hpp"
 #include "utils/mul_wrapper.hpp" // treat networks as multi-labeled trees
 //#include "utils/tc_preprocess.hpp" // preprocessing
 
@@ -16,16 +17,33 @@ void parse_options(const int argc, const char** argv)
 {
   OptionDesc description;
   description["-v"] = {0,0};
-  description[""] = {1,2};
-  const std::string help_message(std::string(argv[0]) + " <file1> [file2]\n\tfile1 and file2 describe two networks (either file1 contains 2 lines of extended newick or both file1 and file2 describe a network in extended newick or edgelist format)\n Unless the first network is a tree and the second is not, we try to embed the second network in the first.");
+  description["-r"] = {3,3};
+  description[""] = {0,2};
+  const std::string help_message(std::string(argv[0]) + " <file1> [file2]\n\
+      \tfile1 and file2 describe two networks (either file1 contains 2 lines of extended newick or both file1 and file2 describe a network in extended newick or edgelist format)\n\
+      \tUnless the first network is a tree and the second is not, we try to embed the second network in the first.\n\
+      \n" + std::string(argv[0]) + " -r <x> <y> <z>\n\
+      \trandomize a tree with x nodes + y leaves and add z additional edges, then check containment of the tree in the network\n");
 
   parse_options(argc, argv, description, help_message, options);
 
-  for(const std::string& filename: options[""])
-    if(!file_exists(filename)) {
-      std::cerr << filename << " cannot be opened for reading" << std::endl;
+  if(test(options, "-r")){
+    const auto r_vec = options.at("-r");
+    if(stoi(r_vec[0]) == 0) {
+      std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes\n";
       exit(EXIT_FAILURE);
     }
+    if(stoi(r_vec[1]) >= stoi(r_vec[0])) {
+      std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes & "<<r_vec[1]<<" leaves\n";
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    for(const std::string& filename: options[""])
+      if(!file_exists(filename)) {
+        std::cerr << filename << " cannot be opened for reading" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+  }
 }
 
 // if we declare the network to be compatible without ROTree, then we get a vector_map label-map in both
@@ -73,15 +91,32 @@ bool check_display(MyNet& N, MyTree& T)
 }
 */
 
-int main(const int argc, const char** argv)
+using NetAndTree = std::pair<MyNet, MyTree>;
+
+NetAndTree create_net_and_tree()
 {
-  parse_options(argc, argv);
-  std::ifstream in(options[""][0]);
+  EdgeVec el;
+  std::shared_ptr<LabelMap> node_labels = std::make_shared<LabelMap>();
 
+  const uint32_t num_internals = std::stoi(options["-r"][0]);
+  const uint32_t num_leaves = std::stoi(options["-r"][1]);
+  const uint32_t num_new_edges = std::stoi(options["-r"][2]);
+
+  generate_random_tree(el, *node_labels, num_internals, num_leaves);
+  
+  MyNet N(el, node_labels);
+  add_random_edges(N, num_new_edges / 2, num_new_edges / 2, num_new_edges);
+
+  return { std::piecewise_construct, std::make_tuple(el, node_labels), std::make_tuple(std::move(N)) };
+}
+
+NetAndTree read_net_and_tree()
+{
   EdgeVec el[2];
-  LabelMap node_labels[2];
+  std::shared_ptr<LabelMap> node_labels[2] = {std::make_shared<LabelMap>(), std::make_shared<LabelMap>()};
 
-  if(!read_from_stream(in, el[0], node_labels[0])){
+  std::ifstream in(options[""][0]);
+  if(!read_from_stream(in, el[0], *(node_labels[0]))){
     std::cerr << "could not read any network from "<<options[""][0]<<std::endl;
     exit(EXIT_FAILURE);
   } else {
@@ -89,30 +124,41 @@ int main(const int argc, const char** argv)
       // if we've been given a second filename, try to read that one next
       in.close();
       in.open(options[""][1]);
-      if(!read_from_stream(in, el[1], node_labels[1])){
+      if(!read_from_stream(in, el[1], *(node_labels[1]))){
         std::cerr << "could not read any network from "<<options[""][1]<<std::endl;
         exit(EXIT_FAILURE);
       }
     } else {
       while(std::isspace(in.peek())) in.get();
       // if we have only a single filename, try to continue reading the same file
-      if((in.bad() || in.eof() || !read_from_stream(in, el[1], node_labels[1]))){
+      if((in.bad() || in.eof() || !read_from_stream(in, el[1], *(node_labels[1])))){
         std::cerr << "could not read 2 networks from "<<options[""][0]<<" but no other useable source was found"<<std::endl;
         exit(EXIT_FAILURE);
       }
     }
   }
-
   DEBUG5(std::cout << "building N0 from "<<el[0]<< std::endl << "building N1 from "<<el[1]<<std::endl);
 
   // choose which index corresponds to the host and which to the guest (we try to embed guest into host)
-  const bool first_is_tree = (el[0].size() == node_labels[0].size() - 1);
-  const bool second_is_tree= (el[1].size() == node_labels[1].size() - 1);
+  const bool first_is_tree = (el[0].size() == node_labels[0]->size() - 1);
+  const bool second_is_tree= (el[1].size() == node_labels[1]->size() - 1);
   // if we've been given 2 trees, the first is considered the host, otherwise, the network is considered the host :)
   const bool host_net_index = (first_is_tree && !second_is_tree);
   const bool guest_net_index = 1 - host_net_index;
-  MyNet  N(el[host_net_index], node_labels[host_net_index]);
-  MyTree T(el[guest_net_index], node_labels[guest_net_index]);
+  std::cout << "\n\n\n returning net/tree pair...\n\n\n";
+  return { std::piecewise_construct,
+           std::make_tuple(el[host_net_index], node_labels[host_net_index]),
+           std::make_tuple(el[guest_net_index], node_labels[guest_net_index]) };
+}
+
+int main(const int argc, const char** argv)
+{
+  parse_options(argc, argv);
+
+  auto [N, T] = test(options, "-r") ?
+    create_net_and_tree() :
+    read_net_and_tree();
+
       
   if(test(options, "-v"))
     std::cout << N << std::endl << T << std::endl;

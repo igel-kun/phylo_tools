@@ -21,140 +21,22 @@ namespace PT{
   using DefaultMutableTreePredecessorMap = HashMap<Node, std::singleton_set<ReverseAdjacencyFromData<_EdgeData>, std::default_invalid_t<Node>>>;
 
 
-  template<class _EdgeData = void,
-           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
-           class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
-  class MutableNetworkAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
+
+  template<class _EdgeData, class _SuccessorMap, class _PredecessorMap>
+  class MutableAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
   {
     using Parent = RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
-  public:
-
-    using MutabilityTag = mutable_tag;
-    using typename Parent::Edge;
-    using typename Parent::Adjacency;
-    using typename Parent::RevEdge;
-    using typename Parent::RevAdjacency;
-
-    template<class T>
-    using NodeMap = HashMap<Node, T>;
-    
-    using Translation   = NodeMap<Node>;
-    using InOutDegreeMap = NodeMap<InOutDegree>;
-    using DegreeMap = NodeMap<Degree>;
-    using NodeSet = HashSet<Node>;
   protected:
     using Parent::_successors;
     using Parent::_predecessors;
     using Parent::_root;
     using Parent::_size;
-
-  public:
-    using Parent::compute_root;
-    using Parent::successors;
-    using Parent::predecessors;
-
-    // Note: we assume that the node u exists already
-    // NOTE: the edge data will be moved, unless the edge or its adjacency is const
-    template<class _Edge> // for universal reference
-    bool add_edge(_Edge&& uv){ return add_edge(uv.tail(), uv.get_adjacency()); }
-    template<class _Adjacency> // for universal reference
-    bool add_edge(const Node u, _Adjacency&& v)
-    {
-      if(append(_predecessors, v, u).second){
-#ifndef NDEBUG
-        const bool uv_app = append(_successors, u, std::move(v)).second;
-        assert(uv_app);
-#else
-        // move the edge data from the Adjacency unless its const
-        append(_successors, u, std::move(v)).second;
-#endif
-        ++_size;
-        // make sure that both u and v have an entry in both _predecessors and _successors
-        _successors.try_emplace(v);
-        _predecessors.try_emplace(u);
-        return true;
-      } else return false;
-    }
-  
-    bool remove_edge(const Edge& uv) { return remove_edge(uv.tail(), uv.head()); }
-    bool remove_edge(const Node u, const Node v)
-    {
-      DEBUG4(std::cout << "trying to remove edge "<<u<<"->"<<v<<"\n");
-      const auto v_pre_iter = _predecessors.find(v);
-      if(v_pre_iter != _predecessors.end()){
-        auto& v_pred_container = v_pre_iter->second;
-        // NOTE: make sure two edges with equal head & tail compare true wrt. operator==() (they should if they are derived from std::pair<Node, Node>
-        const auto uv_iter = v_pred_container.find(u);
-        if(uv_iter != v_pred_container.end()){
-          // the data structure better be consistent
-          assert(*uv_iter == u);
-          // remove uv from both containers
-          _successors.at(u).erase(v);
-          v_pred_container.erase(uv_iter);
-          --_size;
-          return true;
-        } else return false;
-      } else return false; // edge is not in here, so nothing to delete
-    }
-
-    bool remove_node(const Node v)
-    {
-      DEBUG4(std::cout << "trying to remove node "<<v<<"\n");
-      if((v == _root) && (_size != 0)) throw(std::logic_error("cannot remove the root from a networks/tree unless it's edgeless"));
-      const auto v_pre = _predecessors.find(v);
-      if(v_pre != _predecessors.end()){
-        _size -= v_pre->second.size();
-        for(const auto& u: v_pre->second){
-          _successors.at(u).erase(v);
-        }
-        _predecessors.erase(v_pre);
-        const auto v_succ = _successors.find(v);
-        _size -= v_succ->second.size();
-        _successors.erase(v_succ);
-        return true;
-      } else return false;
-    }
-
-
-    //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableNetworkAdjacencyStorage(const edgelist_tag_t,
-                                    GivenEdgeContainer&& given_edges,
-                                    NodeTranslation* old_to_new = nullptr,
-                                    LeafContainer* leaves = nullptr):
-      Parent()
-    {
-      std::cout << "adding edges to the network...\n";
-      for(auto&& uv: given_edges) add_edge(uv);
-      std::cout << "computing the root...\n";
-      compute_root();
-      std::cout << "computing node translation and leaves...\n";
-      compute_translate_and_leaves(*this, old_to_new, leaves);
-    }
-
-    //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableNetworkAdjacencyStorage(const non_consecutive_tag_t,
-                                    GivenEdgeContainer&& given_edges,
-                                    NodeTranslation* old_to_new = nullptr,
-                                    LeafContainer* leaves = nullptr):
-      MutableNetworkAdjacencyStorage(edgelist_tag, std::forward<GivenEdgeContainer>(given_edges), old_to_new, leaves)
-    {}
-
-  };
-
-
-  template<class _EdgeData = void,
-           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
-           class _PredecessorMap = DefaultMutableTreePredecessorMap<_EdgeData>>
-  class MutableTreeAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
-  {
-    using Parent = RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
   public:
     using MutabilityTag = mutable_tag;
     using Parent::Parent;
     using typename Parent::Edge;
     using typename Parent::Adjacency;
+    using Parent::compute_root;
 
     template<class T>
     using NodeMap = HashMap<Node, T>;
@@ -163,14 +45,15 @@ namespace PT{
     using InOutDegreeMap = NodeMap<InOutDegree>;
     using DegreeMap = NodeMap<Degree>;
     using NodeSet = HashSet<Node>;
-  protected:
-    using Parent::_successors;
-    using Parent::_predecessors;
-    using Parent::_root;
-    using Parent::_size;
 
-  public:
-    using Parent::compute_root;
+    Node add_node()
+    {
+      if(!_successors.empty()){
+        Node u = std::prev(_successors.end())->first;
+        while(test(_successors, ++u)) {};
+        return u;
+      } else return Node(0);
+    }
 
     // the non-secure versions allow any form of edge addition
     // ATTENTION: this will NOT update the root! use set_root() afterwards!
@@ -179,10 +62,26 @@ namespace PT{
     template<class _Adjacency> // for universal reference
     bool add_edge(const Node u, _Adjacency&& v)
     {
-      if(!append(_successors, u, std::move(v)).second) return false;
-      if(!append(_predecessors, (Node)v, u).second) throw std::logic_error("cannot create tree with reticulation (edges ("+std::to_string(front(_predecessors[v]))+","+std::to_string(v)+") and ("+std::to_string(u)+","+std::to_string(v)+") given)");
-      ++_size;
-      return true;
+      const auto [it, success] = append(_successors[u], std::move(v));
+      if(success){
+        if(append(_predecessors[(Node)v], get_reverse_adjacency(u, *it)).second){
+          ++_size;
+          return true;
+        } else assert(false);
+      } else return false;
+    }
+
+    //! subdivide uv: remove uv, add w, add uw and wv
+    //NOTE: no checks are made, so if uv did not exist before, this will still create uw and wv, possibly making v a reticulation!
+    template<class _Edge>
+    Node subdivide(const _Edge& uv) { return subdivide(uv.tail(), uv.head()); }
+    Node subdivide(const Node u, const Node v)
+    {
+      const Node w = add_node();
+      remove_edge(u, v);
+      add_edge(u, w);
+      add_edge(w, v);
+      return w;
     }
 
     // the secure versions allow only adding edges uv for which u is in the tree, but v is not, or v is the root and u is not in the tree
@@ -217,13 +116,14 @@ namespace PT{
     bool remove_edge(const Edge& uv) { return remove_edge(uv.tail(), uv.head()); }
     bool remove_edge(const Node u, const Node v)
     {
+      DEBUG5(std::cout << "removing edge "<<u<<"->"<<v<<"\n");
       const auto uv_in = _predecessors.find(v);
       if(uv_in != _predecessors.end()){
         // the data structure better be consistent
-        assert(*uv_in == u);
+        assert(test(uv_in->second, u));
         // remove uv from both containers
         _successors.at(u).erase(v);
-        _predecessors.erase(uv_in);
+        uv_in->second.erase(u);
         --_size;
         return true;
       } else return false; // edge is not in here, so nothing to delete
@@ -231,64 +131,72 @@ namespace PT{
 
     bool remove_node(const Node v)
     {
+      DEBUG5(std::cout << "removing node "<<v<<"\n");
       if((v == _root) && (_size != 0)) throw(std::logic_error("cannot remove the root from a non-empty rooted storage"));
       const auto v_pre = _predecessors.find(v);
       if(v_pre != _predecessors.end()){
-        _successors.at(front(v_pre->second)).erase(v);
+        for(const Node u: v_pre->second)
+          _successors.at(u).erase(v);
+        _size -= v_pre->second.size();
         _predecessors.erase(v_pre);
 
         const auto v_succ = _successors.find(v);
-        _size -= v_succ->second.size() + 1;
+        assert(v_succ != _successors.end());
+        for(const Node u: v_succ->second)
+          _predecessors.at(u).erase(v);
+        _size -= v_succ->second.size();
         _successors.erase(v_succ);
         return true;
       } else return false;
     }
 
-    //! initialization from edgelist
+    //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableTreeAdjacencyStorage(const edgelist_tag_t,
-                                GivenEdgeContainer&& given_edges,
-                                NodeTranslation* old_to_new = nullptr,
-                                LeafContainer* leaves = nullptr):
+    MutableAdjacencyStorage(const edgelist_tag_t,
+                            GivenEdgeContainer&& given_edges,
+                            NodeTranslation* old_to_new = nullptr,
+                            LeafContainer* leaves = nullptr):
       Parent()
     {
-      if(given_edges.size()){
+      if(!given_edges.empty()){
+        std::cout << "adding edges to the tree/network...\n";
         for(auto&& uv: given_edges) {
           _predecessors.try_emplace(uv.tail());
           _successors.try_emplace(uv.head());
           add_edge(uv);
         }
-        // get a root
-        const Node u = front(_predecessors).first;
-        if(!_predecessors.at(u).empty()){
-          Node v = u;
-          //NOTE: we're using operator[] to create empty predecessors for root!
-          do v = front(_predecessors.at(v)); while((v != u) && !_predecessors[v].empty());
-          if(u == v) throw std::logic_error("given edgelist is cyclic");
-          _root = v;
-        } else _root = u;
-#ifndef NDEBUG
-        compute_root(); // verify that we don't have multiple roots
-#endif
+        std::cout << "computing the root...\n";
+        compute_root();
+        std::cout << "computing node translation and leaves...\n";
         compute_translate_and_leaves(*this, old_to_new, leaves);
       } else {
-        append(_successors, 0);
-        append(_predecessors, 0);
-        if(leaves) append(*leaves, 0);
+        _predecessors.try_emplace(0);
+        _successors.try_emplace(0);
+        _root = 0;
       }
     }
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableTreeAdjacencyStorage(const non_consecutive_tag_t,
-                                    const GivenEdgeContainer& given_edges,
-                                    NodeTranslation* old_to_new,
-                                    LeafContainer* leaves = nullptr):
-      MutableTreeAdjacencyStorage(given_edges, old_to_new, leaves)
+    MutableAdjacencyStorage(const non_consecutive_tag_t,
+                            GivenEdgeContainer&& given_edges,
+                            NodeTranslation* old_to_new = nullptr,
+                            LeafContainer* leaves = nullptr):
+      MutableAdjacencyStorage(edgelist_tag, std::forward<GivenEdgeContainer>(given_edges), old_to_new, leaves)
     {}
 
   };
 
+  template<class _EdgeData = void,
+           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
+           class _PredecessorMap = DefaultMutablePredecessorMap<_EdgeData>>
+  using MutableNetworkAdjacencyStorage = MutableAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
+
+
+  template<class _EdgeData = void,
+           class _SuccessorMap = DefaultMutableSuccessorMap<_EdgeData>,
+           class _PredecessorMap = DefaultMutableTreePredecessorMap<_EdgeData>>
+  using MutableTreeAdjacencyStorage = MutableAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>;
 
 }
 

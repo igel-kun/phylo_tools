@@ -72,6 +72,7 @@ namespace PT{
 
     const Node& head() const { return this->second; }
     const Node& tail() const { return this->first; }
+    bool incident_with(const Node x) const { return (x == this->first) || (x == this->second); }
     std::pair<const Node&, const Node&> as_pair() const { return { this->first, this->second }; }
 
     bool operator<(const AbstractEdge& e) const
