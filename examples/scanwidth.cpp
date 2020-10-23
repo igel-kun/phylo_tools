@@ -92,6 +92,8 @@ unsigned parse_method()
 
 void print_extension(const MyNetwork& N, const Extension& ex)
 {
+  using GammaType = CompatibleROTree<const MyNetwork>;
+
   std::cout << "extension: " << ex << std::endl;
 
   // compute scanwidth of ex
@@ -103,7 +105,8 @@ void print_extension(const MyNetwork& N, const Extension& ex)
   ext_to_tree(N, ex, gamma_el);
 
   std::cout << "constructing extension tree\n";
-  const CompatibleROTree<MyNetwork> Gamma(gamma_el, N.labels());
+  //const ROTree<void, void, typename MyNetwork::LabelTag, const typename MyNetwork::LabelMap> Gamma(gamma_el, N.labels());
+  const GammaType Gamma(gamma_el, N.labels());
   std::cout << "extension tree:\n" << Gamma << std::endl;
   
   const auto gamma_sw = ext_tree_sw_map(Gamma, N);

@@ -628,7 +628,7 @@ namespace std {
         buffer &= (BITSET_FULL_BUCKET << sub_index);
     }
 
-    bool is_valid() const { return index != storage.cend(); }
+    bool is_valid() const { return index != storage.end(); }
     operator bool() const { return is_valid(); }
     value_type operator*() const { return (*index).first * BITSET_BITS_IN_BUCKET + NUM_TRAILING_ZEROSL(buffer); }
 

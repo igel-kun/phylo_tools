@@ -101,6 +101,7 @@ namespace PT{
     // NOTE: calling operator* is expensive, consider calling it at most once for each item
     // NOTE: we can't be sure that the vertices of the component are consecutive, so if the user requested consecutive output networks, we need to translate
     reference operator*() const {
+      static_assert(std::is_const_v<typename _Component::LabelMap>);
       return _Component(non_consecutive_tag, current_edges, N.labels());
     }
     BiconnectedComponentIter& operator++() { next_component(); return *this; }
@@ -120,7 +121,7 @@ namespace PT{
   };
 
   // factory for biconnected components, see notes for BiconnectedComponentIter
-  template<class _Network, class _Component = CompatibleRWNetwork<_Network>, bool enumerate_trivial = true,
+  template<class _Network, class _Component = CompatibleRWNetwork<const _Network, void, void>, bool enumerate_trivial = true,
     class = std::enable_if_t<are_compatible_v<_Network, _Component>>>
   class BiconnectedComponents
   {

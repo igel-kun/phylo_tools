@@ -38,8 +38,8 @@ namespace std {
 
     iterator begin() { return BeginEnd::begin(*container); }
     iterator end() { return BeginEnd::end(*container); }
-    const_iterator begin() const { return BeginEnd::begin(*container); }
-    const_iterator end() const { return BeginEnd::end(*container); }
+    const_iterator begin() const { return BeginEnd::begin(static_cast<const Container&>(*container)); }
+    const_iterator end() const { return BeginEnd::end(static_cast<const Container&>(*container)); }
     const_iterator cbegin() const { return BeginEnd::begin(static_cast<const Container&>(*container)); }
     const_iterator cend() const { return BeginEnd::end(static_cast<const Container&>(*container)); }
 

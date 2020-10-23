@@ -11,7 +11,7 @@ namespace PT{
   template<class _NodeData,
            class _EdgeData,
            class _LabelTag = single_label_tag,
-           class _EdgeStorage = MutableNetworkAdjacencyStorage<_NodeData, _EdgeData>,
+           class _EdgeStorage = MutableNetworkAdjacencyStorage<_EdgeData>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>>
   class Network : public Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>
   {
@@ -179,7 +179,7 @@ namespace PT{
     class _EdgeData = typename __Network::EdgeData,
     class _LabelTag = typename __Network::LabelTag,
     class _MutabilityTag = typename __Network::MutabilityTag,
-    class _LabelMap = std::conditional_t<std::is_const_v<__Network>, typename __Network::LabelMap, const typename __Network::LabelMap>>
+    class _LabelMap = std::copy_cv_t<__Network, LabelMapOf<__Network>>>
   using CompatibleNetwork = std::conditional_t<std::is_same_v<_MutabilityTag, mutable_tag>,
                                 RWNetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>,
                                 RONetwork<_NodeData, _EdgeData, _LabelTag, _LabelMap>>;

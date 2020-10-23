@@ -108,9 +108,6 @@ namespace PT{
       throw std::logic_error("cannot add" + std::to_string(num_edges) + " edges without introducing a reticulation");
 
     while(num_edges){
-      unsigned char reti_diff = 0;
-      unsigned char tree_diff = 0;
-
       if(new_reticulations){
         const auto [u, v] = get_random_iterator(N.edges())->as_pair();
         if(new_tree_nodes){

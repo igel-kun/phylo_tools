@@ -37,14 +37,14 @@ namespace PT{
 
   //! get an iterator to a (uniformly) random item in the container
   template<class Container>
-  typename Container::iterator get_random_iterator(Container& c)
+  std::iterator_of_t<Container> get_random_iterator(Container&& c)
   {
     assert(!c.empty());
     return std::next(c.begin(), throw_die(c.size()));
   }
   //! get an iterator to a (uniformly) random item in the container, except a given iterator
   template<class Container>
-  typename Container::iterator get_random_iterator_except(Container& c, const typename Container::iterator _except)
+  std::iterator_of_t<Container> get_random_iterator_except(Container&& c, const std::iterator_of_t<Container> _except)
   {
     assert(c.size() >= 2);
     size_t k = throw_die(c.size() - 1);

@@ -100,7 +100,7 @@ namespace PT{
 
     using value_type      = typename EdgeIterator::value_type;
     using pointer         = typename EdgeIterator::pointer;
-    using difference_type = typename EdgeIterator::value_type;
+    using difference_type = typename EdgeIterator::difference_type;
     using reference       = typename EdgeIterator::reference;
     using const_reference = typename EdgeIterator::const_reference;
     using iterator_category = typename EdgeIterator::iterator_category;
@@ -112,6 +112,10 @@ namespace PT{
 
     // skip over map-items for which the container is empty
     void skip_empty() { while(node_it != nc_map.end() ? node_it->second.empty() : false) ++node_it; }
+    void skip_empty_rev() {
+      while(node_it != nc_map.begin() ? node_it->second.empty() : false) --node_it;
+      if(node_it->second.empty()) --node_it;
+    }
 
   public:
     EdgeMapIterator(_Map& _nc_map, const MapIterator& _node_it):
@@ -133,7 +137,7 @@ namespace PT{
     {}
 
     const_reference operator*() const { return *out_it; }
-    pointer operator->() const { return EdgeIterator::operator->(out_it); }
+    pointer operator->() const { return out_it.operator->(); }
 
     //! increment operator
     EdgeMapIterator& operator++()
@@ -148,13 +152,23 @@ namespace PT{
       return *this;
     }
 
-    //! post-increment
-    EdgeMapIterator operator++(int)
+    //! decrement operator
+    EdgeMapIterator& operator--()
     {
-      EdgeMapIterator tmp(*this);
-      ++(*this);
-      return tmp;
+      if(out_it == node_it->second.begin()){
+        const auto bad_iter = std::prev(nc_map.begin());
+        if(node_it != bad_iter){
+          --node_it;
+          skip_empty_rev();
+        }
+        if(node_it != bad_iter)
+          out_it = EdgeIterator(std::prev(node_it->second.end()), node_it->first);
+      } else --out_it;
+      return *this;
     }
+    //! post in-/decrement
+    EdgeMapIterator operator++(int) { EdgeMapIterator tmp(*this); ++(*this); return tmp; }
+    EdgeMapIterator operator--(int) { EdgeMapIterator tmp(*this); --(*this); return tmp; }
 
     bool operator==(const EdgeMapIterator& it) const 
     {

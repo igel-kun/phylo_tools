@@ -185,7 +185,7 @@ namespace PT{
       if(x < y) return false;
       while(1){
         if(x == y) return true;
-        if(x == root) return false;
+        if(is_root(x)) return false;
         x = parent(x);
       } 
     }
@@ -410,7 +410,7 @@ namespace PT{
     
     void print_subtree(std::ostream& os, const Node u, std::string prefix) const
     {
-      LabelType name = node_labels->at(u);
+      std::remove_const_t<LabelType> name = node_labels->at(u);
       DEBUG3(name += "[" + std::to_string(u) + "]");
       if(name == "") name = "+";
       os << '-' << name;
@@ -449,6 +449,15 @@ namespace PT{
 
 
 
+  template<class __Tree>
+  using LabelMapOf = typename std::remove_reference_t<__Tree>::LabelMap;
+
+  template<class __TreeA, class __TreeB>
+  constexpr bool are_compatible_v = std::is_same_v<std::remove_cvref_t<LabelMapOf<__TreeA>>, std::remove_cvref_t<LabelMapOf<__TreeB>>>;
+
+
+
+
   template<class _NodeData,
            class _EdgeData = void,
            class _LabelTag = single_label_tag,
@@ -475,10 +484,10 @@ namespace PT{
     class _EdgeData = typename __Tree::EdgeData,
     class _LabelTag = typename __Tree::LabelTag,
     class _MutabilityTag = typename __Tree::MutabilityTag,
-    class _LabelMap = std::conditional_t<std::is_const_v<__Tree>, typename __Tree::LabelMap, const typename __Tree::LabelMap>>
+    class _LabelMap = std::copy_cv_t<__Tree, LabelMapOf<__Tree>>>
   using CompatibleTree = std::conditional_t<std::is_same_v<_MutabilityTag, mutable_tag>,
-                                RWTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>,
-                                ROTree<_NodeData, _EdgeData, _LabelTag, typename __Tree::LabelMap>>;
+                                RWTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>,
+                                ROTree<_NodeData, _EdgeData, _LabelTag, _LabelMap>>;
 
   template<class __Tree,
     class _NodeData = typename __Tree::NodeData,
@@ -501,10 +510,5 @@ namespace PT{
     class _MutabilityTag = typename __Tree::MutabilityTag>
   using CompatibleSilTree = CompatibleTree<__Tree, _NodeData, _EdgeData, single_label_tag, _MutabilityTag>;
 
-  template<class __Tree>
-  using LabelMapOf = typename std::remove_reference_t<__Tree>::LabelMap;
-
-  template<class __TreeA, class __TreeB>
-  constexpr bool are_compatible_v = std::is_same_v<std::remove_cvref_t<LabelMapOf<__TreeA>>, std::remove_cvref_t<LabelMapOf<__TreeB>>>;
 
 }
