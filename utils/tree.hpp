@@ -291,9 +291,17 @@ namespace PT{
     {
       DEBUG3(os << "tree is mutable? "<<is_mutable<<" multi-labeled? "<<!is_single_labeled<<"\n");
       DEBUG3(os << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<"\n");
+      DEBUG3(os << "nodes: "<<nodes()<<'\n');
+      DEBUG3(os << num_edges() << " edges: "<<Parent::edges()<<" (size: "<<Parent::edges().size()<<"\n");
+
       
-      for(const Node i: nodes())
-        os << i << " (" << node_labels->at(i) << "):" << "\tIN: "<< in_edges(i) << "\tOUT: "<< out_edges(i) << std::endl;
+      for(const Node i: nodes()){
+        const auto label_it = node_labels->find(i);
+        os << i;
+        if(label_it != node_labels->end())
+          os << "(" << label_it->second << ")";
+        os << ":" << "\tIN: "<< in_edges(i) << "\tOUT: "<< out_edges(i) << std::endl;
+      }
       return os << "\n";
     }
     

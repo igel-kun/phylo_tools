@@ -49,10 +49,10 @@ namespace PT{
     InOutEdgeIterator& operator--() { --node_it; return *this; }
     InOutEdgeIterator operator--(int) { InOutEdgeIterator tmp(*this); --(*this); return tmp; }
 
-    InOutEdgeIterator& operator+=(const difference_type diff) { node_it += diff; return *this; }
-    InOutEdgeIterator& operator-=(const difference_type diff) { node_it -= diff; return *this; }
-    InOutEdgeIterator operator+(const difference_type diff) { return {u, node_it + diff}; }
-    InOutEdgeIterator operator-(const difference_type diff) { return {u, node_it - diff}; }
+    InOutEdgeIterator& operator+=(const difference_type diff) { std::advance(node_it, diff); return *this; }
+    InOutEdgeIterator& operator-=(const difference_type diff) { std::advance(node_it, -diff); return *this; }
+    InOutEdgeIterator operator+(const difference_type diff) { return {u, std::next(node_it, diff)}; }
+    InOutEdgeIterator operator-(const difference_type diff) { return {u, std::next(node_it, diff)}; }
 
     //InOutEdgeIterator& operator=(const InOutEdgeIterator& op) = default; // { u = op.u; node_it = op.node_it; return *this; }
 
@@ -194,9 +194,28 @@ namespace PT{
     static const_iterator end(const _Map& c)         { return {c, std::end(c) }; }
   };
 
+
+
+
+
   // since EdgeMapIterators are constructed using the map as well as the iterator, we'll have to modify the BeginMaker and EndMaker a little bit
   template<class _Map, template<class> class _Iterator>
-  using EdgeMapIterFactory = std::IterFactory<_Map, void, BeginEndEdgeMapIters<_Map, _Iterator>>;
+  class EdgeMapIterFactory: public std::IterFactory<_Map, void, BeginEndEdgeMapIters<_Map, _Iterator>>
+  {
+    using Parent = std::IterFactory<_Map, void, BeginEndEdgeMapIters<_Map, _Iterator>>;
+    const size_t& _size;
+  public:
+
+    // construct with a size_t reference pointing to the size of the data structure (number edges)
+    template<class... Args>
+    EdgeMapIterFactory(const size_t& __size, Args&&... args):
+      Parent(std::forward<Args>(args)...), _size(__size)
+    {}
+
+    size_t size() const { return _size; }
+    bool  empty() const { return _size == 0; }
+  };
+
 
   template<class _Map>
   using OutEdgeMapIterFactory = EdgeMapIterFactory<_Map, OutEdgeIterator>;

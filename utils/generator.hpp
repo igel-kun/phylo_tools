@@ -48,13 +48,14 @@ namespace PT{
 
   //! generate random (not necessarily binary) tree
   template<class EdgeContainer, class NameContainer>
-  void generate_random_tree(EdgeContainer& edges, NameContainer& names,
+  void generate_random_tree(EdgeContainer& edges,
+                            NameContainer& names,
                             const uint32_t num_internal,
                             const uint32_t num_leaves,
                             const float multilabel_density = 0.0f)
   {
-#warning implement multi-labels
-    assert(multilabel_density >= 0   && multilabel_density < 1);
+#warning TODO: implement multi-labels
+    assert(multilabel_density >= 0.0f   && multilabel_density < 1.0f);
     
     if(num_leaves == 0) throw std::logic_error("cannot construct tree without leaves");
     if(num_internal == 0) throw std::logic_error("cannot construct tree without internal nodes");
@@ -84,6 +85,7 @@ namespace PT{
         append(edges, u, *it);
         free_nodes.erase(it);
       }
+      free_nodes.emplace(u);
     }
   }
 
@@ -102,19 +104,27 @@ namespace PT{
       throw std::logic_error("cannot add" + std::to_string(new_reticulations) + " new reticulations with only " + std::to_string(num_edges) + " new edges");
 
     HashSet<Node> tree_nodes, retis;
-    for(const Node u: N) if(N.is_reti(u)) append(retis, u); else if(!N.is_leaf(u)) append(tree_nodes, u);
+    for(const Node u: N)
+      if(N.is_reti(u))
+        append(retis, u);
+      else if(!N.is_leaf(u))
+        append(tree_nodes, u);
 
     if(retis.empty() && !new_reticulations)
       throw std::logic_error("cannot add" + std::to_string(num_edges) + " edges without introducing a reticulation");
 
     while(num_edges){
+      std::cout << N.edges().size() << " edges in N\n";
+      std::cout << num_edges << " edges to go; retis left: "<<new_reticulations<<" tree nodes left: "<<new_tree_nodes<<"\n";
       if(new_reticulations){
         const auto [u, v] = get_random_iterator(N.edges())->as_pair();
         if(new_tree_nodes){
           const auto [x, y] = get_random_iterator(N.edges())->as_pair();
+          std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<'\n';
           if(u != x){
             Node s = N.subdivide(u, v);
             Node t = N.subdivide(x, y);
+            DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             if(N.has_path(y, u)) std::swap(s, t);
             N.add_edge(s, t);       --num_edges;
             append(tree_nodes, s);  --new_tree_nodes;
@@ -125,6 +135,7 @@ namespace PT{
             const Node t = N.subdivide(u, v);
             Node s;
             do s = *(get_random_iterator(tree_nodes)); while((s != u) && !N.has_path(v, s));
+            DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             N.add_edge(s, t);       --num_edges;
             append(retis, t);       --new_reticulations;
           }
@@ -140,11 +151,13 @@ namespace PT{
               break;
             }
           }
+          DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
           N.add_edge(s, t);       --num_edges;
           append(tree_nodes, s);  --new_tree_nodes;
         } else {
           const Node s = *(get_random_iterator(tree_nodes));
           if(!N.has_path(t,s)){
+            DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             N.add_edge(s, t);       --num_edges;
           }
         }

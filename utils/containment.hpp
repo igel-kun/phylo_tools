@@ -340,9 +340,9 @@ namespace PT {
     {
       // step 1: unzip the lowest reticulations and get a visible leaf
       auto node_infos = std::make_shared<typename TreeChecker::NodeInfos>();
-      auto lmatch = std::make_shared<LabelMatching>();
+      auto lmatch = std::make_shared<typename TreeChecker::LabelMatching>();
       Node vis_leaf = NoNode;
-      const auto subtree = unzip_retis(u, vis_leaf, *node_infos, *lmatch);
+      const MulSubtree subtree = unzip_retis(u, vis_leaf, *node_infos, *lmatch);
       std::cout << "\nunzipped to:\n"<<subtree<<"[visible leaf: "<<vis_leaf<<" ("<<host.label(vis_leaf)<<")]\n";
       if(vis_leaf != NoNode){
         // step 2: get the highest ancestor v of vis_leaf in T s.t. T_v is still displayed by N_u

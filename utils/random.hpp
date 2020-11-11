@@ -40,21 +40,28 @@ namespace PT{
   std::iterator_of_t<Container> get_random_iterator(Container&& c)
   {
     assert(!c.empty());
-    return std::next(c.begin(), throw_die(c.size()));
+
+    std::iterator_of_t<Container> result = c.begin();
+    const int k = throw_die(c.size());
+    std::cout << "incrementing "<<k<<" times (vs size of "<<c.size()<<")\n";
+    for(int i = k; i; --i){
+      ++result;
+      std::cout << *result << '\n';
+    }
+    return result;
+    //return std::next(c.begin(), throw_die(c.size()));
   }
   //! get an iterator to a (uniformly) random item in the container, except a given iterator
   template<class Container>
   std::iterator_of_t<Container> get_random_iterator_except(Container&& c, const std::iterator_of_t<Container> _except)
   {
-    assert(c.size() >= 2);
-    size_t k = throw_die(c.size() - 1);
-    const size_t except_dist = std::distance(c.begin(), _except);
-    std::cout << "got container "<<c<<"\ngetting item #"<<k<<" avoiding "<<*_except<<std::endl;
-    if(k < except_dist)
-      return std::next(c.begin(), k);
+    assert((c.size() >= 2) || (_except == c.end()));
+    std::iterator_of_t<Container> result = c.begin();
+    std::advance(result, throw_die(c.size()-1));
+    if(result == _except)
+      return std::prev(c.end());
     else
-      return std::next(_except, k - except_dist + 1);
-
+      return result;
   }
 
 

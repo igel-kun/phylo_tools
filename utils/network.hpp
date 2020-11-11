@@ -70,14 +70,16 @@ namespace PT{
 
   public:
 
-    // if the edges currently in the network actually describe a tree, we can cast it down to tree
+    // if the edges currently in the network actually describe a tree, we can cast it up to tree
     // NOTE: the EdgeStorage will be unaffected, potentially allowing you to insert edges that could not be inserted into a normal Tree
     //       (unless your network has been declared with a Tree Storage in the first place, which is uncommon, but possible)
-    Parent& use_as_tree() {
+    Parent& use_as_tree()
+    {
       assert(is_tree());
       return *(reinterpret_cast<Parent*>(*this));
     }
-    const Parent& use_as_tree() const {
+    const Parent& use_as_tree() const
+    {
       assert(is_tree());
       return *(reinterpret_cast<const Parent*>(*this));
     }

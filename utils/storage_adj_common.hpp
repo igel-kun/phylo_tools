@@ -161,14 +161,13 @@ namespace PT{
     const PredecessorMap& predecessor_map() const { return _predecessors; }
 
     ConstOutEdgeContainer out_edges(const Node u) const { return ConstOutEdgeContainer(_successors.at(u), u); }
-    OutEdgeContainer      out_edges(const Node u) { return OutEdgeContainer(_successors.at(u), u); }
+    //OutEdgeContainer      out_edges(const Node u) { return OutEdgeContainer(_successors.at(u), u); }
     
     ConstInEdgeContainer  in_edges(const Node u) const { return ConstInEdgeContainer(predecessors(u), u); }
-    InEdgeContainer       in_edges(const Node u) { return InEdgeContainer(_predecessors.at(u), u); }
+    //InEdgeContainer       in_edges(const Node u) { return InEdgeContainer(_predecessors.at(u), u); }
     
-    ConstEdgeContainer    edges() const { return ConstEdgeContainer(_successors); }
-    EdgeContainer         edges() { return EdgeContainer(_successors); }
-
+    ConstEdgeContainer    edges() const { return ConstEdgeContainer(_size, _successors); }
+    //EdgeContainer         edges() { return EdgeContainer(_size, _successors); }
   };
 
   template<class _Store>

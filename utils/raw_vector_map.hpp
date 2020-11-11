@@ -32,7 +32,7 @@ namespace std {
       index(_index)
     {}
 
-    reference operator*() const { return {(_Key)index, *(start + index)}; }
+    reference operator*() const { return {static_cast<_Key>(index), *(start + index)}; }
     pointer operator->() const { return operator*(); }
 
     //! increment & decrement operators
@@ -160,10 +160,10 @@ namespace std {
     reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }
     reverse_const_iterator rend() const { return make_reverse_iterator(begin()); }
 
-    iterator find(const key_type x) { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
-    const_iterator find(const key_type x) const { if((size_t)x < size()) return {data() + (size_t)x}; else return end(); }
+    iterator find(const key_type x) { if(contains(x)) return {data(), x}; else return end(); }
+    const_iterator find(const key_type x) const { if(contains(x)) return {data(), x}; else return end(); }
     
-    bool contains(const key_type x) const { return x < size(); }
+    bool contains(const key_type x) const { return (size_t)x < size(); }
     bool count(const key_type x) const { return contains(x); }
   };
 
