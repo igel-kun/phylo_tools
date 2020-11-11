@@ -67,7 +67,10 @@ namespace PT{
         if(append(_predecessors[(Node)v], get_reverse_adjacency(u, *it)).second){
           ++_size;
           return true;
-        } else assert(false);
+        } else {
+          assert(false);
+          exit(-1);
+        }
       } else return false;
     }
 

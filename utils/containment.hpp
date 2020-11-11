@@ -411,7 +411,10 @@ namespace PT {
           return host.label(host.root()) == guest.label(guest.root());
         else
           return false;
-      } else assert(false); // not implemented yet
+      } else {
+        assert(false); // not implemented yet
+        exit(-1);
+      }
     }
 
   };
