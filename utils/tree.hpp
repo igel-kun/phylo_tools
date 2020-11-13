@@ -12,16 +12,34 @@
 #include "storage_adj_mutable.hpp"
 #include "storage_adj_immutable.hpp"
 #include "induced_tree.hpp"
+#include "filter.hpp"
+#include "predicates.hpp"
 
 namespace PT{
 
+  template<class LabelType>
+  const LabelType _EmptyLabel = LabelType();
+
   enum node_type { NODE_TYPE_LEAF=0x00, NODE_TYPE_TREE=0x01, NODE_TYPE_RETI=0x02, NODE_TYPE_ISOL=0x03 };
 
-#warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
   struct tree_tag {};
   struct network_tag {};
   struct single_label_tag {};
   struct multi_label_tag {};
+
+  template<class __Tree, node_type nt>
+  struct NodeTypePredicate: public std::DynamicPredicate
+  {
+    const __Tree& t;
+    NodeTypePredicate(const __Tree& _t): t(_t) {}
+    bool value(const Node x) const { return t.type_of(x) == nt; }
+  };
+  template<class __Tree>
+  using LeafPredicate = NodeTypePredicate<__Tree, NODE_TYPE_LEAF>;
+
+
+
+#warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
   // the central Tree class
   // note: we need to give the label-map type as template in order to allow creating mutable copies of subtrees of immutable trees
@@ -60,12 +78,8 @@ namespace PT{
     // we don't want to use the generic container-operator<< for trees, even though we provide an "iterator" type
     using custom_output = std::true_type;
 
-
-    using LabeledNodeContainer    = LabeledNodeIterFactory<const ConstNodeContainer, std::MapGetter<LabelMap>>;
-    using LabeledNodeContainerRef = LabeledNodeContainer;
-    
-    using LabeledLeafContainer    = LabeledNodeIterFactory<const ConstLeafContainer, std::MapGetter<LabelMap>>;
-    using LabeledLeafContainerRef = LabeledLeafContainer;
+    using LabeledNodeContainer    = const LabelMap&;
+    using LabeledLeafContainer    = std::FilteredIterFactory<const LabelMap, std::MapKeyPredicate<LeafPredicate<_Tree>>>;
 
   protected:
     std::shared_ptr<LabelMap> node_labels;
@@ -83,6 +97,15 @@ namespace PT{
     using Parent::out_edges;
     using Parent::in_edges;
 
+    // ================ modification ======================
+
+    Node add_node(const LabelType& _label)
+    {
+      const Node u = Parent::add_node();
+      node_labels->try_emplace(u, _label);
+      return u;
+    }
+
     // =============== variable query ======================
     bool is_tree() const { return num_edges() == num_nodes() - 1; }
     bool empty() const { return num_nodes() == 0; }
@@ -92,10 +115,18 @@ namespace PT{
     bool is_tree_node(const Node u) const { return out_degree(u) > 0; }
     bool is_suppressible(const Node u) const { return (in_degree(u) == 1) && (out_degree(u) == 1); }
 
-    LabelType& label(const Node u) { return node_labels->at(u); }
-    const LabelType& label(const Node u) const { return node_labels->at(u); }
     LabelMap& labels() { return *node_labels; }
     const LabelMap& labels() const { return *node_labels; }
+
+    template<class _LabelType>
+    void set_label(const Node u, _LabelType&& l) { (*node_labels)[u] = std::move(l); }
+
+    //! return the label of a node, if it has one (otherwise, return the empty label)
+    const LabelType& label(const Node u) const
+    {
+      const auto label_iter = node_labels->find(u);
+      return (label_iter == node_labels->end()) ? _EmptyLabel<LabelType> : label_iter->second;
+    }
 
     node_type type_of(const Node u) const
     {
@@ -147,8 +178,8 @@ namespace PT{
 
 
 
-    LabeledNodeContainerRef nodes_labeled() const { return LabeledNodeContainerRef(nodes(), *node_labels); }
-    LabeledLeafContainerRef leaves_labeled() const { return LabeledLeafContainerRef(leaves(), *node_labels); }
+    LabeledNodeContainer nodes_labeled() const { return *node_labels; }
+    LabeledLeafContainer leaves_labeled() const { return { *node_labels, node_labels->end(), *this }; }
 
 
 
@@ -352,7 +383,7 @@ namespace PT{
                 std::make_shared<LabelMap>(in_tree.node_labels->begin(), std::end(in_tree.node_labels)) // no: copy the labelmap
       )
     {
-      std::cout << "\tcopy-constructed tree:\n";
+      std::cout << "\tcopy-constructed tree/net:\n";
       tree_summary(std::cout);
     }
 
@@ -372,14 +403,14 @@ namespace PT{
                 std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end()) // no: copy the labelmap
       )
     {
-      std::cout << "\tmove-constructed tree\n";
+      std::cout << "\tmove-constructed tree/net\n";
       tree_summary(std::cout);
     }
 
     // for some weird reason, the above is not counted as move-constructor, so I have to repeat myself...
     _Tree(_Tree&& in_tree): Parent(std::move(in_tree)), node_labels(std::move(in_tree.node_labels))
     {
-      std::cout << "\tmove-constructed tree (non templated)\n";
+      std::cout << "\tmove-constructed tree/net (non templated)\n";
       tree_summary(std::cout);
     }
 
@@ -456,6 +487,7 @@ namespace PT{
     }
     
   };
+   
   
   template<class _LabelTag, class _EdgeStorage, class _LabelMap>
   std::ostream& operator<<(std::ostream& os, const _Tree<_LabelTag, _EdgeStorage, _LabelMap>& T)
@@ -471,6 +503,7 @@ namespace PT{
 
   template<class __Tree>
   using LabelMapOf = typename std::remove_reference_t<__Tree>::LabelMap;
+
 
   template<class __TreeA, class __TreeB>
   constexpr bool are_compatible_v = std::is_same_v<std::remove_cvref_t<LabelMapOf<__TreeA>>, std::remove_cvref_t<LabelMapOf<__TreeB>>>;

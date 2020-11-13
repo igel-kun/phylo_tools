@@ -9,7 +9,6 @@
 namespace std{
 
   struct do_not_fix_index_tag {};
-  constexpr do_not_fix_index_tag do_not_fix_index;
 
   // skip all items in a container for which the predicate is true
   // NOTE: while we could just always use lambda functions as predicate, the current way is more flexible
@@ -100,7 +99,7 @@ namespace std{
     // make a filtered iterator from a start iterator and an Iteratordata, that is { end iterator, arguments to build the predicate }
     template<class _IteratorData, class = enable_if_t<is_same_v<remove_cvref_t<_IteratorData>, IteratorData>>>
     filtered_iterator(const do_not_fix_index_tag, const NormalIterator& _i, _IteratorData&& data):
-      filtered_iterator(do_not_fix_index, _i, data.first_invalid, move(data.pred))
+      filtered_iterator(do_not_fix_index_tag(), _i, data.first_invalid, move(data.pred))
     {}
 
     // copy construction, also construct const_iterators from iterators (same Category required though)

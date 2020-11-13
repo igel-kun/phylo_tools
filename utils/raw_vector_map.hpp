@@ -31,6 +31,11 @@ namespace std {
       start(_start),
       index(_index)
     {}
+    // convert iterators to const_iterators
+    raw_vector_map_iterator(const raw_vector_map_iterator<_Key, std::remove_cvref_t<_Element>>& other):
+      start(other.start),
+      index(other.index)
+    {}
 
     reference operator*() const { return {static_cast<_Key>(index), *(start + index)}; }
     pointer operator->() const { return operator*(); }
@@ -80,7 +85,7 @@ namespace std {
     using value_type = pair<key_type, _Element>;
 
     using iterator = raw_vector_map_iterator<_Key, _Element>;
-    using const_iterator = raw_vector_map_iterator<const _Key, const _Element>;
+    using const_iterator = raw_vector_map_iterator<_Key, const _Element>;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using reverse_const_iterator = std::reverse_iterator<const_iterator>;
 
@@ -155,6 +160,8 @@ namespace std {
     iterator end() { return {data(), size()}; }
     const_iterator begin() const { return {data()}; }
     const_iterator end() const { return {data(), size()}; }
+    const_iterator cbegin() const { return {data()}; }
+    const_iterator cend() const { return {data(), size()}; }
     reverse_iterator rbegin() { return make_reverse_iterator(end()); }
     reverse_iterator rend() { return make_reverse_iterator(begin()); }
     reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }

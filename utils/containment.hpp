@@ -222,7 +222,10 @@ namespace PT {
 
   };
 
-  // a containment checker, testing if a single-labelled component-visible(!)  host-network contains a single-labeled guest tree
+
+
+  // a containment checker, testing if a single-labelled host-network contains a single-labeled guest tree
+  //NOTE: if an invisible tree component is encountered, we will branch on which subtree to display in the component
   //NOTE: this can be used to solve multi-labeled host networks: just add a reticulation for each multiply occuring label
   template<class Host, class Guest, bool leaf_labels_only = true,
     class = std::enable_if_t<Guest::is_single_labeled>,
@@ -237,24 +240,18 @@ namespace PT {
     using HostEdge = typename RWHost::Edge;
     using NodeList = _NodeList<RWHost>;
     using DisplayTable = _DisplayTable<RWHost, RWGuest::template NodeMap>;
-    using LabelMatching = LabelMatchingFromNets<RWGuest, RWHost, std::vector>;
+    using LabelMatching = LabelMatchingFromNets<RWHost, RWGuest, std::vector>;
     using LabelToGuest = std::unordered_map<typename RWGuest::LabelType, Node>;
 
     RWHost host;
     RWGuest guest;
-
-    LabelToGuest label_to_guest;
+    LabelMatching label_match;
 
     using MulSubtree = CompatibleRO<CompatibleMulTree<Host>>;
     using TreeChecker = TreeInTreeContainment<MulSubtree, RWGuest, leaf_labels_only>;
 
     void init()
     {
-      std::cout << "inversing guest labeling...\n";
-      for(const auto& lpair: guest.labels())
-        if(!lpair.second.empty())
-          if(!label_to_guest.try_emplace(lpair.second, lpair.first).second)
-            throw std::logic_error("cannot check containment of multi-labeled guest trees");
       std::cout << "applying cherry reduction...\n";
       cherry_reduction();
       std::cout << "applying visible-component reduction...\n";      
@@ -264,17 +261,21 @@ namespace PT {
 
     // initialization allows moving Host and Guest
     //NOTE: to allow deriving Host and Guest template parameters, we're not using forwarding references here, but 4 different constructors
-    TreeInNetContainment(const Host& _host, const Guest& _guest): host(_host), guest(_guest) { init(); }
-    TreeInNetContainment(const Host& _host, Guest&& _guest): host(_host), guest(std::move(_guest)) { init(); }
-    TreeInNetContainment(Host&& _host, const Guest& _guest): host(std::move(_host)), guest(_guest) { init(); }
-    TreeInNetContainment(Host&& _host, Guest&& _guest): host(std::move(_host)), guest(std::move(_guest)) { init(); }
+    TreeInNetContainment(const Host& _host, const Guest& _guest): host(_host), guest(_guest), label_match(host, guest)  { init(); }
+    TreeInNetContainment(const Host& _host, Guest&& _guest): host(_host), guest(std::move(_guest)), label_match(host, guest) { init(); }
+    TreeInNetContainment(Host&& _host, const Guest& _guest): host(std::move(_host)), guest(_guest), label_match(host, guest) { init(); }
+    TreeInNetContainment(Host&& _host, Guest&& _guest): host(std::move(_host)), guest(std::move(_guest)), label_match(host, guest) { init(); }
 
+    //! apply cherry redution and return whether anything was reduced
     bool cherry_reduction()
     {
+      //for(const auto& label_occ: label_match){
+      //}
       return true;
     }
 
-    // unzip the reticulations below x to create a MuL-tree; also return a leaf that is visible from x
+    // unzip the reticulations below x to create a MuL-tree
+    //NOTE: this assumes that the cherry rule has been applied exhaustively
     MulSubtree unzip_retis(const Node x, Node& visible_leaf, typename TreeChecker::NodeInfos& node_infos, typename TreeChecker::LabelMatching& lmatch)
     {
       std::cout << "unzipping reticulations...\n";
@@ -284,53 +285,54 @@ namespace PT {
       // to construct the multi-labeled tree, we use a special edge-traversal of the host without a SeenSet, so reticulations are visited multiple times
       size_t node_count = 1;
       HashMap<Node, Node> host_to_subtree; // track translation
-      std::unordered_bitset visible; // track visibility
+      std::unordered_bitset visible = {x}; // track visibility
+      //visible.set(x);
       append(host_to_subtree, x, 0); // translate the root to 0
       node_infos.try_emplace(0, 0, 0); // distance to root and the order number of x are 0
-      visible.set(x);
+      visible_leaf = NoNode;
 
       MetaTraversal<const RWHost, void, EdgeTraversal> my_dfs(host);
       for(const auto uv: my_dfs.preorder(x)){
         const Node u = uv.tail();
         Node v = uv.head();
         if(!host.is_reti(u)){
+          // since the cherry rule has been applied and we're in a lowest tree component, u must be visible from x
+          visible.set(u);
           // skip reticulation chains
           while(host.is_reti(v)) v = front(host.children(v));
           std::cout << "got edge "<<u<<"->"<<v<<"\n";
           // translate u & v
-          const Node st_u(host_to_subtree.at(u));
-          const Node st_v(node_count++);
+          const Node st_u = host_to_subtree[u];
+          const Node st_v = host_to_subtree[v] = node_count++;
           std::cout << "translated to "<<st_u<<"->"<<st_v<<" in the subtree\n";
-          // register the new node-translation
-          host_to_subtree[v] = st_v;
           // add the edge to the subtree
           append(edges, st_u, st_v);
           // set distance to root and order number of st_v
-          node_infos.try_emplace(st_v, node_infos.at(st_u).dist_to_root + 1, st_v); // st_v is its own order number as we're building in preorder
+          node_infos.try_emplace(st_v, node_infos[st_u].dist_to_root + 1, st_v); // st_v is its own order number as we're building in preorder
           // register the label if v has one
           const auto& vlabel = host.label(v);
-          if(!leaf_labels_only || host.is_leaf(v))
-            if(!vlabel.empty()) {
-              // register label in the label map
-              append(labels, st_v, vlabel);
-              // register label and st_v in the label matching
-              const auto [iter, succ] = lmatch.try_emplace(vlabel);
-              if(succ) iter->second.first = label_to_guest.at(vlabel);
-              append(iter->second.second, st_v);
-              std::cout << "matched labels: "<<iter->second<<"\n";
-            }
-          // check if v is visible from x
-          if(!visible.test(v)){
-            for(const Node pv: host.parents(v))
-              if(!visible.test(pv)) goto invis;
-            visible.set(v);
+          if((!leaf_labels_only || host.is_leaf(v)) && !vlabel.empty()) {
+            // register label in the label map
+            append(labels, st_v, vlabel);
+            // register label and st_v in the label matching
+            const auto [iter, succ] = lmatch.try_emplace(vlabel);
+            if(succ) append(iter->second.first, label_match.at(vlabel).second);
+            append(iter->second.second, st_v);
+            std::cout << "matched labels: "<<iter->second<<"\n";
+          }
+          if(host.is_leaf(v)) visible_leaf = v;
+        } else {
+          // if u is a reti, v should not be an inner tree node (otherwise, there is a deeper tree component!)
+          assert(host.is_reti(v) || host.is_leaf(v));
+          // check if u is visible from x;
+          if((visible_leaf == NoNode) && !visible.test(u)){
+            for(const Node pu: host.parents(u))
+              if(!visible.test(pu)) goto invis;
+            visible.set(u);
             // if v is a leaf and visible, register it
             if(host.is_leaf(v)) visible_leaf = v;
           invis:;
           }
-        } else {
-          // if u is a reti, v should not be an inner tree node (otherwise, there is a deeper tree component!)
-          assert(!host.is_inner_tree_node(v));
         }
       }
       return MulSubtree(edges, labels);
@@ -349,7 +351,7 @@ namespace PT {
         TreeChecker subtree_contain(subtree, guest, node_infos, lmatch, true); // note: the checker may move out of the label matching
         std::cout << "constructed Tree-in-Tree checker\n";
         const auto& vlabel = host.label(vis_leaf);
-        Node& v = label_to_guest.at(vlabel);
+        Node& v = label_match.at(vlabel).second;
         Node pv = guest.parent(v);
         std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
         while(!subtree_contain.who_displays(pv).empty()) {
@@ -371,9 +373,9 @@ namespace PT {
         std::cout << "pruned guest:\n"<<guest<<"\n";
         // step 4: update labels & label maps
         std::cout << "marking "<<v<<" (guest) & "<<u<<" (host) with label "<<vlabel<<"\n";
-        guest.label(v) = vlabel;
-        label_to_guest[vlabel] = v;
-        host.label(u) = vlabel;
+        guest.set_label(v, vlabel);
+        host.set_label(u, vlabel);
+        label_match.try_emplace(vlabel, u, v);
         return true;
       } else throw std::logic_error("host is not tree-component visible");
     }

@@ -9,6 +9,7 @@
 #include "iter_bitset.hpp"
 #include "vector_map.hpp"
 #include "stl_utils.hpp"
+#include "singleton.hpp"
 
 namespace PT{
 
@@ -56,6 +57,9 @@ namespace PT{
 
   using Node = uintptr_t;
   constexpr Node NoNode = std::default_invalid_t<Node>::value();
+
+  // singleton set for nodes
+  using NodeSingleton = std::singleton_set<Node, std::default_invalid_t<Node>>;
 
   template<class Network>
   using NodeTranslation = typename Network::template NodeSet<Node>;

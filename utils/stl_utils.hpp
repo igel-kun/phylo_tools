@@ -33,6 +33,9 @@ namespace std{
   // anything that can be converted from and to int is considered "basically arithmetic"
   template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
 
+  template<class T> constexpr bool is_pair = false;
+  template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
+
   template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
   template<class N> using get_const_ptr_t = typename get_const_ptr<remove_cvref_t<N>>::type;
@@ -136,6 +139,7 @@ namespace std{
   struct self_deref<T, true>
   {
     T value;
+
     self_deref(const T& x): value(x) {}
     T& operator*() { return value; }
     const T& operator*() const { return value; }

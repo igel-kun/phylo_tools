@@ -46,12 +46,12 @@ namespace std{
     iterator make_iterator(const typename Parent::iterator& raw_it)
     { return iterator(raw_it, Parent::end(), make_predicate()); }
     iterator make_iterator(const do_not_fix_index_tag, const typename Parent::iterator& raw_it)
-    { return iterator(do_not_fix_index, raw_it, Parent::end(), make_predicate()); }
+    { return iterator(do_not_fix_index_tag(), raw_it, Parent::end(), make_predicate()); }
     
     const_iterator make_iterator(const typename Parent::const_iterator& raw_it) const
     { return const_iterator(raw_it, Parent::end(), make_predicate()); }
     const_iterator make_iterator(const do_not_fix_index_tag, const typename Parent::const_iterator& raw_it) const
-    { return const_iterator(do_not_fix_index, raw_it, Parent::end(), make_predicate()); }
+    { return const_iterator(do_not_fix_index_tag(), raw_it, Parent::end(), make_predicate()); }
 
     template<class... Args>
 	  insert_result try_emplace(const key_type key, Args&&... args)
@@ -64,9 +64,9 @@ namespace std{
         _Element* const val = data() + key;
         val->~_Element();  // destruct invalid element
         new (val) _Element(forward<Args>(args)...); // construct new _Element in place
-      } else return { make_iterator(do_not_fix_index, {data(), key}), false };
+      } else return { make_iterator(do_not_fix_index_tag(), {data(), key}), false };
       set_present(key);
-      return { make_iterator(do_not_fix_index, {data(), key}), true };
+      return { make_iterator(do_not_fix_index_tag(), {data(), key}), true };
     }
 
     // insert and emplace are (almost) synonymous to try_emplace
@@ -76,11 +76,11 @@ namespace std{
 
     iterator begin() { return make_iterator(Parent::begin()); }
     const_iterator begin() const { return make_iterator(Parent::begin()); }
-    iterator end() { return make_iterator(do_not_fix_index, Parent::end()); }
-    const_iterator end() const { return make_iterator(do_not_fix_index, Parent::end()); }
+    iterator end() { return make_iterator(do_not_fix_index_tag(), Parent::end()); }
+    const_iterator end() const { return make_iterator(do_not_fix_index_tag(), Parent::end()); }
 
-    iterator find(const key_type key) { if(contains(key)) return make_iterator(do_not_fix_index, {data() + key}); else return end(); }
-    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(do_not_fix_index, {data() + key}); else return end(); }
+    iterator find(const key_type key) { if(contains(key)) return make_iterator(do_not_fix_index_tag(), {data() + key}); else return end(); }
+    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(do_not_fix_index_tag(), {data() + key}); else return end(); }
   };
 
   template<class _Key, class _Element, class _AbsentPredicate>

@@ -27,10 +27,6 @@ namespace std{
     using reference = value_type&;
     using const_reference = const value_type&;
 
-    _singleton_set() = default;
-    _singleton_set(const _singleton_set&) = default;
-    _singleton_set(_singleton_set&&) = default;
-
     virtual ~_singleton_set() = 0;
     virtual bool empty() const = 0;
     virtual bool erase(const iterator it)
@@ -47,6 +43,8 @@ namespace std{
     }
     void clear() { if(!empty()) erase(begin()); }
 
+    operator const_reference() const { return front(); }
+    operator reference() { return front(); }
     size_t size() const { return !empty(); }
     reference       front() { return *element; }
     const_reference front() const { return *element; }
@@ -88,6 +86,8 @@ namespace std{
     using Parent::clear;
 
     singleton_set(): Parent(_invalid_element) {}
+    singleton_set(const _Element& el): Parent(el) {}
+
 
     template<class... Args>
     pair<iterator, bool> emplace(Args&&... args) 
@@ -110,7 +110,8 @@ namespace std{
     { while(src_begin != src_end) emplace(*src_begin); }
     
     singleton_set& operator=(const _Element& e) { clear(); emplace(e); return *this; }
-    singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
+    //singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
+    //singleton_set& operator=(const singleton_set& s) { singleton_set new_set(s); std::swap(std::move(new_set), std::move(*this)); return *this;}
 
     void push_back(const _Element& el) { emplace(el); }
     bool empty() const { return *element == _invalid_element; }
@@ -133,11 +134,13 @@ namespace std{
     using Parent::Parent;
     using Parent::clear;
 
+    singleton_set(const _Element& el): Parent(make_shared<_Element>(el)) {}
+
     template<class... Args>
     pair<iterator, bool> emplace(Args&&... args) 
     {
       if(empty()){
-        element = make_unique<_Element>(forward<Args>(args)...);
+        element = make_shared<_Element>(forward<Args>(args)...);
         return {element.get(), true};
       } else {
         if(*element == _Element(forward<Args>(args)...))
@@ -155,6 +158,7 @@ namespace std{
 
     singleton_set& operator=(const _Element& e) { clear(); emplace(e); return *this; }
     singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
+    //singleton_set& operator=(const singleton_set& s) { singleton_set new_set(s); std::swap(std::move(new_set), std::move(*this)); return *this;}
 
     void push_back(const _Element& el) { emplace(el); }
     bool empty() const { return !element; }
