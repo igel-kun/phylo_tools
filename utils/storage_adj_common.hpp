@@ -16,6 +16,9 @@ namespace PT{
   struct consecutive_tag: public consecutivity_tag {};
   struct non_consecutive_tag: public consecutivity_tag {};
 
+  constexpr consecutive_tag consecutive_nodes;
+  constexpr non_consecutive_tag non_consecutive_nodes;
+
   struct immutable_tag {};
   struct mutable_tag {};
 

@@ -115,6 +115,7 @@ namespace PT{
       for(auto&& uv: given_edges){
         const Node u = old_to_new ? (*old_to_new).at(uv.tail()) : uv.tail();
         const Node v = old_to_new ? (*old_to_new).at(uv.head()) : uv.head();
+
         Adjacency* const position = _successors.at(u).begin() + (--deg.at(u).second);
         DEBUG5(std::cout << "constructing adjacency "<<uv.get_adjacency()<<" at "<<position<<std::endl);
         emplace_new_adjacency(position, std::move(uv.get_adjacency()), v);
@@ -194,9 +195,8 @@ namespace PT{
     // storage for the adjacencies; _successors will point into this
     ConsecutiveStorage<Adjacency> _succ_storage;
 
-
-    template<class GivenEdgeContainer>
-    void setup_edges(GivenEdgeContainer&& given_edges, RawConsecutiveMap<Node, InOutDegree>& deg)
+    template<class GivenEdgeContainer, class NodeTranslation = Translation>
+    void setup_edges(GivenEdgeContainer&& given_edges, RawConsecutiveMap<Node, InOutDegree>& deg, const NodeTranslation* const old_to_new)
     {
       const size_t num_nodes = deg.size();
       auto nh_start = _succ_storage.begin();
@@ -208,14 +208,14 @@ namespace PT{
       }
       // put the edges
       for(auto&& uv: given_edges){
-        const Node u = uv.tail();
-        const Node v = uv.head();
+        const Node u = old_to_new ? (*old_to_new).at(uv.tail()) : uv.tail();
+        const Node v = old_to_new ? (*old_to_new).at(uv.head()) : uv.head();
 
         //*(&(_successors[tail(edge)]) + (--out_deg[tail(edge)])) = head(edge);
         Adjacency* const position = _successors.at(u).begin() + (--deg.at(u).second);
-        new(position) Adjacency(std::move(uv.get_adjacency()));
+        emplace_new_adjacency(position, std::move(uv.get_adjacency()), v);
 
-        if(!append(_predecessors, v, get_reverse_adjacency(u, *position)).second)
+        if(!append(_predecessors, v, std::move(get_reverse_adjacency(u, *position))).second)
           throw std::logic_error("cannot create tree with reticulation (" + std::to_string(v) + ")");
       }
       _size = given_edges.size();
@@ -240,7 +240,7 @@ namespace PT{
       RawConsecutiveMap<Node, InOutDegree> deg;
       compute_degrees(given_edges, deg, old_to_new);
       _root = compute_root_and_leaves(deg, leaves);
-      setup_edges(std::forward<GivenEdgeContainer>(given_edges), deg);
+      setup_edges(std::forward<GivenEdgeContainer>(given_edges), deg, old_to_new);
     }
 
     //! initialization from explicitly non-consecutive edgelist
