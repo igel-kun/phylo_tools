@@ -2,8 +2,9 @@
 
 #pragma once
 
-#include "utils/types.hpp"
 #include <unordered_map>
+#include "utils/types.hpp"
+#include "utils/set_interface.hpp"
 
 namespace PT{
   struct MalformedEdgeVec : public std::exception 
@@ -70,10 +71,16 @@ namespace PT{
 
   };
 
+
   template<class EdgeList, class LabelMap>
   void parse_edgelist(std::istream& in, EdgeList& el, LabelMap& names)
   {
     EdgeVecParser<EdgeList, LabelMap>(in, el, names).read_tree();
+  }
+  template<class EdgeList, class LabelMap>
+  void parse_edgelist(std::istream& in, EdgeList& el, std::shared_ptr<LabelMap>& names)
+  {
+    EdgeVecParser<EdgeList, LabelMap>(in, el, *names).read_tree();
   }
 
 

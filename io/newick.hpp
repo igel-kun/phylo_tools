@@ -270,17 +270,21 @@ namespace PT{
   };
 
   template<class EdgeList, class LabelMap>
-  void parse_newick(const std::string in, EdgeList& el, LabelMap& names)
+  void parse_newick(const std::string& in, EdgeList& el, LabelMap& names)
   {
     NewickParser<EdgeList, LabelMap>(in, el, names);
+  }
+  template<class EdgeList, class LabelMap>
+  void parse_newick(const std::string& in, EdgeList& el, std::shared_ptr<LabelMap>& names)
+  {
+    NewickParser<EdgeList, LabelMap>(in, el, *names);
   }
   template<class EdgeList, class LabelMap>
   void parse_newick(std::istream& in, EdgeList& el, LabelMap& names)
   {
     std::string in_line;
     std::getline(in, in_line);
-    NewickParser<EdgeList, LabelMap>(in_line, el, names);
+    parse_newick(in_line, el, names);
   }
-
 }
 
