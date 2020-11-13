@@ -68,10 +68,17 @@ namespace PT{
     using Edge = typename EL::value_type;
 
     const std::string& newick_string;
+
+    // keep track of the nodes we've seen
+    ConsecutiveNodeSet nodes_seen;
+
+    // map of names read
     LabelMap& names;
 
     // map a hybrid-index to a node index (and in-degree) so that we can find the corresponding hybrid when reading a hybrid number
     std::unordered_map<Index, IndexAndDegree> hybrids;
+
+    // pointer to the current read-position in the newick string
     ssize_t back;
 
     bool parsed = false;
@@ -94,6 +101,7 @@ namespace PT{
                  const bool _allow_non_binary = true,
                  const bool _allow_junctions = true):
       newick_string(_newick_string),
+      nodes_seen(),
       names(_names),
       hybrids(),
       back(_newick_string.length() - 1),
@@ -103,7 +111,7 @@ namespace PT{
     { read_tree(); }
 
     bool is_tree() const { return hybrids.empty(); }
-    size_t num_nodes() const { return names.size(); }
+    size_t num_nodes() const { return nodes_seen.size(); }
     LabelMap& get_names() const { return names; }
 
     // a tree is a branch followed by a semicolon
@@ -138,13 +146,20 @@ namespace PT{
       return root_deg != UINT32_MAX;
     }
 
+    template<class NameType>
+    void register_new_node(const Node u, NameType&& name)
+    {
+      nodes_seen.emplace(u);
+      if(!name.empty()) names.emplace(u, std::forward<NameType>(name));
+    }
+
     // a subtree is a leaf or an internal vertex
     Index read_subtree()
     {
       skip_whitespaces();
 
       // read the name of the root, any non-trailing whitespaces are considered part of the name
-      Index root = names.size();
+      Index root = num_nodes();
       // keep root's name as rvalue in the air - we may or may not insert it into names, depending on its hybrid status
       std::string&& root_name = read_name();
 
@@ -161,8 +176,8 @@ namespace PT{
           // increase the registered in-degree of 'root'
           const Index root_deg = ++stored.second;
           if((root_deg) == 3) not_binary();
-        } else names.emplace(root, hyb_info.first);
-      } else names.emplace(root, std::forward<std::string>(root_name));
+        } else register_new_node(root, hyb_info.first);
+      } else register_new_node(root, std::forward<std::string>(root_name));
 
       // if the subtree dangling from root is non-empty, then recurse
       if((back > 0) && newick_string.at(back) == ')') read_internal(root, hyb_info.second);
