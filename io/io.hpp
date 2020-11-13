@@ -10,36 +10,47 @@
 namespace PT{
 
   template<class Network, class LabelMap = typename Network::LabelMap, class EdgeVec = std::vector<typename Network::Edge>>
-  using EdgeVecAndNodeLabel = std::pair<EdgeVec, std::shared_ptr<LabelMap>>;
+  struct EdgesAndNodeLabels
+  {
+    EdgeVec edges;
+    std::shared_ptr<LabelMap> labels;
+    size_t num_nodes;
 
-  template<class _EdgeListAndNodeLabel>
-  bool read_edges(std::ifstream& in, _EdgeListAndNodeLabel& el)
+    void from_newick(std::ifstream& in) { num_nodes = parse_newick(in, edges, *labels); }
+    void from_edgelist(std::ifstream& in) { num_nodes = parse_edgelist(in, edges, *labels); }
+    void clear() { edges.clear(); labels->clear(); }
+    bool is_tree() const { return edges.size() == num_nodes - 1; }
+  };
+
+  //! read edges from an input-file stream and return the number of nodes used by edges in the container
+  template<class _EdgeListAndNodeLabels>
+  bool read_edges(std::ifstream& in, _EdgeListAndNodeLabels el)
   {
     try{
       DEBUG3(std::cout << "trying to read newick..." <<std::endl);
-      parse_newick(in, el.first, el.second);
+      el.from_newick(in);
     } catch(const MalformedNewick& nw_err){
       try{
         in.seekg(0);
         DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
-        parse_edgelist(in, el.first, el.second);
+        el.clear();
+        el.from_edgelist(in);
       } catch(const MalformedEdgeVec& el_err){
         return false;
       }
     }
-    DEBUG3(std::cout << "read edges: "<<el<<"\n");
     return true;
   }
 
-  template<class _EdgeListAndNodeLabel>
-  bool read_edges(const std::string& filename, _EdgeListAndNodeLabel& el)
+  template<class _EdgeListAndNodeLabels>
+  bool read_edges(const std::string& filename, _EdgeListAndNodeLabels el)
   {
     return read_edges(std::ifstream(filename), el);
   }
 
-  //! read all edgelists provided in files
-  template<class _EdgeListAndNodeLabel>
-  void read_edgelists(const std::string& filename, std::vector<_EdgeListAndNodeLabel>& edgelists)
+  //! read all edgelists provided in files and return their number of nodes
+  template<class _EdgeListAndNodeLabels>
+  void read_edgelists(const std::string& filename, std::vector<_EdgeListAndNodeLabels>& edgelists)
   {
     std::ifstream in(filename);
     while(read_edges(in, *(edgelists.emplace(edgelists.end()))))
@@ -49,8 +60,8 @@ namespace PT{
   }
 
   //! read all edgelists provided in files
-  template<class _EdgeListAndNodeLabel>
-  inline void read_edgelists(const std::vector<std::string>& filenames, std::vector<_EdgeListAndNodeLabel>& edgelists)
+  template<class _EdgeListAndNodeLabels>
+  inline void read_edgelists(const std::vector<std::string>& filenames, std::vector<_EdgeListAndNodeLabels>& edgelists)
   {
     for(const auto& fn: filenames) read_edgelists(fn, edgelists);
   }

@@ -49,7 +49,8 @@ namespace PT{
       } else return emp_res.first->second;
     }
 
-    void read_tree()
+    //! read edges and return the number of nodes used by them
+    size_t read_tree()
     {
       while(!edgestream.eof()){
         std::string name;
@@ -67,20 +68,21 @@ namespace PT{
         edges.emplace_back(u, v);
         while(edgestream.peek() == 10) edgestream.get();
       }
+      return name_to_node.size();
     }
 
   };
 
 
   template<class EdgeList, class LabelMap>
-  void parse_edgelist(std::istream& in, EdgeList& el, LabelMap& names)
+  size_t parse_edgelist(std::istream& in, EdgeList& el, LabelMap& names)
   {
-    EdgeVecParser<EdgeList, LabelMap>(in, el, names).read_tree();
+    return EdgeVecParser<EdgeList, LabelMap>(in, el, names).read_tree();
   }
   template<class EdgeList, class LabelMap>
-  void parse_edgelist(std::istream& in, EdgeList& el, std::shared_ptr<LabelMap>& names)
+  size_t parse_edgelist(std::istream& in, EdgeList& el, std::shared_ptr<LabelMap>& names)
   {
-    EdgeVecParser<EdgeList, LabelMap>(in, el, *names).read_tree();
+    return EdgeVecParser<EdgeList, LabelMap>(in, el, *names).read_tree();
   }
 
 
