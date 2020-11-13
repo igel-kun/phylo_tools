@@ -3,6 +3,8 @@
 
 #include <memory>
 
+#warning TODO: remowork to avoid vtables: have a "SingletonStorage" class that can do size() and empty() and build the SingletonSet on top of that
+
 namespace std{
 
   // a set holding exactly one element, but having a set-interface

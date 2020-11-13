@@ -102,6 +102,30 @@ namespace PT{
       return comp_roots;
     }
 
+    // return whether there is an x-y-path in the network
+    bool has_path(const Node x, Node y) const
+    {
+      while(1){
+        while(!is_reti(y)){
+          if(x == y) return true;
+          if(Parent::is_root(y)) return false;
+          y = std::front(parents(y));
+        }
+        typename Parent::NodeSet seen;
+        std::queue<Node> search_front;
+        // add the parents of y to the search front
+        for(const Node p: parents(y)) search_front.push(p);
+        // if, at some point, the search-front shrinks back to a single strand, restart the simpler has_path()
+        while((search_front.size() != 1) || is_reti(y)){
+          y = search_front.front(); search_front.pop();
+          if(x != y){
+            if(append(seen, y).second)
+              for(const Node p: parents(y)) search_front.push(p);
+          } else return true;
+        }
+        y = search_front.front();
+      }
+    }
     // =================== modification ====================
 
 

@@ -41,10 +41,10 @@ namespace std {
     raw_vector_map_iterator& operator--() { --index; return *this; }
     raw_vector_map_iterator operator--(int) { raw_vector_map_iterator tmp(*this); --(*this); return tmp; }
 
-    raw_vector_map_iterator& operator+=(const size_t x) { index += x; return *this; }
-    raw_vector_map_iterator& operator-=(const size_t x) { index -= x; return *this; }
-    raw_vector_map_iterator  operator+(const size_t x) { return {start, index + x}; }
-    raw_vector_map_iterator  operator-(const size_t x) { return {start, index - x}; }
+    raw_vector_map_iterator& operator+=(const difference_type x) { index += x; return *this; }
+    raw_vector_map_iterator& operator-=(const difference_type x) { index -= x; return *this; }
+    raw_vector_map_iterator  operator+(const difference_type x) { return {start, index + x}; }
+    raw_vector_map_iterator  operator-(const difference_type x) { return {start, index - x}; }
 
     difference_type operator-(const raw_vector_map_iterator& it) { return (start + index) - (it.start + it.index); }
 

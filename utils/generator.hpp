@@ -114,18 +114,20 @@ namespace PT{
       throw std::logic_error("cannot add" + std::to_string(num_edges) + " edges without introducing a reticulation");
 
     while(num_edges){
-      std::cout << N.edges().size() << " edges in N\n";
-      std::cout << num_edges << " edges to go; retis left: "<<new_reticulations<<" tree nodes left: "<<new_tree_nodes<<"\n";
       if(new_reticulations){
-        const auto [u, v] = get_random_iterator(N.edges())->as_pair();
+        const auto edges = N.edges();
+        const auto uv_iter = get_random_iterator(edges);
+        const auto [u, v] = uv_iter->as_pair();
+        //const Node u = uv_iter->first;
+        //const Node v = uv_iter->second;
         if(new_tree_nodes){
-          const auto [x, y] = get_random_iterator(N.edges())->as_pair();
-          std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<'\n';
+          const auto [x, y] = get_random_iterator_except(edges, uv_iter)->as_pair();
+          DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<'\n');
           if(u != x){
             Node s = N.subdivide(u, v);
             Node t = N.subdivide(x, y);
-            DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             if(N.has_path(y, u)) std::swap(s, t);
+            DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             N.add_edge(s, t);       --num_edges;
             append(tree_nodes, s);  --new_tree_nodes;
             append(retis, t);       --new_reticulations;

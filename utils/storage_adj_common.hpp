@@ -6,14 +6,19 @@
 #include "edge.hpp"
 #include "edge_iter.hpp"
 #include "storage.hpp"
-#include "storage_common.hpp"
 #include "set_interface.hpp"
 #include "singleton.hpp"
 
 #warning TODO: implement move constructors for edge storages and adjacency storages!!!
 namespace PT{
 
-  struct edgelist_tag_t {} edgelist_tag;
+  struct consecutivity_tag {};
+  struct consecutive_tag: public consecutivity_tag {};
+  struct non_consecutive_tag: public consecutivity_tag {};
+
+  struct immutable_tag {};
+  struct mutable_tag {};
+
 
   template<class _EdgeData, class _SuccessorMap, class _PredecessorMap>
   class RootedAdjacencyStorage
@@ -163,7 +168,7 @@ namespace PT{
     ConstOutEdgeContainer out_edges(const Node u) const { return ConstOutEdgeContainer(_successors.at(u), u); }
     //OutEdgeContainer      out_edges(const Node u) { return OutEdgeContainer(_successors.at(u), u); }
     
-    ConstInEdgeContainer  in_edges(const Node u) const { return ConstInEdgeContainer(predecessors(u), u); }
+    ConstInEdgeContainer  in_edges(const Node u) const { return ConstInEdgeContainer(_predecessors.at(u), u); }
     //InEdgeContainer       in_edges(const Node u) { return InEdgeContainer(_predecessors.at(u), u); }
     
     ConstEdgeContainer    edges() const { return ConstEdgeContainer(_size, _successors); }

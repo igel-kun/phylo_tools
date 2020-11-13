@@ -103,7 +103,9 @@ namespace PT{
     using difference_type = typename EdgeIterator::difference_type;
     using reference       = typename EdgeIterator::reference;
     using const_reference = typename EdgeIterator::const_reference;
-    using iterator_category = typename EdgeIterator::iterator_category;
+    //using iterator_category = typename EdgeIterator::iterator_category;
+    // NOTE: make more efficient depending on the iterator_categories of _Map and EdgeIterator
+    using iterator_category = typename std::my_iterator_traits<MapIterator>::iterator_category;
 
   protected:
     Map& nc_map;
@@ -140,6 +142,7 @@ namespace PT{
     pointer operator->() const { return out_it.operator->(); }
 
     //! increment operator
+    //NOTE: incrementing the end-iterator will crash
     EdgeMapIterator& operator++()
     {
       ++out_it;
@@ -153,22 +156,78 @@ namespace PT{
     }
 
     //! decrement operator
+    //NOTE: this does little to no error checking, so be sure there is an item to go to!
     EdgeMapIterator& operator--()
     {
-      if(out_it == node_it->second.begin()){
-        const auto bad_iter = std::prev(nc_map.begin());
-        if(node_it != bad_iter){
+      if(node_it != nc_map.end()) {
+        if(out_it == node_it->second.begin()){
           --node_it;
           skip_empty_rev();
-        }
-        if(node_it != bad_iter)
           out_it = EdgeIterator(std::prev(node_it->second.end()), node_it->first);
-      } else --out_it;
+        } else --out_it;
+      } else {
+        node_it = std::prev(nc_map.end());
+        skip_empty_rev();
+        out_it = std::prev(node_it->second.end());
+      }
       return *this;
     }
+
     //! post in-/decrement
     EdgeMapIterator operator++(int) { EdgeMapIterator tmp(*this); ++(*this); return tmp; }
     EdgeMapIterator operator--(int) { EdgeMapIterator tmp(*this); --(*this); return tmp; }
+
+
+    //! random-access increment operator
+    //NOTE: incrementing the end-iterator will crash
+    EdgeMapIterator& operator+=(difference_type x)
+    {
+      if(x < 0) return operator-=(-x);
+
+      while(x){
+        const difference_type items_left = std::distance(out_it, node_it->second.end());
+        if(x >= items_left){
+          x -= items_left;
+          ++node_it;
+          skip_empty();
+          if(node_it != nc_map.end())
+            out_it = EdgeIterator(node_it->second, node_it->first);
+          else
+            return *this;
+        } else {
+          std::advance(out_it, x);
+          return *this;
+        }
+      }
+      return *this;
+    }
+
+    //! random-access decrement operator
+    EdgeMapIterator& operator-=(difference_type x)
+    {
+      if(x < 0) return operator+=(-x);
+      if(x == 0) return *this;
+      if(node_it == std::end(nc_map)){
+        --(*this);
+        --x;
+      }
+      // at this point, we either crashed (if nc_map.empty()) or out_it points to a valid item... let's keep it that way
+      while(x) {
+        const difference_type items_before = std::distance(std::begin(node_it->second), out_it);
+        if(x > items_before) {
+          x -= items_before + 1;
+          --node_it;
+          skip_empty_rev();
+          out_it = std::prev(node_it->second.end());
+        } else {
+          std::advance(out_it, -x);
+          return *this;
+        }
+      }
+      return *this;
+    }
+ 
+
 
     bool operator==(const EdgeMapIterator& it) const 
     {
@@ -193,8 +252,6 @@ namespace PT{
     static const_iterator begin(const _Map& c)       { return {c, std::begin(c) }; }
     static const_iterator end(const _Map& c)         { return {c, std::end(c) }; }
   };
-
-
 
 
 

@@ -21,6 +21,21 @@ namespace PT{
   using DefaultMutableTreePredecessorMap = HashMap<Node, std::singleton_set<ReverseAdjacencyFromData<_EdgeData>, std::default_invalid_t<Node>>>;
 
 
+  template<class EdgeContainer, class LeafContainer, class NodeTranslation>
+  void compute_translate_and_leaves(const EdgeContainer& edges, NodeTranslation* old_to_new, LeafContainer* leaves = nullptr)
+  {
+    if(leaves)
+      for(const auto& uV: edges.successor_map())
+        if(uV.second.empty())
+          append(*leaves, uV.first);
+    // translate maps are kind of silly for mutable storages, but if the user insists to want one, we'll give her/him one
+    if(old_to_new)
+      for(const auto& uV: edges.successor_map())
+        append(*old_to_new, uV.first, uV.first);
+  }
+
+
+
 
   template<class _EdgeData, class _SuccessorMap, class _PredecessorMap>
   class MutableAdjacencyStorage: public RootedAdjacencyStorage<_EdgeData, _SuccessorMap, _PredecessorMap>
@@ -31,6 +46,8 @@ namespace PT{
     using Parent::_predecessors;
     using Parent::_root;
     using Parent::_size;
+
+    Node max_node_index = 0;
   public:
     using MutabilityTag = mutable_tag;
     using Parent::Parent;
@@ -48,11 +65,10 @@ namespace PT{
 
     Node add_node()
     {
-      if(!_successors.empty()){
-        Node u = std::prev(_successors.end())->first;
-        while(test(_successors, ++u)) {};
-        return u;
-      } else return Node(0);
+      assert(!test(_successors, max_node_index) && !test(_predecessors, max_node_index));
+      _successors.try_emplace(max_node_index);
+      _predecessors.try_emplace(max_node_index);
+      return max_node_index++;
     }
 
     // the non-secure versions allow any form of edge addition
@@ -64,7 +80,7 @@ namespace PT{
     {
       const auto [it, success] = append(_successors[u], std::move(v));
       if(success){
-        if(append(_predecessors[(Node)v], get_reverse_adjacency(u, *it)).second){
+        if(append(_predecessors[static_cast<Node>(v)], get_reverse_adjacency(u, *it)).second){
           ++_size;
           return true;
         } else {
@@ -155,7 +171,7 @@ namespace PT{
 
     //! initialization from edgelist without consecutive nodes
     template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableAdjacencyStorage(const edgelist_tag_t,
+    MutableAdjacencyStorage(const consecutivity_tag,
                             GivenEdgeContainer&& given_edges,
                             NodeTranslation* old_to_new = nullptr,
                             LeafContainer* leaves = nullptr):
@@ -168,25 +184,13 @@ namespace PT{
           _successors.try_emplace(uv.head());
           add_edge(uv);
         }
+        max_node_index = _successors.size();
         std::cout << "computing the root...\n";
         compute_root();
         std::cout << "computing node translation and leaves...\n";
         compute_translate_and_leaves(*this, old_to_new, leaves);
-      } else {
-        _predecessors.try_emplace(0);
-        _successors.try_emplace(0);
-        _root = 0;
-      }
+      } else _root = add_node();
     }
-
-    //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableAdjacencyStorage(const non_consecutive_tag_t,
-                            GivenEdgeContainer&& given_edges,
-                            NodeTranslation* old_to_new = nullptr,
-                            LeafContainer* leaves = nullptr):
-      MutableAdjacencyStorage(edgelist_tag, std::forward<GivenEdgeContainer>(given_edges), old_to_new, leaves)
-    {}
 
   };
 

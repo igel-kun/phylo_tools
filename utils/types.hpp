@@ -66,13 +66,6 @@ namespace PT{
   using NodeWithDegree = std::pair<Node, Degree>;
   using InOutDegree = std::pair<Degree, Degree>;
 
-  // indicate whether a given edgelist can be assumed to contain all nodes in consecutive order
-  // (useful for tree/network construction from newick strings)
-  struct consecutive_tag { };
-  constexpr consecutive_tag consecutive_nodes = consecutive_tag();
-  struct non_consecutive_tag { };
-  constexpr non_consecutive_tag non_consecutive_nodes = non_consecutive_tag();
-
   template<class Property = const std::string>
   using LabeledNode = std::pair<Node, Property>;
   template<class Property = const std::string>
