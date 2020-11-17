@@ -1,6 +1,5 @@
 
-#include "io/newick.hpp"
-#include "io/edgelist.hpp"
+#include "io/io.hpp"
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
@@ -33,7 +32,7 @@ void parse_options(const int argc, const char** argv)
       std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes\n";
       exit(EXIT_FAILURE);
     }
-    if(stoi(r_vec[1]) >= stoi(r_vec[0])) {
+    if(stoi(r_vec[1]) <= stoi(r_vec[0])) {
       std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes & "<<r_vec[1]<<" leaves\n";
       exit(EXIT_FAILURE);
     }
@@ -49,29 +48,11 @@ void parse_options(const int argc, const char** argv)
 // if we declare the network to be compatible without ROTree, then we get a vector_map label-map in both
 // if we declare the network first, as RWNetwork<> and the tree to be CompatibleROTree<...>, then the label maps will both be unordered_map
 using MyTree = ROTree<>;
-using MyNet = CompatibleRW<CompatibleMulNetwork<MyTree>>;
+using MyNet = CompatibleRWNetwork<MyTree>;
 // in any case, both label maps have the same type
 using LabelMap = typename MyTree::LabelMap;
 static_assert(std::is_same_v<LabelMap, typename MyNet::LabelMap>);
 
-
-bool read_from_stream(std::ifstream& in, EdgeVec& el, LabelMap& node_labels)
-{
-  try{
-    DEBUG3(std::cout << "trying to read newick..." <<std::endl);
-    parse_newick(in, el, node_labels);
-  } catch(const MalformedNewick& nw_err){
-    try{
-      in.seekg(0);
-      DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
-      parse_edgelist(in, el, node_labels);
-    } catch(const MalformedEdgeVec& el_err){
-      return false;
-    }
-  }
-  std::cout << "read edges: "<<el<<"\n";
-  return true;
-}
 
 /*
 // check containment for a Network or MUL-Tree
@@ -105,64 +86,48 @@ NetAndTree create_net_and_tree()
   generate_random_tree(el, *node_labels, num_internals, num_leaves);
   
   MyNet N(el, node_labels);
-  add_random_edges(N, num_new_edges / 2, num_new_edges / 2, num_new_edges);
 
-  return { std::piecewise_construct, std::make_tuple(el, node_labels), std::make_tuple(std::move(N)) };
+  std::cout << "adding "<<num_new_edges<<" new edges...\n";
+
+  add_random_edges(N, num_new_edges, num_new_edges, num_new_edges);
+
+  return { std::piecewise_construct, std::forward_as_tuple(std::move(N)), std::forward_as_tuple(std::move(el), node_labels, consecutive_nodes)};
 }
 
 NetAndTree read_net_and_tree()
 {
-  EdgeVec el[2];
-  std::shared_ptr<LabelMap> node_labels[2] = {std::make_shared<LabelMap>(), std::make_shared<LabelMap>()};
+  std::vector<EdgesAndNodeLabels<MyTree, LabelMap>> el;
+  read_edgelists(options[""][0], el);
 
-  std::ifstream in(options[""][0]);
-  if(!read_from_stream(in, el[0], *(node_labels[0]))){
-    std::cerr << "could not read any network from "<<options[""][0]<<std::endl;
+  if(el.size() < 2){
+    std::cerr << "could not read 2 networks from files "<<options[""]<<std::endl;
     exit(EXIT_FAILURE);
-  } else {
-    if(options[""].size() > 1){
-      // if we've been given a second filename, try to read that one next
-      in.close();
-      in.open(options[""][1]);
-      if(!read_from_stream(in, el[1], *(node_labels[1]))){
-        std::cerr << "could not read any network from "<<options[""][1]<<std::endl;
-        exit(EXIT_FAILURE);
-      }
-    } else {
-      while(std::isspace(in.peek())) in.get();
-      // if we have only a single filename, try to continue reading the same file
-      if((in.bad() || in.eof() || !read_from_stream(in, el[1], *(node_labels[1])))){
-        std::cerr << "could not read 2 networks from "<<options[""][0]<<" but no other useable source was found"<<std::endl;
-        exit(EXIT_FAILURE);
-      }
-    }
   }
-  DEBUG5(std::cout << "building N0 from "<<el[0]<< std::endl << "building N1 from "<<el[1]<<std::endl);
 
   // choose which index corresponds to the host and which to the guest (we try to embed guest into host)
-  const bool first_is_tree = (el[0].size() == node_labels[0]->size() - 1);
-  const bool second_is_tree= (el[1].size() == node_labels[1]->size() - 1);
   // if we've been given 2 trees, the first is considered the host, otherwise, the network is considered the host :)
-  const bool host_net_index = (first_is_tree && !second_is_tree);
+  const bool host_net_index = (el[0].is_tree() && !el[1].is_tree());
   const bool guest_net_index = 1 - host_net_index;
-  std::cout << "\n\n\n returning net/tree pair...\n\n\n";
   return { std::piecewise_construct,
-           std::make_tuple(el[host_net_index], node_labels[host_net_index]),
-           std::make_tuple(el[guest_net_index], node_labels[guest_net_index]) };
+           std::forward_as_tuple(std::move(el[host_net_index].edges), std::move(el[host_net_index].labels), consecutive_tag()),
+           std::forward_as_tuple(std::move(el[guest_net_index].edges), std::move(el[guest_net_index].labels), consecutive_tag()) };
 }
 
 int main(const int argc, const char** argv)
 {
   parse_options(argc, argv);
 
-  auto [N, T] = test(options, "-r") ?
+  auto NT_tuple = test(options, "-r") ?
     create_net_and_tree() :
     read_net_and_tree();
 
-      
-  if(test(options, "-v"))
-    std::cout << N << std::endl << T << std::endl;
+  MyNet& N = NT_tuple.first;
+  MyTree& T = NT_tuple.second;
 
+  if(test(options, "-v"))
+    std::cout << "N:\n" << N << std::endl << "T:\n" << T << std::endl;
+
+  std::cout << "\n\n starting the containment engine...\n\n";
   if(T.is_tree()) {
     if(N.is_tree()){
       TreeInTreeContainment tc(N.as_tree(), T);
@@ -176,12 +141,5 @@ int main(const int argc, const char** argv)
       else std::cout << "not displayed\n";
     }
   } else std::cout << "sorry, can't check network-network containment yet...\n";
-
-/*
-  if(check_display(N, T))
-    std::cout << "display!" << std::endl;
-  else
-    std::cout << "no display!" << std::endl;
-*/  
 }
 

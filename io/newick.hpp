@@ -124,7 +124,7 @@ namespace PT{
         read_subtree();
       }
       parsed = true;
-      std::cout << "done parsing"<<std::endl;
+      std::cout << "done parsing, got edges: "<<edges<<std::endl;
     }
 
   private:

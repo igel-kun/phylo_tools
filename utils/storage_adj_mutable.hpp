@@ -10,7 +10,8 @@
  */
 
 namespace PT{
-  
+ 
+#warning TODO: make a mutable network class whose adjacencies are stored in a vector instead of a hashset
   // by default, save the edge data in the successor map and provide a reference in each "reverse adjacency" of the predecessor map
   // note: the default maps map Nodes to sets of adjacencies in which 2 adjacencies are considered equal if their nodes are equal (ignoring data)
   template<class _EdgeData>
@@ -54,6 +55,10 @@ namespace PT{
     using typename Parent::Edge;
     using typename Parent::Adjacency;
     using Parent::compute_root;
+    using Parent::in_degree;
+    using Parent::out_degree;
+    using Parent::parent;
+    using Parent::children;
 
     template<class T>
     using NodeMap = HashMap<Node, T>;
@@ -75,6 +80,7 @@ namespace PT{
     // ATTENTION: this will NOT update the root! use set_root() afterwards!
     template<class _Edge> // for universal reference
     bool add_edge(_Edge&& uv) { return add_edge(uv.tail(), uv.get_adjacency()); }
+
     template<class _Adjacency> // for universal reference
     bool add_edge(const Node u, _Adjacency&& v)
     {
@@ -88,6 +94,13 @@ namespace PT{
           exit(-1);
         }
       } else return false;
+    }
+
+    void suppress_node(const Node y)
+    {
+      assert((in_degree(y) == 1) && (out_degree(y) == 1));
+      add_edge(parent(y), std::move(front(children(y))));
+      remove_node(y);
     }
 
     //! subdivide uv: remove uv, add w, add uw and wv

@@ -91,9 +91,10 @@ namespace std{
   template<class T, class Traits, class Alloc> struct is_vector<basic_string<T,Traits,Alloc>>: public true_type {};
   template<class T> constexpr bool is_vector_v = is_vector<remove_cvref_t<T>>::value;
 
-  //a container is something we can iterate through, that is, it has an iterator
+  //a container is something we can iterate through, that is, it has an iterator (EXCEPTION: strings are not containers)
   template<class N, class T = void> struct is_container: public false_type {};
   template<class N> struct is_container<N, void_t<typename N::iterator>>: public true_type {};
+  template<class C, class T, class A> struct is_container<std::basic_string<C,T,A>, void>: public false_type {};
   template<class N> constexpr bool is_container_v = is_container<remove_cvref_t<N>>::value;
   
   // a map is something with a mapped_type in it
@@ -121,6 +122,14 @@ namespace std{
   template<class T> struct _const_reference<T&&> { using type = my_add_const_t<T>&&; };
   template<class T> using const_reference_t = typename _const_reference<T>::type;
 
+
+  // a map lookup with default
+  template <typename _Map, typename _Key, typename _Ref = copy_cv_t<_Map, typename _Map::value_type>&>
+  inline _Ref map_lookup(const _Map& m, const _Key& key, const _Ref& default_val)
+  {
+     const auto iter = m.find(key);
+     return (iter == m.end()) ? default_val : iter->second;
+  }
 
 
   // a class that returns itself on dereference 

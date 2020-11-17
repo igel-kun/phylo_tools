@@ -37,6 +37,10 @@ namespace PT{
   template<class __Tree>
   using LeafPredicate = NodeTypePredicate<__Tree, NODE_TYPE_LEAF>;
 
+  template<class EdgeStorage>
+  static constexpr bool is_mutable = std::is_same_v<typename EdgeStorage::MutabilityTag, mutable_tag>;
+  template<class EdgeStorage>
+  static constexpr bool has_consecutive_nodes = !is_mutable<EdgeStorage>;
 
 
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
@@ -67,7 +71,7 @@ namespace PT{
     //       but is_declared_tree allows setting reasonable defaults (for example, for DFSIterators)
     static constexpr bool is_declared_tree = std::is_same_v<NetworkTag, tree_tag>;
 
-    static constexpr bool is_mutable = std::is_same_v<MutabilityTag, mutable_tag>;
+    static constexpr bool is_mutable = PT::is_mutable<_EdgeStorage>;
     static constexpr bool has_consecutive_nodes = !is_mutable;
 
     using LabelTag = _LabelTag;
@@ -93,6 +97,7 @@ namespace PT{
     using Parent::nodes;
     using Parent::leaves;
     using Parent::parents;
+    using Parent::parent;
     using Parent::children;
     using Parent::out_edges;
     using Parent::in_edges;
@@ -134,12 +139,6 @@ namespace PT{
       if(is_tree_node(u)) return NODE_TYPE_TREE;
       return NODE_TYPE_ISOL;
     }
-
-    // this asks for the first parent of u; for trees, it must be the only parent of u (but networks might also be interested in "any" parent of u)
-    RevAdjacency parent(const Node u) const { return std::front(parents(u)); }
-    // this returns the root as parent for the root, instead of segfaulting / throwing out-of-range
-    //NOTE: since this must work even if the tree has no edges, this cannot deal with edge-data, so everything is a node here
-    Node parent_safe(const Node u) const { return (u == root()) ? u : parent(u); }
 
 
 
@@ -251,7 +250,7 @@ namespace PT{
     {
       HashSet<LabelType> seen;
       for(const Node u: leaves())
-        if(test(seen, (*node_labels)[u])) return true;
+        if(test(seen, label(u))) return true;
       return false;
     }
 
@@ -286,6 +285,7 @@ namespace PT{
       Parent::remove_node(u);
     }
 
+
     // remove the subtree rooted at u
     void remove_subtree(const Node u, const bool remove_labels = false)
     {
@@ -294,17 +294,16 @@ namespace PT{
       remove_node(u, remove_labels);
     }
 
-
     // =================== rooted subtrees ====================
 
     // copy the subtree rooted at u into t
     template<class __Tree = _Tree<LabelTag, EdgeStorage, LabelMap, NetworkTag>>
     __Tree get_rooted_subtree(const Node u) const
-    { return {get_edges_below(u), *node_labels}; }
+    { return {get_edges_below(u), node_labels}; }
     // copy the subtree rooted at u into t, but ignore subtrees rooted at nodes in 'except'
     template<class __Tree = _Tree<LabelTag, EdgeStorage, LabelMap, NetworkTag>, class ExceptContainer>
     __Tree get_rooted_subtree_except(const Node u, ExceptContainer&& except) const
-    { return {get_edges_below_except(u, except), *node_labels}; }
+    { return {get_edges_below_except(u, except), node_labels}; }
 
 
     template<class _Edgelist>
@@ -316,69 +315,54 @@ namespace PT{
     { return all_edges_dfs_except(except).postorder(u).append_to(el); }
 
     // ================== construction =====================
-
-    std::ostream& tree_summary(std::ostream& os) const
-    {
-      DEBUG3(os << "tree is mutable? "<<is_mutable<<" multi-labeled? "<<!is_single_labeled<<"\n");
-      DEBUG3(os << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<"\n");
-      DEBUG3(os << "nodes: "<<nodes()<<'\n');
-      DEBUG3(os << "edges: "<<Parent::edges()<<'\n');
-      
-      for(const Node i: nodes()){
-        const auto label_it = node_labels->find(i);
-        os << i;
-        if(label_it != node_labels->end())
-          os << "(" << label_it->second << ")";
-        os << ":" << "\tIN: "<< in_edges(i) << "\tOUT: "<< out_edges(i) << std::endl;
-      }
-      return os << "\n";
-    }
-    
+   
     // initialize tree from any iterable edge-container, for example, std::vector<PT::Edge<>>
     // NOTE: this allows to specify whether the edge container uses nodes consecutively (starting at 0)
     // NOTE: even for consecutive nodes, no assumption is made which node is the root
-    template<class GivenEdgeContainer>
-    _Tree(GivenEdgeContainer&& given_edges, std::shared_ptr<LabelMap> _node_labels, const non_consecutive_tag tag = non_consecutive_tag()):
-      Parent(non_consecutive_tag(), std::forward<GivenEdgeContainer>(given_edges)),
+    // NOTE: if no LabelMap is given, we create an empty one
+    // non-consecutive edges:
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag>
+    _Tree(GivenEdgeContainer&& given_edges, std::shared_ptr<LabelMap> _node_labels, const Tag tag = Tag()):
+      Parent(tag, std::forward<GivenEdgeContainer>(given_edges)),
       node_labels(std::move(_node_labels))
     {
-      DEBUG3(std::cout << "init Tree with edges "<<given_edges<<"\n and "<<node_labels->size()<<" node_labels: "<<*node_labels<<std::endl);
+      DEBUG3(std::cout << "init Tree with edges "<<given_edges<<"\n and "<<labels().size()<<" node_labels: "<<labels()<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
-    template<class GivenEdgeContainer>
-    _Tree(GivenEdgeContainer&& given_edges, LabelMap& _node_labels, const non_consecutive_tag tag = non_consecutive_tag()):
-      _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(_node_labels))
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag>
+    _Tree(GivenEdgeContainer&& given_edges, LabelMap& _node_labels, const Tag tag = Tag()):
+      _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(_node_labels), tag)
     {}
-    template<class GivenEdgeContainer>
-    _Tree(GivenEdgeContainer&& given_edges, std::shared_ptr<LabelMap> _node_labels, const consecutive_tag):
-      Parent(consecutive_tag(), std::forward<GivenEdgeContainer>(given_edges)),
-      node_labels(std::move(_node_labels))
-    {
-      DEBUG3(std::cout << "init Tree with consecutive edges "<<given_edges<<"\n and "<<node_labels->size()<<" node_labels: "<<*node_labels<<std::endl);
-      DEBUG2(tree_summary(std::cout));
-    }
-    template<class GivenEdgeContainer>
-    _Tree(GivenEdgeContainer&& given_edges, LabelMap& _node_labels, const consecutive_tag):
-      _Tree(consecutive_tag(), std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(_node_labels))
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag>
+    _Tree(GivenEdgeContainer&& given_edges, std::remove_cvref_t<LabelMap>&& _node_labels, const Tag tag = Tag()):
+      _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(std::move(_node_labels)), tag)
+    {}
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
+      class = std::enable_if_t<std::is_same_v<Tag, non_consecutive_tag> || std::is_same_v<Tag, consecutive_tag>>>
+    _Tree(GivenEdgeContainer&& given_edges, const Tag tag = Tag()):
+      _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(), tag)
     {}
 
 
 
     // Copy construction from any tree
     //NOTE: if the LabelMaps are the same, then just create a new reference to it, otherwise construct a copy
-    template<class __Tree>
-    _Tree(const __Tree& in_tree):
-      Parent(std::is_same_v<EdgeStorage, typename __Tree::EdgeStorage> // in_tree has the same EdgeContainer as we do?
+    template<class __LabelTag,
+           class __EdgeStorage,
+           class __LabelMap,
+           class __NetworkTag>
+    _Tree(const _Tree<__LabelTag, __EdgeStorage, __LabelMap, __NetworkTag>& in_tree):
+      Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // in_tree has the same EdgeContainer as we do?
                               ? EdgeStorage(*((const EdgeStorage*)(&in_tree))) // yes: copy edge container
                               : ( // no: make a copy of the EdgeStorage (and move it into place)
-                                __Tree::has_consecutive_nodes // in_tree has consecutive nodes?
+                                PT::has_consecutive_nodes<__EdgeStorage> // in_tree has consecutive nodes?
                                 ? EdgeStorage(consecutive_tag(), in_tree.edges())
                                 : EdgeStorage(non_consecutive_tag(), in_tree.edges())
                               )),
       // We can re-use the existing node_label structure if their LabelMap is the same as ours and no node-translation has taken place.
       // We can be sure that no node translation has taken place iff we have non-consecutive nodes or they have consecutive nodes
       node_labels(
-          (std::is_same_v<LabelMap, typename __Tree::LabelMap> && (!has_consecutive_nodes || __Tree::has_consecutive_nodes)) ?
+          (std::is_same_v<LabelMap, __LabelMap> && (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>)) ?
                 in_tree.node_labels : // yes: just create a new reference
                 std::make_shared<LabelMap>(in_tree.node_labels->begin(), std::end(in_tree.node_labels)) // no: copy the labelmap
       )
@@ -388,17 +372,20 @@ namespace PT{
     }
 
     // Move construction from any tree (see copy construction)
-    template<class __Tree, class = std::enable_if_t<std::is_rvalue_reference_v<__Tree&&>>>
-    _Tree(__Tree&& in_tree):
-      Parent(std::is_same_v<EdgeStorage, typename __Tree::EdgeStorage> // same EdgeContainer ?
+    template<class __LabelTag,
+           class __EdgeStorage,
+           class __LabelMap,
+           class __NetworkTag>
+    _Tree(_Tree<__LabelTag, __EdgeStorage, __LabelMap, __NetworkTag>&& in_tree):
+      Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // same EdgeContainer ?
                               ? EdgeStorage(std::move(*((EdgeStorage*)(&in_tree)))) // yes: move edges if possible
                               : ( // no: make a copy of the EdgeStorage
-                                __Tree::has_consecutive_nodes // in_tree has consecutive nodes?
+                                PT::has_consecutive_nodes<__EdgeStorage> // in_tree has consecutive nodes?
                                 ? EdgeStorage(consecutive_tag(), in_tree.edges())
                                 : EdgeStorage(non_consecutive_tag(), in_tree.edges())
                               )),
       node_labels(
-          (std::is_same_v<LabelMap, typename __Tree::LabelMap> && (!has_consecutive_nodes || __Tree::has_consecutive_nodes)) ?
+          (std::is_same_v<LabelMap, __LabelMap> && (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>)) ?
                 in_tree.node_labels : // yes: just create a new reference
                 std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end()) // no: copy the labelmap
       )
@@ -458,10 +445,27 @@ namespace PT{
 
 
     // =================== i/o ======================
-    
+
+    std::ostream& tree_summary(std::ostream& os) const
+    {
+      DEBUG3(os << "tree is mutable? "<<is_mutable<<" multi-labeled? "<<!is_single_labeled<<"\n");
+      DEBUG3(os << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<"\n");
+      DEBUG3(os << "nodes: "<<nodes()<<'\n');
+      DEBUG3(os << "edges: "<<Parent::edges()<<'\n');
+      
+      for(const Node i: nodes()){
+        const auto label_it = node_labels->find(i);
+        os << i;
+        if(label_it != node_labels->end())
+          os << "(" << label_it->second << ")";
+        os << ":" << "\tIN: "<< in_edges(i) << "\tOUT: "<< out_edges(i) << std::endl;
+      }
+      return os << "\n";
+    }
+ 
     void print_subtree(std::ostream& os, const Node u, std::string prefix) const
     {
-      std::remove_const_t<LabelType> name = node_labels->at(u);
+      std::remove_cvref_t<LabelType> name = label(u);
       DEBUG3(name += "[" + std::to_string(u) + "]");
       if(name == "") name = "+";
       os << '-' << name;

@@ -42,8 +42,7 @@ namespace PT {
     {
       if(!left_seen.set(u)) return false;
       // if u is matched, ignore u's matching partner when looking for augmenting paths
-      const auto it = left_match.find(u);
-      const Node skip = (it == left_match.end()) ? NoNode : it->second;
+      const Node skip = map_lookup(left_match, u, NoNode);
       for(const Node v: adj.at(u)) if(v != skip) {
         // if v is not matched either, we can augment the matching with uv
         const auto [v_match_it, success] = right_match.emplace(v, u);

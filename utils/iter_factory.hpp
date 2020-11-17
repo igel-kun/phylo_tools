@@ -45,6 +45,12 @@ namespace std {
 
     bool empty() const { return container->empty(); }
     size_t size() const { return container->size(); }
+
+    // copy the elements in the traversal to a container using the 'append()'-function
+    template<class _Container>
+    _Container& append_to(_Container& c) const { append(c, *this); }
+    template<class _Container>
+    _Container to_container() const { _Container result; append(result, *this); return result; }
   };
 
   // same as above, but we allow storing local data with the factory that is passed to each created iterator

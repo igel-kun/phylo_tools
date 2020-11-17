@@ -40,9 +40,6 @@ namespace PT {
     LabelMatching(const NodeLabelContainerA& Nfac, const NodeLabelContainerB& Tfac):
       Parent()
     {
-      std::cout << "mark!\n";
-      std::cout << "Nfac is "<<Nfac<<"\n";
-      std::cout << "Tfac is "<<Tfac<<"\n";
       // step 1: create a mapping of labels to nodes in N
       for(const auto& p: Nfac) if(!p.second.empty()){
         // the factory Nfac gives us pairs of (node, label)

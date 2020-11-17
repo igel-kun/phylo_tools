@@ -25,7 +25,7 @@ namespace PT{
         exit(EXIT_SUCCESS);
       } else {
         if(current_arg[0] == '-'){
-          const OptionDesc::const_iterator mm_iter = description.find(current_arg);
+          const auto mm_iter = description.find(current_arg);
           if(mm_iter != description.end()){
             current_option_vec = &(options[current_arg]);
             current_max = mm_iter->second.second;

@@ -70,15 +70,20 @@ namespace std {
   using emplace_result = pair<typename remove_reference_t<T>::iterator, bool>;
 
   // on non-map containers, append = emplace
-  template<class Set, class = enable_if_t<is_container_v<Set> && !is_map_v<Set> && !is_vector_v<Set>>, class ...Args>
+  template<class Set,
+    enable_if_t<is_container_v<Set> && !is_map_v<Set> && !is_vector_v<Set>, int> = 0,
+    class ...Args>
   inline emplace_result<Set> append(Set& _set, Args&&... args) { return _set.emplace(forward<Args>(args)...); }
 
   // on vectors, append =  emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
-  template<typename T, typename First, class = enable_if_t<!is_convertible_v<remove_cvref_t<First>, vector<T>>>, class ...Args>
-  inline emplace_result<vector<T>> append(vector<T>& _vec, First&& first, Args&&... args)
+  template<class T, class A, class First,
+    //enable_if_t<!is_convertible_v<remove_cvref_t<First>, vector<T, A>>, int> = 0,
+    enable_if_t<!is_container_v<First>, int> = 0,
+    class ...Args>
+  inline emplace_result<vector<T, A>> append(vector<T, A>& _vec, First&& first, Args&&... args)
   { // NOTE: as we want an iterator back, I'd much rather say "emplace(end()..)"; however, that will not compile for Adjacencies with "const Node"
     _vec.emplace_back(forward<First>(first), forward<Args>(args)...);
     return {std::prev(_vec.end()), true};
@@ -87,7 +92,9 @@ namespace std {
   template<typename T> inline emplace_result<vector<T>> append(vector<T>& _vec) { return {_vec.begin(), true}; }
  
   // on maps to primitives, append = try_emplace
-  template<class Map, enable_if_t<is_map_v<Map> && !is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
+  template<class Map,
+    enable_if_t<is_map_v<Map> && !is_container_v<typename Map::mapped_type>, int> = 0,
+    class ...Args>
   inline emplace_result<Map> append(Map& _map, const typename Map::key_type& _key, Args&&... args)
   { return _map.try_emplace(_key, std::forward<Args>(args)...); }
 
@@ -95,7 +102,9 @@ namespace std {
   //NOTE: return an iterator to the pair in the map whose second now contains the newly constructed item
   //      also return a bool indicating whether insertion took place
   //NOTE: this also works for emplacing a string into a map that maps to strings, the "inserting" appends below are called in this case
-  template<class Map, enable_if_t<is_map_v<Map> && is_container_v<typename Map::mapped_type>, int> = 0, class ...Args>
+  template<class Map,
+    enable_if_t<is_map_v<Map> && is_container_v<typename Map::mapped_type>, int> = 0,
+    class ...Args>
   inline emplace_result<Map> append(Map& _map, const typename Map::key_type& _key, Args&&... args)
   {
     const auto iter = _map.try_emplace(_key).first;
@@ -104,14 +113,19 @@ namespace std {
     //return append(_map.try_emplace(_key).first->second, forward<Args>(args)...);
   }
   // append with 2 containers means to add the second to the end of the first
-  template<class _Container, enable_if_t<is_container_v<_Container> && !is_vector_v<_Container>, int> = 0>
-  inline emplace_result<_Container> append(_Container& x, const _Container& y)
+  template<class _ContainerA, class _ContainerB,
+    enable_if_t<is_container_v<_ContainerA> && is_container_v<_ContainerB> &&
+                !is_convertible_v<_ContainerA, vector<typename _ContainerA::value_type>> &&
+                is_same_v<typename _ContainerA::value_type, typename _ContainerB::value_type>, int> = 0>
+  inline emplace_result<_ContainerA> append(_ContainerA& x, const _ContainerB& y)
   {
     x.insert(y.begin(), y.end());
     return {x.begin(), true};
   }
-  template<class _Container, enable_if_t<is_vector_v<_Container>, int> = 0>
-  inline emplace_result<_Container> append(_Container& x, const _Container& y)
+  template<class T, class A, class _ContainerB,
+    enable_if_t<is_container_v<_ContainerB>, int> = 0,
+    enable_if_t<is_same_v<std::remove_cvref_t<typename _ContainerB::value_type>, T>, int> = 0>
+  inline emplace_result<std::vector<T,A>> append(std::vector<T,A>& x, const _ContainerB& y)
   {
     x.insert(x.end(), y.begin(), y.end());
     return {x.begin(), true};

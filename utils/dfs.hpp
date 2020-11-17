@@ -150,7 +150,7 @@ namespace PT{
     {
       ItemContainerRef&& children = get_children(N, u);
 
-      std::cout << "stack-appending children of "<< u <<": "<<children<<"\n";
+      //std::cout << "stack-appending children of "<< u <<": "<<children<<"\n";
 
       child_history.emplace_back(children.begin(), children.end());
 
@@ -207,7 +207,7 @@ namespace PT{
         ChildIter& current = child_history.back();
         // skip over all seen children
         while(current.is_valid() && is_seen(*current)) {
-          std::cout << "skipping "<<*current<<"\n";
+          //std::cout << "skipping "<<*current<<"\n";
           ++current;
         }
       }
@@ -411,7 +411,8 @@ namespace PT{
     template<class Container, class = std::enable_if_t<std::is_container_v<Container>>>
     operator Container() { std::cout << "casting to container\n"; return {begin(), end()}; }
     template<class Container>
-    Container& append_to(Container& c) { std::cout << "appending to container\n"; for(auto uv: *this) append(c, uv); return c; }
+    Container& append_to(Container& c) { std::cout << "appending to container\n"; append(c, *this); }
+    //Container& append_to(Container& c) { std::cout << "appending to container\n"; for(auto uv: *this) append(c, uv); return c; }
   };
 
   template<TraversalType o, class NodeEdge, class _Network, class _SeenSet>

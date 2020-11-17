@@ -102,7 +102,7 @@ namespace PT{
     // NOTE: we can't be sure that the vertices of the component are consecutive, so if the user requested consecutive output networks, we need to translate
     reference operator*() const {
       static_assert(std::is_const_v<typename _Component::LabelMap>);
-      return _Component(non_consecutive_tag, current_edges, N.labels());
+      return _Component(current_edges, N.labels());
     }
     BiconnectedComponentIter& operator++() { next_component(); return *this; }
 

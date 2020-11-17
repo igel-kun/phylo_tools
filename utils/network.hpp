@@ -17,8 +17,6 @@ namespace PT{
   {
     using Parent = Tree<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap, network_tag>;
     template<class, class, class, class> friend class _Tree;
-  protected:
-    using Parent::node_labels;
   public:
     using NetworkTag = network_tag;
     using typename Parent::Edge;
@@ -35,6 +33,7 @@ namespace PT{
     using Parent::num_nodes;
     using Parent::root;
     using Parent::is_tree;
+    using Parent::label;
     
     static constexpr bool is_declared_network = std::is_same_v<NetworkTag, network_tag>;
 
@@ -47,7 +46,7 @@ namespace PT{
     inline bool is_reti(const Node u) const { return in_degree(u) > 1; }
     inline bool is_inner_tree_node(const Node u) const { return is_tree_node(u) && !is_leaf(u); }
 
-    uint32_t type_of(const Node u) const
+    node_type type_of(const Node u) const
     {
       if(is_reti(u)) return NODE_TYPE_RETI; else return Parent::type_of(u);
     }
@@ -89,18 +88,6 @@ namespace PT{
     inline std::vector<Edge> get_bridges_below_postorder(const Node u) const { return list_bridges(*this, u); }
     inline std::vector<Edge> get_bridges_postorder() const { return list_bridges(*this, root()); }
 
-    //! get a list of component roots in preorder
-    NodeVec get_comp_roots() const
-    {
-      NodeVec comp_roots;
-      for(const Node u: nodes()){
-        if(is_inner_tree_node(u)){
-          const Node v = parents(u).front();
-          if(is_reti(v)) comp_roots.push_back(v);
-        }
-      }
-      return comp_roots;
-    }
 
     // return whether there is an x-y-path in the network
     bool has_path(const Node x, Node y) const
@@ -136,7 +123,7 @@ namespace PT{
     
     void print_subtree(std::ostream& os, const Node u, std::string prefix, std::unordered_bitset& seen) const
     {
-      std::string name = node_labels->at(u);
+      std::string name = label(u);
       if(name == "") name = (is_reti(u)) ? std::string("(R" + std::to_string(u) + ")") : std::string("+");
       DEBUG3(name += "[" + std::to_string(u) + "]");
       os << '-' << name;

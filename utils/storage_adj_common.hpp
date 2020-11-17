@@ -165,6 +165,15 @@ namespace PT{
     ConstPredContainerRef parents(const Node u) const { return _predecessors.at(u); }
     PredContainerRef      parents(const Node u) { return _predecessors.at(u); }
 
+    // this returns the "first" parent of u; for trees, it must be the only parent of u (but networks might also be interested in "any" parent of u)
+    //NOTE: this will segfault if called for the root
+    RevAdjacency parent(const Node u) const { return std::front(parents(u)); }
+
+    // this returns the root as parent for the root, instead of segfaulting / throwing out-of-range
+    //NOTE: since this must work even if the tree has no edges, this cannot deal with edge-data, so everything is a node here
+    Node parent_safe(const Node u) const { return (u == root()) ? u : parent(u); }
+
+
     const SuccessorMap&   successor_map() const { return _successors; }
     const PredecessorMap& predecessor_map() const { return _predecessors; }
 

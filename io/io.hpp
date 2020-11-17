@@ -13,8 +13,8 @@ namespace PT{
   struct EdgesAndNodeLabels
   {
     EdgeVec edges;
-    std::shared_ptr<LabelMap> labels;
-    size_t num_nodes;
+    std::shared_ptr<LabelMap> labels = std::make_shared<LabelMap>();
+    size_t num_nodes = 0;
 
     void from_newick(std::ifstream& in) { num_nodes = parse_newick(in, edges, *labels); }
     void from_edgelist(std::ifstream& in) { num_nodes = parse_edgelist(in, edges, *labels); }
@@ -24,7 +24,7 @@ namespace PT{
 
   //! read edges from an input-file stream and return the number of nodes used by edges in the container
   template<class _EdgeListAndNodeLabels>
-  bool read_edges(std::ifstream& in, _EdgeListAndNodeLabels el)
+  bool read_edges(std::ifstream& in, _EdgeListAndNodeLabels& el)
   {
     try{
       DEBUG3(std::cout << "trying to read newick..." <<std::endl);
@@ -43,7 +43,7 @@ namespace PT{
   }
 
   template<class _EdgeListAndNodeLabels>
-  bool read_edges(const std::string& filename, _EdgeListAndNodeLabels el)
+  bool read_edges(const std::string& filename, _EdgeListAndNodeLabels& el)
   {
     return read_edges(std::ifstream(filename), el);
   }
@@ -53,10 +53,12 @@ namespace PT{
   void read_edgelists(const std::string& filename, std::vector<_EdgeListAndNodeLabels>& edgelists)
   {
     std::ifstream in(filename);
-    while(read_edges(in, *(edgelists.emplace(edgelists.end()))))
+    while(!in.bad() && !in.eof()){
+      if(!read_edges(in, *(edgelists.emplace(edgelists.end()))))
+        edgelists.pop_back();
       while(std::isspace(in.peek())) in.get(); // remove leading whitespaces and newlines to prepare reading the next line
+    }
     // as the last read attempt failed, we'll have an empty item in the back of edgelists... let's remove that
-    edgelists.pop_back();
   }
 
   //! read all edgelists provided in files
