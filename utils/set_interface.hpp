@@ -12,6 +12,7 @@
 #pragma once
 
 namespace std {
+#warning TODO: write a back() function (doing front() for unordered containers)
 
   // since it was the job of STL to provide for it and they failed, I'll pollute their namespace instead :) 
   template<class Set>

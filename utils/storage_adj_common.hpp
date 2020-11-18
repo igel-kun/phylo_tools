@@ -49,6 +49,7 @@ namespace PT{
     // NOTE: okay, so C++ doesn't allow const containers of non-const objects, so if we want the user to be anble to change the edge-data of an adjacency,
     //       we'll have to return an IterFactory-wrapper around the internal container, thus keeping the latter hidden/unmodified
     //       This problem does not occur for constant successor containers, so we can just return a const reference to the internal storage
+#warning TODO: implement continous storage succ-container as vectors instead of the self-built class; then SuccContainerRefs are actual refs to the succ containers
     using SuccContainerRef      = std::IterFactory<SuccContainer>;
     using ConstSuccContainer    = const SuccContainer;
     using ConstSuccContainerRef = ConstSuccContainer&;

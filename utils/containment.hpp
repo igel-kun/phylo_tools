@@ -33,7 +33,7 @@ namespace PT {
     using NodeList = _NodeList<Host>;
     using NodeInfos = _NodeInfos<Host>;
     using DisplayTable = _DisplayTable<Host, Guest::template NodeMap>;
-    using LabelMatching = LabelMatchingFromNets<Guest, Host, std::vector>;
+    using LabelMatching = LabelMatchingFromNets<Host, Guest, std::vector>;
    
   protected:
     const Guest& guest;
@@ -59,8 +59,8 @@ namespace PT {
       lmatch_temporary(_lmatch_temporary || !lmatch)
     {
       if(!lmatch) lmatch = std::make_shared<LabelMatching>(leaf_labels_only ?
-                                      get_leaf_label_matching<Guest, Host, std::vector>(guest, host) :
-                                      get_label_matching<Guest, Host, std::vector>(guest, host));
+                                      get_leaf_label_matching<Host, Guest, std::vector>(host, guest) :
+                                      get_label_matching<Host, Guest, std::vector>(host, guest));
       make_node_infos(_host, node_infos);
       std::cout << "order numbers: ";
       for(const auto& x: *node_infos) std::cout << x.first << ":" << x.second.order_number << " "; std::cout << "\n";
@@ -85,7 +85,8 @@ namespace PT {
   protected:
     // in the subtree induced by the child possibilities, we'll need to keep track of which child of u can be displayed by one of our own children
     using MatchingPossibilities = HashMap<Node, std::unordered_bitset>;
-    struct induced_subtree_infos {
+    struct induced_subtree_infos
+    {
       MatchingPossibilities nodes_for_poss;
       // try to register a new poss type; if the node has not already seen a poss of this type,
       //    then return the new # children of u for whom we have a possible child
@@ -105,7 +106,8 @@ namespace PT {
       }
     };
 
-    std::function<bool(const Node,const Node)> sort_by_order = [&](const Node a, const Node b) {
+    std::function<bool(const Node,const Node)> sort_by_order = [&](const Node a, const Node b)
+    {
       return node_infos->at(a).order_number > node_infos->at(b).order_number;
     };
 
@@ -113,13 +115,13 @@ namespace PT {
     void construct_base_cases()
     {
       for(auto& node_pair: seconds(*lmatch)){
-        assert(node_pair.first.size() == 1);
-        std::flexible_sort(node_pair.second.begin(), node_pair.second.end(), sort_by_order);
+        assert(node_pair.second.size() == 1);
+        std::flexible_sort(node_pair.first.begin(), node_pair.first.end(), sort_by_order);
         std::cout << "base case: "<<node_pair<<"\n";
         if(lmatch_temporary)
-          table.try_emplace(front(node_pair.first), std::move(node_pair.second));
+          table.try_emplace(front(node_pair.second), std::move(node_pair.first));
         else
-          table.try_emplace(front(node_pair.first), node_pair.second);
+          table.try_emplace(front(node_pair.second), node_pair.first);
       }
     }
     
@@ -175,8 +177,8 @@ namespace PT {
     {
       // if u is a leaf, it should be managed by the base case, unless its label is not in the host, in which case it's not displayed
       NodeVec poss;
-      std::cout << "merging possibilities of "<<guest.children(u)<<"\n";
       if(!guest.is_leaf(u)){
+        std::cout << "merging possibilities of "<<guest.children(u)<<"\n";
         // for degree up to x, merge the child possibilities by linear "inplace_merge", otherwise, merge via iterator-queue in O(n log deg)
         if(guest.out_degree(u) > config::vector_queue_merge_threshold){
           const auto sort_iter_by_order = [&](const auto& a, const auto& b) -> bool {  return sort_by_order(*a, *b); };
@@ -256,11 +258,24 @@ namespace PT {
 
     std::unique_ptr<ComponentInfos> comp_infos;
     std::unique_ptr<CompGraph> tree_comp_DAG;
-    
+    bool failed = false;
+
+    // initialization and early cherry reduction
     void init()
     {
       std::cout << "applying cherry reduction...\n";
-      cherry_reduction();
+      for(auto label_iter = HG_label_match.begin(); label_iter != HG_label_match.end();){
+        auto& uv = label_iter->second;
+        // if the label only exists in the guest, but not in the host, then the host can never display the guest!
+        if(uv.first.empty()) { failed = true; return; }; // this label occurs only in the guest, so the host can never display it
+        if(uv.second.empty()) {
+          // this label occurs only in the host, but not in the guest, so we can simply remove it, along with the entry in the label matching
+          std::cout << "removing label "<<label_iter->first<<" from the host since it's not in the guest\n";
+          host.remove_upwards(uv.first);
+          label_iter = HG_label_match.erase(label_iter);
+        } else if(!simple_cherry_reduction_from(uv)) ++label_iter;
+      }
+      std::cout << "after cherry reduction:\nhost:\n"<<host<<"\nguest:\n"<<guest<<"\n\n";
       
       std::cout << "computing DAG of tree-components...\n";      
       comp_infos = std::make_unique<ComponentInfos>(host);
@@ -269,6 +284,7 @@ namespace PT {
       std::cout << "applying visible-component reduction...\n";      
       vis_comp_reduction();
     }
+
 
 
   public:
@@ -280,13 +296,48 @@ namespace PT {
     TreeInNetContainment(Host&& _host, const Guest& _guest): host(std::move(_host)), guest(_guest) { init(); }
     TreeInNetContainment(Host&& _host, Guest&& _guest): host(std::move(_host)), guest(std::move(_guest)) { init(); }
 
-    //! apply cherry redution and return whether anything was reduced
-    bool cherry_reduction()
+    bool simple_cherry_reduction_from(typename LabelMatching::mapped_type& HG_label_pair)
     {
-      //for(const auto& label_occ: HG_label_match){
-      //}
+      std::cout << "checking label matching of pair "<<HG_label_pair<<"\n";
+      auto& u = HG_label_pair.first;
+      if(host.in_degree(u) != 1) return false;
+      const Node pu = host.parent(u);
+      if(host.in_degree(pu) > 1) return false;
+      
+      auto& v = HG_label_pair.second;
+      assert(guest.in_degree(v) == 1);
+      const Node pv = guest.parent(v);
+      if(guest.in_degree(pv) > 1) return false;
+      if(host.out_degree(pu) != guest.out_degree(pv)) return false;
+
+      // degrees match, so see if the labels of the children match
+      HashSet<typename RWGuest::LabelType> seen;
+      for(const Node x: guest.children(pv)) {
+        if(guest.out_degree(x) != 0) return false;
+        append(seen, guest.label(x));
+      }
+      for(const Node x: host.children(pu)){
+        if(host.out_degree(x) != 0) return false;
+        if(!seen.erase(host.label(x))) return false;
+      }
+      if(!seen.empty()) return false;
+
+      std::cout << "found cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
+
+      // the childrens labels match, so remove all children and suppress both pu (in host) and pv (in guest)
+      for(const Node x: guest.children(pv))
+        if(x != v) HG_label_match.erase(guest.label(x));
+      std::cout << "contracting cherry in host\n";
+      host.remove_subtree_except(pu, u, true);
+      host.suppress_node(pu);
+
+      std::cout << "contracting cherry in guest\n";
+      guest.remove_subtree_except(pv, v, true);
+      guest.suppress_node(pv);
       return true;
     }
+
+#warning: TODO: implement general cherry reduction (1. uv is cherry in guest and 2. exists lowest ancestor x of u & v s.t. x visible on v (tree-path f.ex.) and the x-->u path is unqiue) before resorting to branching
 
     // unzip the reticulations below x to create a MuL-tree
     //NOTE: this assumes that the cherry rule has been applied exhaustively
@@ -327,8 +378,8 @@ namespace PT {
             append(labels, st_v, vlabel);
             // register label and st_v in the label matching
             const auto [iter, succ] = SG_label_match.try_emplace(vlabel);
-            if(succ) append(iter->second.first, HG_label_match.at(vlabel).second);
-            append(iter->second.second, st_v);
+            if(succ) append(iter->second.second, HG_label_match[vlabel].second);
+            append(iter->second.first, st_v);
             std::cout << "matched labels: "<<iter->second<<"\n";
           }
         }
@@ -358,6 +409,7 @@ namespace PT {
                   // if the child z of y is also a leaf, then register that the component root is now stable on that leaf
                   if(host.out_degree(z) == 0)
                     comp_infos->visible.try_emplace(rt_iter->second, z);
+#warning TODO: we might want to apply cherry-reduction again here; to this end, it might be best to just return a vector of leaves whose parents are no longer reticulation and update from there...
                 }
               }
               host.suppress_node(py);
@@ -396,7 +448,7 @@ namespace PT {
       auto SG_label_match = std::make_shared<typename TreeChecker::LabelMatching>();
       const Node vis_leaf = map_lookup(comp_infos->visible, u, NoNode);
       const MulSubtree subtree = unzip_retis(u, *node_infos, *SG_label_match);
-      std::cout << "\nunzipped to:\n"<<subtree<<"[visible leaf: "<<vis_leaf<<" ("<<host.label(vis_leaf)<<")]\n";
+      std::cout << "\nunzipped to:\n"<<subtree<<"[visible leaf: "<<vis_leaf<<" ("<<host.label(vis_leaf)<<")]\nguest:\n"<<guest<<"\nnode-infos (order#, root-dist): "<<*node_infos<<"\nlabel-match: "<<*SG_label_match<<"\n";
       if(vis_leaf != NoNode){
         const auto& vlabel = host.label(vis_leaf);
         const auto uv_label_iter = HG_label_match.find(vlabel);
@@ -415,7 +467,7 @@ namespace PT {
           pv = guest.parent(pv);
           std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
         }
-        std::cout << pv << " is no longer displayed (or it's the root); last node displayed below "<<u<<" in host is "<<v<<" (label "<<vlabel<<")\n";
+        std::cout << pv << " is no longer displayed (or it's the root); last node displayed by "<<u<<" in host is "<<v<<" (label "<<vlabel<<")\n";
 
         // step 3: replace both N_u and T_v by a leaf with the label of vis_leaf
 
@@ -430,7 +482,6 @@ namespace PT {
         //NOTE: keep track of nodes in the host who have one of their incoming edges removed as component roots may now see them
         prune_host(u);
         std::cout << "pruned host:\n"<<host<<"\n";
-
 
         // step 4: update labels & label maps
         std::cout << "marking "<<v<<" (guest) & "<<u<<" (host) with label "<<vlabel<<"\n";
@@ -474,6 +525,7 @@ namespace PT {
     bool displayed()
     {
       std::cout << "number of edges: "<<host.num_edges() << " (host) "<<guest.num_edges()<<" (guest)\n";
+      if(failed) return false;
       if(host.edgeless()){
         if(guest.edgeless())
           return host.label(host.root()) == guest.label(guest.root());

@@ -10,8 +10,11 @@
  */
 
 namespace PT{
- 
+
+#warning TODO: make a class that selects a tree/network type using properties wanted by the user
+#warning TODO: unordered_map<Node, vector> with non-growing vectors also allows for certain modifications: subdivision, leaf-addition, etc
 #warning TODO: make a mutable network class whose adjacencies are stored in a vector instead of a hashset
+#warning TODO: rewrite alot: instead of removing front(children) or front(parents), do remove back(...), so vector<Node> has an easier time
   // by default, save the edge data in the successor map and provide a reference in each "reverse adjacency" of the predecessor map
   // note: the default maps map Nodes to sets of adjacencies in which 2 adjacencies are considered equal if their nodes are equal (ignoring data)
   template<class _EdgeData>
@@ -96,11 +99,51 @@ namespace PT{
       } else return false;
     }
 
+    // replace the given parent y of z with x, that is, swap the arc yz with xz; return whether the replace took place (that is xz was not already there)
+    //NOTE: z is given as iterator in y's children and y is given as iterator in z's parents!
+    bool replace_parent(const Node z, const Node y, const Node x)
+    {
+      auto& y_children = _successors[y];
+      const auto z_iter = y_children.find(z);
+      // move the z-adjacency into x's children
+      if(append(_successors[x], std::move(*z_iter)).second) {
+        // replace y by x in z's parents
+        y_children.erase(z_iter);
+        auto& z_parents = _predecessors[z];
+        z_parents.erase(y);
+        append(z_parents, x);
+        return true;
+      } else return false;
+    }
+
+    // replace the (unique) parent of z with x, that is, hang the subtree rooted at z below x (z will become a child of x)
+    bool replace_parent_of(const Node z, const Node x)
+    {
+      assert(in_degree(z) == 1);
+      return replace_parent(z, front(_predecessors[z]), x);
+    }
+
+    // suppress (shortcut) a node with in-degree = out-degree = 1
+    //NOTE: trees cannot handle nodes having 2 parents, even temporarily, so this has to be handled with care!
     void suppress_node(const Node y)
     {
       assert((in_degree(y) == 1) && (out_degree(y) == 1));
-      add_edge(parent(y), std::move(front(children(y))));
+      replace_parent_of(front(_successors[y]), front(_predecessors[y]));
       remove_node(y);
+    }
+
+    // remove a node and all out-deg-1 nodes directly above it
+    void remove_upwards(const Node x)
+    {
+      const auto& parents = _predecessors.at(x);
+      auto parent_iter = parents.begin();
+      while(parent_iter != parents.end()) {
+        const auto next_iter = std::next(parent_iter);
+        if(out_degree(*parent_iter) == 1)
+          remove_upwards(*parent_iter);
+        parent_iter = next_iter;
+      }
+      remove_node(x);      
     }
 
     //! subdivide uv: remove uv, add w, add uw and wv

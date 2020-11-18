@@ -113,6 +113,26 @@ namespace PT{
         y = search_front.front();
       }
     }
+
+    // return a list of lowest ancestors of x that are non-suppressible tree nodes (that is, skip all outdeg-1 nodes above x)
+    template<class Container>
+    void get_lowest_tree_ancestors(const Node x, Container& c)
+    {
+      for(const Node y: parents(x)){
+        if(out_degree(y) == 1)
+          get_lowest_tree_ancestors(y, c);
+        else
+          append(c, y);
+      }
+    }
+    template<class Container>
+    Container get_lowest_tree_ancestors(const Node x)
+    {
+      Container result;
+      get_lowest_tree_ancestors(x, result);
+      return result;
+    }
+
     // =================== modification ====================
 
 

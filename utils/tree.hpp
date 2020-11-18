@@ -125,6 +125,15 @@ namespace PT{
 
     template<class _LabelType>
     void set_label(const Node u, _LabelType&& l) { (*node_labels)[u] = std::move(l); }
+    
+    void move_label(const Node u, const Node v)
+    {
+      const auto label_iter = node_labels->find(u);
+      (*node_labels)[v] = std::move(label_iter->second);
+      node_labels->erase(label_iter);
+    }
+
+
 
     //! return the label of a node, if it has one (otherwise, return the empty label)
     const LabelType& label(const Node u) const
@@ -285,7 +294,6 @@ namespace PT{
       Parent::remove_node(u);
     }
 
-
     // remove the subtree rooted at u
     void remove_subtree(const Node u, const bool remove_labels = false)
     {
@@ -294,6 +302,32 @@ namespace PT{
       remove_node(u, remove_labels);
     }
 
+    void remove_subtree_except(const Node u, const Node except, const bool remove_labels = false)
+    {
+      if(u != except) {
+        const auto& C = children(u);
+        auto C_iter = C.begin();
+        while(C_iter != C.end()){
+          const auto next_iter = std::next(C_iter);
+          remove_subtree_except(*C_iter, except);
+          C_iter = std::move(next_iter);
+        }
+        if(C.empty()) remove_node(u);
+      } else remove_subtree_except_root(u);
+    }
+
+    // remove the subtree rooted at u, but leave u be
+    void remove_subtree_except_root(const Node u, const bool remove_labels = false)
+    {
+      const auto& C = children(u);
+      while(!C.empty()) remove_subtree(front(C), remove_labels);
+    }
+    
+    void suppress_node(const Node u, const bool remove_labels = false)
+    {
+      Parent::suppress_node(u);
+      if(remove_labels) node_labels->erase(u);
+    }
     // =================== rooted subtrees ====================
 
     // copy the subtree rooted at u into t
