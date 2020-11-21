@@ -235,21 +235,22 @@ namespace PT {
 
 
   // a class that checks for subtrees of the guest to be displayed in a lowest tree component of the host
-  template<class MulSubtree, class HG_Label_Match, bool leaf_labels_only = true>  
+  template<class MulSubtree, bool leaf_labels_only = true>  
   class TreeInTreeComponent
   {
     using RWHost = RWNetwork<>;
     using RWGuest = RWTree<>;
+    using HG_Label_Matching = LabelMatchingFromNets<RWHost, RWGuest, std::vector>;
+    using SG_Label_Matching = LabelMatchingFromNets<MulSubtree, RWGuest, std::vector>;
 
     using TreeChecker = TreeInTreeContainment<MulSubtree, RWGuest, leaf_labels_only>;
-    using typename TreeChecker::NodeInfos;
-    using typename TreeChecker::LabelMatching;
+    using NodeInfos = typename TreeChecker::NodeInfos;
 
 
     const RWGuest& guest;
     
-    std::shared_ptr<NodeInfos>      node_infos;
-    std::shared_ptr<LabelMatching>  SG_label_match;
+    std::shared_ptr<NodeInfos>          node_infos;
+    std::shared_ptr<SG_Label_Matching>  SG_label_match;
     
     MulSubtree  subtree;
     TreeChecker subtree_display;
@@ -257,9 +258,9 @@ namespace PT {
 
     // unzip the reticulations below u to create a MuL-tree
     //NOTE: this assumes that the cherry rule has been applied exhaustively
-    MulSubtree unzip_retis(const RWHost& host, const HGLabelMatching& HG_label_match, const Node u)
+    MulSubtree unzip_retis(const RWHost& host, const HG_Label_Matching& HG_label_match, const Node u)
     {
-      std::cout << "unzipping reticulations under tree component below "<<x<<"...\n";
+      std::cout << "unzipping reticulations under tree component below "<<u<<"...\n";
       EdgeVec edges;
       typename MulSubtree::LabelMap labels;
 
@@ -269,33 +270,33 @@ namespace PT {
       //      thus, we'll need a translate map, a label map, and a label matching between host and subtree
       HashMap<Node, Node> host_to_subtree; // track translation
       append(host_to_subtree, u, 0); // translate the root to 0
-      node_infos.try_emplace(0, 0, 0); // distance to root and the order number of u are 0
+      node_infos->try_emplace(0, 0, 0); // distance to root and the order number of u are 0
 
       MetaTraversal<const RWHost, void, EdgeTraversal> my_dfs(host);
-      for(const auto uv: my_dfs.preorder(u)){
-        const Node u = uv.tail();
-        Node v = uv.head();
-        if(!host.is_reti(u)){
+      for(const auto xy: my_dfs.preorder(u)){
+        const Node x = xy.tail();
+        Node y = xy.head();
+        if(!host.is_reti(x)){
           // skip reticulation chains
-          while(host.out_degree(v) == 1) v = host.any_child(v);
-          std::cout << "got edge "<<u<<"->"<<v<<"\n";
+          while(host.out_degree(y) == 1) y = host.any_child(y);
+          std::cout << "got edge "<<x<<"->"<<y<<"\n";
           // translate u & v
-          const Node st_u = host_to_subtree[u];
-          const Node st_v = host_to_subtree[v] = node_count++;
-          std::cout << "translated to "<<st_u<<"->"<<st_v<<" in the subtree\n";
+          const Node st_x = host_to_subtree[x];
+          const Node st_y = host_to_subtree[y] = node_count++;
+          std::cout << "translated to "<<st_x<<"->"<<st_y<<" in the subtree\n";
           // add the edge to the subtree
-          append(edges, st_u, st_v);
-          // set distance to root and order number of st_v
-          node_infos.try_emplace(st_v, node_infos[st_u].dist_to_root + 1, st_v); // st_v is its own order number as we're building in preorder
-          // register the label if v has one
-          const auto& vlabel = host.label(v);
-          if((!leaf_labels_only || host.is_leaf(v)) && !vlabel.empty()) {
+          append(edges, st_x, st_y);
+          // set distance to root and order number of st_y
+          node_infos->try_emplace(st_y, node_infos->at(st_x).dist_to_root + 1, st_y); // st_v is its own order number as we're building in preorder
+          // register the label if y has one
+          const auto& ylabel = host.label(y);
+          if((!leaf_labels_only || host.is_leaf(y)) && !ylabel.empty()) {
             // register label in the label map
-            append(labels, st_v, vlabel);
+            append(labels, st_y, ylabel);
             // register label and st_v in the label matching
-            const auto [iter, succ] = SG_label_match.try_emplace(vlabel);
-            if(succ) append(iter->second.second, HG_label_match[vlabel].second);
-            append(iter->second.first, st_v);
+            const auto [iter, succ] = SG_label_match->try_emplace(ylabel);
+            if(succ) iter->second.second = HG_label_match.at(ylabel).second;
+            append(iter->second.first, st_y);
             std::cout << "matched labels: "<<iter->second<<"\n";
           }
         }
@@ -308,20 +309,21 @@ namespace PT {
     TreeInTreeComponent(const RWHost& _host, const RWGuest& _guest, const HG_Label_Matching& HG_label_match, const Node u):
       guest(_guest),
       node_infos(std::make_shared<NodeInfos>()),
-      SG_label_match(std::make_shared<LabelMatching>()),
+      SG_label_match(std::make_shared<SG_Label_Matching>()),
       subtree(unzip_retis(_host, HG_label_match, u)),
-      subtree_contain(subtree, _guest, node_infos, SG_label_match, true) // note: the checker may move out of the label matching
+      subtree_display(subtree, _guest, node_infos, SG_label_match, true) // note: the checker may move out of the label matching
     {
+      std::cout << "\tconstructed TreeInTreeComponent checker\n subtree is:\n"<<subtree<<"\n";
     }
 
     // get the highest ancestor of v in the guest that is still displayed by the tree-component
-    Node get_highest_displayed_ancestor(Node v)
+    Node highest_displayed_ancestor(Node v)
     {
       // step 1: unzip the lowest reticulations
       Node pv = guest.parent(v);
       std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
       while(1) {
-        const auto& pv_disp = subtree_contain.who_displays(pv);
+        const auto& pv_disp = subtree_display.who_displays(pv);
         if(pv_disp.empty()) return v;
         v = pv;
         if(pv == guest.root()) return v;
@@ -470,54 +472,6 @@ namespace PT {
 
 #warning: TODO: implement general cherry reduction (1. uv is cherry in guest and 2. exists lowest ancestor x of u & v s.t. x visible on v (tree-path f.ex.) and the x-->u path is unqiue) before resorting to branching
 
-    // unzip the reticulations below x to create a MuL-tree
-    //NOTE: this assumes that the cherry rule has been applied exhaustively
-    MulSubtree unzip_retis(const Node x, typename TreeChecker::NodeInfos& node_infos, typename TreeChecker::LabelMatching& SG_label_match)
-    {
-      std::cout << "unzipping reticulations under tree component below "<<x<<"...\n";
-      EdgeVec edges;
-      typename MulSubtree::LabelMap labels;
-
-      // to construct the multi-labeled tree, we use a special edge-traversal of the host without a SeenSet, so reticulations are visited multiple times
-      size_t node_count = 1;
-      //NOTE: we cannot simply use the node indices of the host since we may see some nodes multiple times in the MulTree...
-      //      thus, we'll need a translate map, a label map, and a label matching between host and subtree
-      HashMap<Node, Node> host_to_subtree; // track translation
-      append(host_to_subtree, x, 0); // translate the root to 0
-      node_infos.try_emplace(0, 0, 0); // distance to root and the order number of x are 0
-
-      MetaTraversal<const RWHost, void, EdgeTraversal> my_dfs(host);
-      for(const auto uv: my_dfs.preorder(x)){
-        const Node u = uv.tail();
-        Node v = uv.head();
-        if(!host.is_reti(u)){
-          // skip reticulation chains
-          while(host.is_reti(v)) v = front(host.children(v));
-          std::cout << "got edge "<<u<<"->"<<v<<"\n";
-          // translate u & v
-          const Node st_u = host_to_subtree[u];
-          const Node st_v = host_to_subtree[v] = node_count++;
-          std::cout << "translated to "<<st_u<<"->"<<st_v<<" in the subtree\n";
-          // add the edge to the subtree
-          append(edges, st_u, st_v);
-          // set distance to root and order number of st_v
-          node_infos.try_emplace(st_v, node_infos[st_u].dist_to_root + 1, st_v); // st_v is its own order number as we're building in preorder
-          // register the label if v has one
-          const auto& vlabel = host.label(v);
-          if((!leaf_labels_only || host.is_leaf(v)) && !vlabel.empty()) {
-            // register label in the label map
-            append(labels, st_v, vlabel);
-            // register label and st_v in the label matching
-            const auto [iter, succ] = SG_label_match.try_emplace(vlabel);
-            if(succ) append(iter->second.second, HG_label_match[vlabel].second);
-            append(iter->second.first, st_v);
-            std::cout << "matched labels: "<<iter->second<<"\n";
-          }
-        }
-      }
-      return {edges, labels, consecutive_tag()};
-    }
-
     // remove the component tree below x (except for the root), returning all reticulations that may now render someone visible
     void prune_host(const Node x)
     {
@@ -583,71 +537,45 @@ namespace PT {
       }
     }
 
-
-    // get the highest ancestor of v in the guest that is still displayed by the network below u, given that u is visible from 'visible_leaf'
-    Node get_highest_displayed_ancestor(const Node u, Node v, const Node visible_leaf)
+    void treat_comp_root(const Node u, const Node visible_leaf)
     {
-      // step 1: unzip the lowest reticulations
-      auto node_infos = std::make_shared<typename TreeChecker::NodeInfos>();
-      auto SG_label_match = std::make_shared<typename TreeChecker::LabelMatching>();
-      const MulSubtree subtree = unzip_retis(u, *node_infos, *SG_label_match);
-      std::cout << "\nunzipped to:\n"<<subtree<<"[visible leaf: "<<visible_leaf<<" ("<<host.label(visible_leaf)<<")]\nguest:\n"<<guest<<"\nnode-infos (order#, root-dist): "<<*node_infos<<"\nlabel-match: "<<*SG_label_match<<"\n";
+      TreeInTreeComponent<MulSubtree, leaf_labels_only> tree_comp_display(host, guest, HG_label_match, u);
 
-      TreeChecker subtree_contain(subtree, guest, node_infos, SG_label_match, true); // note: the checker may move out of the label matching
-      std::cout << "constructed Tree-in-Tree checker\n";
+      assert(visible_leaf != NoNode);
+      const auto& vlabel = host.label(visible_leaf);
+      const auto uv_label_iter = HG_label_match.find(vlabel);
+      const Node visible_leaf_in_guest = uv_label_iter->second.second;
+      assert(uv_label_iter != HG_label_match.end());
 
-      Node pv = guest.parent(v);
-      std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
-      while(1) {
-        const auto& pv_disp = subtree_contain.who_displays(pv);
-        if(pv_disp.empty()) return v;
-        v = pv;
-        if(pv == guest.root()) return v;
-        if((pv_disp.size() == 1) && (front(pv_disp) == subtree.root())) return v;
-        pv = guest.parent(pv);
-        std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
-      }
-    }
+      // step 2: get the highest ancestor v of vis_leaf in T s.t. T_v is still displayed by N_u
+      const Node v = tree_comp_display.highest_displayed_ancestor(visible_leaf_in_guest);
+      std::cout << v << " is the highest displayed ancestor (or it's the root) - label: "<<vlabel<<"\n";
+      // step 3: replace both N_u and T_v by a leaf with the label of vis_leaf
 
-    bool treat_comp_root(const Node u, const Node visible_leaf)
-    {
-      if(visible_leaf != NoNode){
-        const auto& vlabel = host.label(visible_leaf);
-        const auto uv_label_iter = HG_label_match.find(vlabel);
-        assert(uv_label_iter != HG_label_match.end());
+      // step 3a: prune guest and remove nodes with label below v (in guest) from both host and guest - also remove their label entries in HG_label_match
+      NodeVec prune_host_leaves;
+      if(guest.is_leaf(v)) {
+        // the highest thing that we could display is a leaf: mark the corresponding leaf in host to be deleted and remove the label_map entry
+        prune_host_leaves.push_back(uv_label_iter->second.first);
+        HG_label_match.erase(uv_label_iter);
+      } else prune_guest(v, prune_host_leaves);
+      std::cout << "pruned guest:\n"<<guest<<"\n";
 
-        // step 2: get the highest ancestor v of vis_leaf in T s.t. T_v is still displayed by N_u
-        const Node v = get_highest_displayed_ancestor(u, uv_label_iter->second.second, visible_leaf);
-        std::cout << v << " is the highest displayed ancestor (or it's the root) - label: "<<vlabel<<"\n";
-        // step 3: replace both N_u and T_v by a leaf with the label of vis_leaf
+      // step 3b: remove the leaves in host that have been marked for removal and take their reticulations with them
+      std::cout << "removing leaves from host (with their reticulations): "<<prune_host_leaves<<"\n";
+      for(const Node x: prune_host_leaves)
+        host.remove_upwards_except(x, std::DynamicEqualPredicate<Node>(u)); // avoid removing u when going upwards from the leaves
 
-        // step 3a: prune guest and remove nodes with label below v (in guest) from both host and guest - also remove their label entries in HG_label_match
-        NodeVec prune_host_leaves;
-        if(guest.is_leaf(v)) {
-          // the highest thing that we could display is a leaf: mark the corresponding leaf in host to be deleted and remove the label_map entry
-          prune_host_leaves.push_back(uv_label_iter->second.first);
-          HG_label_match.erase(uv_label_iter);
-        } else prune_guest(v, prune_host_leaves);
-        std::cout << "pruned guest:\n"<<guest<<"\n";
+      // step 3c: prune host
+      //NOTE: keep track of nodes in the host who have one of their incoming edges removed as component roots may now see them
+      prune_host(u);
+      std::cout << "pruned host:\n"<<host<<"\n";
 
-        // step 3b: remove the leaves in host that have been marked for removal and take their reticulations with them
-        std::cout << "removing leaves from host (with their reticulations): "<<prune_host_leaves<<"\n";
-        for(const Node x: prune_host_leaves)
-          host.remove_upwards_except(x, std::DynamicEqualPredicate<Node>(u)); // avoid removing u when going upwards from the leaves
-
-        // step 3c: prune host
-        //NOTE: keep track of nodes in the host who have one of their incoming edges removed as component roots may now see them
-        prune_host(u);
-        std::cout << "pruned host:\n"<<host<<"\n";
-
-        // step 4: update labels & label maps
-        std::cout << "marking "<<v<<" (guest) & "<<u<<" (host) with label "<<vlabel<<"\n";
-        guest.set_label(v, vlabel);
-        host.set_label(u, vlabel);
-        HG_label_match.try_emplace(vlabel, u, v);
-
-        return true;
-      } else throw std::logic_error("host is not tree-component visible");
+      // step 4: update labels & label maps
+      std::cout << "marking "<<v<<" (guest) & "<<u<<" (host) with label "<<vlabel<<"\n";
+      guest.set_label(v, vlabel);
+      host.set_label(u, vlabel);
+      HG_label_match.try_emplace(vlabel, u, v);
     }
 
 
@@ -664,18 +592,17 @@ namespace PT {
         const auto vis_it = comp_infos.visible.find(x);
         if(vis_it != comp_infos.visible.end()) {
           std::cout << "visible on leaf "<<*vis_it<<"\n";
-          if(treat_comp_root(x, vis_it->second)){
-            std::cout << "successfully treated comp root "<<x<<"\n";
-            // update the leaf-components of the tree-component-DAG and delete x from it
-            for(const Node y: tree_comp_DAG.parents(x))
-              if(tree_comp_DAG.out_degree(y) == 1){
-                std::cout << "registering new leaf component "<<y<<"\n";
-                leaf_component_roots.push_back(y);
-              }
-            std::cout << "removing node "<<x<<" from component-root-DAG\n"<<tree_comp_DAG<<"\n";
-            tree_comp_DAG.remove_node(x);
-            result = true;
-          }
+          treat_comp_root(x, vis_it->second);
+          std::cout << "successfully treated comp root "<<x<<"\n";
+          // update the leaf-components of the tree-component-DAG and delete x from it
+          for(const Node y: tree_comp_DAG.parents(x))
+            if(tree_comp_DAG.out_degree(y) == 1){
+              std::cout << "registering new leaf component "<<y<<"\n";
+              leaf_component_roots.push_back(y);
+            }
+          std::cout << "removing node "<<x<<" from component-root-DAG\n"<<tree_comp_DAG<<"\n";
+          tree_comp_DAG.remove_node(x);
+          result = true;
         }
       }
       return result;

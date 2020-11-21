@@ -135,6 +135,7 @@ namespace PT{
     InOutDegree in_out_degree(const Node u) const { return {predecessors(u).size(), successors(u).size()}; }
     size_t size() const { return _size; }
     bool empty() const { return _size == 0; }
+    bool has_node(const Node u) const { return _successors.find(u) != _successors.end(); }
     Node root() const { return _root; }
 
     // set the root to a node that does not have predecessors (this might become necessary after adding edges willy nilly)
@@ -169,6 +170,8 @@ namespace PT{
     // this returns the "first" parent of u; for trees, it must be the only parent of u (but networks might also be interested in "any" parent of u)
     //NOTE: this will segfault if called for the root
     RevAdjacency parent(const Node u) const { return std::front(parents(u)); }
+    
+    Node any_child(const Node u) const { return std::front(children(u)); }
 
     // this returns the root as parent for the root, instead of segfaulting / throwing out-of-range
     //NOTE: since this must work even if the tree has no edges, this cannot deal with edge-data, so everything is a node here

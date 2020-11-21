@@ -25,11 +25,12 @@ namespace PT{
     }
   };
 
-  template<class _Network>
-  std::string get_extended_newick(const _Network& N, const Node sub_root, std::unordered_bitset& retis_seen)
+  // compute the extended newick string for a subnetwork rooted at sub_root of a network N with retis_seen reticulations considered as treated
+  template<class _Network, class Container>
+  std::string get_extended_newick(const _Network& N, const Node sub_root, Container& retis_seen)
   {
     std::string accu = "";
-    if(!N.is_reti(sub_root) || !test(retis_seen, (Index)(sub_root))){
+    if((N.in_degree(sub_root) <= 1) || !test(retis_seen, sub_root)){
       accu += "(";
       for(const auto& w: N.children(sub_root))
         accu += get_extended_newick(N, w, retis_seen) + ",";
@@ -38,17 +39,18 @@ namespace PT{
       if(!N.is_leaf(sub_root)) accu += ")";
     }
     accu += N.label(sub_root);
-    if(N.is_reti(sub_root)) {
+    if(N.in_degree(sub_root) > 1) {
       accu += "#H" + std::to_string(sub_root);
-      retis_seen.set((Index)(sub_root));
+      append(retis_seen, sub_root);
     }
     return accu;
   }
 
+  // compute the extended newick string for a network N
   template<class _Network>
   std::string get_extended_newick(const _Network& N)
   {
-    std::unordered_bitset retis_seen(N.num_nodes());
+    typename _Network::NodeSet retis_seen;
     return get_extended_newick(N, N.root(), retis_seen) + ";";
   }
 

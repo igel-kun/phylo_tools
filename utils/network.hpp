@@ -25,6 +25,7 @@ namespace PT{
     using Parent::Parent;
     using Parent::children;
     using Parent::parents;
+    using Parent::parent;
     using Parent::is_leaf;
     using Parent::out_degree;
     using Parent::in_degree;
@@ -92,22 +93,24 @@ namespace PT{
     // return whether there is an x-y-path in the network
     bool has_path(const Node x, Node y) const
     {
-      while(1){
-        while(!is_reti(y)){
-          if(x == y) return true;
-          if(Parent::is_root(y)) return false;
-          y = std::front(parents(y));
+      if(x == y) return true;
+      while(1) {
+        while(in_degree(y) <= 1) {
+          if(y == x) return true;
+          if(y == Parent::_root) return false;
+          y = parent(y);
         }
         typename Parent::NodeSet seen;
         std::queue<Node> search_front;
         // add the parents of y to the search front
-        for(const Node p: parents(y)) search_front.push(p);
+        for(const Node u: parents(y)) search_front.push(u);
         // if, at some point, the search-front shrinks back to a single strand, restart the simpler has_path()
         while((search_front.size() != 1) || is_reti(y)){
           y = search_front.front(); search_front.pop();
           if(x != y){
             if(append(seen, y).second)
-              for(const Node p: parents(y)) search_front.push(p);
+              for(const Node p: parents(y))
+                search_front.push(p);
           } else return true;
         }
         y = search_front.front();
@@ -144,7 +147,7 @@ namespace PT{
     void print_subtree(std::ostream& os, const Node u, std::string prefix, std::unordered_bitset& seen) const
     {
       std::string name = label(u);
-      if(name == "") name = (is_reti(u)) ? std::string("(R" + std::to_string(u) + ")") : std::string("+");
+      if(name == "") name = (is_reti(u)) ? std::string("(R" + std::to_string(u) + ")") : (is_leaf(u) ? std::string() : std::string("+"));
       DEBUG3(name += "[" + std::to_string(u) + "]");
       os << '-' << name;
       
@@ -182,6 +185,10 @@ namespace PT{
 
     friend class TreeComponentInfo;
   };
+
+  template<class ND, class ED, class LT, class ES, class LM>
+  struct is_phylogeny<Network<ND, ED, LT, ES, LM>> : public std::true_type {};
+
 
   template<class _NodeData, class _EdgeData, class _LabelTag, class _EdgeStorage, class _LabelMap>
   std::ostream& operator<<(std::ostream& os, const Network<_NodeData, _EdgeData, _LabelTag, _EdgeStorage, _LabelMap>& N)

@@ -36,7 +36,8 @@ namespace std{
   };
 
   template<class _Iterator, class _EndIterator = _Iterator>
-  struct bd_auto_iter: public fwd_auto_iter<_Iterator, _EndIterator> {
+  struct bd_auto_iter: public fwd_auto_iter<_Iterator, _EndIterator>
+  {
     using Parent = fwd_auto_iter<_Iterator, _EndIterator>;
     using Parent::Parent;
 
@@ -80,5 +81,20 @@ namespace std{
   
   template<class _Iterator, class _EndIterator = _Iterator>
   using auto_iter = typename _auto_iter<_Iterator, _EndIterator>::type;
+
+  template<class Container,
+           class _Iterator = iterator_of_t<Container>,
+           class _EndIterator = _Iterator,
+           class = enable_if_t<is_container_v<Container>>>
+  auto_iter<_Iterator, _EndIterator> get_auto_iter(Container&& c) { return c; }
+
+  template<class Container,
+           class KeyType,
+           class _Iterator = iterator_of_t<Container>,
+           class _EndIterator = _Iterator,
+           class = enable_if_t<is_container_v<Container>>>
+  auto_iter<_Iterator, _EndIterator> auto_find(Container&& c, const KeyType& key) { return {c.find(key), end(c)}; }
+ 
+
 
 } //namespace

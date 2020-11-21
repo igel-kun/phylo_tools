@@ -43,6 +43,11 @@ namespace PT{
   static constexpr bool has_consecutive_nodes = !is_mutable<EdgeStorage>;
 
 
+  template<class X>
+  struct is_phylogeny: public std::false_type {};
+  template<class X>
+  constexpr bool is_phylogeny_v = is_phylogeny<X>::value;
+
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
   // the central Tree class
@@ -124,7 +129,11 @@ namespace PT{
     const LabelMap& labels() const { return *node_labels; }
 
     template<class _LabelType>
-    void set_label(const Node u, _LabelType&& l) { (*node_labels)[u] = std::move(l); }
+    void set_label(const Node u, _LabelType&& l)
+    {
+      if(!append(*node_labels, u, std::move(l)).second)
+        (*node_labels)[u] = std::move(l);
+    }
     
     void move_label(const Node u, const Node v)
     {
@@ -355,7 +364,8 @@ namespace PT{
     // NOTE: even for consecutive nodes, no assumption is made which node is the root
     // NOTE: if no LabelMap is given, we create an empty one
     // non-consecutive edges:
-    template<class GivenEdgeContainer, class Tag = non_consecutive_tag>
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
+      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>>
     _Tree(GivenEdgeContainer&& given_edges, std::shared_ptr<LabelMap> _node_labels, const Tag tag = Tag()):
       Parent(tag, std::forward<GivenEdgeContainer>(given_edges)),
       node_labels(std::move(_node_labels))
@@ -363,15 +373,18 @@ namespace PT{
       DEBUG3(std::cout << "init Tree with edges "<<given_edges<<"\n and "<<labels().size()<<" node_labels: "<<labels()<<std::endl);
       DEBUG2(tree_summary(std::cout));
     }
-    template<class GivenEdgeContainer, class Tag = non_consecutive_tag>
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
+      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>>
     _Tree(GivenEdgeContainer&& given_edges, LabelMap& _node_labels, const Tag tag = Tag()):
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(_node_labels), tag)
     {}
-    template<class GivenEdgeContainer, class Tag = non_consecutive_tag>
+    template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
+      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>>
     _Tree(GivenEdgeContainer&& given_edges, std::remove_cvref_t<LabelMap>&& _node_labels, const Tag tag = Tag()):
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(std::move(_node_labels)), tag)
     {}
     template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
+      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>,
       class = std::enable_if_t<std::is_same_v<Tag, non_consecutive_tag> || std::is_same_v<Tag, consecutive_tag>>>
     _Tree(GivenEdgeContainer&& given_edges, const Tag tag = Tag()):
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(), tag)
@@ -381,10 +394,36 @@ namespace PT{
 
     // Copy construction from any tree
     //NOTE: if the LabelMaps are the same, then just create a new reference to it, otherwise construct a copy
+    //version 1: construct from tree with the same LabelMap-type as we have
+    template<class __LabelTag,
+           class __EdgeStorage,
+           class __NetworkTag>
+    _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>& in_tree):
+      Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // in_tree has the same EdgeContainer as we do?
+                              ? EdgeStorage(*((const EdgeStorage*)(&in_tree))) // yes: copy edge container
+                              : ( // no: make a copy of the EdgeStorage (and move it into place)
+                                PT::has_consecutive_nodes<__EdgeStorage> // in_tree has consecutive nodes?
+                                ? EdgeStorage(consecutive_tag(), in_tree.edges())
+                                : EdgeStorage(non_consecutive_tag(), in_tree.edges())
+                              )),
+      // We can re-use the existing node_label structure if no node-translation has taken place.
+      // We can be sure that no node translation has taken place iff we have non-consecutive nodes or they have consecutive nodes
+      node_labels(
+        (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>) ?
+          in_tree.node_labels : // yes: just create a new reference
+          std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end())) // no: copy the labelmap
+    {
+      std::cout << "\tcopy-constructed tree/net:\n";
+      tree_summary(std::cout);
+    }
+
+
+    // version 2: LabelMaps are different
     template<class __LabelTag,
            class __EdgeStorage,
            class __LabelMap,
-           class __NetworkTag>
+           class __NetworkTag,
+           class = std::enable_if_t<!std::is_same_v<LabelMap, __LabelMap>>>
     _Tree(const _Tree<__LabelTag, __EdgeStorage, __LabelMap, __NetworkTag>& in_tree):
       Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // in_tree has the same EdgeContainer as we do?
                               ? EdgeStorage(*((const EdgeStorage*)(&in_tree))) // yes: copy edge container
@@ -393,24 +432,20 @@ namespace PT{
                                 ? EdgeStorage(consecutive_tag(), in_tree.edges())
                                 : EdgeStorage(non_consecutive_tag(), in_tree.edges())
                               )),
-      // We can re-use the existing node_label structure if their LabelMap is the same as ours and no node-translation has taken place.
-      // We can be sure that no node translation has taken place iff we have non-consecutive nodes or they have consecutive nodes
-      node_labels(
-          (std::is_same_v<LabelMap, __LabelMap> && (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>)) ?
-                in_tree.node_labels : // yes: just create a new reference
-                std::make_shared<LabelMap>(in_tree.node_labels->begin(), std::end(in_tree.node_labels)) // no: copy the labelmap
-      )
+      // Since the LabelMaps are different, we cannot reuse their LabelMap
+      node_labels(std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end()))
     {
       std::cout << "\tcopy-constructed tree/net:\n";
       tree_summary(std::cout);
     }
 
+
     // Move construction from any tree (see copy construction)
+    //version 1: same LabelMap
     template<class __LabelTag,
            class __EdgeStorage,
-           class __LabelMap,
            class __NetworkTag>
-    _Tree(_Tree<__LabelTag, __EdgeStorage, __LabelMap, __NetworkTag>&& in_tree):
+    _Tree(_Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>&& in_tree):
       Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // same EdgeContainer ?
                               ? EdgeStorage(std::move(*((EdgeStorage*)(&in_tree)))) // yes: move edges if possible
                               : ( // no: make a copy of the EdgeStorage
@@ -419,7 +454,7 @@ namespace PT{
                                 : EdgeStorage(non_consecutive_tag(), in_tree.edges())
                               )),
       node_labels(
-          (std::is_same_v<LabelMap, __LabelMap> && (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>)) ?
+          (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>) ?
                 in_tree.node_labels : // yes: just create a new reference
                 std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end()) // no: copy the labelmap
       )
@@ -427,6 +462,28 @@ namespace PT{
       std::cout << "\tmove-constructed tree/net\n";
       tree_summary(std::cout);
     }
+    //version 2: different LabelMaps
+    template<class __LabelTag,
+           class __EdgeStorage,
+           class __LabelMap,
+           class __NetworkTag,
+           class = std::enable_if_t<!std::is_same_v<LabelMap, __LabelMap>>>
+    _Tree(_Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>&& in_tree):
+      Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // same EdgeContainer ?
+                              ? EdgeStorage(std::move(*((EdgeStorage*)(&in_tree)))) // yes: move edges if possible
+                              : ( // no: make a copy of the EdgeStorage
+                                PT::has_consecutive_nodes<__EdgeStorage> // in_tree has consecutive nodes?
+                                ? EdgeStorage(consecutive_tag(), in_tree.edges())
+                                : EdgeStorage(non_consecutive_tag(), in_tree.edges())
+                              )),
+      node_labels(std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end()))
+    {
+      std::cout << "\tmove-constructed tree/net\n";
+      tree_summary(std::cout);
+    }
+
+
+
 
     // for some weird reason, the above is not counted as move-constructor, so I have to repeat myself...
     _Tree(_Tree&& in_tree): Parent(std::move(in_tree)), node_labels(std::move(in_tree.node_labels))
@@ -522,10 +579,9 @@ namespace PT{
             if(count == 1) prefix.back() = ' ';
           }
       }
-    }
-    
+    }    
   };
-   
+
   
   template<class _LabelTag, class _EdgeStorage, class _LabelMap>
   std::ostream& operator<<(std::ostream& os, const _Tree<_LabelTag, _EdgeStorage, _LabelMap>& T)
@@ -555,7 +611,14 @@ namespace PT{
            class _EdgeStorage = MutableTreeAdjacencyStorage<_EdgeData>,
            class _LabelMap = typename _EdgeStorage::template NodeMap<std::string>,
            class _NetworkTag = tree_tag>
-  using Tree = AddNodeData<_NodeData, _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>>;
+  using Tree = _Tree<_LabelTag, AddNodeData<_NodeData, _EdgeStorage>, _LabelMap, _NetworkTag>;
+  //using Tree = AddNodeData<_NodeData, _Tree<_LabelTag, _EdgeStorage, _LabelMap, _NetworkTag>>;
+
+  template<class LT, class ES, class LM, class NT>
+  struct is_phylogeny<_Tree<LT, ES, LM, NT>> : public std::true_type {};
+  template<class ND, class ED, class LT, class ES, class LM, class NT>
+  struct is_phylogeny<Tree<ND, ED, LT, ES, LM, NT>> : public std::true_type {};
+
 
   // these two types should cover 95% of all (non-internal) use cases
   template<class _NodeData = void, class _EdgeData = void, class _LabelTag = single_label_tag, class _LabelMap = HashMap<Node, std::string>>

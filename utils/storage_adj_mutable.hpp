@@ -2,7 +2,9 @@
 
 #pragma once
 
+#include "predicates.hpp"
 #include "storage_adj_common.hpp"
+
 
 /*
  * in mutable edge storages, we DO NOT assume consecutivity.
@@ -51,7 +53,7 @@ namespace PT{
     using Parent::_root;
     using Parent::_size;
 
-    Node max_node_index = 0;
+    Node next_node_index = 0;
   public:
     using MutabilityTag = mutable_tag;
     using Parent::Parent;
@@ -71,12 +73,36 @@ namespace PT{
     using DegreeMap = NodeMap<Degree>;
     using NodeSet = HashSet<Node>;
 
+#warning TODO: re-design such that it is always in a consistent state (single root, no cycles) --> disallow arbitrary deletion
+
+
     Node add_node()
     {
-      assert(!test(_successors, max_node_index) && !test(_predecessors, max_node_index));
-      _successors.try_emplace(max_node_index);
-      _predecessors.try_emplace(max_node_index);
-      return max_node_index++;
+      assert(!test(_successors, next_node_index) && !test(_predecessors, next_node_index));
+      _successors.try_emplace(next_node_index);
+      _predecessors.try_emplace(next_node_index);
+
+      return next_node_index++;
+    }
+
+    // the user can suggest(!) a node index (if this suggestion is invalid (already exists), we'll ignore it)
+    Node add_node(const Node index)
+    {
+      if(!test(_successors, index)){
+        _successors.try_emplace(index);
+        _predecessors.try_emplace(index);
+        next_node_index = std::max(index + 1, next_node_index);
+        return index;
+      } else return add_node();
+    }
+
+    // add a new child to u and return its index
+    Node add_child(const Node u, const Node index = NoNode)
+    {
+      const Node v = index == NoNode ? add_node() : add_node(index);
+      append(_predecessors, v, u);
+      append(_successors, u, v);
+      return v;
     }
 
     // the non-secure versions allow any form of edge addition
@@ -87,9 +113,10 @@ namespace PT{
     template<class _Adjacency> // for universal reference
     bool add_edge(const Node u, _Adjacency&& v)
     {
+      const Node v_idx = static_cast<Node>(v);
       const auto [it, success] = append(_successors[u], std::move(v));
       if(success){
-        if(append(_predecessors[static_cast<Node>(v)], get_reverse_adjacency(u, *it)).second){
+        if(append(_predecessors[v_idx], get_reverse_adjacency(u, *it)).second){
           ++_size;
           return true;
         } else {
@@ -128,23 +155,33 @@ namespace PT{
     void suppress_node(const Node y)
     {
       assert((in_degree(y) == 1) && (out_degree(y) == 1));
-      replace_parent_of(front(_successors[y]), front(_predecessors[y]));
+      replace_parent(front(_successors[y]), y, front(_predecessors[y]));
       remove_node(y);
     }
+#warning TODO: have 2 global bools telling us whether to automatically suppress suppressible nodes or remove dangling leaves
 
+#warning TODO: reformulate all bla_except()-functions using predicates like so:
     // remove a node and all out-deg-1 nodes directly above it
+    template<class Predicate>
+    void remove_upwards_except(const Node x, const Predicate& except)
+    {
+      if(!except.value(x)) {
+        const auto& parents = _predecessors.at(x);
+        auto parent_iter = parents.begin();
+        while(parent_iter != parents.end()) {
+          const auto next_iter = std::next(parent_iter);
+          if(out_degree(*parent_iter) == 1)
+            remove_upwards_except(*parent_iter, except);
+          parent_iter = next_iter;
+        }
+        remove_node(x);
+      }
+    }
     void remove_upwards(const Node x)
     {
-      const auto& parents = _predecessors.at(x);
-      auto parent_iter = parents.begin();
-      while(parent_iter != parents.end()) {
-        const auto next_iter = std::next(parent_iter);
-        if(out_degree(*parent_iter) == 1)
-          remove_upwards(*parent_iter);
-        parent_iter = next_iter;
-      }
-      remove_node(x);      
+      return remove_upwards_except(x, std::FalsePredicate());
     }
+
 
     //! subdivide uv: remove uv, add w, add uw and wv
     //NOTE: no checks are made, so if uv did not exist before, this will still create uw and wv, possibly making v a reticulation!
@@ -153,6 +190,7 @@ namespace PT{
     Node subdivide(const Node u, const Node v)
     {
       const Node w = add_node();
+      DEBUG3(std::cout << "subvididing "<<u<<"-->"<<v<<" with new node "<<w<<"\n");
       remove_edge(u, v);
       add_edge(u, w);
       add_edge(w, v);
@@ -192,13 +230,13 @@ namespace PT{
     bool remove_edge(const Node u, const Node v)
     {
       DEBUG5(std::cout << "removing edge "<<u<<"->"<<v<<"\n");
-      const auto uv_in = _predecessors.find(v);
-      if(uv_in != _predecessors.end()){
+      const auto v_in = _predecessors.find(v);
+      if(v_in != _predecessors.end()){
         // the data structure better be consistent
-        assert(test(uv_in->second, u));
+        assert(test(v_in->second, u));
         // remove uv from both containers
         _successors.at(u).erase(v);
-        uv_in->second.erase(u);
+        v_in->second.erase(u);
         --_size;
         return true;
       } else return false; // edge is not in here, so nothing to delete
@@ -207,7 +245,7 @@ namespace PT{
     bool remove_node(const Node v)
     {
       DEBUG5(std::cout << "removing node "<<v<<"\n");
-      if((v == _root) && (_size != 0)) throw(std::logic_error("cannot remove the root from a non-empty rooted storage"));
+      if((v == _root) && (out_degree(_root) > 1)) throw(std::logic_error("cannot remove the root unless it has out-degree one"));
       const auto v_pre = _predecessors.find(v);
       if(v_pre != _predecessors.end()){
         for(const Node u: v_pre->second)
@@ -217,10 +255,12 @@ namespace PT{
 
         const auto v_succ = _successors.find(v);
         assert(v_succ != _successors.end());
+        if((v == _root) && (out_degree(_root) != 0)) _root = front(v_succ->second);
         for(const Node u: v_succ->second)
           _predecessors.at(u).erase(v);
         _size -= v_succ->second.size();
         _successors.erase(v_succ);
+
         return true;
       } else return false;
     }
@@ -240,7 +280,7 @@ namespace PT{
           _successors.try_emplace(uv.head());
           add_edge(uv);
         }
-        max_node_index = _successors.size();
+        next_node_index = _successors.size();
         std::cout << "computing the root...\n";
         compute_root();
         std::cout << "computing node translation and leaves...\n";

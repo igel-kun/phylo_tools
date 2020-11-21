@@ -122,11 +122,14 @@ namespace PT{
         //const Node v = uv_iter->second;
         if(new_tree_nodes){
           const auto [x, y] = get_random_iterator_except(edges, uv_iter)->as_pair();
-          DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<'\n');
+          DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<"\t "<<y<<"-"<<u<<"-path? "<<N.has_path(y,u)<<'\n');
           if(u != x){
             Node s = N.subdivide(u, v);
             Node t = N.subdivide(x, y);
-            if(N.has_path(y, u)) std::swap(s, t);
+            if(N.has_path(y, u)) {
+              std::cout << "swapping "<<s<<" & "<<t<<"\n";
+              std::swap(s, t);
+            }
             DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             N.add_edge(s, t);       --num_edges;
             append(tree_nodes, s);  --new_tree_nodes;

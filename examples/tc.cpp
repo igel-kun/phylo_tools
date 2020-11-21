@@ -22,7 +22,7 @@ void parse_options(const int argc, const char** argv)
       \tfile1 and file2 describe two networks (either file1 contains 2 lines of extended newick or both file1 and file2 describe a network in extended newick or edgelist format)\n\
       \tUnless the first network is a tree and the second is not, we try to embed the second network in the first.\n\
       \n" + std::string(argv[0]) + " -r <x> <y> <z>\n\
-      \trandomize a tree with x nodes + y leaves and add z additional edges, then check containment of the tree in the network\n");
+      \trandomize a tree with x internal nodes + y leaves and add z additional edges, then check containment of the tree in the network\n");
 
   parse_options(argc, argv, description, help_message, options);
 
@@ -33,7 +33,7 @@ void parse_options(const int argc, const char** argv)
       exit(EXIT_FAILURE);
     }
     if(stoi(r_vec[1]) <= stoi(r_vec[0])) {
-      std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes & "<<r_vec[1]<<" leaves\n";
+      std::cerr << "cannot construct tree with "<<r_vec[0]<<" internal nodes & "<<r_vec[1]<<" leaves\n";
       exit(EXIT_FAILURE);
     }
   } else {
@@ -87,6 +87,7 @@ NetAndTree create_net_and_tree()
   
   MyNet N(el, node_labels);
 
+  std::cout << "rolled tree:\n"<<N<<"\n";
   std::cout << "adding "<<num_new_edges<<" new edges...\n";
 
   add_random_edges(N, num_new_edges, num_new_edges, num_new_edges);
@@ -125,7 +126,7 @@ int main(const int argc, const char** argv)
   MyTree& T = NT_tuple.second;
 
   if(test(options, "-v"))
-    std::cout << "N:\n" << N << std::endl << "T:\n" << T << std::endl;
+    std::cout << "N:\n" << N << "\n" << get_extended_newick(N) << "\nT:\n" << T << "\n"<< get_extended_newick(T)<<"\n";
 
   std::cout << "\n\n starting the containment engine...\n\n";
   if(T.is_tree()) {

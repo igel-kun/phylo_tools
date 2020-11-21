@@ -151,8 +151,8 @@ namespace std {
 	  
     insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
-    mapped_type& operator[](const key_type& key) { return Parent::operator[]((size_t)key); }
-    const mapped_type& operator[](const key_type& key) const { return Parent::operator[]((size_t)key); }
+    mapped_type& operator[](const key_type& key) { assert(key < size()); return Parent::operator[]((size_t)key); }
+    const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Parent::operator[]((size_t)key); }
     mapped_type& at(const key_type& key) { return Parent::at((size_t)key); }
     const mapped_type& at(const key_type& key) const { return Parent::at((size_t)key); }
 

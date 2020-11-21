@@ -20,6 +20,7 @@ namespace PT{
     return comp_roots;
   }
 
+
   template<class Network>
   struct TreeComponentInfos
   {

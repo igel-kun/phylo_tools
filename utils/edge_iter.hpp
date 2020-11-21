@@ -83,7 +83,7 @@ namespace PT{
   template<class _AdjContainer>
   using OutEdgeFactory = EdgeIterFactory<_AdjContainer, OutEdgeIterator>;
 
-  // go one step further and enumerate edges from a mapping of nodes to nodes
+  // go one step further and enumerate edges from a mapping of nodes to adjacencies (nodes with edge-data)
 
   //! an iterator over a mapping Node->Successors enumerating Edges
   template<class _Map, template<class> class _EdgeIterator>
@@ -126,17 +126,13 @@ namespace PT{
     {
       if(node_it != nc_map.end()){
         skip_empty();
-        out_it = EdgeIterator(node_it->second, node_it->first);
+        if(node_it != nc_map.end())
+          out_it = EdgeIterator(node_it->second, node_it->first);
       }
     }
 
     EdgeMapIterator(_Map& _nc_map): EdgeMapIterator(_nc_map, _nc_map.begin()) {}
 
-    EdgeMapIterator(const EdgeMapIterator& _it):
-      nc_map(_it.nc_map),
-      node_it(_it.node_it),
-      out_it(_it.out_it)
-    {}
 
     const_reference operator*() const { return *out_it; }
     pointer operator->() const { return out_it.operator->(); }
@@ -241,6 +237,7 @@ namespace PT{
     operator bool() const { return valid(); }
   };
 
+
   // for EdgeMapIterators, we need to slightly modify how the factory constructs them...
   template<class _Map, template<class> class _Iterator>
   struct BeginEndEdgeMapIters
@@ -254,8 +251,7 @@ namespace PT{
   };
 
 
-
-  // since EdgeMapIterators are constructed using the map as well as the iterator, we'll have to modify the BeginMaker and EndMaker a little bit
+  // successor-maps cannot know à priori how many edges are stored within them, so we take a reference to an external size_t
   template<class _Map, template<class> class _Iterator>
   class EdgeMapIterFactory: public std::IterFactory<_Map, void, BeginEndEdgeMapIters<_Map, _Iterator>>
   {
