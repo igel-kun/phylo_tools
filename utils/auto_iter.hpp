@@ -33,6 +33,7 @@ namespace std{
     operator bool() const { return is_valid(); }
     operator _Iterator() { return first; }
     operator const _Iterator() const { return first; }
+    _Iterator get_iter() const { return first; }
   };
 
   template<class _Iterator, class _EndIterator = _Iterator>

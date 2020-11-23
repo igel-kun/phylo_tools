@@ -64,6 +64,8 @@ namespace PT{
     using Parent::out_degree;
     using Parent::parent;
     using Parent::children;
+    using Parent::any_child;
+    using Parent::has_node;
 
     template<class T>
     using NodeMap = HashMap<Node, T>;
@@ -127,20 +129,27 @@ namespace PT{
     }
 
     // replace the given parent y of z with x, that is, swap the arc yz with xz; return whether the replace took place (that is xz was not already there)
-    //NOTE: z is given as iterator in y's children and y is given as iterator in z's parents!
-    bool replace_parent(const Node z, const Node y, const Node x)
+    bool replace_parent(const Node z, const Node old_parent, const Node new_parent)
     {
-      auto& y_children = _successors[y];
+      if(old_parent == new_parent) return true;
+
+      auto& y_children = _successors.at(old_parent);
       const auto z_iter = y_children.find(z);
+      assert(z_iter != y_children.end());
       // move the z-adjacency into x's children
-      if(append(_successors[x], std::move(*z_iter)).second) {
+      auto& z_parents = _predecessors.at(z);
+      if((new_parent != z) && append(_successors.at(new_parent), std::move(*z_iter)).second) {
         // replace y by x in z's parents
         y_children.erase(z_iter);
-        auto& z_parents = _predecessors[z];
-        z_parents.erase(y);
-        append(z_parents, x);
+        z_parents.erase(old_parent);
+        append(z_parents, new_parent);
         return true;
-      } else return false;
+      } else { // if xz was already present, we've lost an edge
+        y_children.erase(z_iter);
+        z_parents.erase(old_parent);
+        --_size;
+        return false;
+      }
     }
 
     // replace the (unique) parent of z with x, that is, hang the subtree rooted at z below x (z will become a child of x)
@@ -150,14 +159,107 @@ namespace PT{
       return replace_parent(z, front(_predecessors[z]), x);
     }
 
-    // suppress (shortcut) a node with in-degree = out-degree = 1
-    //NOTE: trees cannot handle nodes having 2 parents, even temporarily, so this has to be handled with care!
+    // replace the given child z of y with x, that is, swap the arc yz with yx; return whether the swap was made (that is, yx is not already in the graph)
+    //NOTE: if old_child is a leaf, then this leaf will be removed from the graph!
+    bool replace_child(const Node y, const Node old_child, const Node new_child)
+    {
+      if(old_child == new_child) return true;
+
+      auto& y_children = _successors.at(y);
+      const auto z_iter = y_children.find(old_child);
+      assert(z_iter != y_children.end());
+
+      // in order to avoid invalidation of z_iter (by rehash) we'll have to move the adjacency into a temporary and then back into y_children
+      Adjacency tmp_adj(std::move(*z_iter)); // move the adjacency out of y's children
+      y_children.erase(z_iter);
+      _predecessors.at(old_child).erase(y);
+
+      if(in_degree(old_child) == 0){
+        if(out_degree(old_child) == 0)
+          remove_node(old_child);
+        else
+          throw std::logic_error("trying to create network with 2 roots");
+      }
+
+      static_cast<Node&>(tmp_adj) = new_child; // install x as new child of the temporary adjacency
+      if((new_child != y) && append(y_children, std::move(tmp_adj)).second) { // put the modified adjacency back in
+        append(_predecessors.at(new_child), y);
+        // if old_child was a leaf, then just remove it, if it was a tree node, then throw an exception
+        return true;
+      } else { // if yx was already present, we've just lost an edge
+        --_size;
+        return false;
+      }
+    }
+
+    // replace the (unique) child of y with x
+    bool replace_child_of(const Node y, const Node x)
+    {
+      assert(out_degree(y) == 1);
+      return replace_parent(y, front(_successors.at(y)), x);
+    }
+
+#warning: TODO: write a network class with builtin branch-length that can contract edges in context of their branch-lengths
+
+    // contract the edge uv, leaving u in tact and removing v
+    void contract_upwards(const Node v, const Node u)
+    {
+      assert(auto_find(_predecessors.at(v), u));
+      assert((in_degree(u) + in_degree(v) <= 2) || (out_degree(u) + out_degree(v) <= 2)); // let's not create forbidden nodes (in- and out-degree > 1)
+      
+      auto& v_pred = _predecessors.at(v);
+      v_pred.erase(u);
+      while(!v_pred.empty()) replace_child(front(v_pred), v, u);
+
+      auto& v_succ = _successors.at(v);
+      while(!v_succ.empty()) replace_parent(front(v_succ), v, u);
+      
+      --_size; // we lost the edge uv
+      _successors.at(u).erase(v);
+      _predecessors.erase(v);
+      _successors.erase(v);
+    }
+
+    void contract_upwards(const Node u)
+    {
+      assert(in_degree(u) == 1);
+      contract_upwards(u, parent(u));
+    }
+
+    // contract the edge uv, leaving v in tact and removing u
+    void contract_downwards(const Node u, const Node v)
+    {
+      assert(auto_find(_predecessors.at(v), u));
+      assert((in_degree(u) + in_degree(v) <= 2) || (out_degree(u) + out_degree(v) <= 2)); // let's not create forbidden nodes (in- and out-degree > 1)
+
+      std::cout << "contracting "<<u<<" onto its child "<<v<<"\n";
+      while(out_degree(u)) replace_parent(any_child(u), u, v);
+      while(has_node(u)) replace_child(parent(u), u, v);
+    }
+
+    void contract_downwards(const Node u)
+    {
+      assert(out_degree(u) == 1);
+      contract_downwards(u, Parent::any_child(u));
+    }
+
+    // suppress (shortcut) a node with in-degree == 1 or out-degree <= 1 (if outdegree == 0, then just remove the node)
     void suppress_node(const Node y)
     {
-      assert((in_degree(y) == 1) && (out_degree(y) == 1));
-      replace_parent(front(_successors[y]), y, front(_predecessors[y]));
-      remove_node(y);
+      assert(in_degree(y) != 0); // please don't suppress the root
+      switch(out_degree(y)){
+        case 0:
+          remove_node(y);
+          break;
+        case 1:
+          contract_downwards(y);
+          break;
+        default:
+          assert(in_degree(y) == 1);
+          contract_upwards(y);
+      }
     }
+
 #warning TODO: have 2 global bools telling us whether to automatically suppress suppressible nodes or remove dangling leaves
 
 #warning TODO: reformulate all bla_except()-functions using predicates like so:

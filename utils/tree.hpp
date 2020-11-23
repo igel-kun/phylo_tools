@@ -134,7 +134,12 @@ namespace PT{
       if(!append(*node_labels, u, std::move(l)).second)
         (*node_labels)[u] = std::move(l);
     }
-    
+   
+    bool remove_label(const Node u)
+    {
+      return node_labels->erase(u);
+    }
+
     void move_label(const Node u, const Node v)
     {
       const auto label_iter = node_labels->find(u);
@@ -142,6 +147,11 @@ namespace PT{
       node_labels->erase(label_iter);
     }
 
+    bool has_label(const Node u) const
+    {
+      const auto it = auto_find(*node_labels, u);
+      return it ? !it->second.empty() : false;
+    }
 
 
     //! return the label of a node, if it has one (otherwise, return the empty label)
@@ -417,7 +427,6 @@ namespace PT{
       tree_summary(std::cout);
     }
 
-
     // version 2: LabelMaps are different
     template<class __LabelTag,
            class __EdgeStorage,
@@ -438,7 +447,6 @@ namespace PT{
       std::cout << "\tcopy-constructed tree/net:\n";
       tree_summary(std::cout);
     }
-
 
     // Move construction from any tree (see copy construction)
     //version 1: same LabelMap
@@ -482,15 +490,7 @@ namespace PT{
       tree_summary(std::cout);
     }
 
-
-
-
-    // for some weird reason, the above is not counted as move-constructor, so I have to repeat myself...
-    _Tree(_Tree&& in_tree): Parent(std::move(in_tree)), node_labels(std::move(in_tree.node_labels))
-    {
-      std::cout << "\tmove-constructed tree/net (non templated)\n";
-      tree_summary(std::cout);
-    }
+    //NOTE: by the standard, copy/move constructors cannot be templates, so our copy/move constructors are implicit!!!
 
 
 #warning TODO: make all the following constructors take a __Tree universal reference
@@ -543,6 +543,7 @@ namespace PT{
       DEBUG3(os << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<"\n");
       DEBUG3(os << "nodes: "<<nodes()<<'\n');
       DEBUG3(os << "edges: "<<Parent::edges()<<'\n');
+      DEBUG3(if(node_labels) os << "labels: "<<*node_labels<<"\n"; else os << "no labels\n";);
       
       for(const Node i: nodes()){
         const auto label_it = node_labels->find(i);

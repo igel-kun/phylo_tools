@@ -28,19 +28,23 @@ namespace PT{
 
     const Network& N;
     // store for each node of N the root of its tree component
-    Translate         component_root_of = { {N.root(), N.root()} };
+    Translate         component_root_of;
+
+    // for each component root x, if x is visible from a leaf y, then store y here
+    HashMap<Node, Node> visible_leaf;
+
     // store the list of all component roots
     NodeVec non_trivial_roots;
     NodeVec trivial_roots;
     // store the list of edges in the component-graph (each component represented by its root)
     EdgeVec           component_graph_edges;
-    // for each component root x, if there is a tree-component directly below x whose root is visible on x, then store this root here
-    HashMap<Node, Node> visible;
 
 
     // construction
     TreeComponentInfos(const Network& _N): N(_N)
     {
+      std::cout << "constructing component-infos...\n";
+      component_root_of.try_emplace(N.root(), N.root());
       compute_component_roots();
       // construct the component DAG from the non-trivial roots
       compute_edges(non_trivial_roots, true);
@@ -49,6 +53,32 @@ namespace PT{
       // the root has not yet stored in the list of non-trivial roots, so add it here
       non_trivial_roots.emplace_back(N.root());
     };
+
+    // register that a component root r is visible from a node v
+    void comp_root_visible(const Node r, const Node v)
+    {
+      std::cout << "marking "<<r<<" visible from "<<v<<'\n';
+      const bool succ = component_root_of.try_emplace(v, r).second;
+      
+      switch(N.out_degree(v)){
+        case 0:
+          assert(r != v); // do not try to say that a leaf is visible on itself!
+          visible_leaf.try_emplace(r, v);
+          break;
+        case 1:
+          if(succ){
+            const Node w = N.any_child(v);
+            for(const Node pw: N.parents(w))
+              if(map_lookup(component_root_of, pw, NoNode) != r)
+                  goto no_unique_root;
+            comp_root_visible(r, w);
+          }
+no_unique_root:
+        default: // do not spread over tree-nodes
+          break;
+      }
+    }
+
 
     // compute component roots and return list of leaves encountered
     void compute_component_roots()
@@ -94,10 +124,7 @@ namespace PT{
         if(rt != next_rt) rt = NoNode;
       }
       assert(rt != r); // rt == r only if r has no parents which should never be the case
-      if(rt != NoNode) {
-        std::cout << "marking "<<r<<" visible from "<<rt<<'\n';
-        visible[rt] = r;
-      }
+      if(rt != NoNode) comp_root_visible(rt, r);
       return rt;
     }
 

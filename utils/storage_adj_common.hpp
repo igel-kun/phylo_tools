@@ -42,20 +42,12 @@ namespace PT{
     using NodeData = void;
     static constexpr bool has_node_data = false;
 
-  protected:
     using SuccContainer         = typename SuccessorMap::mapped_type;
     using PredContainer         = typename PredecessorMap::mapped_type;
-  public:
     // NOTE: okay, so C++ doesn't allow const containers of non-const objects, so if we want the user to be anble to change the edge-data of an adjacency,
     //       we'll have to return an IterFactory-wrapper around the internal container, thus keeping the latter hidden/unmodified
     //       This problem does not occur for constant successor containers, so we can just return a const reference to the internal storage
 #warning TODO: implement continous storage succ-container as vectors instead of the self-built class; then SuccContainerRefs are actual refs to the succ containers
-    using SuccContainerRef      = std::IterFactory<SuccContainer>;
-    using ConstSuccContainer    = const SuccContainer;
-    using ConstSuccContainerRef = ConstSuccContainer&;
-    using PredContainerRef      = std::IterFactory<PredContainer>;
-    using ConstPredContainer    = const PredContainer;
-    using ConstPredContainerRef = ConstPredContainer&;
    
     // Edges and RevEdges differ in that one of the two should contain a reference to the EdgeData instead of the data itself
     using Adjacency     = typename SuccContainer::value_type;
@@ -155,46 +147,48 @@ namespace PT{
     // iterate over adjacencies
     //NOTE: in order to allow the user to modify the edge-data associated with an adjacency, we give him/her a proxy container
     //      that only allows access to the items in the container, but not the container itself
-    ConstSuccContainerRef successors(const Node u) const { return _successors.at(u); }
-    SuccContainerRef      successors(const Node u) { return _successors.at(u); }
-    // successors are also called "children"
-    ConstSuccContainerRef children(const Node u) const { return _successors.at(u); }
-    SuccContainerRef      children(const Node u) { return _successors.at(u); }
+    const SuccContainer& successors(const Node u) const { return _successors.at(u); }
+    SuccContainer&       successors(const Node u) { return _successors.at(u); }
 
-    ConstPredContainerRef predecessors(const Node u) const { return _predecessors.at(u); }
-    PredContainerRef      predecessors(const Node u) { return _predecessors.at(u); }
+    // successors are also called "children"
+    const SuccContainer& children(const Node u) const { return _successors.at(u); }
+    SuccContainer&       children(const Node u) { return _successors.at(u); }
+
+    const PredContainer& predecessors(const Node u) const { return _predecessors.at(u); }
+    PredContainer&       predecessors(const Node u) { return _predecessors.at(u); }
+    
     // predecessors are also called "parents"
-    ConstPredContainerRef parents(const Node u) const { return _predecessors.at(u); }
-    PredContainerRef      parents(const Node u) { return _predecessors.at(u); }
+    const PredContainer& parents(const Node u) const { return _predecessors.at(u); }
+    PredContainer&       parents(const Node u) { return _predecessors.at(u); }
 
     // this returns the "first" parent of u; for trees, it must be the only parent of u (but networks might also be interested in "any" parent of u)
     //NOTE: this will segfault if called for the root
-    RevAdjacency parent(const Node u) const { return std::front(parents(u)); }
-    
-    Node any_child(const Node u) const { return std::front(children(u)); }
+    const RevAdjacency& parent(const Node u) const { return std::front(parents(u)); }
 
     // this returns the root as parent for the root, instead of segfaulting / throwing out-of-range
     //NOTE: since this must work even if the tree has no edges, this cannot deal with edge-data, so everything is a node here
     Node parent_safe(const Node u) const { return (u == root()) ? u : parent(u); }
+    
+    Node any_child(const Node u) const { return std::front(children(u)); }
 
 
     const SuccessorMap&   successor_map() const { return _successors; }
     const PredecessorMap& predecessor_map() const { return _predecessors; }
 
     ConstOutEdgeContainer out_edges(const Node u) const { return ConstOutEdgeContainer(_successors.at(u), u); }
-    //OutEdgeContainer      out_edges(const Node u) { return OutEdgeContainer(_successors.at(u), u); }
+    OutEdgeContainer      out_edges(const Node u) { return OutEdgeContainer(_successors.at(u), u); }
     
     ConstInEdgeContainer  in_edges(const Node u) const { return ConstInEdgeContainer(_predecessors.at(u), u); }
-    //InEdgeContainer       in_edges(const Node u) { return InEdgeContainer(_predecessors.at(u), u); }
+    InEdgeContainer       in_edges(const Node u) { return InEdgeContainer(_predecessors.at(u), u); }
     
     ConstEdgeContainer    edges() const { return ConstEdgeContainer(_size, _successors); }
-    //EdgeContainer         edges() { return EdgeContainer(_size, _successors); }
+    EdgeContainer         edges() { return EdgeContainer(_size, _successors); }
   };
 
   template<class _Store>
-  using SuccContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstSuccContainerRef, typename _Store::SuccContainerRef>;
+  using SuccContainer_of = std::copy_cv_t<_Store, typename _Store::SuccContainer>&;
   template<class _Store>
-  using PredContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstPredContainerRef, typename _Store::PredContainerRef>;
+  using PredContainer_of = std::copy_cv_t<_Store, typename _Store::PredContainer>&;
   template<class _Store>
   using LeafContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstLeafContainerRef, typename _Store::LeafContainerRef>;
   template<class _Store>
@@ -203,7 +197,6 @@ namespace PT{
   using InEdgeContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstInEdgeContainerRef, typename _Store::InEdgeContainerRef>;
   template<class _Store>
   using EdgeContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstEdgeContainerRef, typename _Store::EdgeContainerRef>;
-
   // the following classes are for adding (or not) node-data onto any form of _EdgeStorage
 
   // NOTE: the weird std::conditional is needed because otherwise, the default template arg cannot be initialized if _NodeData == void

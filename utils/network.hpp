@@ -68,8 +68,6 @@ namespace PT{
       return is_preordered(root(), counter);
     }
 
-  public:
-
     // if the edges currently in the network actually describe a tree, we can cast it up to tree
     // NOTE: the EdgeStorage will be unaffected, potentially allowing you to insert edges that could not be inserted into a normal Tree
     //       (unless your network has been declared with a Tree Storage in the first place, which is uncommon, but possible)
