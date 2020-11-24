@@ -124,11 +124,11 @@ namespace std{
 
 
   // a map lookup with default
-  template <typename _Map, typename _Key, typename _Ref = copy_cv_t<_Map, typename _Map::value_type>&>
-  inline _Ref map_lookup(const _Map& m, const _Key& key, const _Ref& default_val)
+  template <typename _Map, typename _Key, typename _Ref = typename _Map::value_type>
+  inline _Ref map_lookup(_Map&& m, const _Key& key, _Ref&& default_val)
   {
-     const auto iter = m.find(key);
-     return (iter == m.end()) ? default_val : iter->second;
+    const auto iter = m.find(key);
+    return (iter == m.end()) ? default_val : iter->second;
   }
 
 

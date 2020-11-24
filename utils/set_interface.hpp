@@ -154,6 +154,36 @@ namespace std {
   template<class T, class = enable_if_t<is_map_v<T>>>
   inline bool test(const T& _map, const typename T::key_type& key) { return _map.count(key); }
 
+
+  template<class Container>
+  bool are_disjoint(const Container& x, const Container& y)
+  {
+    if(x.size() < y.size()){
+      for(const auto& item: x) if(y.contains(item)) return false;
+    } else {
+      for(const auto& item: y) if(x.contains(item)) return false;
+    }
+    return true;
+  }
+
+  template<class Container>
+  auto_iter<typename Container::const_iterator> any_intersecting(const Container& x, const Container& y)
+  {
+    typename Container::const_iterator result;
+    if(x.size() < y.size()){
+      for(const auto& item: x)
+        if((result = y.find(item)) != y.end()) return {result, y.end()};
+    } else {
+      for(const auto& item: y){
+        if((result = x.find(item)) != x.end()) return {result, x.end()};
+      }
+    }
+    return {x.end(), x.end()};
+  }
+
+
+
+
   // I would write an operator= to assign unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
   template<class T>
   inline iterable_bitset<T>& copy(const unordered_set<uint32_t>& x, iterable_bitset<T>& y)
@@ -189,15 +219,24 @@ namespace std {
 
   // value-copying pop operations
   template<class Set, class = enable_if_t<has_pop_v<Set>>>
-  typename Set::value_type value_pop(Set& s){
+  typename Set::value_type value_pop(Set& s)
+  {
     typename Set::value_type t = s.top();
     s.pop();
     return t;
   }
   template<class Set, class = enable_if_t<is_container_v<Set>>>
-  typename Set::value_type pop_front(Set& s){
+  typename Set::value_type value_pop_front(Set& s)
+  {
     typename Set::value_type t = front(s);
     s.erase(s.begin());
+    return t;
+  }
+  template<class Set, class = enable_if_t<is_container_v<Set>>>
+  typename Set::value_type value_pop_back(Set& s)
+  {
+    typename Set::value_type t = back(s);
+    s.erase(s.rbegin());
     return t;
   }
 

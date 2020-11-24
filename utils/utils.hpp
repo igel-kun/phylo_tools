@@ -58,7 +58,7 @@
 //! testing whether a file exists by trying to open it
 #define file_exists(x) (std::ifstream(x).good())
 // a map lookup that returns a value z on unsuccessful lookups
-#define return_map_lookup(x,y,z) {const auto _iter = (x).find(y); return (_iter != (x).end()) ? _iter->second : (z); }
+#define return_map_lookup(x,y,z) {const auto __iter = (x).find(y); return (__iter == (x).end()) ? (z) : __iter->second; }
 
 // data transfer policies
 struct policy_move_t {} policy_move;

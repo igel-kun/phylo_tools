@@ -380,6 +380,7 @@ namespace PT {
     void init()
     {
       if(!clean_up_labels()){
+        rule_of_raute();
         simple_cherry_reduction();
         // if host has only 1 tree component, then its root has index 0 while the host's root is not necessarily 0... so we fix this.
         if(tree_comp_DAG.edgeless()) {
@@ -412,17 +413,6 @@ namespace PT {
       return false;
     }
 
-
-    bool simple_cherry_reduction()
-    {
-      std::cout << "applying cherry reduction...\n";
-      bool result = false;
-      for(const auto& uv: seconds(HG_label_match))
-        if(simple_cherry_reduction_from(uv)) result = true;
-      std::cout << "after cherry reduction:\nhost:\n"<<host<<"\nguest:\n"<<guest<<"\n\n";
-      return result;
-    }
-
     // general constructor with universal references and a bool sentinel
     //NOTE: the public constructors below just call this one, but they are useful for the compiler to deduce the template arguments of the class
     template<class _Host, class _Guest>
@@ -446,7 +436,15 @@ namespace PT {
     TreeInNetContainment(Host&& _host, const Guest& _guest):      TreeInNetContainment(std::move(_host), _guest, false) {}
     TreeInNetContainment(Host&& _host, Guest&& _guest):           TreeInNetContainment(std::move(_host), std::move(_guest), false) {}
 
-
+    bool simple_cherry_reduction()
+    {
+      std::cout << "applying cherry reduction...\n";
+      bool result = false;
+      for(const auto& uv: seconds(HG_label_match))
+        if(simple_cherry_reduction_from(uv)) result = true;
+      std::cout << "after cherry reduction:\nhost:\n"<<host<<"\nguest:\n"<<guest<<"\n\n";
+      return result;
+    }
 
     bool simple_cherry_reduction_from(const typename LabelMatching::mapped_type& HG_label_pair)
     {
@@ -479,7 +477,9 @@ namespace PT {
       std::cout << "found (reticulated) cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
 
       // the childrens labels match, so remove all children and suppress both pu (in host) and pv (in guest)
-      guest.replace_parent(v, pv, host.parent(pv));
+      std::cout << "replacing parent "<<pv<<" of "<<v<<" by "<<guest.parent(pv)<<"\n";
+      guest.replace_parent(v, pv, guest.parent(pv));
+      std::cout <<"guest now:\n"<<guest<<"\n";
       while(!guest.children(pv).empty()){
         const Node x = guest.any_child(pv);
         const auto& x_label = guest.label(x);
@@ -504,6 +504,8 @@ namespace PT {
         }
         clean_up_above(z, false);
       }
+      guest.remove_upwards(pv);
+      std::cout << "after cherry-reduction:\nhost:\n"<<host<<"guest:\n"<<guest<<"\n";
       return true;
     }
 
@@ -511,6 +513,44 @@ namespace PT {
     {
       return label.empty() ? false : simple_cherry_reduction_from(HG_label_match.at(label));
     }
+
+    // the rule of raute goes:
+    // if a reticulation z has a reticulation parent y that has a common parent x with another parent y' of z, then remove the arc xy
+    // (whenever x-y-z is used in a solution, simply use x-y'-z instead)
+    bool rule_of_raute(const Node z, const Node y)
+    {
+      std::cout << "checking if "<<z<<" and "<<y<<" form a raute...\n";
+      // find if there is a sibling of y that is parent of z
+      for(const Node pz: host.parents(z)) if(pz != y) {
+        const Node x = host.common_parent(pz, y);
+        if(x != NoNode) {
+          host.remove_edge(x, y);
+          if(host.is_suppressible(y)) host.suppress_node(y);
+          if(host.is_suppressible(x)) host.suppress_node(x);
+          return true;
+        }
+      }
+      return false;
+    }
+    bool rule_of_raute(const Node z)
+    {
+      assert(host.out_degree(z) == 1);
+      bool result = false;
+      for(const Node y: host.parents(z))
+        if((host.out_degree(y) == 1) && rule_of_raute(z, y)) result = true;
+      return result;          
+    }
+    bool rule_of_raute()
+    {
+      std::cout << "raute-reduction\n";
+      bool result = false;
+      for(const Node r: host.nodes())
+        if((host.out_degree(r) == 1) && rule_of_raute(r)) result = true;
+      return result;
+    }
+
+
+
 
 #warning: TODO: implement general cherry reduction (1. uv is cherry in guest and 2. exists lowest ancestor x of u & v s.t. x visible on v (tree-path f.ex.) and the x-->u path is unqiue) before resorting to branching
 
@@ -558,6 +598,9 @@ namespace PT {
     void treat_comp_root(const Node u, const Node visible_leaf)
     {
       TreeInTreeComponent<MulSubtree, leaf_labels_only> tree_comp_display(host, guest, HG_label_match, u);
+
+      std::cout << "using visible leaf "<<visible_leaf<<" with label "<<host.label(visible_leaf)<<"\n";
+      std::cout << "label matching: "<<HG_label_match<<"\n";
 
       assert(visible_leaf != NoNode);
       const auto& vlabel = host.label(visible_leaf);
@@ -627,7 +670,7 @@ namespace PT {
 
     // clean up dangling leaves/reticulations and suppressible nodes in the host
     //NOTE: this will also update comp_infos and tree_comp_DAG
-    void clean_up_above(const Node y, const bool apply_cherry = true)
+    void clean_up_above(const Node y, const bool apply_cherry = true, const bool apply_raute = true)
     {
       std::cout << "\tCLEAN: called for "<< y << "\n";
       if(!host.has_label(y)){
@@ -674,6 +717,7 @@ namespace PT {
                       comp_infos.visible_leaf[rt] = z;
                     }
                     std::cout << "\tCLEAN: removing "<<y <<" from component DAG and host\n";
+                    assert(tree_comp_DAG.out_degree(y) == 0);
                     tree_comp_DAG.remove_node(y);
                     host.contract_downwards(y, z);
                   } else {
@@ -693,11 +737,13 @@ namespace PT {
                     comp_infos.comp_root_visible(x_rt_iter->second, z);
                   
                   std::cout << "\tCLEAN: removing "<<y <<" from component DAG and host\n";
+                  assert(tree_comp_DAG.out_degree(y) <= 1);
                   tree_comp_DAG.suppress_node(y);
                   host.contract_downwards(y, z);
+                  if(apply_raute) rule_of_raute(z);
                 }
               } else {
-                // if y was a reticulation before, z may now see some component root
+                // if y was a reticulation before, then z may now see some component root
                 if(y_rt_iter){
                     std::cout << "\tCLEAN: "<< y <<" was a non-component-root tree or reti before deletion\n";
                     comp_infos.component_root_of.erase(y_rt_iter.get_iter());
@@ -709,8 +755,10 @@ namespace PT {
                 std::cout << "\tCLEAN: contracting "<< y <<" down onto "<<z<<"\n";
                 host.contract_downwards(y, z);
 
+                if(apply_raute && (host.out_degree(z) == 1)) rule_of_raute(z);
+
                 // apply cherry reduction if z is a leaf and x is a tree-node
-                if(apply_cherry && (host.in_degree(x) == 1)){
+                if(apply_cherry && host.has_node(x) && (host.in_degree(x) == 1)){
                   std::cout << "\tCLEAN: checking for cherry reduction on "<<z<<"\n";
                   const auto z_label_it = auto_find(host.labels(), z);
                   if(z_label_it)
@@ -828,9 +876,11 @@ namespace PT {
         // for each parent u of the best-branching node v, make a copy of *this and make u the only parent of v, then run the machine again
         const Node u = branching_candidates.top().node;
         for(const Node v: host.parents(u)){
-          TreeInNetContainment sub_checker(*this);
+          std::cout << "\n================ new branch: keep "<<v<<" --> "<<u<<" ====================\n\n";
+          TreeInNetContainment sub_checker(std::as_const(*this));
           sub_checker.force_parent(u, v);
           if(sub_checker.displayed()) return true;
+          exit(1);
         }
         // if no branch returned true, then the tree is not displayed
         return false;

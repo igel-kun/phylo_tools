@@ -171,7 +171,6 @@ namespace PT{
     
     Node any_child(const Node u) const { return std::front(children(u)); }
 
-
     const SuccessorMap&   successor_map() const { return _successors; }
     const PredecessorMap& predecessor_map() const { return _predecessors; }
 

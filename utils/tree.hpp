@@ -153,12 +153,10 @@ namespace PT{
       return it ? !it->second.empty() : false;
     }
 
-
     //! return the label of a node, if it has one (otherwise, return the empty label)
     const LabelType& label(const Node u) const
     {
-      const auto label_iter = node_labels->find(u);
-      return (label_iter == node_labels->end()) ? _EmptyLabel<LabelType> : label_iter->second;
+      return map_lookup(*node_labels, u, _EmptyLabel<LabelType>);
     }
 
     node_type type_of(const Node u) const
@@ -236,6 +234,17 @@ namespace PT{
 
 #warning TODO: use more efficient LCA
     Node LCA(const Node x, const Node y) const { return naiveLCA(x,y); }
+
+    bool are_siblings(const Node y, const Node z) const
+    {
+      return !std::are_disjoint(parents(y), parents(z));
+    }
+    Node common_parent(const Node y, const Node z) const
+    {
+      const auto iter = any_intersecting(parents(y), parents(z));
+      return iter ? *iter : NoNode;
+      
+    }
 
     //! return if there is a directed path from x to y in the tree
     bool has_path(const Node x, Node y) const

@@ -268,15 +268,19 @@ namespace PT{
     void remove_upwards_except(const Node x, const Predicate& except)
     {
       if(!except.value(x)) {
-        const auto& parents = _predecessors.at(x);
-        auto parent_iter = parents.begin();
-        while(parent_iter != parents.end()) {
-          const auto next_iter = std::next(parent_iter);
-          if(out_degree(*parent_iter) == 1)
-            remove_upwards_except(*parent_iter, except);
-          parent_iter = next_iter;
-        }
+        const auto& x_preds = _predecessors.at(x);
+        const NodeVec x_parents(x_preds.begin(), x_preds.end());
         remove_node(x);
+        for(const Node px: x_parents) {
+          switch(out_degree(px)){
+            case 0:
+              remove_upwards_except(px, except);
+              break;
+            case 1:
+              if(!except.value(px)) suppress_node(px);
+            default: break;
+          }
+        }
       }
     }
     void remove_upwards(const Node x)
