@@ -10,6 +10,7 @@ namespace std{
 
   struct do_not_fix_index_tag {};
 
+#warning TODO: inherit from auto_iterator instead of keeping one around
   // skip all items in a container for which the predicate is true
   // NOTE: while we could just always use lambda functions as predicate, the current way is more flexible
   //       since it allows default initializing the filtered_iterator if our Predicate is static
@@ -45,8 +46,8 @@ namespace std{
     bool operator!=(const _filtered_iterator<_Container, _NormalIterator>& other) const { return !operator==(other); }
     bool operator!=(const NormalIterator& j) const { return !operator==(j); }
 
-    reference operator*() const { return *it; }
-    pointer operator->() const { return *it; }
+    reference operator*() const { return it.operator*(); }
+    pointer operator->() const { return it.operator->(); }
 
     template<class, class>
     friend class _filtered_iterator;

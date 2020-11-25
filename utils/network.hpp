@@ -35,7 +35,7 @@ namespace PT{
     using Parent::root;
     using Parent::is_tree;
     using Parent::label;
-    
+   
     static constexpr bool is_declared_network = std::is_same_v<NetworkTag, network_tag>;
 
     // ================== cast back to tree (f.ex. to use Tree::LCA on a network without reticulation) ===============

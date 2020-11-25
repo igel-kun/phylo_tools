@@ -8,6 +8,8 @@
 
 namespace PT{
 
+#warning TODO: make a bridge iterator
+
   template<class Node>
   struct BridgeInfo
   {

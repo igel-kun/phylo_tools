@@ -10,6 +10,7 @@
 #include "singleton.hpp"
 
 #warning TODO: implement move constructors for edge storages and adjacency storages!!!
+#warning TODO: instead of having 2 containers (1 for succ, 1 for pred), store only 1 map (node to preds, succ). Then, create a 'DegreeIterator' and create a 'Reticulation'-predicate and then create a reticulations()-function
 namespace PT{
 
   struct consecutivity_tag {};
@@ -72,12 +73,10 @@ namespace PT{
 
     // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
     using MapValueNonEmptyPredicate = std::MapValuePredicate<std::NonEmptySetPredicate>;
-    using EmptySuccIterFactory  = std::FilteredIterFactory<SuccessorMap, MapValueNonEmptyPredicate>;
-    using LeafContainer         = FirstFactory<EmptySuccIterFactory>;
-    using LeafContainerRef      = LeafContainer;
+    //using EmptySuccIterFactory  = std::FilteredIterFactory<SuccessorMap, MapValueNonEmptyPredicate>;
+    //using LeafContainer         = FirstFactory<EmptySuccIterFactory>;
     using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, MapValueNonEmptyPredicate>;
     using ConstLeafContainer    = FirstFactory<const ConstEmptySuccIterFactory>;
-    using ConstLeafContainerRef = ConstLeafContainer;
 
     using value_type      = Node;
     using reference       = Node;
@@ -140,9 +139,9 @@ namespace PT{
 
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
     ConstNodeContainerRef nodes() const { return _successors; }
-    NodeContainerRef      nodes()       { return _successors; } 
-    ConstLeafContainerRef leaves() const { return ConstLeafContainerRef(ConstEmptySuccIterFactory(_successors, _successors.end())); }
-    LeafContainerRef      leaves()       { return LeafContainerRef(EmptySuccIterFactory(_successors, _successors.end())); }
+    //NodeContainerRef      nodes()       { return _successors; } 
+    ConstLeafContainer leaves() const { return ConstLeafContainer(ConstEmptySuccIterFactory(_successors, _successors.end())); }
+    //LeafContainer      leaves()       { return LeafContainer(EmptySuccIterFactory(_successors, _successors.end())); }
 
     // iterate over adjacencies
     //NOTE: in order to allow the user to modify the edge-data associated with an adjacency, we give him/her a proxy container

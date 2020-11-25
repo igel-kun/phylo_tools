@@ -417,7 +417,7 @@ namespace PT{
     template<class __LabelTag,
            class __EdgeStorage,
            class __NetworkTag>
-    _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>& in_tree):
+    _Tree(const _Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>& in_tree, const bool reuse_labelmap = true):
       Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // in_tree has the same EdgeContainer as we do?
                               ? EdgeStorage(*((const EdgeStorage*)(&in_tree))) // yes: copy edge container
                               : ( // no: make a copy of the EdgeStorage (and move it into place)
@@ -428,7 +428,7 @@ namespace PT{
       // We can re-use the existing node_label structure if no node-translation has taken place.
       // We can be sure that no node translation has taken place iff we have non-consecutive nodes or they have consecutive nodes
       node_labels(
-        (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>) ?
+        (reuse_labelmap && (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>)) ?
           in_tree.node_labels : // yes: just create a new reference
           std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end())) // no: copy the labelmap
     {
@@ -462,7 +462,7 @@ namespace PT{
     template<class __LabelTag,
            class __EdgeStorage,
            class __NetworkTag>
-    _Tree(_Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>&& in_tree):
+    _Tree(_Tree<__LabelTag, __EdgeStorage, LabelMap, __NetworkTag>&& in_tree, const bool reuse_labelmap = true):
       Parent(std::is_same_v<EdgeStorage, __EdgeStorage> // same EdgeContainer ?
                               ? EdgeStorage(std::move(*((EdgeStorage*)(&in_tree)))) // yes: move edges if possible
                               : ( // no: make a copy of the EdgeStorage
@@ -471,7 +471,7 @@ namespace PT{
                                 : EdgeStorage(non_consecutive_tag(), in_tree.edges())
                               )),
       node_labels(
-          (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>) ?
+          (reuse_labelmap && (!has_consecutive_nodes || PT::has_consecutive_nodes<__EdgeStorage>)) ?
                 in_tree.node_labels : // yes: just create a new reference
                 std::make_shared<LabelMap>(in_tree.node_labels->begin(), in_tree.node_labels->end()) // no: copy the labelmap
       )

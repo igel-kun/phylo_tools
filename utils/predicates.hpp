@@ -6,16 +6,19 @@ namespace std{
 #warning "TODO: automatically detect static and dynamic predicates"
   struct StaticPredicate { inline static constexpr bool is_static = true; };
   struct DynamicPredicate { inline static constexpr bool is_static = false; };
+  
   // note: for an iterator it, use pred.value(it) to get the value of the predicate for the item at position it
   template<class Predicate>
   struct StaticNotPredicate: public Predicate
   { template<class X> static constexpr bool value(const X& x) { return !Predicate::value(x); } };
+  
   template<class Predicate>
   struct DynamicNotPredicate: public Predicate
   {
     using Predicate::Predicate;
     template<class X> bool value(const X& x) const { return !Predicate::value(x); }
   };
+  
   template<class Predicate>
   using NotPredicate = conditional_t<Predicate::is_static, StaticNotPredicate<Predicate>, DynamicNotPredicate<Predicate>>;
 
@@ -33,6 +36,19 @@ namespace std{
     template<class... Args>
     DynamicEqualPredicate(Args&&... args): t(forward<Args>(args)...) {}
     bool value(const T& x) const { return t == x; }
+  };
+
+  template<class PredicateA, class PredicateB>
+  struct StaticAndPredicate
+  {
+    template<class X>
+    static bool value(const X& x) { return PredicateA::value(x) && PredicateB::value(x); }
+  };
+  template<class PredicateA, class PredicateB>
+  struct StaticOrPredicate
+  {
+    template<class X>
+    static bool value(const X& x) { return PredicateA::value(x) || PredicateB::value(x); }
   };
 
   template<class _ItemPredicate, size_t get_num>
@@ -55,6 +71,32 @@ namespace std{
   template<class _ItemPredicate>
   using MapValuePredicate = SelectingPredicate<_ItemPredicate, 1>;
 
+  template<class Compare, class CmpTarget = typename Compare::second_argument_type>
+  struct DynamicComparePredicate: public DynamicPredicate
+  {
+    const CmpTarget cmp_target;
+    const Compare cmp;
+
+    DynamicComparePredicate(const CmpTarget& _target): cmp_target(_target) {}
+
+    template<class X>
+    bool value(const X& x) const { return cmp(x, cmp_target); }
+  };
+  template<class Compare, size_t cmp_target>
+  struct StaticComparePredicate: public StaticPredicate
+  {
+    template<class X>
+    static bool value(const X& x)
+    {
+      const Compare cmp;
+      return cmp(x, cmp_target);
+    }
+  };
+
+  template<class Compare, class CmpTarget = typename Compare::second_argument_type>
+  using DynamicMapValueComparePredicate = MapValuePredicate<DynamicComparePredicate<Compare, CmpTarget>>;
+  template<class Compare, size_t cmp_target>
+  using StaticMapValueComparePredicate = MapValuePredicate<StaticComparePredicate<Compare, cmp_target>>;
 
   // predicate for containers of sets, returning whether the given set is empty
   struct EmptySetPredicate: public StaticPredicate
@@ -72,6 +114,7 @@ namespace std{
     bool value(const Item& x) const { return test(*c, x) == is_in; }
   };
 
+#warning TODO: implement static predicates correctly
   /* THIS DOESN'T WORK YET... ULTIMATELY, I WANT TWO DIFFERENT filter_iterators DEPENDING ON WHETHER THE predicate IS STATIC
   // we'll assume that a class with a static member ::value(...) is a static predicate
   template <typename T, typename X = int> // if value(cont X&) is templated, check for value<int>(...) by default
