@@ -51,12 +51,14 @@ namespace std{
     template<class Iter>
     bool value(const Iter& it) { return c.is_vacant(it); }
   };
+  template<class Container>
+  using OccupiedPredicate = NotPredicate<VancantPredicate<Container>>;
 
 
   template<class Container, class ParentContainer, bool reverse = false>
   using linear_vector_hash_iterator = filtered_iterator<
         Container,
-        VacantPredicate<Container>,
+        OccupiedPredicate<Container>,
         reverse,
         std::conditional_t<reverse, std::reverse_iterator_of<typename Container::Parent>, std::iterator_of_t<typename Container::Parent>>,
         std::BeginEndIters<typename Container::Parent, reverse>>;

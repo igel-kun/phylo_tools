@@ -32,12 +32,10 @@ namespace PT{
     using SuccessorMap = _SuccessorMap;
     using PredecessorMap = _PredecessorMap;
       
-    using NodeContainer = FirstFactory<SuccessorMap>;
-    using NodeContainerRef = NodeContainer;
+    //using NodeContainer = FirstFactory<SuccessorMap>;
     using ConstNodeContainer = FirstFactory<const SuccessorMap>;
-    using ConstNodeContainerRef = ConstNodeContainer;
     
-    using NodeIterator = std::iterator_of_t<NodeContainer>;
+    //using NodeIterator = std::iterator_of_t<NodeContainer>;
     using ConstNodeIterator = std::iterator_of_t<ConstNodeContainer>;
 
     using NodeData = void;
@@ -72,16 +70,14 @@ namespace PT{
     using ConstInEdgeContainerRef  = ConstInEdgeContainer;
 
     // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
-    using MapValueNonEmptyPredicate = std::MapValuePredicate<std::NonEmptySetPredicate>;
-    //using EmptySuccIterFactory  = std::FilteredIterFactory<SuccessorMap, MapValueNonEmptyPredicate>;
-    //using LeafContainer         = FirstFactory<EmptySuccIterFactory>;
-    using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, MapValueNonEmptyPredicate>;
+    using MapValueEmptyPredicate = std::MapValuePredicate<std::EmptySetPredicate>;
+    using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, MapValueEmptyPredicate>;
     using ConstLeafContainer    = FirstFactory<const ConstEmptySuccIterFactory>;
 
     using value_type      = Node;
     using reference       = Node;
-    using iterator        = NodeIterator;
     using const_iterator  = ConstNodeIterator;
+    using iterator        = const_iterator;
   protected:
     SuccessorMap _successors;
     PredecessorMap _predecessors;
@@ -108,15 +104,14 @@ namespace PT{
         throw std::logic_error("given edgelist is cyclic (has no root)");
     }
 
+    virtual void erase_node_data(const Node) {}
+    virtual ~RootedAdjacencyStorage() = default;
   public:
-
     // =============== iteration ================
 
     // iterator over nodes
     ConstNodeIterator begin() const { return _successors.begin(); }
     ConstNodeIterator end() const { return _successors.end(); }
-    NodeIterator begin() { return _successors.begin(); }
-    NodeIterator end() { return _successors.end(); }
 
     // =============== query ===================
     size_t num_nodes() const { return _successors.size(); }
@@ -138,7 +133,7 @@ namespace PT{
     }
 
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
-    ConstNodeContainerRef nodes() const { return _successors; }
+    ConstNodeContainer nodes() const { return _successors; }
     //NodeContainerRef      nodes()       { return _successors; } 
     ConstLeafContainer leaves() const { return ConstLeafContainer(ConstEmptySuccIterFactory(_successors, _successors.end())); }
     //LeafContainer      leaves()       { return LeafContainer(EmptySuccIterFactory(_successors, _successors.end())); }
@@ -197,6 +192,7 @@ namespace PT{
   using EdgeContainer_of = std::conditional_t<std::is_const_v<_Store>, typename _Store::ConstEdgeContainerRef, typename _Store::EdgeContainerRef>;
   // the following classes are for adding (or not) node-data onto any form of _EdgeStorage
 
+#warning TODO: when constructing a tree from another tree with node-translation, the node-data also has to be translated!!!
   // NOTE: the weird std::conditional is needed because otherwise, the default template arg cannot be initialized if _NodeData == void
   template<class _NodeData,
            class _EdgeStorage,
@@ -211,20 +207,50 @@ namespace PT{
     using Parent::Parent;
     static constexpr bool has_node_data = true;
 
+  protected:
     template<class... Args>
     NodeData& emplace_node_data(const Node u, Args&&... args) { return node_data.try_emplace(u, std::forward<Args>(args)...).first->second; }
 
+    void erase_node_data(const Node x) override { node_data.erase(x); }
+    
+  public:
     // on const EdgeStorages, use node_data.at(), which will throw an exception if u does not yet have node data
     const NodeData& get_node_data(const Node u) const { return node_data.at(u); }
     const NodeData& operator[](const Node u) const { return get_node_data(u); }
     
     // on non-const EdgeStorages, operator[] can emplace NodeData...
     template<class = std::enable_if_t<std::is_default_constructible_v<_NodeData>>, class... Args>
-    NodeData& operator[](const Node u) { return emplace_node_data(u); }
+    NodeData& operator[](const Node u) { return node_data[u]; }
     // ... but get_node_data() will throw an out_of_range exception
     NodeData& get_node_data(const Node u) { return node_data.at(u); }
-
     const NodeDataMap& get_node_data() const { return node_data; }
+
+    // modification
+    template<class... Args>
+    Node add_node(Args&& ...args)
+    {
+      const Node result = Parent::add_node();
+      emplace_node_data(result, std::forward<Args>(args)...);
+      return result;
+    }
+
+    // the user can suggest(!) a node index (if this suggestion is invalid (already exists), we'll ignore it)
+    template<class... Args>
+    Node add_node_idx(const Node index, Args&& ...args)
+    {
+      const Node result = Parent::add_node_idx(index);
+      emplace_node_data(result, std::forward<Args>(args)...);
+      return result;
+    }
+
+    // add a new child to u and return its index
+    template<class... Args>
+    Node add_child(const Node u, const Node index = NoNode, Args&& ...args)
+    {
+      const Node result = Parent::add_child(u, index);
+      emplace_node_data(result, std::forward<Args>(args)...);
+      return result;
+    }
   };
 
   template<class _NodeData,

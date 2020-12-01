@@ -11,10 +11,10 @@ namespace PT{
   struct SparseInducedSubtreeInfo
   {
     size_t dist_to_root;
+
     SparseInducedSubtreeInfo(const size_t _dtr = 0, const size_t _ignore = 0):
       dist_to_root(_dtr)
     {}
-    operator size_t() const { return dist_to_root; }
   };
   template<class Tree>
   using SparseInducedSubtreeInfoMap = typename Tree::template NodeMap<SparseInducedSubtreeInfo>;
@@ -23,9 +23,13 @@ namespace PT{
   struct InducedSubtreeInfo: public SparseInducedSubtreeInfo
   {
     size_t order_number;
+    
     InducedSubtreeInfo(const size_t _dtr = 0, const size_t _on = 0):
       SparseInducedSubtreeInfo(_dtr), order_number(_on)
     {}
+    
+    friend std::ostream& operator<<(std::ostream& os, const InducedSubtreeInfo& si)
+    { return os << "{order#: "<<si.order_number<<", dist: "<<si.dist_to_root<<"}"; }
   };
   template<class Tree>
   using InducedSubtreeInfoMap = typename Tree::template NodeMap<InducedSubtreeInfo>;

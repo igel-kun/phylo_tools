@@ -42,15 +42,16 @@ namespace PT {
     {
       // step 1: create a mapping of labels to nodes in N
       for(const auto& p: Nfac) if(!p.second.empty()){
+        std::cout << "treating label "<<p<<"\n";
         // the factory Nfac gives us pairs of (node, label)
         // find entry for p's label or construct it by matching p to the default constructed (empty LabelNodeStorage)
         // (if the entry was already there, then we have 2 nodes of the same label, so throw an exception)
-        const auto emp_res = Parent::try_emplace(p.second);
+        const auto [iter, success] = Parent::try_emplace(p.second);
         // if A is single-label and the label was already there, we have to bail...
-        if(_single_label_v<_LabelTagA> && !emp_res.second)
+        if(_single_label_v<_LabelTagA> && !success)
           throw std::logic_error("single-label map for multi-labeled tree/network");
         // otherwise, just add the node to the (first part of the) entry
-        append(emp_res.first->second.first, p.first);
+        append(iter->second.first, p.first);
       }
       // step 2: for each node u with label l in T, add u to the set of T-nodes mapped to l
       for(const auto& p: Tfac) if(!p.second.empty()){

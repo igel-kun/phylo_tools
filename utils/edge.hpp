@@ -85,8 +85,9 @@ namespace PT{
     template<class __Adjacency>
     bool operator==(const AbstractEdge<__Adjacency>& other) const { return (head() == other.head()) && (tail() == other.tail()); }
 
-    Adjacency& get_adjacency() { return Parent::second; }
-    const Adjacency& get_adjacency() const { return Parent::second; }
+    Adjacency& get_adjacency() & { return Parent::second; }
+    Adjacency&& get_adjacency() && { return std::move(Parent::second); }
+    const Adjacency& get_adjacency() const & { return Parent::second; }
 
     std::ostream& print(std::ostream& os) const { return os << Parent(*this); }
   };

@@ -78,7 +78,7 @@ namespace std {
 
     // see comments for the corresponding constructor in _IterFactory; in short: make sure Container has a move-constructor
     template<class... Args>
-    IterFactory(remove_cv_t<Container>&& _c, Args&&... args): Parent(forward<remove_cv_t<Container>>(_c)), _data(forward<Args>(args)...) {}
+    IterFactory(remove_cv_t<Container>&& _c, Args&&... args): Parent(move(_c)), _data(forward<Args>(args)...) {}
 
     iterator begin() { return BeginEnd::begin(*container, _data); }
     iterator end()   { return BeginEnd::end(*container, _data); }

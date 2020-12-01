@@ -9,9 +9,9 @@
 namespace std{
 
   struct do_not_fix_index_tag {};
-
+#warning TODO: replace by C++20 spans
 #warning TODO: inherit from auto_iterator instead of keeping one around
-  // skip all items in a container for which the predicate is true
+  // skip all items in a container for which the predicate is false (that is, list all items for which the predicate is true)
   // NOTE: while we could just always use lambda functions as predicate, the current way is more flexible
   //       since it allows default initializing the filtered_iterator if our Predicate is static
   template<class Container, class NormalIterator>
@@ -66,7 +66,7 @@ namespace std{
 
     Predicate pred;
 
-    inline void fix_index() { while(!it.is_invalid() && pred.value(*it)) ++it; }
+    inline void fix_index() { while(!it.is_invalid() && !pred.value(*it)) ++it; }
   public:
     
     struct IteratorData {
@@ -131,7 +131,7 @@ namespace std{
     using Parent::pred;
     using Parent::it;
 
-    inline void rev_fix_index() { while(!it.is_invalid() && pred.value(it)) --it; }
+    inline void rev_fix_index() { while(!it.is_invalid() && !pred.value(it)) --it; }
   public:
     using Parent::Parent;
 

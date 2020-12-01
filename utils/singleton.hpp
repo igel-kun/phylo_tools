@@ -51,7 +51,7 @@ namespace std{
     iterator       find(const _Element& x) { return (!empty() && (x == *element)) ? begin() : end(); }
     const_iterator find(const _Element& x) const { return (!empty() && (x == *element)) ? begin() : end(); }
     bool contains(const _Element& x) const { return empty() ? false : x == front(); }
-    void reserve(const size_t) {} // compatibility with vector
+    void reserve(const size_t) const {} // compatibility with vector
 
     virtual iterator begin() = 0;
     virtual const_iterator begin() const = 0;

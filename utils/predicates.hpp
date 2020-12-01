@@ -38,6 +38,13 @@ namespace std{
     bool value(const T& x) const { return t == x; }
   };
 
+  template<class T, class X>
+  using StaticUnequalPredicate = NotPredicate<StaticEqualPredicate<T, X>>;
+  template<class T>
+  using DynamicUnequalPredicate = NotPredicate<DynamicEqualPredicate<T>>;
+
+
+
   template<class PredicateA, class PredicateB>
   struct StaticAndPredicate
   {
@@ -114,6 +121,7 @@ namespace std{
     bool value(const Item& x) const { return test(*c, x) == is_in; }
   };
 
+#warning TODO: replace all this by lambdas
 #warning TODO: implement static predicates correctly
   /* THIS DOESN'T WORK YET... ULTIMATELY, I WANT TWO DIFFERENT filter_iterators DEPENDING ON WHETHER THE predicate IS STATIC
   // we'll assume that a class with a static member ::value(...) is a static predicate

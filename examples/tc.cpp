@@ -131,9 +131,9 @@ int main(const int argc, const char** argv)
   std::cout << "\n\n starting the containment engine...\n\n";
   if(T.is_tree()) {
     if(N.is_tree()){
-      TreeInTreeContainment tc(N.as_tree(), T);
+      TreeInTreeContainment tc(std::move(N.as_tree()), std::move(T));
       if(tc.displayed())
-        std::cout << "displayed by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
+        std::cout << "displayed\n"; // by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
       else std::cout << "not displayed\n";
     } else {
       TreeInNetContainment tc(std::move(N), std::move(T));

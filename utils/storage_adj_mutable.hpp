@@ -83,16 +83,18 @@ namespace PT{
       assert(!test(_successors, next_node_index) && !test(_predecessors, next_node_index));
       _successors.try_emplace(next_node_index);
       _predecessors.try_emplace(next_node_index);
+      if(_root == NoNode) _root = next_node_index;
 
       return next_node_index++;
     }
 
     // the user can suggest(!) a node index (if this suggestion is invalid (already exists), we'll ignore it)
-    Node add_node(const Node index)
+    Node add_node_idx(const Node index)
     {
       if(!test(_successors, index)){
         _successors.try_emplace(index);
         _predecessors.try_emplace(index);
+        if(_root == NoNode) _root = index;
         next_node_index = std::max(index + 1, next_node_index);
         return index;
       } else return add_node();
@@ -101,7 +103,7 @@ namespace PT{
     // add a new child to u and return its index
     Node add_child(const Node u, const Node index = NoNode)
     {
-      const Node v = index == NoNode ? add_node() : add_node(index);
+      const Node v = index == NoNode ? add_node() : add_node_idx(index);
       append(_predecessors, v, u);
       append(_successors, u, v);
       return v;
@@ -291,11 +293,12 @@ namespace PT{
 
     //! subdivide uv: remove uv, add w, add uw and wv
     //NOTE: no checks are made, so if uv did not exist before, this will still create uw and wv, possibly making v a reticulation!
-    template<class _Edge>
-    Node subdivide(const _Edge& uv) { return subdivide(uv.tail(), uv.head()); }
-    Node subdivide(const Node u, const Node v)
+    template<class _Edge, class... Args>
+    Node subdivide(const _Edge& uv, Args&& ...args) { return subdivide(uv.tail(), uv.head(), std::forward<Args>(args)...); }
+    template<class... Args>
+    Node subdivide(const Node u, const Node v, Args&& ...args)
     {
-      const Node w = add_node();
+      const Node w = add_node(std::forward<Args>(args)...);
       DEBUG3(std::cout << "subvididing "<<u<<"-->"<<v<<" with new node "<<w<<"\n");
       remove_edge(u, v);
       add_edge(u, w);
@@ -391,7 +394,8 @@ namespace PT{
         compute_root();
         std::cout << "computing node translation and leaves...\n";
         compute_translate_and_leaves(*this, old_to_new, leaves);
-      } else _root = add_node();
+      }
+      else _root = add_node();
     }
 
   };

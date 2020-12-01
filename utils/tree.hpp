@@ -20,7 +20,7 @@ namespace PT{
   template<class LabelType>
   const LabelType _EmptyLabel = LabelType();
 
-  enum node_type { NODE_TYPE_LEAF=0x00, NODE_TYPE_TREE=0x01, NODE_TYPE_RETI=0x02, NODE_TYPE_ISOL=0x03 };
+  enum node_type { NODE_TYPE_LEAF=0x1, NODE_TYPE_INTERNAL_TREE=0x2, NODE_TYPE_INTERNAL_RETI=0x04};
 
   struct tree_tag {};
   struct network_tag {};
@@ -46,7 +46,7 @@ namespace PT{
   template<class X>
   struct is_phylogeny: public std::false_type {};
   template<class X>
-  constexpr bool is_phylogeny_v = is_phylogeny<X>::value;
+  constexpr bool is_phylogeny_v = is_phylogeny<std::remove_cvref_t<X>>::value;
 
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
@@ -109,13 +109,6 @@ namespace PT{
 
     // ================ modification ======================
 
-    Node add_node(const LabelType& _label)
-    {
-      const Node u = Parent::add_node();
-      node_labels->try_emplace(u, _label);
-      return u;
-    }
-
     // =============== variable query ======================
     bool is_tree() const { return num_edges() == num_nodes() - 1; }
     bool empty() const { return num_nodes() == 0; }
@@ -161,9 +154,8 @@ namespace PT{
 
     node_type type_of(const Node u) const
     {
-      if(is_leaf(u)) return NODE_TYPE_LEAF;
-      if(is_tree_node(u)) return NODE_TYPE_TREE;
-      return NODE_TYPE_ISOL;
+      if(out_degree(u) == 0) return NODE_TYPE_LEAF;
+      return NODE_TYPE_INTERNAL_TREE;
     }
 
 
@@ -403,8 +395,7 @@ namespace PT{
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(std::move(_node_labels)), tag)
     {}
     template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
-      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>,
-      class = std::enable_if_t<std::is_same_v<Tag, non_consecutive_tag> || std::is_same_v<Tag, consecutive_tag>>>
+      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>>
     _Tree(GivenEdgeContainer&& given_edges, const Tag tag = Tag()):
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(), tag)
     {}

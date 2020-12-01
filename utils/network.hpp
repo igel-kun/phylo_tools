@@ -49,7 +49,7 @@ namespace PT{
 
     node_type type_of(const Node u) const
     {
-      if(is_reti(u)) return NODE_TYPE_RETI; else return Parent::type_of(u);
+      if(is_reti(u)) return NODE_TYPE_INTERNAL_RETI; else return Parent::type_of(u);
     }
 
     //! return whether the tree indices are in pre-order (modulo gaps) (they should always be) 
@@ -91,13 +91,14 @@ namespace PT{
     // return whether there is an x-y-path in the network
     bool has_path(const Node x, Node y) const
     {
-      if(x == y) return true;
       while(1) {
         while(in_degree(y) <= 1) {
           if(y == x) return true;
           if(y == Parent::_root) return false;
           y = parent(y);
         }
+        if(x == y) return true;
+
         typename Parent::NodeSet seen;
         std::queue<Node> search_front;
         // add the parents of y to the search front

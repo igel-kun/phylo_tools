@@ -31,6 +31,7 @@ namespace std{
     bool is_valid() const { return first != second; }
     bool is_invalid() const { return !is_valid(); }
     operator bool() const { return is_valid(); }
+    operator bool() { return is_valid(); }
     operator _Iterator() { return first; }
     operator const _Iterator() const { return first; }
     _Iterator get_iter() const { return first; }

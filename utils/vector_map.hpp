@@ -89,10 +89,10 @@ namespace std{
   // if _Element is simple, we can use a given constexpr as "invalid element" instead of adding a bitset mask
   //NOTE: _Element must be constructible from and comparable to InvalidElement
   template<class _Key, class _Element, class InvalidElement>
-  class simple_vector_map: public _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, InvalidElement>>>
+  class simple_vector_map: public _vector_map<_Key, _Element, MapValuePredicate<StaticUnequalPredicate<_Element, InvalidElement>>>
   {
     static constexpr auto _invalid_element = InvalidElement::value();
-    using Parent = _vector_map<_Key, _Element, MapValuePredicate<StaticEqualPredicate<_Element, InvalidElement>>>;
+    using Parent = _vector_map<_Key, _Element, MapValuePredicate<StaticUnequalPredicate<_Element, InvalidElement>>>;
   public:
     using Parent::Parent;
     using Parent::data;
@@ -126,9 +126,9 @@ namespace std{
   // for types that cannot have an invalid state, we'll have to keep a bitset around, indicating whether or not a key is present
   template<class _Key, class _Element>
   class bitset_vector_map:
-    public _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset, false>>>
+    public _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset>>>
   {
-    using Parent = _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset, false>>>;
+    using Parent = _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset>>>;
 
     // use a bitset to check who is present - NOTE: internally, ordered_bitset uses a raw_vector_map, which forces this separation of header files
     // into raw_vector_map.hpp and vector_map.hpp
@@ -146,7 +146,7 @@ namespace std{
     void set_absent(const key_type key) { present.unset(key); }
     AbsentPredicate make_predicate() const { return AbsentPredicate(present); }
   public:
-    void resize(const key_type new_size) { Parent::raw_resize(new_size); }
+    void resize(const size_t new_size) { Parent::raw_resize(new_size); }
 
     bool contains(const key_type key) const { return present.test(key); }
 

@@ -226,20 +226,33 @@ namespace std {
     return t;
   }
   template<class Set, class = enable_if_t<is_container_v<Set>>>
-  typename Set::value_type value_pop_front(Set& s)
+  auto value_pop_front(Set& s)
   {
     typename Set::value_type t = front(s);
     s.erase(s.begin());
     return t;
   }
   template<class Set, class = enable_if_t<is_container_v<Set>>>
-  typename Set::value_type value_pop_back(Set& s)
+  auto value_pop_back(Set& s)
   {
     typename Set::value_type t = back(s);
     s.erase(s.rbegin());
     return t;
   }
-
+  template<class T, class A>
+  auto value_pop_front(vector<T,A>& s)
+  {
+    T t = front(s);
+    s.pop_front();
+    return t;
+  }
+  template<class T, class A>
+  auto value_pop_back(vector<T,A>& s)
+  {
+    T t = back(s);
+    s.pop_back();
+    return t;
+  }
   template<class T>
   unordered_set<typename iterable_bitset<T>::value_type> to_set(const iterable_bitset<T>& x)
   {
