@@ -66,6 +66,7 @@ namespace PT{
     using Parent::children;
     using Parent::any_child;
     using Parent::has_node;
+    using Parent::erase_node_data;
 
     template<class T>
     using NodeMap = HashMap<Node, T>;
@@ -131,6 +132,7 @@ namespace PT{
     }
 
     // replace the given parent y of z with x, that is, swap the arc yz with xz; return whether the replace took place (that is xz was not already there)
+    //NOTE: no check is made whether new_parent is a descendant of z, so you can create loops with this... be careful not to!
     bool replace_parent(const Node z, const Node old_parent, const Node new_parent)
     {
       if(old_parent == new_parent) return true;
@@ -204,22 +206,15 @@ namespace PT{
 #warning: TODO: write a network class with builtin branch-length that can contract edges in context of their branch-lengths
 
     // contract the edge uv, leaving u in tact and removing v
+    //NOTE: this can create cycles if there is a u-->v path other than the arc uv! Use with caution (preferably only if uv is a bridge)...
     void contract_upwards(const Node v, const Node u)
     {
       assert(auto_find(_predecessors.at(v), u));
       assert((in_degree(u) + in_degree(v) <= 2) || (out_degree(u) + out_degree(v) <= 2)); // let's not create forbidden nodes (in- and out-degree > 1)
       
-      auto& v_pred = _predecessors.at(v);
-      v_pred.erase(u);
-      while(!v_pred.empty()) replace_child(front(v_pred), v, u);
-
       auto& v_succ = _successors.at(v);
       while(!v_succ.empty()) replace_parent(front(v_succ), v, u);
-      
-      --_size; // we lost the edge uv
-      _successors.at(u).erase(v);
-      _predecessors.erase(v);
-      _successors.erase(v);
+      while(has_node(v)) replace_child(parent(v), v, u);
     }
 
     void contract_upwards(const Node u)
@@ -236,7 +231,10 @@ namespace PT{
 
       std::cout << "contracting "<<u<<" onto its child "<<v<<"\n";
       while(out_degree(u)) replace_parent(any_child(u), u, v);
-      while(has_node(u)) replace_child(parent(u), u, v);
+      if(u == _root){
+        _root = v;
+        remove_node(u);
+      } else while(has_node(u)) replace_child(parent(u), u, v);
     }
 
     void contract_downwards(const Node u)
@@ -248,7 +246,6 @@ namespace PT{
     // suppress (shortcut) a node with in-degree == 1 or out-degree <= 1 (if outdegree == 0, then just remove the node)
     void suppress_node(const Node y)
     {
-      assert(in_degree(y) != 0); // please don't suppress the root
       switch(out_degree(y)){
         case 0:
           remove_node(y);
@@ -370,6 +367,8 @@ namespace PT{
         _size -= v_succ->second.size();
         _successors.erase(v_succ);
 
+        // finally, erase the node data if there is any
+        erase_node_data(v);
         return true;
       } else return false;
     }

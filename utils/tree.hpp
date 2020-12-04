@@ -238,6 +238,20 @@ namespace PT{
       
     }
 
+    template<class Container = NodeVec>
+    Container common_parents(const Node x, const Node y) const 
+    {
+      Container result;
+      const bool swp = (in_degree(x) > in_degree(y));
+      const auto& p_large = swp ? parents(x) : parents(y);
+      const auto& p_small = swp ? parents(y) : parents(x);
+      for(const Node z: p_small)
+        if(test(p_large, z))
+          append(result, z);
+      return result;
+    }
+
+
     //! return if there is a directed path from x to y in the tree
     bool has_path(const Node x, Node y) const
     {

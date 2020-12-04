@@ -254,6 +254,13 @@ namespace std {
     return t;
   }
   template<class T>
+  auto value_pop_back(unordered_set<T>& s)
+  {
+    return value_pop_front(s);
+  }
+
+
+  template<class T>
   unordered_set<typename iterable_bitset<T>::value_type> to_set(const iterable_bitset<T>& x)
   {
     unordered_set<typename iterable_bitset<T>::value_type> result;

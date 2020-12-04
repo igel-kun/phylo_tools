@@ -26,22 +26,6 @@ namespace PT{
     Node comp_root = NoNode;
     Node visible_leaf = NoNode;
 
-    // conservative "set" functions that only set if the value was NoNode before and return whether the value was set
-    bool set_comp_root(const Node x)
-    {
-      if(comp_root == NoNode) {
-        comp_root = x; 
-        return true;
-      } else return false;
-    }
-
-    bool set_visible_leaf(const Node x)
-    {
-      if(visible_leaf == NoNode) {
-        visible_leaf = x;
-        return true;
-      } else return false;
-    }
     void force_both(const Node x) { comp_root = visible_leaf = x; }
     void clear() { force_both(NoNode); }
     friend std::ostream& operator<<(std::ostream& os, const ComponentData& cd) { return os<<"{rt: "<<cd.comp_root<<" vl: "<<cd.visible_leaf<<"}"; }
@@ -68,7 +52,7 @@ namespace PT{
       NodeVec non_trivial_roots;
       NodeVec trivial_roots;
 
-      N[N.root()].force_both(N.root());
+      N[N.root()].comp_root = N.root();
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
       compute_edges(non_trivial_roots, &result);
@@ -112,7 +96,7 @@ namespace PT{
       // we use "r" to denote "uninitialized" and "NoNode" to denote "more than one component sees r"
       //NOTE: we cannot simply use "components_above.size() == 1" since previous branches might have already filled that
       Node rt = r;
-      std::cout << "updating 'reticulation' "<<r<<'\n';
+      std::cout << "updating 'reticulation' "<<r<<" with parents "<<N.parents(r)<<'\n';
       for(const Node pr: N.parents(r)){
         Node next_rt;
         if(!N.is_reti(pr)){
@@ -123,7 +107,7 @@ namespace PT{
         if(rt != next_rt) rt = NoNode;
       }
       assert(rt != r); // rt == r only if r has no parents which should never be the case
-      if(rt != NoNode) comp_root_visible(rt, r);
+      if(N.out_degree(r) <= 1) N[r].comp_root = rt;
       return rt;
     }
 
@@ -133,7 +117,11 @@ namespace PT{
       for(const Node u: roots){
         assert(!N.is_reti(u));
         typename Network::NodeSet components_above;
-        update_reticulations(u, &components_above);
+        const Node rt = update_reticulations(u, &components_above);
+        if((N.out_degree(u) == 0) && (rt != NoNode)) {
+          std::cout << "setting visible leaf of "<<rt<<" to the leaf "<<u<<"\n";
+          N[rt].visible_leaf = u;
+        }
         if(edges)
           for(const Node v: components_above)
             edges->emplace_back(v, u);
@@ -149,43 +137,83 @@ namespace PT{
       N(_N), comp_DAG(compute_comp_DAG())
     {}
 
+    // we want to be able to give a new Network-reference when copy-constructing
+    TreeComponentInfos(const TreeComponentInfos& tc, Network& _N):
+      N(_N), comp_DAG(tc.comp_DAG)
+    {}
+    TreeComponentInfos(TreeComponentInfos&& tc, Network& _N):
+      N(_N), comp_DAG(std::move(tc.comp_DAG))
+    {}
 
-    // recomputes the component root of a node y from the component roots of its parents
-    void inherit_root(const Node y)
-    {
-      if(N.in_degree(y) > 0)
-        comp_root_visible(N[N.parent(y)].comp_root, y);
-      else N[y].comp_root = y;
-      std::cout << "updated component root of "<<y<<" to "<< N[y].comp_root<<"\n";
+
+    // get the highest component-root that is visible on u
+    Node get_highest_visible_comp_root(const Node u){
+      // get highest initial component root reachable without reticulation
+      std::cout << "getting highest visible from "<<u<<" ("<<N[u]<<")\n";
+      Node rt = N[u].comp_root;
+      while(rt != NoNode) {
+        std::cout << "rt = "<<rt<<" ("<<N[rt]<<")\n";
+        assert(N.has_node(rt));
+        if(N.in_degree(rt) == 1){
+          const Node p_rt = N.parent(rt);
+          switch(N.in_degree(p_rt)){
+            case 0:
+              return p_rt;
+            case 1:
+              rt = N[p_rt].comp_root;
+              assert(rt != NoNode); // the parent is a tree-node, so it should have a component-root
+            default:
+              return rt;
+          }
+        } else {
+          assert(N.in_degree(rt) == 0);
+          return rt;
+        }
+      }
+      return rt;
     }
 
-    // register that a component root r is visible from a node v
-    void comp_root_visible(const Node r, const Node v)
-    {
-      std::cout << "marking "<<r<<" visible from "<<v<<'\n';
 
-      Node& v_root = N[v].comp_root;
-      if(v_root != r){     
-        v_root = r;
-        switch(N.out_degree(v)){
-          case 0:
-            N[r].visible_leaf = v;
+
+    // recomputes the component root of a node y from the component roots of its parents
+    // return whether the root of y changed
+    bool inherit_root(const Node y, const bool spread_info = false)
+    {
+      Node& y_root = N[y].comp_root;
+      if((y_root != y) || (N.in_degree(y) > 1)){ // update only for non-component roots!
+        Node rt;
+        switch(N.in_degree(y)){
+          case 0: 
+            rt = y;
             break;
           case 1:
             {
-              const Node w = N.any_child(v);
-              for(const Node pw: N.parents(w))
-                if(N[pw].comp_root != r)
-                    goto no_unique_root;
-              comp_root_visible(r, w);
+              const Node x = N.parent(y);
+              std::cout << "inheriting comp-root from "<<x<<": "<<N[x]<<"\n";
+              // if we have in-degree 1, then we take the component-root of our parent x if x is a tree node or we are a leaf
+              rt = ((N.in_degree(x) > 1) && (N.out_degree(y) > 1)) ? y : N[x].comp_root;
             }
-  no_unique_root:
             break;
           default:
-            for(const Node w: N.children(v))
-              comp_root_visible(r, w);
+            rt = comp_root_consensus(N.parents(y));
         }
-      }
+        std::cout << "updating comp-root of "<<y<<" with "<<rt<<'\n';
+        if(y_root != rt) {
+          if(y_root == y) {
+            std::cout << "as "<<y<<" was a comp-root, we will suppress it in the component DAG\n";
+            comp_DAG.suppress_node(y);
+          }
+          y_root = rt;
+          std::cout << "updated comp-info of "<<y<<" to "<< N[y]<<"\n";
+          if(N.out_degree(y) > 0) {
+            if(spread_info) for(const Node z: N.children(y)) inherit_root(z);
+          } else if(rt != NoNode) {
+            std::cout << "setting visible leaf of "<<rt<<" to "<<y<<"\n";
+            N[rt].visible_leaf = y; // further, if we are a leaf, then mark the component root(s) visible from us
+          }
+          return true;
+        } else return false;
+      } else return false;
     }
 
     // return the intersection of component roots of nodes in the container c (or NoNode if the intersection is empty)
@@ -194,9 +222,9 @@ namespace PT{
     {
       if(c.empty()) return NoNode;
       auto c_iter = c.begin();
-      const Node result = *c_iter;
+      const Node result = get_highest_visible_comp_root(*c_iter);
       while(++c_iter != c.end())
-        if(N[*c_iter].component_root != result) return NoNode;
+        if(get_highest_visible_comp_root(*c_iter) != result) return NoNode;
       return result;
     }
   };
