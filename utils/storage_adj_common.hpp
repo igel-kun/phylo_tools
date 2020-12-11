@@ -71,8 +71,12 @@ namespace PT{
 
     // to get the leaves, get all pairs (u,V) of the SuccessorMap, filter-out all pairs with non-empty V and return the first items of these pairs
     using MapValueEmptyPredicate = std::MapValuePredicate<std::EmptySetPredicate>;
-    using ConstEmptySuccIterFactory  = std::FilteredIterFactory<const SuccessorMap, MapValueEmptyPredicate>;
-    using ConstLeafContainer    = FirstFactory<const ConstEmptySuccIterFactory>;
+    using ConstLeafIterFactory  = std::FilteredIterFactory<const SuccessorMap, MapValueEmptyPredicate>;
+    using ConstLeafContainer    = FirstFactory<const ConstLeafIterFactory>;
+
+    struct RetiPredicate { static bool value(const typename PredecessorMap::value_type& p) { return p.second.size() >= 2; } };
+    using ConstRetiIterFactory  = std::FilteredIterFactory<const PredecessorMap, RetiPredicate>;
+    using ConstRetiContainer    = FirstFactory<const ConstRetiIterFactory>;
 
     using value_type      = Node;
     using reference       = Node;
@@ -135,8 +139,9 @@ namespace PT{
     // NOTE: this should go without saying, but: do not try to store away nodes() and access them after destroying the storage
     ConstNodeContainer nodes() const { return _successors; }
     //NodeContainerRef      nodes()       { return _successors; } 
-    ConstLeafContainer leaves() const { return ConstLeafContainer(ConstEmptySuccIterFactory(_successors, _successors.end())); }
-    //LeafContainer      leaves()       { return LeafContainer(EmptySuccIterFactory(_successors, _successors.end())); }
+    ConstLeafContainer leaves() const { return ConstLeafContainer(ConstLeafIterFactory(_successors, _successors.end())); }
+    //LeafContainer      leaves()       { return LeafContainer(LeafIterFactory(_successors, _successors.end())); }
+    ConstRetiContainer reticulations() const { return ConstRetiContainer(ConstRetiIterFactory(_predecessors, _predecessors.end())); }
 
     // iterate over adjacencies
     //NOTE: in order to allow the user to modify the edge-data associated with an adjacency, we give him/her a proxy container

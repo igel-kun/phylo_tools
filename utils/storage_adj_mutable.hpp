@@ -210,7 +210,6 @@ namespace PT{
     void contract_upwards(const Node v, const Node u)
     {
       assert(auto_find(_predecessors.at(v), u));
-      assert((in_degree(u) + in_degree(v) <= 2) || (out_degree(u) + out_degree(v) <= 2)); // let's not create forbidden nodes (in- and out-degree > 1)
       
       auto& v_succ = _successors.at(v);
       while(!v_succ.empty()) replace_parent(front(v_succ), v, u);
@@ -227,7 +226,6 @@ namespace PT{
     void contract_downwards(const Node u, const Node v)
     {
       assert(auto_find(_predecessors.at(v), u));
-      assert((in_degree(u) + in_degree(v) <= 2) || (out_degree(u) + out_degree(v) <= 2)); // let's not create forbidden nodes (in- and out-degree > 1)
 
       std::cout << "contracting "<<u<<" onto its child "<<v<<"\n";
       while(out_degree(u)) replace_parent(any_child(u), u, v);

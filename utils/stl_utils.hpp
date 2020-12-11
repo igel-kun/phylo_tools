@@ -314,18 +314,6 @@ namespace std{
   };
 
 
-  //! simple property getter
-  template<class Map, class Key = typename Map::key_type, class Mapped = copy_cvref_t<Map, typename Map::mapped_type>>
-  struct MapGetter
-  {
-    using PropertyType = typename Map::mapped_type;
-    Map& m;
-    MapGetter(Map& _m): m(_m) {}
-
-    Mapped& operator()(const Key& key) const { return m.at(key); }
-  };
-
-
   template<class C, class = enable_if_t<is_container_v<C> && !is_same_v<C,string_view> && !has_custom_output_v<C>>>
   inline std::ostream& operator<<(std::ostream& os, const C& objs)
   {

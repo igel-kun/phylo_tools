@@ -130,39 +130,42 @@ namespace PT {
       // step 1: get the subtree of host induced by the nodes that the children map to
       const NodeVec child_poss = merge_child_poss(u);
       if(!child_poss.empty()){
-        std::cout << "building tree induced by "<<child_poss<<"\n";
-        CompatibleRWTree<Host, induced_subtree_infos> induced_subhost(policy_noop, host, child_poss, node_infos);
-        std::cout << "induced tree:\n"<<induced_subhost<<"\n";
-
-        // step 2: find all nodes v such that each child of u has a possibility that is seen by a distinct leaf of v
-        // register the possibilities for all but one child of u
-        for(const Node u_child: guest.children(u)){
-          for(Node v_child: who_displays(u_child)){
-            // move upwards from v_child until we reach a node that's already seen a possibility for u_child
-            while(v_child != induced_subhost.root()){
-              const Node v_parent = induced_subhost.parent(v_child);
-              if(!induced_subhost[v_parent].register_child_poss(v_child, u_child)) break;
-              v_child = v_parent;
+        if(guest.out_degree(u) > 1){
+          std::cout << "building tree induced by "<<child_poss<<"\n";
+          CompatibleRWTree<Host, induced_subtree_infos> induced_subhost(policy_noop, host, child_poss, node_infos);
+          std::cout << "induced tree:\n"<<induced_subhost<<"\n";
+          if(!induced_subhost.edgeless()) {
+            // step 2: find all nodes v such that each child of u has a possibility that is seen by a distinct leaf of v
+            // register the possibilities for all but one child of u
+            for(const Node u_child: guest.children(u)){
+              for(Node v_child: who_displays(u_child)){
+                // move upwards from v_child until we reach a node that's already seen a possibility for u_child
+                while(v_child != induced_subhost.root()){
+                  const Node v_parent = induced_subhost.parent(v_child);
+                  if(!induced_subhost[v_parent].register_child_poss(v_child, u_child)) break;
+                  v_child = v_parent;
+                }
+              }
             }
-          }
-        }
-        
-        // step 3: go through the induced_subhost in postorder(!) and check containment for eligible nodes
-        for(Node v: induced_subhost.dfs().postorder()){
-          const auto& v_infos = induced_subhost[v];
-          if(v_infos.nodes_for_poss.size() == guest.out_degree(u)){ // if all children of u have a child of u that can display them
-            std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n";
-            if(perfect_child_matching(v_infos.nodes_for_poss)){ // if each child of v can be displayed by a different child of u
-              // H_v displays G_u \o/ - register and mark all ancestors uninteresting, so we don't run matching on them in the future
-              poss.push_back(v);
-              // if someone else already marked v unintersting, all ancestors are already marked as well
-              while((v != induced_subhost.root()) && !induced_subhost[v = induced_subhost.parent(v)].mark_uninteresting());
+          
+            // step 3: go through the induced_subhost in postorder(!) and check containment for eligible nodes
+            for(Node v: induced_subhost.dfs().postorder()){
+              const auto& v_infos = induced_subhost[v];
+              if(v_infos.nodes_for_poss.size() == guest.out_degree(u)){ // if all children of u have a child of u that can display them
+                std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n";
+                if(perfect_child_matching(v_infos.nodes_for_poss)){ // if each child of v can be displayed by a different child of u
+                  // H_v displays G_u \o/ - register and mark all ancestors uninteresting, so we don't run matching on them in the future
+                  poss.push_back(v);
+                  // if someone else already marked v unintersting, all ancestors are already marked as well
+                  while((v != induced_subhost.root()) && !induced_subhost[v = induced_subhost.parent(v)].mark_uninteresting());
+                }
+              }
             }
-          }
-        }
-        // make sure the nodes are in the correct order
-        std::flexible_sort(poss.begin(), poss.end(), sort_by_order);
-      } else poss.clear();
+            // make sure the nodes are in the correct order
+            std::flexible_sort(poss.begin(), poss.end(), sort_by_order);
+          } else poss.clear(); // if the induced tree is edgeless but there are at least 2 children of u in guest, then u is not displayed
+        } else append(poss, child_poss); // if u has a single child, then u maps where this child maps
+      } else poss.clear(); // if no child of u can be mapped, then u cannot be mapped either
 
       std::cout << "found that "<< u << " is displayed at "<<poss<<"\n";
     }
@@ -391,10 +394,15 @@ namespace PT {
       assert(host.out_degree(x) == 1);
       const Node y = host.any_child(x);
       if(host.out_degree(y) == 1) {
-        std::cout << "contracting reti "<<x<<" down to reti "<<y<<"\n";
-        const NodeVec common_parents = host.common_parents(x, y);
-        for(const Node z: common_parents) contain.suppress.add(z);
-        host.contract_downwards(x, y); // we have to contract retis downwards in order to preserve their comp_info
+        if(host.in_degree(y) > 1) {
+          std::cout << "contracting reti "<<x<<" down to reti "<<y<<"\n";
+          for(const Node z: host.common_parents(x, y)) contain.suppress.add(z);
+          // next, we contract x onto y (we have to contract retis downwards in order to preserve their comp_info)
+          if(host[x].comp_root == x) contain.comp_info.comp_DAG.suppress_node(x);
+          host.contract_downwards(x, y);
+          contain.comp_info.inherit_root(y);
+        }
+        contain.suppress.clean_up_node(y);
         return true;
       }
       return false;
@@ -437,47 +445,51 @@ namespace PT {
     bool apply() { return triangle_rule(); }
 
     // triangle rule:
-    // if z has 2 parents x and y s.t. xy is an arc and x & y have out-deg 2, then remove the arc xz
-    bool triangle_rule(const Node z, const Node y)
+    // if z has 2 parents x and y s.t. xy is an arc and x & y have out-deg 2, then return the Node x in order to remove the arc xz
+    Node triangle_rule(const Node z, const Node y)
     {
       assert(host.out_degree(z) == 1);
-      bool result = false;
       if(host.out_degree(y) <= 2){
         for(const Node x: host.parents(y)){
           std::cout << "checking parent "<<x<<" of "<<z<<" for triangle with "<<y<<"\n";
           if((host.out_degree(x) == 2) && test(host.parents(z), x)) {
             host.remove_edge(x, z);
             contain.comp_info.inherit_root(z); // update the component info of y
-            contain.suppress.add(z);
-            contain.suppress.add(x);
-            result = true;
+            contain.suppress.clean_up_node(z, false);
+            contain.suppress.clean_up_node(x, false);
+            return true;
           }
         }
       } 
-      return result;
+      return false;
     }
 
     bool triangle_rule(const Node z)
     {
-      assert(host.out_degree(z) == 1);
+      assert(host.has_node(z));
       bool result = false;
-      bool local_result;
-      do {
-        local_result = false;
-        for(const Node y: host.parents(z))
-          if((host.out_degree(y) <= 2) && triangle_rule(z, y)) {
-            result = local_result = true;
-            break;
-          }
-      } while(local_result);
+      if(host.out_degree(z) == 1){
+        bool local_result;
+        do {
+          local_result = false;
+          for(const Node y: host.parents(z))
+            if((host.out_degree(y) <= 2) && triangle_rule(z, y)) {
+              result = local_result = true;
+              break;
+            }
+        } while(local_result && host.has_node(z));
+      } 
       return result;
     }
 
     bool triangle_rule()
     {
       bool result = false;
-      for(const Node z: host.nodes()) if(host.in_degree(z) > 1)
-        if(triangle_rule(z)) result = true;
+      NodeVec retis = host.reticulations().to_container();
+      while(!retis.empty()){
+        const Node z = value_pop_back(retis);
+        if(host.has_node(z) && triangle_rule(z)) result = true;
+      }
       return result;
     }
 
@@ -511,7 +523,7 @@ namespace PT {
 
     bool simple_cherry_reduction()
     {
-      std::cout << "applying cherry reduction...\n";
+      std::cout << "\tCHERRY: applying reduction...\n";
       bool result = false;
       while(!node_queue.empty()){
         const Node u = value_pop_back(node_queue);
@@ -525,7 +537,7 @@ namespace PT {
 
     bool simple_cherry_reduction_from(const typename LabelMatching::iterator& uv_label_iter)
     {
-      std::cout << "checking label matching "<<*uv_label_iter<<"\n";
+      std::cout << "\tCHERRY: checking label matching "<<*uv_label_iter<<"\n";
       const Node u = uv_label_iter->second.first;
       if(host.in_degree(u) != 1) return false;
       const Node pu = host.parent(u);
@@ -543,7 +555,7 @@ namespace PT {
       }
       //NOTE: detect reticulated cherries by passing through reticulations
       const auto& puC = host.children(pu);
-      std::cout << "considering children "<<puC<<" of "<<pu<<"\n";
+      std::cout << "\tCHERRY: considering children "<<puC<<" of "<<pu<<"\n";
       if(puC.size() < seen.size()){
         // pu cannot display pv, so pu has to display v
         contain.HG_match.match_nodes(pu, v, uv_label_iter);
@@ -568,12 +580,12 @@ namespace PT {
       }
       if(!seen.empty()) return false;
 
-      std::cout << "found (reticulated) cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
+      std::cout << "\tCHERRY: found (reticulated) cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
       // step 1: fix visibility labeling to u, because the leaf that pu's root is visible from may not survive the cherry reduction (but u will)
       host[host[pu].comp_root].visible_leaf = u;
       // step 2: prune host and guest
       contain.HG_match.match_nodes(pu, pv, uv_label_iter);
-      std::cout << "after cherry-reduction:\nhost:\n"<<host<<"guest:\n"<<guest<<"\n";
+      std::cout << "\tCHERRY: after reduction:\nhost:\n"<<host<<"guest:\n"<<guest<<"\n";
       return true;
     }
 
@@ -607,8 +619,6 @@ namespace PT {
 
     VisibleComponentRule(Containment& c):
       Parent(c), host(c.host), guest(c.guest), HG_label_match(contain.HG_label_match), cDAG(c.comp_info.comp_DAG) {}
-
-    bool apply() { return treat_all_roots(); }
 
     void treat_comp_root(const Node u, const Node visible_leaf)
     {
@@ -694,7 +704,7 @@ namespace PT {
     }
 
     // visible tree-component reduction: find a lowest visible tree component C and reduce it in O(|C|) time; return if network/tree changed
-    bool treat_all_roots()
+    bool apply()
     {
       const Node rt = get_eligible_component_root();
       if(rt != NoNode){
@@ -723,38 +733,43 @@ namespace PT {
     using typename Parent::Host;
     using Parent::contain;
     using Parent::node_queue;
+    using Parent::add;
 
     Host& host;
     ComponentInfos& comp_info;
 
     NodeSuppresser(Containment& c): Parent(c), host(c.host), comp_info(c.comp_info) {}
     
-    bool apply()
+
+    bool apply() { return process_queue(); }
+
+    bool process_queue(const bool recursive = true, const bool apply_reti_reduction = true)
     {
       if(node_queue.empty()) return false;
       while(!node_queue.empty())
-        clean_up_node(value_pop_back(node_queue));
+        clean_up_node(value_pop_back(node_queue), recursive, apply_reti_reduction);
       return true;
     }
 
     // clean up dangling leaves/reticulations and suppressible nodes in the host
     //NOTE: this will also update comp_info and comp_info.comp_DAG
-    void clean_up_node(const Node y)
+    void clean_up_node(const Node y, const bool recursive = true, const bool apply_reti_reduction = true)
     {
-      std::cout << "\tCLEAN: called for "<< y << " in\n"<<host<<"\n";
+      std::cout << "\tCLEAN: called for "<< y << " (reduction flag: "<<apply_reti_reduction<<") in\n"<<host<<"\n";
       if(host.has_node(y) && !host.has_label(y)){
         switch(host.out_degree(y)){
           case 0: // host.out_degree(y) == 0
             {
               std::cout << "\tCLEAN: "<< y << " is a dangling leaf, so we'll remove it from host\n";
               // remove y and treat y's former parents
-              for(const Node z: host.parents(y)) Parent::add(z);
+              for(const Node z: host.parents(y)) add(z);
               host.remove_node(y);
               if(comp_info.comp_DAG.has_node(y)) comp_info.comp_DAG.suppress_node(y); // y may have been a comp-root
             }
             break;
           case 1: // host.out_degree(y) == 1
             if(host.in_degree(y) < 2){
+              const Node x = host.parent_safe(y);
               const Node z = host.any_child(y);
               std::cout << "\tCLEAN: "<< y <<" ("<<host[y]<<") is suppressible with child: "<<z<<" ("<<host[z]<<"))\n";
               // if y is the root of a tree-component, then contract the other outgoing arc yz from y,
@@ -767,37 +782,39 @@ namespace PT {
                 host.contract_downwards(y, z);
                 comp_info.comp_DAG.remove_node(y);
                 comp_info.inherit_root(z);
-                clean_up_node(z);
+                if(recursive) clean_up_node(z, true, apply_reti_reduction); else add(z);
                 if(host.has_node(z)) contain.cherry_rule.add(z);
               } else {
                 if(host[z].comp_root != z){ // if z is not a component root, then contract z onto y
                   std::cout << "\tCLEAN: "<< y <<"'s only remaining child "<<z<<" is not a component-root\n";
                   host.contract_upwards(z, y);
                   comp_info.inherit_root(y);
-                  clean_up_node(y);
+                  if(recursive) clean_up_node(y, true, apply_reti_reduction); else add(z);
                 } else { // if z is a component root, then contract y onto z
                   std::cout << "\tCLEAN: "<< y <<"'s only remaining child "<<z<<" is a component-root\n";
                   host.contract_downwards(y, z);
                   comp_info.inherit_root(z);
                   if(comp_info.comp_DAG.has_node(y)) comp_info.comp_DAG.suppress_node(y); // y may have been a comp-root
-                  clean_up_node(z);
+                  if(recursive) clean_up_node(z, true, apply_reti_reduction); else add(z);
                 }
+                // if the parent of y still exists in host, then also recurse for him
+                if(recursive) clean_up_node(x, true, apply_reti_reduction); else add(x);
               }
             } else {
               std::cout << "\tCLEAN: "<< y <<" is a reticulation\n";
-              contain.triangle_rule.triangle_rule(y);
-              const Node z = host.any_child(y);
-              switch(host.out_degree(z)){
-                case 0:
-                  comp_info.inherit_root(z);
-                  break;
-                case 1:
-                  if(contain.reti_merge.contract_reti(y))
+              if(!apply_reti_reduction || !contain.triangle_rule.triangle_rule(y)){
+                const Node z = host.any_child(y);
+                switch(host.out_degree(z)){
+                  case 0:
                     comp_info.inherit_root(z);
-                  break;
-                default: break;
-              }
-            }// end switch in-degree(y)
+                    break;
+                  case 1:
+                    if(apply_reti_reduction) contain.reti_merge.contract_reti(y);
+                    break;
+                  default: break;
+                } // end switch out-degree(z)
+              } else if(recursive) clean_up_node(y, true, apply_reti_reduction);
+            }// end if(in-degree(y)...)
             break;
           default: // y is a non-leaf tree node
             break;
@@ -876,8 +893,8 @@ namespace PT {
             child_iter = hC.begin();
           } else ++child_iter;
         }
-        if(host[rt].comp_root == rt) contain.comp_info.comp_DAG.remove_node(rt);
-        host.suppress_node(rt);
+        assert(host.out_degree(rt) <= 1);
+        contain.suppress.clean_up_node(rt, false, false);
       } else if(rt != except) {
         if(host.has_label(rt)) {
           // if the node v in guest with the same label as x has not been removed before, it means that v can never be displayed!
@@ -902,31 +919,32 @@ namespace PT {
       const Node host_x = xy_label_iter->second.first;
       const Node guest_y = xy_label_iter->second.second;
 
-      std::cout << "marking "<<guest_v<<" (guest) & "<<host_u<<" (host) with label "<<vlabel<<"\n";
+      std::cout << "\tMATCH: marking "<<guest_v<<" (guest) & "<<host_u<<" (host) with label "<<vlabel<<"\n";
       
-      std::cout << "pruning guest at "<<guest_v<<" (except "<<guest_y<<"):\n"<<guest<<"\n";
+      std::cout << "\tMATCH: pruning guest at "<<guest_v<<" (except "<<guest_y<<"):\n"<<guest<<"\n";
       prune_guest_except(guest_v, guest_y); // note: prune_guest automatically removes everything it encounters from HG_label_match
-      std::cout << "pruned guest:\n"<<guest<<"\n";
+      std::cout << "\tMATCH: pruned guest:\n"<<guest<<"\n";
 
       //NOTE: prune_guest may have already suppressed host_u, so check if it's still there...
       assert(host.has_node(host_u));
       //NOTE: keep track of nodes in the host who have one of their incoming edges removed as component roots may now see them
-      std::cout << "pruning host at "<<host_u<<" (except "<<host_x<<"):\n"<<host<<" with comp-DAG\n"<<contain.comp_info.comp_DAG<<"\n";
+      std::cout << "\tMATCH: pruning host at "<<host_u<<" (except "<<host_x<<"):\n"<<host<<" with comp-DAG\n"<<contain.comp_info.comp_DAG<<"\n";
       //prune_host_except(host_u, host_x);
-      contain.suppress.apply();
+      contain.suppress.process_queue(true, false);
       if(host.has_node(host_u)){
         prune_host_except(host_u, host_x);
+        std::cout << "\tMATCH: done pruning host; now processing suppress-queue "<<contain.suppress.node_queue<<"\n";
         assert(host.in_degree(host_x) <= 1);
         contain.comp_info.inherit_root(host_x);
         contain.suppress.apply();
       }
-      std::cout << "pruned host:\n"<<host<<"\n";
+      std::cout << "\tMATCH: pruned host:\n"<<host<<"\n";
 
-      std::cout << "node-info:\n";
+      std::cout << "\tMATCH: node-info:\n";
       for(const auto x: host.get_node_data()) std::cout << x<<"\n";
 
       if(contain.comp_info.comp_DAG.has_node(host_u)){
-        assert(contain.comp_info.comp_DAG.out_degree(host_u) == 0);
+        std::cout << "\tMATCH: removing "<<host_u<<" from cDAG\n";
         contain.comp_info.comp_DAG.remove_node(host_u);
       }
     }
@@ -1037,16 +1055,18 @@ namespace PT {
     {
       std::cout << "\n ===== REDUCTION RULES ======\n\n";
       reti_merge.init_queue();
+      reti_merge.apply();
 
       // if, at some point, there are only 2 leaves left, then simply say 'yes'
       while(!failed && (HG_label_match.size() > 2)) {
         std::cout << "\nrestart rule-application...\n";
         std::cout << "host:\n" << host << "guest:\n" << guest << "comp-DAG:\n"<<comp_info.comp_DAG<<"\n";
         std::cout << "label matching: "<<HG_label_match<<"\n";
+        std::cout << "comp-info: "; for(const auto& x: host.get_node_data()) std::cout << x <<"\n";
 
         if(suppress.apply()) continue;
-        if(reti_merge.apply()) continue;
-        if(triangle_rule.apply()) continue;
+        // not necessary to apply each time, clean_up_node will call it when appropriate
+        //if(triangle_rule.apply()) continue;
       
         cherry_rule.init_queue();
         if(cherry_rule.apply()) continue;
@@ -1080,8 +1100,8 @@ namespace PT {
         // apply all reduction rules
         apply_rules();
 
-        // if the comp_DAG is edgeless, then visible-component reduction must have applied
-        assert(!comp_info.comp_DAG.edgeless() || host.edgeless());
+        // if the comp_DAG is edgeless, then visible-component reduction must have applied (unless the loop broke for the 2-label-case)
+        assert(!comp_info.comp_DAG.edgeless() || host.edgeless() || (HG_label_match.size() <= 2));
       }
       std::cout << "done initializing Tree-in-Net containment checker; failed? "<<failed<<"\n";
     }

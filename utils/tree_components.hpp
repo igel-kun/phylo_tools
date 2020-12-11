@@ -28,7 +28,9 @@ namespace PT{
 
     void force_both(const Node x) { comp_root = visible_leaf = x; }
     void clear() { force_both(NoNode); }
-    friend std::ostream& operator<<(std::ostream& os, const ComponentData& cd) { return os<<"{rt: "<<cd.comp_root<<" vl: "<<cd.visible_leaf<<"}"; }
+    friend std::ostream& operator<<(std::ostream& os, const ComponentData& cd)
+    { return os<<"{rt: "<< (cd.comp_root == NoNode ? std::string(".") : std::to_string(cd.comp_root))
+                <<" vl: "<<(cd.visible_leaf == NoNode ? std::string(".") : std::to_string(cd.visible_leaf))<<"}"; }
   };
 
 
@@ -181,6 +183,7 @@ namespace PT{
     {
       Node& y_root = N[y].comp_root;
       if((y_root != y) || (N.in_degree(y) > 1)){ // update only for non-component roots!
+        std::cout << "computing new component root of "<<y<<" (spread = "<<spread_info<<")\n";
         Node rt;
         switch(N.in_degree(y)){
           case 0: 

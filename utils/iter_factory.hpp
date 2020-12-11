@@ -49,7 +49,7 @@ namespace std {
     // copy the elements in the traversal to a container using the 'append()'-function
     template<class _Container>
     _Container& append_to(_Container& c) const { append(c, *this); }
-    template<class _Container>
+    template<class _Container = vector<remove_cvref_t<typename Iterator::value_type>>>
     _Container to_container() const { _Container result; append(result, *this); return result; }
   };
 

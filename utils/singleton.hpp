@@ -104,7 +104,11 @@ namespace std{
 
     template<class... Args>
     pair<iterator, bool> emplace_back(Args&&... args) { emplace(std::forward<Args>(args)...); }
-    
+ 
+    template<class Iter>
+    void insert(Iter src_begin, const Iter& src_end)
+    { while(src_begin != src_end) emplace(*src_begin); }
+
     template<class Iter>
     void insert(const iterator _ins, Iter src_begin, const Iter& src_end)
     { while(src_begin != src_end) emplace(*src_begin); }
