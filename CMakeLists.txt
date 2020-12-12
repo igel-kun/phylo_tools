@@ -1,12 +1,12 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8)
 project (phylo_tools)
 # The version number.
 set (phylo_tools_VERSION_MAJOR 1)
 set (phylo_tools_VERSION_MINOR 0)
 
-if(POLICY CMP0012)
-  CMAKE_POLICY(SET CMP0012 NEW)
-endif()
+#if(POLICY CMP0012)
+#  CMAKE_POLICY(SET CMP0012 NEW)
+#endif()
 
 
 option (GRAPHITE "build with graphite loop analysis" OFF)
@@ -29,7 +29,7 @@ add_custom_target ( doc doxygen Doxyfile )
 
 include_directories ("${PROJECT_SOURCE_DIR}")
 
-if(${GRAPHITE} STREQUAL ON)
+if(${GRAPHITE})
   message("setting graphite flags...")
   #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
   set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
@@ -38,7 +38,7 @@ endif()
 message("GRAPHITE_CXX_FLAGS is ${GRAPHITE_CXX_FLAGS}")
 
 # static linking
-if(${STATIC} STREQUAL ON)
+if(${STATIC})
   SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
   SET(BUILD_SHARED_LIBRARIES OFF)
   SET(CMAKE_EXE_LINKER_FLAGS "-static")
@@ -50,23 +50,24 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif()
 
 set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -std=c++17")
-if(${FATAL} STREQUAL ON)
+
+if(${FATAL})
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wfatal-errors")
 endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
 
-if((${STATISTICS} EQUAL "1") OR (${STATISTICS} STREQUAL "ON"))
+if(${STATISTICS})
   MESSAGE("adding support for collecting statistics...")
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
 endif()
 
-if((${DEBUG} EQUAL 0) OR (${DEBUG} STREQUAL OFF))
-  set(CMAKE_BUILD_TYPE RELEASE)
-else((${DEBUG} EQUAL 0) OR (${DEBUG} STREQUAL OFF))
+if(${DEBUG})
   MESSAGE("building DEBUG version...")
   set(CMAKE_BUILD_TYPE DEBUG)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Ddebuglevel=${DEBUG}")
+else()
+  set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
 ADD_EXECUTABLE( iso examples/iso.cpp )
@@ -74,7 +75,7 @@ ADD_EXECUTABLE( tc examples/tc.cpp )
 ADD_EXECUTABLE( gen examples/gen.cpp )
 ADD_EXECUTABLE( node_data examples/node_data.cpp )
 ADD_EXECUTABLE( branch_len examples/branch_len.cpp )
-ADD_EXECUTABLE( sw examples/scanwidth.cpp )
+ADD_EXECUTABLE( scanwidth examples/scanwidth.cpp )
 
 
 
