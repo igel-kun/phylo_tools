@@ -164,6 +164,7 @@ namespace PT{
             case 1:
               rt = N[p_rt].comp_root;
               assert(rt != NoNode); // the parent is a tree-node, so it should have a component-root
+              return rt;
             default:
               return rt;
           }

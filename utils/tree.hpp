@@ -631,8 +631,8 @@ namespace PT{
 
   template<class LT, class ES, class LM, class NT>
   struct is_phylogeny<_Tree<LT, ES, LM, NT>> : public std::true_type {};
-  template<class ND, class ED, class LT, class ES, class LM, class NT>
-  struct is_phylogeny<Tree<ND, ED, LT, ES, LM, NT>> : public std::true_type {};
+  //template<class ND, class ED, class LT, class ES, class LM, class NT>
+  //struct is_phylogeny<Tree<ND, ED, LT, ES, LM, NT>> : public std::true_type {};
 
 
   // these two types should cover 95% of all (non-internal) use cases
