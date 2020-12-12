@@ -372,8 +372,8 @@ namespace PT{
     }
 
     //! initialization from edgelist without consecutive nodes
-    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation>
-    MutableAdjacencyStorage(const consecutivity_tag,
+    template<class GivenEdgeContainer, class LeafContainer = NodeVec, class NodeTranslation = Translation, class Tag = non_consecutive_tag>
+    MutableAdjacencyStorage(const Tag,
                             GivenEdgeContainer&& given_edges,
                             NodeTranslation* old_to_new = nullptr,
                             LeafContainer* leaves = nullptr):

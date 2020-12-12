@@ -71,9 +71,9 @@ namespace PT{
       switch(N1.type_of(v)){
         case NODE_TYPE_LEAF:
           return (flags & FLAG_MAP_LEAF_LABELS);
-        case NODE_TYPE_TREE:
+        case NODE_TYPE_INTERNAL_TREE:
           return (flags & FLAG_MAP_TREE_LABELS);
-        case NODE_TYPE_RETI:
+        case NODE_TYPE_INTERNAL_RETI:
           return (flags & FLAG_MAP_RETI_LABELS);
         default:
           return true;

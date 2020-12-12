@@ -22,10 +22,10 @@ namespace PT{
 
   enum node_type { NODE_TYPE_LEAF=0x1, NODE_TYPE_INTERNAL_TREE=0x2, NODE_TYPE_INTERNAL_RETI=0x04};
 
-  struct tree_tag {};
-  struct network_tag {};
-  struct single_label_tag {};
-  struct multi_label_tag {};
+  using network_tag = std::true_type;
+  using tree_tag = std::false_type;
+  using single_label_tag = std::false_type;
+  using multi_label_tag = std::true_type;
 
   template<class __Tree, node_type nt>
   struct NodeTypePredicate: public std::DynamicPredicate
@@ -36,11 +36,6 @@ namespace PT{
   };
   template<class __Tree>
   using LeafPredicate = NodeTypePredicate<__Tree, NODE_TYPE_LEAF>;
-
-  template<class EdgeStorage>
-  static constexpr bool is_mutable = std::is_same_v<typename EdgeStorage::MutabilityTag, mutable_tag>;
-  template<class EdgeStorage>
-  static constexpr bool has_consecutive_nodes = !is_mutable<EdgeStorage>;
 
 
   template<class X>
@@ -409,7 +404,8 @@ namespace PT{
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(std::move(_node_labels)), tag)
     {}
     template<class GivenEdgeContainer, class Tag = non_consecutive_tag,
-      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>>
+      class = std::enable_if_t<!is_phylogeny_v<GivenEdgeContainer>>,
+      class = std::enable_if_t<Tag::value || !Tag::value>>
     _Tree(GivenEdgeContainer&& given_edges, const Tag tag = Tag()):
       _Tree(std::forward<GivenEdgeContainer>(given_edges), std::make_shared<LabelMap>(), tag)
     {}

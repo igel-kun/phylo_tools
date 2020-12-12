@@ -13,15 +13,16 @@
 #warning TODO: instead of having 2 containers (1 for succ, 1 for pred), store only 1 map (node to preds, succ). Then, create a 'DegreeIterator' and create a 'Reticulation'-predicate and then create a reticulations()-function
 namespace PT{
 
-  struct consecutivity_tag {};
-  struct consecutive_tag: public consecutivity_tag {};
-  struct non_consecutive_tag: public consecutivity_tag {};
+  using consecutive_tag = std::true_type;
+  using non_consecutive_tag = std::false_type;
 
-  constexpr consecutive_tag consecutive_nodes;
-  constexpr non_consecutive_tag non_consecutive_nodes;
+  using mutable_tag = std::true_type;
+  using immutable_tag = std::false_type;
 
-  struct immutable_tag {};
-  struct mutable_tag {};
+  template<class EdgeStorage>
+  static constexpr bool is_mutable = EdgeStorage::MutabilityTag::value;
+  template<class EdgeStorage>
+  static constexpr bool has_consecutive_nodes = !is_mutable<EdgeStorage>;
 
 
   template<class _EdgeData, class _SuccessorMap, class _PredecessorMap>

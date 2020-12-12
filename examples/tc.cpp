@@ -92,7 +92,7 @@ NetAndTree create_net_and_tree()
 
   add_random_edges(N, num_new_edges, num_new_edges, num_new_edges);
 
-  return { std::piecewise_construct, std::forward_as_tuple(std::move(N)), std::forward_as_tuple(std::move(el), node_labels, consecutive_nodes)};
+  return { std::piecewise_construct, std::forward_as_tuple(std::move(N)), std::forward_as_tuple(std::move(el), node_labels, consecutive_tag())};
 }
 
 NetAndTree read_net_and_tree()
