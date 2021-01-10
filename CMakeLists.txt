@@ -8,7 +8,6 @@ set (phylo_tools_VERSION_MINOR 0)
 #  CMAKE_POLICY(SET CMP0012 NEW)
 #endif()
 
-
 option (GRAPHITE "build with graphite loop analysis" OFF)
 option (DEBUG "debug mode (0=none, 9=max)" OFF)
 option (STATISTICS "collect statistics" OFF)
