@@ -22,7 +22,7 @@ namespace PT{
     std::istream& edgestream;
     EdgeList& edges;
     LabelMap& names;
-    HashMap<std::string, Node> name_to_node;
+    std::unordered_map<std::string, NodeDesc> name_to_node;
 
     EdgeVecParser();
   public:
@@ -38,11 +38,11 @@ namespace PT{
       edges.clear();
     }
 
-    Node get_id(const std::string& name)
+    NodeDesc get_id(const std::string& name)
     {
       auto emp_res = append(name_to_node, name);
       if(emp_res.second){
-        const Node id = (Node)names.size();
+        const NodeDesc id = NodeDesc(names.size());
         emp_res.first->second = id;
         append(names, id, name);
         return id;
@@ -56,12 +56,12 @@ namespace PT{
         std::string name;
         
         edgestream >> name;
-        const Node u = get_id(name);
+        const NodeDesc u = get_id(name);
         if(edgestream.bad() || edgestream.eof() || edgestream.fail() || !std::isblank(edgestream.peek()))
           throw MalformedEdgeVec();
 
         edgestream >> name;
-        const Node v = get_id(name);
+        const NodeDesc v = get_id(name);
         if(edgestream.bad() || (!edgestream.eof() && edgestream.fail()) || !std::isspace(edgestream.peek()))
           throw MalformedEdgeVec();
         
