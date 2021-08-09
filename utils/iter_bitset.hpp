@@ -19,14 +19,14 @@
 
 namespace std {
 
-  template<class bucket_map = std::raw_vector_map<size_t, uint64_t> >
+  template<MapType bucket_map = std::raw_vector_map<size_t, uint64_t> >
   class bitset_iterator;
 
   class ordered_bitset;
   class unordered_bitset;
 
   // ATTENTION: this does not do error checking if NDEBUG is on (except front())
-  template<class _bucket_map>
+  template<MapType _bucket_map = std::raw_vector_map<size_t, uint64_t> >
   class iterable_bitset 
   {
   public:
@@ -42,6 +42,8 @@ namespace std {
     using const_reference = reference;
     using pointer = std::self_deref<value_type>;
     using const_pointer = pointer;
+    using difference_type = ptrdiff_t;
+    using size_type = size_t;
 
     using iterator = bitset_iterator<bucket_map>;
     using const_iterator = iterator;
@@ -59,40 +61,35 @@ namespace std {
     {
       if(_set_all) set_all();
     }
+
     iterable_bitset(const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {}
     
     // construct with some items
-    template<class Container, class = enable_if_t<is_container_v<Container>>>
-    iterable_bitset(Container&& init, const size_t _num_bits = 0):
+    template<IterableType C>
+    iterable_bitset(C&& init, const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {
       for(const auto& x: init) set(x);
     }
 
-    template<class _InitSet>
+    template<IterableType _InitSet>
     iterable_bitset(const typename _InitSet::const_iterator _begin, const typename _InitSet::const_iterator _end, const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {
       for(typename _InitSet::const_iterator i = _begin; i != _end; ++i) set(*i);
     }
 
-    iterable_bitset(const iterable_bitset<bucket_map>&) = default;
-    iterable_bitset(iterable_bitset<bucket_map>&&) = default;
-    iterable_bitset& operator=(iterable_bitset<bucket_map>&& bs) = default;
-
-    template<class T>
-    iterable_bitset& operator=(const iterable_bitset<T>& bs)
-    {
-      if(&bs != this){
-        num_bits = bs.num_bits;
-        _count = bs._count;
-        storage.clear();
-        storage.insert(bs.storage.begin(), bs.storage.end());
-      }
-    }
-
+    iterable_bitset(const iterable_bitset&) = default;
+    iterable_bitset(iterable_bitset&&) = default;
+    iterable_bitset& operator=(iterable_bitset&& bs) = default;
+    iterable_bitset& operator=(const iterable_bitset& bs) = default;
+    /*{
+      num_bits = bs.num_bits;
+      _count = bs._count;
+      storage = bs.storage;
+    }*/
 
     const bucket_map& data() const { return storage; }
     std::pair<iterator,bool> emplace(const value_type x) { const bool res = set(x); return {find(x), res}; }
@@ -123,7 +120,7 @@ namespace std {
     bool set(const value_type x)
     {
       bucket_type bit_set = (1ul << POS_OF(x));
-      auto [iter, success] = storage.try_emplace(BUCKET_OF(x), bit_set);
+      const auto [iter, success] = storage.try_emplace(BUCKET_OF(x), bit_set);
       if(!success){
         bucket_type& bucket = iter->second;
         if(bucket & bit_set) return false; else bucket |= bit_set;
@@ -347,6 +344,17 @@ namespace std {
   };
 
 
+template<class T>
+concept mod_assignable_from =
+  requires(T& lhs, T rhs) {
+    { lhs.operator=(rhs) } -> std::same_as<T&>;
+};
+template<class T>
+concept abc = requires(T x) {
+  T::operator=(x);
+};
+
+
   // ------------------ unordered_map-based bitset ----------------------------
 
   class unordered_bitset: public iterable_bitset<std::unordered_map<size_t, uint64_t> >
@@ -392,11 +400,6 @@ namespace std {
         storage[num_buckets() - 1] ^= (BITSET_FULL_BUCKET << POS_OF(_num_bits));
       }
     }
-
-    ordered_bitset(const ordered_bitset&) = default;
-    ordered_bitset(ordered_bitset&&) = default;
-    ordered_bitset& operator=(const ordered_bitset& bs) = default;
-    ordered_bitset& operator=(ordered_bitset&& bs) = default;
 
     void clear() { clear_all(); }
     void clear_all() {
@@ -583,7 +586,7 @@ namespace std {
   // "if a and b compare equal then either they are both non-dereferenceable or *a and *b are references bound to the same object"
   // since our *-operation does not return a reference, but an integer
   // however, iteration a la "for(auto i: my_set)" works very well...
-  template<class bucket_map>
+  template<MapType bucket_map>
   class bitset_iterator: public std::iterator<std::forward_iterator_tag, typename iterable_bitset<bucket_map>::value_type>
   {
     using Parent = std::iterator<std::forward_iterator_tag, typename iterable_bitset<bucket_map>::value_type>;
@@ -685,3 +688,6 @@ namespace std {
   template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_cvref_t<C>>::value;
 
 }
+
+
+

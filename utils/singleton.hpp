@@ -1,173 +1,146 @@
 
 #pragma once
 
-#include <memory>
-
-#warning TODO: remowork to avoid vtables: have a "SingletonStorage" class that can do size() and empty() and build the SingletonSet on top of that
+#include <optional>
 
 namespace std{
 
-  // a set holding exactly one element, but having a set-interface
-  template<class _Element, class ElementContainer>
-  class _singleton_set
-  {
-  protected:
-    ElementContainer element;
+  // if a type has a specific invalid element (like nullptr), then this can be used to indicate that the singleton is absent
+  template<class T, T invalid>
+  struct SingletonByInvalid {
+    using value_type = T;
+    T element = invalid;
 
-    virtual void remove_element() = 0;
+    // in-place construct the element
+    template<class... Args>
+    SingletonByInvalid(const std::in_place_t, Args&&... args):
+      T(std::forward<Args>(args)...) {}
+    
+    // re-construct the element
+    template<class... Args>
+    T& emplace(Args&&... args){
+      T const * addr = &element;
+      addr->~T();
+      new(addr) T(std::forward<Args>(args)...);
+      return *addr;
+    }
+    T& operator*() { return element; }
+    const T& operator*() const { return element; }
 
-    _singleton_set(const ElementContainer& _c): element(_c) {}
+    void reset() { emplace(invalid); }
+    operator bool() const { return element == invalid; }
+  };
+  // if a type does not have a specific invalid element, then we'll use std::optional (which stores 1 additional byte for the "absence" information)
+
+
+
+  // a set holding at most one element, but having a set-interface
+  template<class ElementContainer>
+  class _singleton_set {
+    ElementContainer storage;
   public:
-    using iterator = _Element*;
-    using const_iterator = const _Element*;
+    using value_type = typename ElementContainer::value_type;
+    using difference_type = ptrdiff_t;
+    using size_type = size_t;
+    using iterator = value_type*;
+    using const_iterator = const value_type*;
+    using reference = value_type&;
+    using const_reference = const value_type&;
+    using rvalue_reference = value_type&&;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-    using value_type = _Element;
-    using reference = value_type&;
-    using const_reference = const value_type&;
+    _singleton_set() = default;
+    _singleton_set(const value_type& el): storage(std::in_place_t(), el) {}
+    _singleton_set(value_type&& el): storage(std::in_place_t(), std::move(el)) {}
 
-    virtual ~_singleton_set() = 0;
-    virtual bool empty() const = 0;
-    virtual bool erase(const iterator it)
-    {
+    bool non_empty() const { return static_cast<bool>(storage); }
+    bool empty() const { return !non_empty(); }
+    void clear() { storage.reset(); }
+
+    template<class X, class = enable_if_t<is_same_v<remove_cvref_t<X>, remove_cvref_t<value_type>>>>
+    void push_back(X&& el) {
+      assert((non_empty(), "trying to add second element to singleton set"));
+      storage.emplace(forward<X>(el));
+    }
+
+    template<class X, class = enable_if_t<is_same_v<remove_cvref_t<X>, remove_cvref_t<value_type>>>>
+    _singleton_set& operator=(X&& x) { clear(); push_back(forward<X>(x)); return *this; }
+    //singleton_set& operator=(const singleton_set& s) = default;
+
+    bool erase(const iterator& it) {
       if(empty() || (it != begin())) return false;
-      remove_element();
+      clear();
       return true;
     }
-    bool erase(const _Element& el)
-    {
-      if(empty() || (el != *element)) return false;
-      remove_element();
+    bool erase(const_reference el) {
+      if(empty() || (el != *storage)) return false;
+      clear();
       return true;
     }
-    void clear() { if(!empty()) erase(begin()); }
-
-    operator const_reference() const { return front(); }
-    operator reference() { return front(); }
-    size_t size() const { return !empty(); }
-    reference       front() { return *element; }
-    const_reference front() const { return *element; }
-    iterator       find(const _Element& x) { return (!empty() && (x == *element)) ? begin() : end(); }
-    const_iterator find(const _Element& x) const { return (!empty() && (x == *element)) ? begin() : end(); }
-    bool contains(const _Element& x) const { return empty() ? false : x == front(); }
-    void reserve(const size_t) const {} // compatibility with vector
-
-    virtual iterator begin() = 0;
-    virtual const_iterator begin() const = 0;
-  
-    reverse_iterator rbegin() { return end(); }
-    const_reverse_iterator rbegin() const { return end(); }
-    iterator end() { return begin() + size(); }
-    const_iterator end() const { return begin() + size(); }
-    reverse_iterator rend() { return rbegin() + size(); }
-    const_reverse_iterator rend() const { return rbegin() + size(); }
-  };
-  template<class _Element, class ElementContainer>
-  _singleton_set<_Element, ElementContainer>::~_singleton_set() {};
-
-
-  // if we are given an invliad element, use it to represent the empty singleton_set
-  template<class _Element, class InvalidElement = void>
-  class singleton_set: public _singleton_set<_Element, self_deref<_Element>>
-  {
-    using Parent = _singleton_set<_Element, self_deref<_Element>>;
-  protected:
-    using Parent::element;
-    static constexpr _Element _invalid_element = InvalidElement::value();
-    
-    void remove_element() { element = _invalid_element; }
-    inline _Element* addr() { return element.operator->(); }
-    inline const _Element* addr() const { return element.operator->(); }
-  public:
-    using typename Parent::iterator;
-    using typename Parent::const_iterator;
-    using Parent::Parent;
-    using Parent::clear;
-
-    singleton_set(): Parent(_invalid_element) {}
-    singleton_set(const _Element& el): Parent(el) {}
-
 
     template<class... Args>
-    pair<iterator, bool> emplace(Args&&... args) 
-    {
+    pair<iterator, bool> emplace(Args&&... args) {
       if(empty()){
-        new(addr()) _Element(forward<Args>(args)...);
-        return {addr(), true};
+        reference emplace_result = storage.emplace(forward<Args>(args)...);
+        return {&emplace_result, true};
       } else {
-        if(*element == _Element(forward<Args>(args)...))
-          return {addr(), false};
-        else throw logic_error("trying to add second element to singleton set");
+        assert(false && "trying to add second element to singleton set");
+        exit(-1);
       }
     }
 
     template<class... Args>
-    pair<iterator, bool> emplace_back(Args&&... args) { emplace(std::forward<Args>(args)...); }
+    pair<iterator, bool> emplace_back(Args&&... args) { emplace(forward<Args>(args)...); }
  
     template<class Iter>
-    void insert(Iter src_begin, const Iter& src_end)
-    { while(src_begin != src_end) emplace(*src_begin); }
-
-    template<class Iter>
-    void insert(const iterator _ins, Iter src_begin, const Iter& src_end)
-    { while(src_begin != src_end) emplace(*src_begin); }
-    
-    singleton_set& operator=(const _Element& e) { clear(); emplace(e); return *this; }
-    //singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
-    //singleton_set& operator=(const singleton_set& s) { singleton_set new_set(s); std::swap(std::move(new_set), std::move(*this)); return *this;}
-
-    void push_back(const _Element& el) { emplace(el); }
-    bool empty() const { return *element == _invalid_element; }
-    iterator begin() { return addr(); }
-    const_iterator begin() const { return addr(); }
-  };
-
-  // if we have no invalid element, we'll store a pointer instead and use nullptr to represent the empty singleton_set
-  template<class _Element>
-  class singleton_set<_Element, void>: public _singleton_set<_Element, shared_ptr<_Element>>
-  {
-    using Parent = _singleton_set<_Element, shared_ptr<_Element>>;
-  protected:
-    using Parent::element;
-
-    void remove_element() { element.reset(); }
-  public:
-    using typename Parent::iterator;
-    using typename Parent::const_iterator;
-    using Parent::Parent;
-    using Parent::clear;
-
-    singleton_set(const _Element& el): Parent(make_shared<_Element>(el)) {}
-
-    template<class... Args>
-    pair<iterator, bool> emplace(Args&&... args) 
-    {
-      if(empty()){
-        element = make_shared<_Element>(forward<Args>(args)...);
-        return {element.get(), true};
-      } else {
-        if(*element == _Element(forward<Args>(args)...))
-          return {element.get(), false};
-        else throw logic_error("trying to add second element to singleton set");
-      }
+    void insert(const Iter& src_begin, const Iter& src_end)
+    { 
+      if(src_begin != src_end) emplace(*src_begin);
+      assert(("trying to add second element to singleton set", next(src_begin) == src_end));
     }
 
-    template<class... Args>
-    pair<iterator, bool> emplace_back(Args&&... args) { emplace(std::forward<Args>(args)...); }
-
     template<class Iter>
-    void insert(const iterator _ins, Iter src_begin, const Iter& src_end)
-    { while(src_begin != src_end) emplace(*src_begin); }
+    void insert(const iterator& _ins, const Iter& src_begin, const Iter& src_end)
+    {
+      assert(("trying to add second element to singleton set", _ins == begin()));
+      insert(src_begin, src_end);
+    }
+    
+    operator const_reference() const { return front(); }
+    operator reference() { return front(); }
+    size_t size() const { return non_empty(); }
+    reference       front() { return *storage; }
+    const_reference front() const { return *storage; }
+    iterator       find(const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    const_iterator find(const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    uint_fast8_t count(const_reference x) const { return non_empty() ? (x == front()) : 0; }
+    bool contains(const_reference x) const { return count(x); }
+    void reserve(const size_t) const {} // compatibility with vector
 
-    singleton_set& operator=(const _Element& e) { clear(); emplace(e); return *this; }
-    singleton_set& operator=(_Element&& e) { clear(); emplace(move(e)); return *this; }
-    //singleton_set& operator=(const singleton_set& s) { singleton_set new_set(s); std::swap(std::move(new_set), std::move(*this)); return *this;}
+    iterator begin() { return empty() ? nullptr : &(front()); }
+    const_iterator begin() const { return empty() ? nullptr : &(front()); }
+    iterator end() { return begin() + non_empty(); }
+    const_iterator end() const { return begin() + non_empty(); }
 
-    void push_back(const _Element& el) { emplace(el); }
-    bool empty() const { return !element; }
-    iterator begin() { return element.get(); }
-    const_iterator begin() const { return element.get(); }
+    reverse_iterator rbegin() { return end(); }
+    const_reverse_iterator rbegin() const { return end(); }
+    reverse_iterator rend() { return rbegin() + non_empty(); }
+    const_reverse_iterator rend() const { return rbegin() + non_empty(); }
+
+    bool operator==(const _singleton_set& other) const {
+      return empty() ? other.empty() : (storage == other.storage);
+    }
+    bool operator!=(const _singleton_set& other) const { return !operator==(other); }
   };
+
+  // to declare a singleton set, you can either provide an invalid-getter (a struct containing a value attribute) or void (triggering the use of std::optional)
+  template<class T, class InvalidGetter>
+  struct __singleton_set { using type = _singleton_set<SingletonByInvalid<T, InvalidGetter::value>>; };
+  template<class T>
+  struct __singleton_set<T, void> { using type = _singleton_set<std::optional<T>>; };
+
+  template<class T, class InvalidGetter = void>
+  using singleton_set = typename __singleton_set<T, InvalidGetter>::type;
 
 }

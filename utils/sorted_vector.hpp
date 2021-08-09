@@ -103,13 +103,19 @@ namespace std{
           return (*x == key) ? x : this->end();
         else return x;
       }
-      
+
       const_iterator find(const Key& key) const
       {
         auto x = _find_this_or_next(key);
         if(x != this->end())
           return (*x == key) ? x : this->end();
         else return x;
+      }
+
+      size_t count(const Key& key) const
+      {
+        auto x = _find_this_or_next(key);
+        return (x != this->end());
       }
 
       // return iterator to element and bool indicating whether insertion took place

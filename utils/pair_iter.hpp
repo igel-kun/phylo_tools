@@ -4,7 +4,7 @@
 #include <memory>
 #include "stl_utils.hpp"
 
-namespace PT{
+namespace std {
 /*
   // spew out all first/second in a container of pairs
   template<class _PairContainer>

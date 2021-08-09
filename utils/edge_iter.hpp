@@ -8,15 +8,15 @@ namespace PT{
 
   struct EdgeMaker {
     template<class Adj>
-    static EdgeFromAdjacency<Adj> make_edge(const Node u, Adj&& adj) { return {u, std::forward<Adj>(adj)}; }
+    static EdgeFromNode<Adj> make_edge(const NodeDesc u, Adj&& adj) { return {u, std::forward<Adj>(adj)}; }
   };
   struct ReverseEdgeMaker {
     template<class Adj>
-    static EdgeFromAdjacency<Adj> make_edge(const Node u, Adj&& adj) { return {reverse_edge, u, std::forward<Adj>(adj)}; }
+    static EdgeFromNode<Adj> make_edge(const NodeDesc u, Adj&& adj) { return {reverse_edge_t(), u, std::forward<Adj>(adj)}; }
   };
 
   // make an edge container from a node and a container of nodes; makes edges with the function object EdgeMaker
-  template<class _AdjContainer, class _EdgeMaker = EdgeMaker>
+  template<std::IterableType _AdjContainer, class _EdgeMaker = EdgeMaker>
   class InOutEdgeIterator
   {
   public:
@@ -24,9 +24,8 @@ namespace PT{
     using iterator_category = typename std::my_iterator_traits<iterator>::iterator_category;
     using Adjacency         = typename std::my_iterator_traits<iterator>::value_type;
     using AdjacencyRef      = typename std::my_iterator_traits<iterator>::reference;
-    // NOTE: instead of copying the edge data around, we'd rather keep a reference!
-    using Edge      = PT::Edge<DataReference<DataFromAdjacency<Adjacency>>>;
-    using ConstEdge = PT::Edge<DataReference<DataFromAdjacency<const Adjacency>>>;
+    using Edge      = typename PT::EdgeFromNode<typename Adjacency::Node>;
+    using ConstEdge = const Edge;
     
     using value_type      = Edge;
     using difference_type = ptrdiff_t;
@@ -36,12 +35,13 @@ namespace PT{
     using const_pointer   = std::self_deref<ConstEdge>;
 
   protected:
+    NodeDesc u;
     iterator node_it;
-    Node u;
   public:
     InOutEdgeIterator() {}
-    InOutEdgeIterator(const iterator& _node_it, const Node _u): node_it(_node_it), u(_u) {}
-    InOutEdgeIterator(_AdjContainer& _node_c, const Node _u): InOutEdgeIterator(_node_c.begin(), _u) {}
+    template<class First, class... Args> requires (!std::ContainerType<First>)
+    InOutEdgeIterator(const NodeDesc _u, First&& first, Args&&... args): u(_u), node_it(std::forward<First>(first), std::forward<Args>(args)...) {}
+    InOutEdgeIterator(const NodeDesc _u, _AdjContainer& _node_c): InOutEdgeIterator(_u, _node_c.begin()) {}
 
     //! increment operator
     InOutEdgeIterator& operator++() { ++node_it; return *this; }
@@ -69,24 +69,24 @@ namespace PT{
   };
 
   // make an edge container from a head and a container of tails
-  template<class _AdjContainer>
+  template<std::IterableType _AdjContainer>
   using InEdgeIterator = InOutEdgeIterator<_AdjContainer, ReverseEdgeMaker>;
   // make an edge container from a tail and a container of heads
-  template<class _AdjContainer>
+  template<std::IterableType _AdjContainer>
   using OutEdgeIterator = InOutEdgeIterator<_AdjContainer>;
 
   // factories
-  template<class _AdjContainer, template<class> class _Iterator>
-  using EdgeIterFactory = std::IterTplIterFactory<_AdjContainer, Node, std::BeginEndIters<_AdjContainer, false, _Iterator>, _Iterator>;
-  template<class _AdjContainer>
+  template<std::IterableType _AdjContainer, template<class> class _Iterator>
+  using EdgeIterFactory = std::IterTplIterFactory<_AdjContainer, NodeDesc, std::BeginEndIters<_AdjContainer, false, _Iterator>, _Iterator>;
+  template<std::IterableType _AdjContainer>
   using InEdgeFactory = EdgeIterFactory<_AdjContainer, InEdgeIterator>;
-  template<class _AdjContainer>
+  template<std::IterableType _AdjContainer>
   using OutEdgeFactory = EdgeIterFactory<_AdjContainer, OutEdgeIterator>;
 
   // go one step further and enumerate edges from a mapping of nodes to adjacencies (nodes with edge-data)
 
   //! an iterator over a mapping Node->Successors enumerating Edges
-  template<class _Map, template<class> class _EdgeIterator>
+  template<std::MapType _Map, template<class> class _EdgeIterator>
   class EdgeMapIterator //: public std::my_iterator_traits<_EdgeIterator<std::copy_cv_t<_Map, typename _Map::mapped_type>>>
   {
     using Map = _Map;
@@ -127,7 +127,7 @@ namespace PT{
       if(node_it != nc_map.end()){
         skip_empty();
         if(node_it != nc_map.end())
-          out_it = EdgeIterator(node_it->second, node_it->first);
+          out_it = EdgeIterator(node_it->first, node_it->second);
       }
     }
 
@@ -146,7 +146,7 @@ namespace PT{
         ++node_it;
         skip_empty();
         if(node_it != nc_map.end())
-          out_it = EdgeIterator(node_it->second, node_it->first);
+          out_it = EdgeIterator(node_it->first, node_it->second);
       }
       return *this;
     }
@@ -159,7 +159,7 @@ namespace PT{
         if(out_it == node_it->second.begin()){
           --node_it;
           skip_empty_rev();
-          out_it = EdgeIterator(std::prev(node_it->second.end()), node_it->first);
+          out_it = EdgeIterator(node_it->first, std::prev(node_it->second.end()));
         } else --out_it;
       } else {
         node_it = std::prev(nc_map.end());
@@ -187,7 +187,7 @@ namespace PT{
           ++node_it;
           skip_empty();
           if(node_it != nc_map.end())
-            out_it = EdgeIterator(node_it->second, node_it->first);
+            out_it = EdgeIterator(node_it->first, node_it->second);
           else
             return *this;
         } else {
@@ -239,7 +239,7 @@ namespace PT{
 
 
   // for EdgeMapIterators, we need to slightly modify how the factory constructs them...
-  template<class _Map, template<class> class _Iterator>
+  template<std::MapType _Map, template<class> class _Iterator>
   struct BeginEndEdgeMapIters
   {
     using iterator = EdgeMapIterator<_Map, _Iterator>;
@@ -252,7 +252,7 @@ namespace PT{
 
 
   // successor-maps cannot know à priori how many edges are stored within them, so we take a reference to an external size_t
-  template<class _Map, template<class> class _Iterator>
+  template<std::MapType _Map, template<class> class _Iterator>
   class EdgeMapIterFactory: public std::IterFactory<_Map, void, BeginEndEdgeMapIters<_Map, _Iterator>>
   {
     using Parent = std::IterFactory<_Map, void, BeginEndEdgeMapIters<_Map, _Iterator>>;
@@ -270,8 +270,8 @@ namespace PT{
   };
 
 
-  template<class _Map>
+  template<std::MapType _Map>
   using OutEdgeMapIterFactory = EdgeMapIterFactory<_Map, OutEdgeIterator>;
-  template<class _Map>
+  template<std::MapType _Map>
   using InEdgeMapIterFactory = EdgeMapIterFactory<_Map, InEdgeIterator>;
 }

@@ -9,6 +9,7 @@
 #include "set_interface.hpp"
 #include "label_matching.hpp"
 #include <unordered_set>
+#include <queue>
 
 #define FLAG_MAP_LEAF_LABELS 0x01
 #define FLAG_MAP_TREE_LABELS 0x02
@@ -22,7 +23,7 @@ namespace PT{
     const std::string msg;
 
     template<class Net>
-    NoPoss(const Net& N, const Node u):
+    NoPoss(const Net& N, const NodeDesc u):
       msg(N.label(u) + '[' + std::to_string(u) + "] is unmappable\n")
     {}
     NoPoss(const std::string& _msg): msg(_msg) {}
@@ -32,7 +33,7 @@ namespace PT{
 
   //NOTE: you may customize the possibility-set type to your needs:
   //    for example, for single-labeled trees, we recommend a singleton_set,
-  //    for low-multiply labeled trees & low-level networks an unordered_set<Node> should be good
+  //    for low-multiply labeled trees & low-level networks an unordered_set<NodeDesc> should be good
   template<class NetworkA, class NetworkB,
     class _PossSet = std::conditional_t<NetworkB::has_consecutive_nodes, std::ordered_bitset, std::unordered_bitset>>
   class IsomorphismMapper
@@ -64,9 +65,9 @@ namespace PT{
     // degree distributions don't match
     bool initial_fail; 
 
-    inline size_t num_poss(const Node x) const { return mapping.at(x).size(); }
+    inline size_t num_poss(const NodeDesc x) const { return mapping.at(x).size(); }
 
-    bool node_is_interesting(const Node v) const
+    bool node_is_interesting(const NodeDesc v) const
     {
       switch(N1.type_of(v)){
         case NODE_TYPE_LEAF:
@@ -82,7 +83,7 @@ namespace PT{
 
 
 
-    inline void mark_update(const Node x, const size_t nr_poss)
+    inline void mark_update(const NodeDesc x, const size_t nr_poss)
     {
       if(nr_poss == 1) ++nr_fix;
       if(update_set.set(x))
@@ -90,7 +91,7 @@ namespace PT{
     }
 
     // set the unique mapping possibility of x1 to x2; fail if x1 has already been determined to not map to x2
-    void set_unique_poss(const Node x1, const Node x2)
+    void set_unique_poss(const NodeDesc x1, const NodeDesc x2)
     {
       auto emp_res = mapping.try_emplace(x1);
       if(!emp_res.second){
@@ -105,7 +106,7 @@ namespace PT{
 
 
     template<class Something>
-    void restrict_by_something(Something (NetworkA::*node_to_something_N1)(const Node) const, Something (NetworkB::*node_to_something_N2)(const Node) const)
+    void restrict_by_something(Something (NetworkA::*node_to_something_N1)(const NodeDesc) const, Something (NetworkB::*node_to_something_N2)(const NodeDesc) const)
     {
       using MySomething = std::remove_cvref_t<Something>;
       // keep track of nodes in N2 mapping to each something
@@ -113,13 +114,13 @@ namespace PT{
       using PossAndHist = std::pair<PossSet, size_t>;
       HashMap<MySomething, PossAndHist> poss_and_hist;
 
-      for(const Node u: N2){
+      for(const NodeDesc u: N2){
         const Something s = (N2.*node_to_something_N2)(u);
         PossAndHist& ph = poss_and_hist.try_emplace(s, size_N, 0).first->second;
         ph.first.set(u);
         ph.second++;
       }
-      for(const Node u: N1){
+      for(const NodeDesc u: N1){
         const Something s = (N1.*node_to_something_N1)(u);
         const auto it = poss_and_hist.find(s);
         if(it != poss_and_hist.end()) {
@@ -210,15 +211,15 @@ namespace PT{
         treat_pending_updates();
 
         DEBUG5(std::cout << "possibilities are:" << std::endl;
-            for(Node u = 0; u < size_N; ++u){
+            for(NodeDesc u = 0; u < size_N; ++u){
               std::cout << u << "\t"<< to_set(mapping.at(u)) << std::endl;
             })
         DEBUG3(std::cout << "no more pending updated"<<std::endl);
 
         // find a vertex to branch on (minimum # possibilities)
-        Node min = 0;
+        NodeDesc min = 0;
         size_t min_poss = num_poss(0);
-        for(Node u: N1){
+        for(NodeDesc u: N1){
           const size_t np = num_poss(u);
           if((np != 1) && (np < min_poss)){
             min_poss = np;
@@ -229,7 +230,7 @@ namespace PT{
         if(min_poss != 1) {
           DEBUG4(std::cout << "branching on vertex "<<min<<std::endl);
           // spawn a new checker for each possibility
-          for(const Node min2: mapping.at(min)){
+          for(const NodeDesc min2: mapping.at(min)){
             IsomorphismMapper child_im(*this);
             child_im.set_unique_poss(min, min2);
             child_im.mark_update(min, min_poss);
@@ -254,31 +255,31 @@ namespace PT{
       DEBUG4(std::cout << update_set.size() <<" updates pending:"<<std::endl);
       DEBUG4(for(const auto& p: update_set) std::cout << p << " "; std::cout<<std::endl);
       while(!update_order.empty()){
-        const Node x = update_order.top().second;
+        const NodeDesc x = update_order.top().second;
         update_order.pop();
         update_set.erase(x);
         update_poss(x);
       }
     }
-    void update_poss(const Node x1)
+    void update_poss(const NodeDesc x1)
     {
       DEBUG5(std::cout << "updating "<<x1<<" whose mapping is ("<<num_poss(x1)<<" possibilities):\n " << to_set(mapping.at(x1)) << std::endl);
       PossSet possible_nodes(size_N);
       // update children
       if(!N1.is_leaf(x1)){
-        for(const Node x2 : mapping.at(x1))
-          for(const Node i: N2.children(x2)) possible_nodes.set(i);
-        for(const Node i: N1.children(x1)) update_poss(i, possible_nodes);
+        for(const NodeDesc x2 : mapping.at(x1))
+          for(const NodeDesc i: N2.children(x2)) possible_nodes.set(i);
+        for(const NodeDesc i: N1.children(x1)) update_poss(i, possible_nodes);
       }
       // update parents
       possible_nodes.clear();
-      for(const Node x2: mapping.at(x1))
-        for(const Node i: N2.parents(x2)) possible_nodes.set(i);
-      for(const Node i: N1.parents(x1)) update_poss(i, possible_nodes);
+      for(const NodeDesc x2: mapping.at(x1))
+        for(const NodeDesc i: N2.parents(x2)) possible_nodes.set(i);
+      for(const NodeDesc i: N1.parents(x1)) update_poss(i, possible_nodes);
     }
 
     // update possibilities, return whether the number of possibilities changed
-    bool update_poss(const Node x, const PossSet& new_poss)
+    bool update_poss(const NodeDesc x, const PossSet& new_poss)
     {
       const auto emp_res = mapping.try_emplace(x, new_poss);
       if(!emp_res.second){

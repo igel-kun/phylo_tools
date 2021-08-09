@@ -9,20 +9,12 @@
 #include<stack> // deal with container-adaptors not being iterable...
 #include<type_traits> // deal with STL's missing type checks
 #include<algorithm> // deal with STL's sort problems
-#include "hash_utils.hpp"
+#include<functional>
 
-// circular shift
-#define rotl(x,y) ((x << y) | (x >> (sizeof(x)*CHAR_BIT - y)))
-#define rotr(x,y) ((x >> y) | (x << (sizeof(x)*CHAR_BIT - y)))
+#include "hash_utils.hpp"
+#include "stl_concepts.hpp"
 
 namespace std{
-
-#if __cplusplus <= 201703L
-  template<class T> using remove_cvref_t = remove_cv_t<remove_reference_t<T>>;
-  constexpr auto identity = [](auto i){return i;};
-#else
-  #include<functional>
-#endif
 
   template<class T> constexpr bool is_const_ref = is_const_v<remove_reference_t<T>>;
 
@@ -33,21 +25,25 @@ namespace std{
   // anything that can be converted from and to int is considered "basically arithmetic"
   template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
 
+  template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
+
+
   template<class T> constexpr bool is_pair = false;
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
 
+  // if a container has a const_pointer type, then return this type, otherwise return a pointer to const value_type
   template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
   template<class N> using get_const_ptr_t = typename get_const_ptr<remove_cvref_t<N>>::type;
 
+  // if a container has a const_reference type, then return this type, otherwise return an lvalue reference to const value_type
   template<class N, class T = void> struct get_const_ref { using type = add_lvalue_reference_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ref<N, void_t<typename N::const_reference>> { using type = typename N::const_reference; };
   template<class N> using get_const_ref_t = typename get_const_ref<remove_cvref_t<N>>::type;
 
   // iterator_traits<const T*>::value_type is "T" not "const T"? What the hell, STL?
   template<typename T>
-  struct my_iterator_traits: public iterator_traits<T>
-  {
+  struct my_iterator_traits: public iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
     using value_type = conditional_t<!is_pointer_v<T>, typename iterator_traits<T>::value_type, remove_reference_t<typename iterator_traits<T>::reference>>;
     using const_reference = get_const_ref_t<T>;
@@ -84,30 +80,6 @@ namespace std{
   template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
   // NOTE: it is important to copy the const before copying the ref!
   template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
-
-
-  template<class T> struct is_vector: public false_type {};
-  template<class T, class Alloc> struct is_vector<vector<T, Alloc>>: public true_type {};
-  template<class T, class Traits, class Alloc> struct is_vector<basic_string<T,Traits,Alloc>>: public true_type {};
-  template<class T> constexpr bool is_vector_v = is_vector<remove_cvref_t<T>>::value;
-
-  //a container is something we can iterate through, that is, it has an iterator (EXCEPTION: strings are not containers)
-  template<class N, class T = void> struct is_container: public false_type {};
-  template<class N> struct is_container<N, void_t<typename N::iterator>>: public true_type {};
-  template<class C, class T, class A> struct is_container<std::basic_string<C,T,A>, void>: public false_type {};
-  template<class N> constexpr bool is_container_v = is_container<remove_cvref_t<N>>::value;
-  
-  // a map is something with a mapped_type in it
-  template<class N, class T = void> struct is_map: public false_type {};
-  template<class N> struct is_map<N, void_t<typename N::mapped_type>>: public true_type {};
-  template<class N> constexpr bool is_map_v = is_map<remove_cvref_t<N>>::value;
-
-  // have a way for a container to tell us not to use the generic operator<< for it; to avoid the generic operator<<, alias "custom_output" to "std::true_type"
-  template<class N, class T = void> struct has_custom_output: public false_type {};
-  template<class N> struct has_custom_output<N, void_t<typename N::custom_output>>: public N::custom_output {};
-  template<class N> struct has_custom_output<N, enable_if_t<is_convertible_v<N, std::string>>>: public true_type {}; // std::string gets a custom output
-  template<class N> constexpr bool has_custom_output_v = has_custom_output<remove_cvref_t<N>>::value;
-
 
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
   template<class T> using iterator_of_t = conditional_t<is_const_v<remove_reference_t<T>>,
@@ -228,43 +200,43 @@ namespace std{
   struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
 
   // begin() and end() for forward and reverse iterators
-  template<class Container,
+  template<IterableType C,
            bool reverse = false,
            template<class> class Iterator = conditional_template<reverse, reverse_iterator_of_t, iterator_of_t>::template type>
   struct BeginEndIters
   {
-    using iterator = Iterator<Container>;
-    using const_iterator = Iterator<const Container>;
+    using NonConstC = remove_cv_t<C>;
+    using iterator = Iterator<C>;
+    using const_iterator = Iterator<const C>;
     template<class... Args>
-    static iterator begin(remove_cv_t<Container>& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
+    static iterator begin(NonConstC& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
     template<class... Args>
-    static iterator end(remove_cv_t<Container>& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
+    static iterator end(NonConstC& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
     template<class... Args>
-    static const_iterator begin(const Container& c, Args&&... args) { return const_iterator(std::begin(c), forward<Args>(args)...); }
+    static const_iterator begin(const C& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
     template<class... Args>
-    static const_iterator end(const Container& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
+    static const_iterator end(const C& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
   };
-  template<class Container, template<class> class Iterator>
-  struct BeginEndIters<Container, true, Iterator>
+  template<IterableType C, template<class> class Iterator>
+  struct BeginEndIters<C, true, Iterator>
   {
-    using iterator = reverse_iterator<Iterator<Container>>;
-    using const_iterator = reverse_iterator<Iterator<const Container>>;
+    using NonConstC = remove_cv_t<C>;
+    using iterator = reverse_iterator<Iterator<C>>;
+    using const_iterator = reverse_iterator<Iterator<const C>>;
     template<class... Args>
-    static iterator rbegin(remove_cv_t<Container>& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
+    static iterator begin(NonConstC& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
     template<class... Args>
-    static iterator rend(remove_cv_t<Container>& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
+    static iterator end(NonConstC& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
     template<class... Args>
-    static const_iterator rbegin(const Container& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
+    static const_iterator begin(const C& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
     template<class... Args>
-    static const_iterator rend(const Container& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
-
+    static const_iterator end(const C& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
   };
 
 
   // why are those things not defined per default by STL???
-
-  template<class _Container>
-  inline typename _Container::const_iterator max_element(const _Container& c) { return max_element(c.begin(), c.end()); }
+  template<IterableType C>
+  inline typename my_iterator_traits<C>::const_iterator max_element(const C& c) { return max_element(begin(c), end(c)); }
 
 
   // deferred function call for emplacements, thx @ Arthur O'Dwyer
@@ -282,7 +254,17 @@ namespace std{
   template<typename F>
   inline auto deferred_call(F&& f) { return deferred_call_t<F>(forward<F>(f)); }
 
-
+  // a functional that ignores everything (and hopefully gets optimized out)
+  template<class ReturnType = void>
+  struct IgnoreFunction {
+    template<class... Args>
+    constexpr ReturnType operator()(Args&&... args) const { return ReturnType(); };
+  };
+  template<>
+  struct IgnoreFunction<void> {
+    template<class... Args>
+    constexpr void operator()(Args&&... args) const { };
+  };
 
   template<typename T1, typename T2>
   struct hash<pair<T1, T2> >{
@@ -299,13 +281,13 @@ namespace std{
     }
   };
 
-  template<class T, class Container = deque<T>>
-  class iterable_stack: public stack<T, Container>
+  template<class T, ContainerType C = deque<T>>
+  class iterable_stack: public stack<T, C>
   {
-    using stack<T, Container>::c;
+    using stack<T, C>::c;
   public:
-    using iterator = typename Container::iterator;
-    using const_iterator = typename Container::const_iterator;
+    using iterator = typename C::iterator;
+    using const_iterator = typename C::const_iterator;
 
     iterator begin() { return c.begin(); }
     iterator end() { return c.end(); }
@@ -314,7 +296,7 @@ namespace std{
   };
 
 
-  template<class C, class = enable_if_t<is_container_v<C> && !is_same_v<C,string_view> && !has_custom_output_v<C>>>
+  template<IterableType C> requires (!is_convertible_v<C,string>)
   inline std::ostream& operator<<(std::ostream& os, const C& objs)
   {
     os << '[';
@@ -348,8 +330,8 @@ namespace std{
 
   //! find a number in a sorted list of numbers between lower_bound and upper_bound
   //if target is not in c, then return the index of the next larger item in c (or upper_bound if there is no larger item)
-  template<typename Container>
-  uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower_bound, uint32_t upper_bound)
+  template<class T, class A>
+  uint32_t binary_search(const vector<T, A>& c, const uint32_t target, uint32_t lower_bound, uint32_t upper_bound)
   {
     while(lower_bound < upper_bound){
       const uint32_t middle = (lower_bound + upper_bound) / 2;
@@ -365,8 +347,8 @@ namespace std{
     return lower_bound;
   }
   //! one-bound version of binary search: if only one bound is given, it is interpreted as lower bound
-  template<typename Container>
-  uint32_t binary_search(const Container& c, const uint32_t target, uint32_t lower_bound = 0)
+  template<class T, class A>
+  uint32_t binary_search(const vector<T, A>& c, const uint32_t target, uint32_t lower_bound = 0)
   {
     return binary_search(c, target, lower_bound, c.size());
   }
@@ -393,31 +375,18 @@ namespace std{
     SelectiveDeleter(const bool _del): del(_del) {}
     inline void operator()(T* p) const { if(del) delete p; }
   };
-  struct NoDeleter {
-    template<class T>
-    inline void operator()(T* p) const {}
-  };
+  using NoDeleter = IgnoreFunction<>;
 
-  // a constexpr_factory churns out constpxr objects initialized with given template arguments
-  //NOTE: this is useful to pass static constexpr objects such as passing an "invalid" state to singleton_set or simple_vector_map
-  template<class T, class... Args>
-  struct constexpr_fac
+  template<class T = int>
+  struct minus_one
   {
-    template<Args... args>
-    struct factory { static constexpr T value() { return T(args...); } };
-  };
-  // for number-types, always return ints and let the constructors sort them out :)
-  template<class T>
-  struct constexpr_fac<T>
-  {
-    template<int init = -1>
-    struct factory { static constexpr int value() { return init; } };
+    static constexpr T value = -1;
   };
 
   // specialize to your hearts desire
   template<class T> struct default_invalid
   {
-    using type = conditional_t<is_basically_arithmetic_v<T>, typename constexpr_fac<int>::template factory<-1>, void>;
+    using type = conditional_t<is_basically_arithmetic_v<T>, minus_one<T>, void>;
   };
   template<class T> using default_invalid_t = typename default_invalid<T>::type;
 }

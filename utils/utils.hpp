@@ -51,7 +51,7 @@
 */
 
 // find x in the container "list" and, ONLY IF NOT FOUND, execute constructor, assign findings to result (which should be a reference to value_type)
-#define FIND_OR_CONSTRUCT(result,x,list,constructor) {auto ___it = list.find(x); if(___it == list.end()) ___it = list.insert(___it, {x, constructor}); result = ___it->second;}
+#define FIND_OR_CONSTRUCT(result,x,list,constructor) {auto ___it = list.find(x); if(___it == list.end()) ___it = list.emplace(x, constructor); result = ___it->second;}
 // get a pointer from a vector iterator
 #define vector_iterator_to_pointer(vec, it) ((v).empty() ? nullptr : &((v)[0]) + ((it) - (v).begin()))
 
@@ -61,10 +61,14 @@
 #define return_map_lookup(x,y,z) {const auto __iter = (x).find(y); return (__iter == (x).end()) ? (z) : __iter->second; }
 
 // data transfer policies
-struct policy_move_t {} policy_move;
-struct policy_copy_t {} policy_copy;
-struct policy_inplace_t {} policy_inplace;
-struct policy_noop_t {} policy_noop;
+struct data_policy_t {};
+struct policy_move_t: public data_policy_t {};
+struct policy_copy_t: public data_policy_t {};
+struct policy_inplace_t: public data_policy_t {};
+struct policy_noop_t: public data_policy_t {};
+
+template<class T>
+concept DataPolicyTag = std::derived_from<T, data_policy_t>;
 
 // rotation
 uint32_t rotl32(uint32_t x, uint32_t n){

@@ -99,13 +99,10 @@ int main(const int argc, const char** argv)
         std::to_string(num_nodes)+" nodes in total");
   std::cout << "constructing network with "<<num_nodes<<" vertices: "<<num_tree_nodes<<" tree nodes, "<<num_retis<<" reticulations and "<<num_leaves<<" leaves"<<std::endl;
 
-  EdgeVec el;
-  LabelMapOf<RONetwork<>> names;
-  generate_random_binary_edgelist_trl(el, names, num_tree_nodes, num_retis, num_leaves, 0);
+  DefaultNetwork N;
+  generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0);
 
   DEBUG5(std::cout << "building N from "<<el<< std::endl);
-  RONetwork<> N(el, names);
-
   if(test(options, "-v")) std::cout << N << std::endl;
 
   const std::string nw_string = get_extended_newick(N);

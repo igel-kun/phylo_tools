@@ -7,17 +7,13 @@
 #include "types.hpp"
 
 namespace PT {
-  
-  // For all types except integral types:
-  template<typename T>
-  struct deref{ static Node do_deref(const T& x) { return *x; } };
-  // For integral types only:
-  template<>
-  struct deref<Node>{ static Node do_deref(const Node x) { return x; } };
+
+  template<class T>
+  concept SingleLabelMap = std::derived_from<T, std::singleton_set<typename T::mapped_type>>;
 
   // an iterator producing pairs of (Node, Property), where the property is produced by the getter
   // Note: the getter should have a type called 'Property'
-  template<class Container, class PropertyGetter>
+  template<std::ContainerType Container, class PropertyGetter>
   class LabeledNodeIter
   {
     using Iter = std::iterator_of_t<Container>;
@@ -41,7 +37,7 @@ namespace PT {
     // dereference
     value_type operator*() const
     {
-      const Node x = *it; // deref<Iter>::do_deref(it);
+      const Node x = *it;
       return value_type(x, getter(x));
     }
 

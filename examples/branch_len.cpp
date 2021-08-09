@@ -6,8 +6,7 @@
 
 using namespace PT;
 
-using MyNetwork = RONetwork<void, float>;
-using MyLabelMap = typename MyNetwork::LabelMap;
+using MyNetwork = DefaultNetwork<void, float>;
 
 OptionMap options;
 
@@ -36,13 +35,11 @@ int main(const int argc, const char** argv)
   parse_options(argc, argv);
 
   std::ifstream in(options[""][0]);
-
-  WEdgeVec weighted_edges;
-  MyLabelMap names;
+  MyNetwork N;
 
   std::cout << "reading network..."<<std::endl;
   try{
-    parse_newick(in, weighted_edges, names);
+    parse_newick(in, N, DefaultNodeCreation<MyNetwork>, [](const NodeDesc d, const std::string& s){ return typename MyNetwork::Adjacency(d, std::stof(s)); });
   } catch(const std::exception& err){
     std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
@@ -50,7 +47,6 @@ int main(const int argc, const char** argv)
 
   DEBUG5(std::cout << "building N from "<<weighted_edges<< std::endl);
 
-  MyNetwork N(weighted_edges, names);
   //EdgeWeightedNetwork<> N(weighted_edges, names);
   //EdgeWeightedNetwork<float, void*, IndexSet, GrowingNetworkAdjacencyStorage<WEdge>> N(weighted_edges, names);
 

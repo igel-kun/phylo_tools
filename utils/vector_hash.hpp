@@ -14,6 +14,7 @@
 //    Thus, the storage after insertion will be [1,2,6,3] (note: slot 0 is vacant and 3 is NOT stored at vec[hash(3)])
 #pragma once
 
+#include <cstring> // for memmove
 #include "utils.hpp"
 #include "stl_utils.hpp"
 #include "filter.hpp"
@@ -24,9 +25,9 @@
 //#include "utils.hpp"
 
 // shift forward y keys at index x by z indices
-#define __VECTOR_HASH_SHIFT_FWD(x,y,z) memmove(static_cast<void*>(data() + (x) + (z)), static_cast<void*>(data() + (x)), (y) * sizeof(Key))    
+#define __VECTOR_HASH_SHIFT_FWD(x,y,z) std::memmove(static_cast<void*>(data() + (x) + (z)), static_cast<void*>(data() + (x)), (y) * sizeof(Key))    
 // shift backward y keys to index x by z indices
-#define __VECTOR_HASH_SHIFT_BWD(x,y,z) memmove(static_cast<void*>(data() + (x)), static_cast<void*>(data() + (x) + (z)), (y) * sizeof(Key))    
+#define __VECTOR_HASH_SHIFT_BWD(x,y,z) std::memmove(static_cast<void*>(data() + (x)), static_cast<void*>(data() + (x) + (z)), (y) * sizeof(Key))    
 // return whether the index x with value y is vacant
 #define __VECTOR_HASH_IS_VACANT(x, y) ((uintptr_t)(y) == (uintptr_t(x)) + 1u)
 // advance the given index
@@ -37,32 +38,19 @@
 // hashing
 #define __VECTOR_HASH_DO_HASH(x) ((uintptr_t)(x) & mask)
 // default load factor, right below 7/8
-#define __VECTOR_HASH_DEFAULT_LOAD_FACTOR 0.8749
+#define __VECTOR_HASH_DEFAULT_LOAD_FACTOR 0.8749f
 
 namespace std{
 
-
-  template<class Container>
-  struct VacantPredicate{
-    const Container& c;
-    
-    VacantPredicate(const Container& _c): c(_c) {}
-
-    template<class Iter>
-    bool value(const Iter& it) { return c.is_vacant(it); }
-  };
-  template<class Container>
-  using OccupiedPredicate = NotPredicate<VancantPredicate<Container>>;
-
-
-  template<class Container, class ParentContainer, bool reverse = false>
+  template<ContainerType Container,
+           ContainerType ParentContainer,
+           bool reverse = false>
   using linear_vector_hash_iterator = filtered_iterator<
         Container,
-        OccupiedPredicate<Container>,
+        std::function<bool(const typename Container::valuetype&)>,
         reverse,
-        std::conditional_t<reverse, std::reverse_iterator_of<typename Container::Parent>, std::iterator_of_t<typename Container::Parent>>,
+        std::conditional_t<reverse, std::reverse_iterator_of_t<typename Container::Parent>, std::iterator_of_t<typename Container::Parent>>,
         std::BeginEndIters<typename Container::Parent, reverse>>;
-  //class linear_vector_hash_iterator;
 
   template<
     class Key,

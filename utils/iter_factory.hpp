@@ -5,7 +5,7 @@
 #include "stl_utils.hpp"
 
 namespace std {
-  // an IterFactory stores a reference to a Container object and can return begin()/end() iterators of the class Iterator,
+  // an IterFactory stores a reference to an Iterable object and can return begin()/end() iterators of the class Iterator,
   // each constructed with begin()/end() of the container object; in this way, a factory is a kind of "VIEW" on the container through the Iterator
   //PARAMETERS:
   //  Container = the container over which to iterate
@@ -15,7 +15,7 @@ namespace std {
   // (1) a reference to an existing container, in which case this reference is used to access the container
   // (2) a shared_ptr to a container
   // (3) an rvalue reference to a container, in which case the factory moves out of that container and manages its own copy
-  template<class Container,
+  template<IterableType Container,
            class BeginEnd = BeginEndIters<Container>,  // I'm terribly sorry about the bulky BeginEnd stuff, but C++17 doesn't let me use lambdas here :(
            class Iterator = typename BeginEnd::iterator,
            class ConstIterator = typename BeginEnd::const_iterator>
@@ -24,15 +24,16 @@ namespace std {
   protected:
     shared_ptr<Container> container;
   public:
+    using NonConstContainer = remove_cv_t<Container>;
     using iterator = Iterator;
     using const_iterator = ConstIterator;
 
     // allow move-construction from a container
     // however since C++ has no way of verifying if a container truely is move constructible (is_move_constructible is true for copy constructibles),
     //    the user better be sure that the Container has a move constructor!!!
-    _IterFactory(remove_cv_t<Container>&& _c): container(make_shared<Container>(forward<remove_cv_t<Container>>(_c))) {}
+    _IterFactory(NonConstContainer&& _c): container(make_shared<Container>(forward<NonConstContainer>(_c))) {}
 
-    _IterFactory(Container& _c): container(&_c, std::NoDeleter()) {}
+    _IterFactory(Container& _c): container(&_c, NoDeleter()) {}
     _IterFactory(shared_ptr<Container> _c): container(move(_c)) {}
     _IterFactory(unique_ptr<Container> _c): container(move(_c)) {}
 
@@ -54,7 +55,7 @@ namespace std {
   };
 
   // same as above, but we allow storing local data with the factory that is passed to each created iterator
-  template<class Container,
+  template<IterableType Container,
            class FactoryData = void,
            class BeginEnd = BeginEndIters<Container>,
            class Iterator = typename BeginEnd::iterator,
@@ -89,7 +90,7 @@ namespace std {
   };
 
   // the factory specialization for void local data just falls back to _IterFactory
-  template<class Container,
+  template<IterableType Container,
            class BeginEnd,
            class Iterator,
            class ConstIterator>
@@ -97,7 +98,7 @@ namespace std {
   { using _IterFactory<Container, BeginEnd, Iterator, ConstIterator>::_IterFactory; };
 
   // a convenience alias taking an iterator template mask instead of 2 iterator types
-  template<class Container,
+  template<IterableType Container,
            class FactoryData,
            class BeginEnd,
            template<class> class IteratorTpl>
