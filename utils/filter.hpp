@@ -27,13 +27,16 @@ namespace std{
     using Parent = auto_iter<NormalIterator>;
     Predicate pred;
 
-    void fix_index() { while(!is_invalid() && !pred(**this)) ++(*this); }
-    void rev_fix_index() { while(!is_invalid() && !pred(**this)) --(*this); }
+    template<bool rev = false>
+    void fix_index() {
+      while(is_valid() && !pred(**this))
+        if constexpr (rev) Parent::operator--(); else Parent::operator++();
+    }
   public:
     using typename Parent::value_type;
     using typename Parent::reference;
     using typename Parent::pointer;
-    using Parent::is_invalid;
+    using Parent::is_valid;
 
     // the IterFactory expects us to tell it what we want for construction besides begin/end: we want a NormalIterator (the end) and a predicate
     struct IteratorData {
@@ -76,9 +79,9 @@ namespace std{
     filtered_iterator& operator=(const filtered_iterator& iter) = default;
     filtered_iterator& operator=(filtered_iterator&& iter) = default;
 
-    filtered_iterator& operator++()    { if(!is_invalid()) {Parent::operantor++(); fix_index();} return *this; }
+    filtered_iterator& operator++()    { if(is_valid()) {Parent::operator++(); fix_index();} return *this; }
     filtered_iterator  operator++(int) { filtered_iterator result(*this); ++(*this); return result; }
-    filtered_iterator& operator--()    { if(!is_invalid()) {Parent::operator--(); rev_fix_index();} return *this; }
+    filtered_iterator& operator--()    { if(is_valid()) {Parent::operator--(); fix_index<true>();} return *this; }
     filtered_iterator  operator--(int) { filtered_iterator result(*this); --(*this); return result; }
 
     template<class, class, bool, class, class>
@@ -104,7 +107,6 @@ namespace std{
   using FilteredIterFactory = IterFactory<Container,
             const typename filtered_iterator<Container, Predicate, reverse>::IteratorData,
             BeginEndIters<Container, reverse, FilteredIterFor<Predicate, reverse>::template type>>;
-
 
 } // namespace std
 

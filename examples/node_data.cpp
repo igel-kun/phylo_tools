@@ -2,7 +2,7 @@
 #include <string>
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
-#include "utils/generator.hpp"
+#include "utils/net_gen.hpp"
 
 
 using namespace PT;
@@ -33,10 +33,20 @@ int main(const int argc, const char** argv)
 {
   uint32_t number = 0;
   NumberNetwork N;
-  generate_random_binary_network_nr(N, 51, 10);
+  //generate_random_binary_network_nr(N, 51, 10);
+  generate_random_binary_network_nr(N, 13, 2);
+  N.print_subtree(std::cout);
+
   PT::sequential_taxon_name sqn;
+  std::cout << "in order:\n";
+  for(const NodeDesc u: N.nodes_inorder()) std::cout<<u<<'\n';
+  std::cout << "post order:\n";
+  for(const NodeDesc u: N.nodes_postorder()) std::cout<<u<<" -- "<<N[u]<<"\n";
+  exit(1);
+  
   for(const NodeDesc u: N.nodes()) N[u].data() = number++;
-  for(const NodeDesc u: N.leaves()) N[u].data() = number++;
+  std::cout << "leaf-nums:\n";
+  for(const NodeDesc u: N.leaves()) std::cout << u << ": "<<N[u].data()<<'\n';
   auto&& X = N.nodes();
   std::vector<NodeDesc> Nnodes;
   X.append_to(Nnodes);

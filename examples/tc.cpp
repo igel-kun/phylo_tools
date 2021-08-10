@@ -3,7 +3,7 @@
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
-#include "utils/generator.hpp"
+#include "utils/net_gen.hpp"
 #include "utils/mul_wrapper.hpp" // treat networks as multi-labeled trees
 //#include "utils/tc_preprocess.hpp" // preprocessing
 

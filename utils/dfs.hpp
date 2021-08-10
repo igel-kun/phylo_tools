@@ -8,6 +8,65 @@
 
 namespace PT{
 
+/*
+  // a shot at using C++20 coroutines to implement the DFS node generator
+  template<TraversalType o, TraversalTraitsType Traits>
+  class DFSIteratorCoro: public Traits
+  {
+    using MyStack = stack<pair<Node*, typename vector<Node*>::iterator>>;
+  public:
+    using typename Traits::Network;
+    using Traits::track_seen;
+    using Traits::Traits;
+
+    void push_all(Node* x, MyStack& nodes){
+      do {
+        auto it = x->children.begin();
+        nodes.push({x, it});
+        if constexpr (o & preorder) std::cout << x->index << '\n';
+        if(it != x->children.end()) x = *it; else return;
+      } while(1);
+    }
+
+    void print_dfs(Node* x){
+      MyStack nodes;
+      // phase1: push all to the first leaf
+      push_all(x, nodes, o);
+      // phase 2:
+      while(!nodes.empty()){
+        auto& top_pair = nodes.top();
+        Node* np = top_pair.first;
+        auto& it = top_pair.second;
+        if(it != np->children.end()) {
+          ++it;
+          if(it != np->children.end()){
+            if constexpr (o & inorder) std::cout << np->index << '\n';
+            push_all(*it, nodes, o);
+          } else {
+            if constexpr (o & inorder)
+              if(np->children.size() == 1) std::cout << np->index << '\n';
+            if constexpr (o & postorder) std::cout << np->index << '\n';
+            nodes.pop();
+          }
+        } else {
+          if constexpr (o & postorder) std::cout << np->index << '\n';
+          if constexpr (o & inorder) std::cout << np->index << '\n';
+          nodes.pop();
+        }
+      }
+    }
+  };
+
+*/
+
+
+
+
+
+
+
+
+
   template<TraversalType o, TraversalTraitsType Traits>
   class DFSIterator: public Traits
   {
@@ -109,6 +168,7 @@ namespace PT{
 
     DFSIterator& operator++()
     {
+      std::cout << "advancing from "<<node_on_top()<<" (finished? "<<current_node_finished()<<")\n";
       if(current_node_finished()){
         // since we're done with the node_on_top now, go backtrack()
         backtrack();
@@ -344,9 +404,9 @@ namespace PT{
 
     // this one is the general form that can do any order, but is a little more difficult to use
     template<TraversalType o>
-    Traversal<o> traversal(const NodeDesc u, const order<o>& = order<o>()) { return Traversal<o>(N, u, seen); }
+    Traversal<o> traversal(const NodeDesc u, const order<o> = order<o>()) { return Traversal<o>(N, u, seen); }
     template<TraversalType o>
-    Traversal<o> traversal(const order<o>& = order<o>()) { return Traversal<o>(N, N.root(), seen); }
+    Traversal<o> traversal(const order<o> = order<o>()) { return Traversal<o>(N, N.root(), seen); }
 
     // then, we add 3 predefined orders: preorder, inorder, postorder, that are easier to use
     // preorder:

@@ -14,19 +14,22 @@ namespace PT{
   template<class EdgeData = void> class Adjacency;
 
 
-  struct _ProtoNode {
 #ifndef NDEBUG
-    static size_t num_names;
-    const size_t _name = num_names++;
+  struct _ProtoNode {
+    static uintptr_t num_names;
+    const uintptr_t _name = num_names++;
 
     // for debugging purposes, we may want to change the name to something more readable, like a successive numbering
-    size_t name() const { return _name; }
+    uintptr_t name() const { return _name; }
+  };
+  inline uintptr_t _ProtoNode::num_names = 0;
+  std::ostream& operator<<(std::ostream& os, const PT::NodeDesc& nd) { return os << ((PT::_ProtoNode*)((uintptr_t)nd))->name(); }
 #else
+  struct _ProtoNode {
     // by default, the name of a node is its address
     NodeDesc name() const { return (NodeDesc)this; }
-#endif
   };
-
+#endif
   // NOTE: we specifically refrain from polymorphic nodes (one node pointer that may point to a TreeNode or a NetworkNode) because
   //       the only gain would be to save one pointer on TreeNodes at the cost of a vtable for everyone, so not really worth it.
   //       Also, polymorphic access to the predecessors becomes a nightmare if its type is not known at compiletime
@@ -196,6 +199,12 @@ namespace PT{
     using LabelType = void;
     static constexpr bool has_label = false;
   };
+  template<StorageEnum A, StorageEnum B, class C, class D, class E>
+  std::ostream& operator<<(std::ostream& os, const Node<A,B,C,D,E>& n){
+    os << "Pre: "<<n.parents()<<"\tSuc:"<<n.children();
+    if constexpr (n.has_label) os << "\tlabel: "<<n.label();
+    return os;
+  }
 
 
   template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData, class _LabelType>
@@ -253,7 +262,8 @@ namespace PT{
     static constexpr Node& node_of(const NodeDesc& u) { return PT::node_of<Node>(u); }
     Node& operator[](const NodeDesc& u) const { return node_of(u); }
     
-    static constexpr std::string& name(const NodeDesc& u) { return node_of(u).name(); }
+    static constexpr uintptr_t name(const NodeDesc& u) { return node_of(u).name(); }
+    static constexpr std::string& label(const NodeDesc& u) { return node_of(u).label(); }
 
     static constexpr SuccContainer& successors(const NodeDesc u) { return node_of(u).successors(); }
     static constexpr SuccContainer& children(const NodeDesc u) { return node_of(u).successors(); }
@@ -320,12 +330,7 @@ namespace PT{
     static constexpr OutEdgeContainer out_edges(const NodeDesc u) { return node_of(u).out_edges(); }
     static constexpr InEdgeContainer in_edges(const NodeDesc u) { return node_of(u).in_edges(); }
   };
-
-#ifndef NDEBUG
-  inline size_t _ProtoNode::num_names = 0;
-  std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) { return os << ((_ProtoNode*)((uintptr_t)nd))->name(); }
-#endif
-
 }
+
 
 

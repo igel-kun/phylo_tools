@@ -114,6 +114,7 @@ namespace PT {
     using Parent::in_edges;
     using Parent::out_edges;
     using Parent::name;
+    using Parent::label;
 		using Parent::num_nodes;
 		using Parent::num_edges;
     using Parent::root;
@@ -393,10 +394,19 @@ namespace PT {
     bool edgeless() const { return num_edges() == 0; }
     size_t num_edges() const { return empty() ? 0 : _num_nodes - 1; }
     size_t num_nodes() const { return _num_nodes; }
+
+    template<TraversalType o = postorder>
+    auto nodes(const order<o> _o = order<o>()) const { return dfs().traversal(_o);  }
+    auto nodes_preorder() const { return nodes(order<preorder>()); }
+    auto nodes_inorder() const { return nodes(order<inorder>()); }
+    auto nodes_postorder() const { return nodes(order<postorder>()); }
     
-    auto nodes() const { return dfs().postorder();  }
-    auto edges() { return all_edges_dfs().postorder(); }
-    auto edges() const { return all_edges_dfs().postorder();  }
+    template<TraversalType o = postorder>
+    auto edges(const order<o> _o = order<o>()) const { return all_edges_dfs().traversal(_o);  }
+    auto edges_preorder() const { return edges(order<preorder>()); }
+    auto edges_inorder() const { return edges(order<inorder>()); }
+    auto edges_postorder() const { return edges(order<postorder>()); }
+
     /* TODO: find out why this doesn't work!
     auto leaves() {
       auto X = nodes() | std::views::filter([](const auto& n){ return n.is_leaf();});
@@ -405,10 +415,14 @@ namespace PT {
     }
     auto leaves() const { return nodes() | std::views::filter([](const auto& n){ return n.is_leaf();});  }
     */
-    auto leaves() {
-      auto nodes_sp = std::make_shared<decltype(nodes())>(nodes());
-      return std::FilteredIterFactory<decltype(nodes())>(nodes_sp, {nodes_sp->end(), [](const auto& n){return n.is_leaf();}});
+    template<TraversalType o = postorder>
+    auto leaves(const order<o> _o = order<o>()) {
+      auto nodes_sp = std::make_shared<decltype(nodes())>(nodes(_o));
+      return std::FilteredIterFactory<decltype(nodes())>(nodes_sp, nodes_sp->end(), [](const NodeDesc& n){return node_of(n).is_leaf();});
     }
+    auto leaves_preorder() { return leaves(order<preorder>()); }
+    auto leaves_inorder() { return leaves(order<inorder>()); }
+    auto leaves_postorder() { return leaves(order<postorder>()); }
 
 
     // =============== traversals ======================
@@ -659,9 +673,11 @@ namespace PT {
       return os << "\n";
     }
  
-    void print_subtree(std::ostream& os, const NodeDesc u = front(_roots), std::string prefix = "") const {
-      std::string u_name = name(u);
-      DEBUG3(u_name += "[" + std::to_string(u) + "]");
+    void print_subtree(std::ostream& os, std::string prefix = "") const { print_subtree(os, front(_roots), std::move(prefix)); }
+    void print_subtree(std::ostream& os, const NodeDesc u, std::string prefix = "") const {
+      std::string u_name = std::to_string(name(u));
+      if constexpr (Node::has_label)
+        u_name += "[" + std::to_string(label(u)) + "]";
       if(u_name == "") u_name = "+";
       os << '-' << u_name;
 

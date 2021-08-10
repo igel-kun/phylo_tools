@@ -3,7 +3,7 @@
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
-#include "utils/generator.hpp"
+#include "utils/net_gen.hpp"
 
 using namespace PT;
   

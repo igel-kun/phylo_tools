@@ -54,11 +54,14 @@ namespace PT{
   struct NodeDesc {
     uintptr_t data;
     // construct from anything
-    template<class T>
+    template<class T> requires (std::integral<T> || std::is_same_v<T,std::nullptr_t>)
     constexpr NodeDesc(T&& t): data((uintptr_t)t) {}
     constexpr NodeDesc(): NodeDesc(nullptr) {}
 
     operator uintptr_t() const { return data; }
+    
+    // we have to forward-declare the output here to avoid having operator<< pick up the implicit conversion to uintptr_t and output the address
+    friend std::ostream& operator<<(std::ostream& os, const PT::NodeDesc& nd);
   };
 }
 
