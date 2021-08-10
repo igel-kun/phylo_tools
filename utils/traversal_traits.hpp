@@ -50,7 +50,7 @@ namespace PT {
     _TraversalTraits(FSet&& _forbidden, Args&&... args): forbidden(std::forward<FSet>(_forbidden)), seen(std::forward<Args>(args)...) {}
    
     bool is_seen(const NodeDesc u) const { return test(seen, u) || test(forbidden, u); }
-    void mark_seen(const NodeDesc u) { if(node_of<Network>(u).in_degree() > 1) append(seen, u); }
+    void mark_seen(const NodeDesc u) { append(seen, u); }
   };
 
   template<PhylogenyType _Network,
@@ -70,7 +70,7 @@ namespace PT {
     _TraversalTraits(Args&&... args): seen(std::forward<Args>(args)...) {}
    
     bool is_seen(const NodeDesc u) const { return test(seen, u); }
-    void mark_seen(const NodeDesc u) { if(node_of<Network>(u).in_degree() > 1) append(seen, u); }
+    void mark_seen(const NodeDesc u) { append(seen, u); }
   };
 
   template<PhylogenyType _Network,

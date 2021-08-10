@@ -97,8 +97,15 @@ namespace PT{
       child_history.emplace_back(get_children(N, u));
 
       // make sure we start with an unseen child
-      if constexpr(track_seen) skip_seen_children();
-      
+      if constexpr(track_seen) {
+        const size_t num_skipped = skip_seen_children();
+        // ATTENTION: when track_seen is active, we may skip all but one child of u; when in in-order mode, this is problematic
+        //    because we would want to output u after its last child in this case...
+        //    slightly abusing our data structures, we can note this down in the seen_set...
+        if constexpr(o & inorder)
+          if(N.out_degree(u) == num_skipped + 1) mark_seen(u);
+      }
+
       // if a pre-order is requested, then u itself is emittable, so don't put more stuff on the stack; otherwise, keep diving to the first unseen child
       if constexpr (!(o & preorder))
         if(!current_node_finished())
@@ -134,21 +141,30 @@ namespace PT{
         ++current_child;
 
         // if now the child at current_iter has been seen, skip it (and all following)
-        if constexpr(track_seen) skip_seen_children();
+        size_t num_skipped = 0;
+        if constexpr(track_seen) num_skipped = skip_seen_children();
 
         // if there are still unseen children then dive() into the next subtree unless inorder is requested
         if(current_child.is_valid()){
           if constexpr (!(o & inorder)) dive(get_node(*(child_history.back())));
-        } else if constexpr (!(o & postorder)) backtrack(); // if the children are spent then keep popping end-iterators unless postorder is requested
+        } else {
+          if constexpr (o & postorder) return; // in post-order, output the node instead of backtracking further
+          // in in-order, if all but at most one child have been skipped, then output the node instead of backtrack
+          if((o & inorder) && (N.out_degree(node_on_top()) <= num_skipped + 1)) return;
+          if((o & inorder) && is_seen(node_on_top())) return;
+          backtrack(); // if the children are spent then keep popping end-iterators unless postorder is requested
+        }
       }
     }
 
     // skip over all seen children of the current node
-    void skip_seen_children()
+    size_t skip_seen_children()
     {
+      size_t result = 0;
       ChildIter& current = child_history.back();
       // skip over all seen children
-      while(current.is_valid() && is_seen(*current)) ++current;
+      while(current.is_valid() && is_seen(*current)) {++current; ++result;}
+      return result;
     }
 
   public:
@@ -168,7 +184,6 @@ namespace PT{
 
     DFSIterator& operator++()
     {
-      std::cout << "advancing from "<<node_on_top()<<" (finished? "<<current_node_finished()<<")\n";
       if(current_node_finished()){
         // since we're done with the node_on_top now, go backtrack()
         backtrack();
