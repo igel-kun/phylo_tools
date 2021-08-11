@@ -12,7 +12,11 @@ option (GRAPHITE "build with graphite loop analysis" OFF)
 option (DEBUG "debug mode (0=none, 9=max)" OFF)
 option (STATISTICS "collect statistics" OFF)
 option (STATIC "enable static build" OFF)
-option (FATAL "enable fatal errors" ON)
+option (FATAL "enable fatal errors" OFF)
+
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(DEBUG 5 CACHE STRING "enable DEBUG mode" FORCE)
+ENDIF()
 
 message("Options: (enable with -D<option>=ON & disable with -D<option>=OFF)")
 message("use graphite (GRAPHITE)         " ${GRAPHITE} )
@@ -45,16 +49,17 @@ endif()
 
 # suppress clangs silly "unused parameter" warnings...
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Qunused-arguments -Wno-unknown-warning")
+  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wno-unknown-warning")
 endif()
 
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -std=c++17")
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20")
 
 if(${FATAL})
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wfatal-errors")
 endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -Ddebuglevel=${DEBUG}")
 
 if(${STATISTICS})
   MESSAGE("adding support for collecting statistics...")
@@ -63,10 +68,10 @@ endif()
 
 if(${DEBUG})
   MESSAGE("building DEBUG version...")
-  set(CMAKE_BUILD_TYPE DEBUG)
+#  set(CMAKE_BUILD_TYPE DEBUG)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Ddebuglevel=${DEBUG}")
 else()
-  set(CMAKE_BUILD_TYPE RELEASE)
+#  set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
 ADD_EXECUTABLE( iso examples/iso.cpp )

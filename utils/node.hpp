@@ -41,6 +41,7 @@ namespace PT{
     static constexpr StorageEnum SuccStorage = _SuccStorage;
     static constexpr StorageEnum PredStorage = _PredStorage;
     static constexpr bool _is_tree_node = (PredStorage == singleS);
+    static constexpr bool has_edge_data = Adjacency::has_data;
     using SuccContainer = StorageType<SuccStorage, Adjacency>;
     using PredContainer = StorageType<PredStorage, Adjacency>;
     using LabelType = void;
@@ -153,7 +154,7 @@ namespace PT{
     static constexpr bool has_data = true;
     
     // initialize only the data, leaving parents and children empty
-    template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, _Node>)
+    template<class First, class... Args> requires (!NodeType<First>)
     _Node(First&& first, Args&&... args): _data(std::forward<First>(first), std::forward<Args>(args)...) {
       std::cout << "created node named "<<this->name()<<" at "<<this <<"\n";
     }
@@ -172,7 +173,7 @@ namespace PT{
     static constexpr bool has_data = false;
 
     // default-initialization ignores all parameters
-    template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, _Node>)
+    template<class First, class... Args> requires (!NodeType<First>)
     _Node(First&& first, Args&&... args) {}
     _Node() = default;
   };
@@ -258,9 +259,13 @@ namespace PT{
     using EdgeSet = std::unordered_set<Edge>;
     template<class T>
     using EdgeMap = std::unordered_map<Edge, T>;
+    
+    static constexpr bool has_node_data = Node::has_data;
+    static constexpr bool has_edge_data = Adjacency::has_data;
 
     static constexpr Node& node_of(const NodeDesc& u) { return PT::node_of<Node>(u); }
     Node& operator[](const NodeDesc& u) const { return node_of(u); }
+    Node&& operator[](const NodeDesc& u) && { return node_of(u); }
     
     static constexpr uintptr_t name(const NodeDesc& u) { return node_of(u).name(); }
     static constexpr std::string& label(const NodeDesc& u) { return node_of(u).label(); }
