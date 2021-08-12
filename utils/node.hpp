@@ -264,7 +264,7 @@ namespace PT{
     static constexpr bool has_edge_data = Adjacency::has_data;
 
     static constexpr Node& node_of(const NodeDesc& u) { return PT::node_of<Node>(u); }
-    Node& operator[](const NodeDesc& u) const { return node_of(u); }
+    Node& operator[](const NodeDesc& u) const & { return node_of(u); }
     Node&& operator[](const NodeDesc& u) && { return node_of(u); }
     
     static constexpr uintptr_t name(const NodeDesc& u) { return node_of(u).name(); }

@@ -27,6 +27,16 @@ using NumberNetwork = DefaultLabeledNetwork<uint32_t>;
 using ISeqNetwork = DefaultNetwork<InformedSequence>;
 using ConstISeqNetwork = DefaultNetwork<const InformedSequence>;
 
+const char* bases = "NACGT";
+
+std::string random_seq(const size_t len)
+{
+    std::string result;
+    for(uint32_t j = len; j > 0; --j)
+      result += bases[throw_die(5)];
+    return result;
+}
+
 
 void assign_DFS_numbers(NumberNetwork& N, const NodeDesc root, uint32_t& current_num)
 {
@@ -34,6 +44,7 @@ void assign_DFS_numbers(NumberNetwork& N, const NodeDesc root, uint32_t& current
   for(const NodeDesc w: N.children(root))
     assign_DFS_numbers(N, w, current_num);
 }
+
 
 int main(const int argc, const char** argv)
 {
@@ -56,14 +67,13 @@ int main(const int argc, const char** argv)
   std::cout << "\n\ndone generating network\n\n";
   assign_DFS_numbers(N, N.root(), DFS_counter);
 
-  // play with nodes that have a string attached: each leaf gets a random sequence of NACGT (length between 5 and 20)
-  ISeqNetwork N2(N);
-  const char* bases = "NACGT";
+  // play with nodes that have a string attached: each node is initialized with a random string
+  // to this end, we use the node-data translation function (that takes the node-data of N (aka uint32_t)
+  // and returns something from which N2's node-data can be initialized (aka a string))
+  ISeqNetwork N2(N, [](const uint32_t){ return "\0"; } );
 
   for(const NodeDesc u: N2.leaves()){
-    std::string s;
-    for(uint32_t j = 10 + throw_die(10); j > 0; --j)
-      s += bases[throw_die(5)];
+    const std::string s = random_seq(10 + throw_die(10));
     auto& data = N2[u].data();
     std::cout << "assigning new data "<<s<<" to "<<u<<'\n';
     data.update(s);
@@ -80,7 +90,7 @@ int main(const int argc, const char** argv)
 
 
   // finally, let's see how to deal with to initialize data instead of assigning data
-  ConstISeqNetwork N3(N);
+  ConstISeqNetwork N3(N, [](const uint32_t){ return random_seq(10 + throw_die(10)); });
   for(const NodeDesc i: N3.nodes()){
     std::cout << "found data at "<<N3[i]<<" for "<<i<<'\n';
     if(!N3[i].data().seq.empty())

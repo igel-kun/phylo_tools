@@ -6,6 +6,22 @@ namespace std {
 
   // NOTE: my concepts do not differentiate between T and T&. For example ContainerType<T> is true for T = vector<int>&. This is so you can write "ContainerType C" and use C as universal reference
 
+  // std::is_arithmetic is false for pointers.... why?
+  template<class T> constexpr bool is_really_arithmetic_v = is_arithmetic_v<T> || is_pointer_v<T>;
+  // anything that can be converted from and to int is considered "basically arithmetic"
+  template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
+
+
+  // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
+  template<class T> struct iterator_of {
+    using type = conditional_t<is_const_v<T>, typename T::const_iterator, typename T::iterator>;
+  };
+  template<class T> struct iterator_of<T*> { using type = T*; };
+  template<class T, std::size_t N> struct iterator_of<T (&)[N]> { using type = T*; };
+  template<class T> using iterator_of_t = typename iterator_of<remove_reference_t<T>>::type;
+  template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
+
+  template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
   template<class T> concept PointerType = is_pointer_v<remove_cvref_t<T>>;
 
   template<class T>
@@ -16,10 +32,10 @@ namespace std {
     // NOTE: it seems forward_iterator concept cannot be satisfied by the proxy iterator of raw_vector_map :/
     //requires forward_iterator<typename T::iterator>;
     //requires forward_iterator<typename T::const_iterator>;
-    { a.begin() }   -> convertible_to<typename T::iterator>;
-    { a.end() }     -> convertible_to<typename T::iterator>;
-    { b.begin() }   -> convertible_to<typename T::const_iterator>;
-    { b.end() }     -> convertible_to<typename T::const_iterator>;
+    { a.begin() }   -> convertible_to<iterator_of_t<T>>;
+    { a.end() }     -> convertible_to<iterator_of_t<T>>;
+    { b.begin() }   -> convertible_to<iterator_of_t<const T>>;
+    { b.end() }     -> convertible_to<iterator_of_t<const T>>;
 	};
   //template<class T>
   //concept IterableType = StrictIterableType<remove_cvref_t<T>>;

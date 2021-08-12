@@ -259,10 +259,10 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<VectorType V> auto find(V&& v, const auto& x) { return std::find(begin(v), end(v), x); }
   template<SetType S>    auto find(S&& s, const auto& key) { return s.find(key); }
 
-  template<VectorType V> auto erase(V& v, const typename V::const_iterator& _iter) { return v.erase(_iter); }
-  template<SetType C>    auto erase(C& c, const typename C::const_iterator& _iter) { return c.erase(_iter); }
-  template<VectorType C> auto erase(C& c, const auto& x) { return c.erase(find(c,x)); }
-  template<SetType S>    auto erase(S& s, const auto& key) { return s.erase(key); }
+  template<VectorType V> auto erase(V& v, const typename remove_reference_t<V>::const_iterator& _iter) { return v.erase(_iter); }
+  template<VectorType V> auto erase(V& c, const typename remove_reference_t<V>::value_type& x) { return c.erase(find(c,x)); }
+  template<SetType S>    auto erase(S& c, const typename remove_reference_t<S>::const_iterator& _iter) { return c.erase(_iter); }
+  template<SetType S>    auto erase(S& s, const typename remove_reference_t<S>::key_type& key) { return s.erase(key); }
 
   template<ContainerType C>
   void pop(C& c) {

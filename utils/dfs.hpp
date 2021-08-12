@@ -94,7 +94,8 @@ namespace PT{
     // if we hit a node that is already seen, return that node
     void dive(const NodeDesc u)
     {
-      child_history.emplace_back(get_children(N, u));
+      auto& u_children = get_children(N, u);
+      child_history.emplace_back(u_children);
 
       // make sure we start with an unseen child
       if constexpr(track_seen) {

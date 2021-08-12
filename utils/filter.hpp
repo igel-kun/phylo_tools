@@ -17,7 +17,7 @@ namespace std{
   // NOTE: filtered_iterators cannot be replaced by C++20's filtered_view because one has to derive a filtered_view object from the container and one can then iterate this filtered view object
   //       while, here, we want the iterator to do the filtering!
 
-  template<class Container,
+  template<IterableType Container,
            class Predicate = std::function<bool(const typename Container::value_type&)>,
            bool reverse = false,
            class NormalIterator = conditional_t<reverse, reverse_iterator_of_t<Container>, iterator_of_t<Container>>,
@@ -84,11 +84,11 @@ namespace std{
     filtered_iterator& operator--()    { if(is_valid()) {Parent::operator--(); fix_index<true>();} return *this; }
     filtered_iterator  operator--(int) { filtered_iterator result(*this); --(*this); return result; }
 
-    template<class, class, bool, class, class>
+    template<IterableType, class, bool, class, class>
     friend class filtered_iterator;
   };
 
-  template<class Container,
+  template<IterableType Container,
            class Predicate,
            bool reverse,
            class NormalIterator>

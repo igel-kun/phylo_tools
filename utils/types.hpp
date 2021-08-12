@@ -84,10 +84,12 @@ namespace PT {
   template<class = void> class Edge;
 
   template<class C>
-  concept HasNodeValue = std::is_convertible_v<typename std::remove_cvref_t<C>::value_type, NodeDesc>;
+  concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<std::iterator_of_t<C>>::value_type, NodeDesc>;
   template<class C>
   concept HasNodeKey = std::is_convertible_v<typename std::remove_cvref_t<C>::key_type, NodeDesc>;
 
+  template<class C>
+  concept NodeIterableType = (std::IterableType<C> && HasNodeValue<C>);
   template<class C>
   concept NodeContainerType = (std::ContainerType<C> && HasNodeValue<C>);
   template<class C>
@@ -169,7 +171,6 @@ namespace PT {
   template<class P>
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
 
-
   template<class P>
   concept StrictTreeType = (StrictPhylogenyType<P> && P::is_declared_tree);
   template<class P>
@@ -180,5 +181,16 @@ namespace PT {
   using NetEdgeVec = std::vector<typename Network::Edge>;
   template<PhylogenyType Network>
   using NetEdgeSet = HashSet<typename Network::Edge>;
+
+  template<class T>
+  constexpr bool has_data = std::remove_reference_t<T>::has_data;
+
+
+  // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
+  template<PhylogenyType Net, class Else = bool>
+  using NodeDataOr = std::conditional_t<std::is_void_v<typename std::remove_cvref_t<Net>::NodeData>, Else, typename std::remove_cvref_t<Net>::NodeData>;
+  // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
+  template<PhylogenyType Net, class Else = bool>
+  using EdgeDataOr = std::conditional_t<std::is_void_v<typename std::remove_cvref_t<Net>::EdgeData>, Else, typename std::remove_cvref_t<Net>::NodeData>;
 
 }

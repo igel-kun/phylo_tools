@@ -16,20 +16,34 @@
 
 namespace std{
 
-  template<class T> constexpr bool is_const_ref = is_const_v<remove_reference_t<T>>;
-
-  // don't add const to void...
-  template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
-  // is_arithmetic is false for pointers.... why?
-  template<class T> constexpr bool is_really_arithmetic_v = is_arithmetic_v<T> || is_pointer_v<T>;
-  // anything that can be converted from and to int is considered "basically arithmetic"
-  template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
-
-  template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
-
+  // --------------------- FUNDAMENTALS -------------------------------------
 
   template<class T> constexpr bool is_pair = false;
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
+
+  //NOTE: add_rvalue_reference<A&> = A& that's not very intuitive...
+  template<class T>
+  using make_rvalue_reference = add_rvalue_reference_t<std::remove_reference_t<T>>;
+
+  // don't add const to void...
+  template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
+  template<class T> constexpr bool is_const_ref = is_const_v<remove_reference_t<T>>;
+
+  // turn a reference into const reference or rvalue into const rvalue
+  template<class T> struct _const_reference { using type = my_add_const_t<T>; };
+  template<class T> struct _const_reference<T&> { using type = my_add_const_t<T>&; };
+  template<class T> struct _const_reference<T&&> { using type = my_add_const_t<T>&&; };
+  template<class T> using const_reference_t = typename _const_reference<T>::type;
+
+  // std::conditional_t for unary templates
+  template<bool condition, template<class> class X, template<class> class Y>
+  struct conditional_template { template<class Z> using type = X<Z>; };
+  template<template<class> class X, template<class> class Y>
+  struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
+
+
+
+  // ----------------- const_pointer and const_reference ---------------------
 
   // if a container has a const_pointer type, then return this type, otherwise return a pointer to const value_type
   template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
@@ -40,6 +54,9 @@ namespace std{
   template<class N, class T = void> struct get_const_ref { using type = add_lvalue_reference_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ref<N, void_t<typename N::const_reference>> { using type = typename N::const_reference; };
   template<class N> using get_const_ref_t = typename get_const_ref<remove_cvref_t<N>>::type;
+
+
+  // ------------------ ITERATORS -----------------------------------
 
   // iterator_traits<const T*>::value_type is "T" not "const T"? What the hell, STL?
   template<typename T>
@@ -57,51 +74,56 @@ namespace std{
   template<class _Iterator>
   constexpr bool is_random_access_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, random_access_iterator_tag>;
 
-  template<typename T,typename U>
-  struct copy_cv
+
+  // compare iterators with their reverse versions
+  template<typename T>
+  bool operator==(const T& i1, const reverse_iterator<T>& i2) {  return (next(i1) == i2.base()); }
+  template<typename T>
+  bool operator!=(const T& i1, const reverse_iterator<T>& i2) {  return !operator==(i1,i2); }
+  template<typename T>
+  bool operator==(const reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
+  template<typename T>
+  bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
+  
+  // begin() and end() for forward and reverse iterators
+  template<IterableType C,
+           bool reverse = false,
+           template<class> class Iterator = conditional_template<reverse, reverse_iterator_of_t, iterator_of_t>::template type>
+  struct BeginEndIters
   {
-    using R =    remove_reference_t<T>;
-    using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
-    using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
+    using NonConstC = remove_cv_t<C>;
+    using iterator = Iterator<C>;
+    using const_iterator = Iterator<const C>;
+    template<class... Args>
+    static iterator begin(NonConstC& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static iterator end(NonConstC& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator begin(const C& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator end(const C& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
   };
-  template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
-
-  //NOTE: add_rvalue_reference<A&> = A& that's not very intuitive...
-  template<class T>
-  using make_rvalue_reference = std::add_rvalue_reference_t<std::remove_reference_t<T>>;
-
-  template<typename T,typename U>
-  struct copy_ref
+  template<IterableType C, template<class> class Iterator>
+  struct BeginEndIters<C, true, Iterator>
   {
-    using R =    remove_reference_t<T>;
-    using U1 =   conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>;
-    using type = conditional_t<is_rvalue_reference_v<T>, add_rvalue_reference_t<U1>, U1>;
+    using NonConstC = remove_cv_t<C>;
+    using iterator = reverse_iterator<Iterator<C>>;
+    using const_iterator = reverse_iterator<Iterator<const C>>;
+    template<class... Args>
+    static iterator begin(NonConstC& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static iterator end(NonConstC& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator begin(const C& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
+    template<class... Args>
+    static const_iterator end(const C& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
   };
-  template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
-  // NOTE: it is important to copy the const before copying the ref!
-  template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
-
-  // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
-  template<class T> using iterator_of_t = conditional_t<is_const_v<remove_reference_t<T>>,
-                                                        typename remove_reference_t<T>::const_iterator,
-                                                        typename remove_reference_t<T>::iterator>;
-  template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
 
 
-  // turn a reference into const reference or rvalue into const rvalue
-  template<class T> struct _const_reference { using type = my_add_const_t<T>; };
-  template<class T> struct _const_reference<T&> { using type = my_add_const_t<T>&; };
-  template<class T> struct _const_reference<T&&> { using type = my_add_const_t<T>&&; };
-  template<class T> using const_reference_t = typename _const_reference<T>::type;
+  // why are those things not defined per default by STL???
+  template<IterableType C>
+  inline typename my_iterator_traits<C>::const_iterator max_element(const C& c) { return max_element(begin(c), end(c)); }
 
-
-  // a map lookup with default
-  template <typename _Map, typename _Key, typename _Ref = typename _Map::value_type>
-  inline _Ref map_lookup(_Map&& m, const _Key& key, _Ref&& default_val)
-  {
-    const auto iter = m.find(key);
-    return (iter == m.end()) ? default_val : iter->second;
-  }
 
 
   // a class that returns itself on dereference 
@@ -128,6 +150,43 @@ namespace std{
     const T* operator->() const { return &value; }
   };
 
+
+  // ---------------- copy CV or & qualifiers from a type to the next -------------------
+  // this is useful as what we're getting from a "const vector<int>" should be "const int", not "int" (the actualy value_type)
+
+  template<typename T,typename U>
+  struct copy_cv
+  {
+    using R =    remove_reference_t<T>;
+    using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
+    using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
+  };
+  template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
+
+  template<typename T,typename U>
+  struct copy_ref
+  {
+    using R =    remove_reference_t<T>;
+    using U1 =   conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>;
+    using type = conditional_t<is_rvalue_reference_v<T>, add_rvalue_reference_t<U1>, U1>;
+  };
+  template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
+  // NOTE: it is important to copy the const before copying the ref!
+  template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
+
+
+
+  // ----------------------- lookup ----------------------------------
+
+  // a map lookup with default
+  template <typename _Map, typename _Key, typename _Ref = typename _Map::value_type>
+  inline _Ref map_lookup(_Map&& m, const _Key& key, _Ref&& default_val)
+  {
+    const auto iter = m.find(key);
+    return (iter == m.end()) ? default_val : iter->second;
+  }
+
+  // --------------------------- sort and merge -------------------------------------
 
   // facepalm-time: the STL can only sort 2 things: random-access containers & std::list, that's it. So this mergesort can sort with bidirectional iters
   // based on a post othx to @TemplateRex: https://stackoverflow.com/questions/24650626/how-to-implement-classic-sorting-algorithms-in-modern-c
@@ -184,61 +243,27 @@ namespace std{
   { flexible_sort(FwdIt first, FwdIt last, Compare cmp = Compare{}) { std::sort(first, last, cmp); } };
 
 
-  // compare iterators with their reverse versions
-  template<typename T>
-  bool operator==(const T& i1, const reverse_iterator<T>& i2) {  return (next(i1) == i2.base()); }
-  template<typename T>
-  bool operator!=(const T& i1, const reverse_iterator<T>& i2) {  return !operator==(i1,i2); }
-  template<typename T>
-  bool operator==(const reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
-  template<typename T>
-  bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
-  
-  template<bool condition, template<class> class X, template<class> class Y>
-  struct conditional_template { template<class Z> using type = X<Z>; };
-  template<template<class> class X, template<class> class Y>
-  struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
 
-  // begin() and end() for forward and reverse iterators
-  template<IterableType C,
-           bool reverse = false,
-           template<class> class Iterator = conditional_template<reverse, reverse_iterator_of_t, iterator_of_t>::template type>
-  struct BeginEndIters
-  {
-    using NonConstC = remove_cv_t<C>;
-    using iterator = Iterator<C>;
-    using const_iterator = Iterator<const C>;
-    template<class... Args>
-    static iterator begin(NonConstC& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static iterator end(NonConstC& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator begin(const C& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator end(const C& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
+
+  // ------------------------- HASHING -------------------------------------------
+
+  template<typename T1, typename T2>
+  struct hash<pair<T1, T2> >{
+    size_t operator()(const pair<T1,T2>& p) const{
+      const std::hash<T1> hasher1;
+      const std::hash<T2> hasher2;
+      return hash_combine(hasher1(p.first), hasher2(p.second));
+    }
   };
-  template<IterableType C, template<class> class Iterator>
-  struct BeginEndIters<C, true, Iterator>
-  {
-    using NonConstC = remove_cv_t<C>;
-    using iterator = reverse_iterator<Iterator<C>>;
-    using const_iterator = reverse_iterator<Iterator<const C>>;
-    template<class... Args>
-    static iterator begin(NonConstC& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static iterator end(NonConstC& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator begin(const C& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator end(const C& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
+  template<typename T>
+  struct hash<reference_wrapper<T>>{
+    size_t operator()(const reference_wrapper<T>& p) const{
+      return (std::hash<T>())(p);
+    }
   };
 
 
-  // why are those things not defined per default by STL???
-  template<IterableType C>
-  inline typename my_iterator_traits<C>::const_iterator max_element(const C& c) { return max_element(begin(c), end(c)); }
-
-
+  // ------------------------ FUNCTIONS -------------------------------------------
   // deferred function call for emplacements, thx @ Arthur O'Dwyer
   // emplace(f(x)) = construct + move (assuming f does copy elision)
   // emplace(deferred_call(f(x))) = (in-place) construct (assuming f does copy elision)
@@ -265,21 +290,14 @@ namespace std{
     template<class... Args>
     constexpr void operator()(Args&&... args) const { };
   };
+  // a functional that just returns its argument (and hopefully gets optimized out)
+  struct IdentityFunction {
+    template<class Arg>
+    constexpr Arg&& operator()(Arg&& x) const { return forward<Arg>(x); };
+  };
 
-  template<typename T1, typename T2>
-  struct hash<pair<T1, T2> >{
-    size_t operator()(const pair<T1,T2>& p) const{
-      const std::hash<T1> hasher1;
-      const std::hash<T2> hasher2;
-      return hash_combine(hasher1(p.first), hasher2(p.second));
-    }
-  };
-  template<typename T>
-  struct hash<reference_wrapper<T>>{
-    size_t operator()(const reference_wrapper<T>& p) const{
-      return (std::hash<T>())(p);
-    }
-  };
+
+  // --------------------- MODIFIED DATA STRUCTURES ------------------------
 
   template<class T, ContainerType C = deque<T>>
   class iterable_stack: public stack<T, C>
@@ -295,6 +313,34 @@ namespace std{
     const_iterator end() const { return c.end(); }
   };
 
+
+  // a deleter that will or will not delete, depeding on its argument upon construction (for shared_ptr's)
+  template<class T>
+  struct SelectiveDeleter {
+    const bool del;
+    SelectiveDeleter(const bool _del): del(_del) {}
+    inline void operator()(T* p) const { if(del) delete p; }
+  };
+  using NoDeleter = IgnoreFunction<>;
+
+
+  //! decrease a value in a map, pointed to by an iterator; return true if the value was decreased and false if the item was removed
+  template<class Map, long threshold = 1>
+  inline bool decrease_or_remove(Map& m, const iterator_of_t<Map>& it) {
+    if(it->second == threshold) {
+      m.erase(it);
+      return false;
+    } else {
+      --(it->second);
+      return true;
+    }
+  }
+
+
+  // TODO: write optional_by_invalid class that implements std::optional without requiring 1 additional byte (by using some "invalid" value
+
+
+  // ----------------------- OUTPUT ---------------------------------------
 
   template<IterableType C> requires (!is_convertible_v<C,string>)
   inline std::ostream& operator<<(std::ostream& os, const C& objs)
@@ -317,6 +363,9 @@ namespace std{
     return os << r.get();
   }
 
+
+  // --------------------- PAIR OPERATIONS -------------------------------
+
   //! add two pairs of things
   template <typename A, typename B>
   pair<A,B> operator+(const pair<A,B>& l, const pair<A,B>& r)
@@ -327,6 +376,9 @@ namespace std{
   //! reverse a pair of things, that is, turn (x,y) into (y,x)
   template<typename A, typename B>
   inline pair<B,A> reverse(const pair<A,B>& p) { return {p.second, p.first}; }
+
+
+  // ---------------------- BINARY SEARCH -----------------------------------
 
   //! find a number in a sorted list of numbers between lower_bound and upper_bound
   //if target is not in c, then return the index of the next larger item in c (or upper_bound if there is no larger item)
@@ -354,28 +406,8 @@ namespace std{
   }
 
 
-  //! decrease a value in a map, pointed to by an iterator; return true if the value was decreased and false if the item was removed
-  template<class Map, long threshold = 1>
-  inline bool decrease_or_remove(Map& m, const typename Map::iterator& it)
-  {
-    if(it->second == threshold) {
-      m.erase(it);
-      return false;
-    } else {
-      --(it->second);
-      return true;
-    }
-  }
 
-
-  // a deleter that will or will not delete, depeding on its argument upon construction (for shared_ptr's)
-  template<class T>
-  struct SelectiveDeleter {
-    const bool del;
-    SelectiveDeleter(const bool _del): del(_del) {}
-    inline void operator()(T* p) const { if(del) delete p; }
-  };
-  using NoDeleter = IgnoreFunction<>;
+  // --------------------- MISC ---------------------------------------------
 
   template<class T = int>
   struct minus_one
