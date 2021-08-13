@@ -12,12 +12,15 @@ namespace PT {
     operator NodeDesc() const { return nd; }
   };
 
+  template<class EdgeData> struct Edge;
+
   // an adjacency is a node-description with edgedata
   // NOTE: the adjacency's edge data can be either constructed from arguments (new() will be called by the constructor) or from another adjacency (shallow copy of the pointer)
   template<class _EdgeData>
   struct Adjacency: public ProtoAdjacency {
     using Parent = ProtoAdjacency;
     using EdgeData = _EdgeData;
+    using Edge = PT::Edge<_EdgeData>;
     static constexpr bool has_data = true;
 
     // edge data is stored in memory and both u-->v and v-->u point to the same edge data. This pointer cannot change during the lifetime of the adjacency!
@@ -46,6 +49,7 @@ namespace PT {
   struct Adjacency<void>: public ProtoAdjacency {
     using Parent = ProtoAdjacency;
     using Parent::Parent;
+    using Edge = PT::Edge<void>;
     static constexpr bool has_data = false;
 
     template<class... Args>

@@ -1,26 +1,46 @@
 
 #pragma once
 
+#include "trans_iter.hpp"
 #include "iter_factory.hpp"
 #include "edge.hpp"
 
 namespace PT{
 
-  struct EdgeMaker {
-    template<class Adj>
-    static EdgeFromNode<Adj> make_edge(const NodeDesc u, Adj&& adj) { return {u, std::forward<Adj>(adj)}; }
-  };
-  struct ReverseEdgeMaker {
-    template<class Adj>
-    static EdgeFromNode<Adj> make_edge(const NodeDesc u, Adj&& adj) { return {reverse_edge_t(), u, std::forward<Adj>(adj)}; }
-  };
+  template<std::IterableType AdjContainer, bool reverse = false>
+  struct ProtoEdgeMaker {
+    NodeDesc u;
+    using Adj  = typename std::value_type_of_t<AdjContainer>;
+    using Edge = typename Adj::Edge;
+    
+    Edge operator()(Adj&& adj) const {
+      if constexpr(reverse)
+        return {reverse_edge_t(), u, std::move<Adj>(adj)};
+      else return {u, std::move<Adj>(adj)};
+    }
+    Edge operator()(const Adj& adj) const {
+      if constexpr(reverse)
+        return {reverse_edge_t(), u, adj};
+      else return {u, adj};
+    }
 
+  };
+  template<class Adj> using EdgeMaker = ProtoEdgeMaker<Adj, false>;
+  template<class Adj> using ReverseEdgeMaker = ProtoEdgeMaker<Adj, true>;
+
+
+  template<std::IterableType AdjContainer, class _EdgeMaker = EdgeMaker<AdjContainer>>
+  using InOutEdgeIterator = std::transforming_iterator<std::iterator_of_t<AdjContainer>,
+                                                       typename _EdgeMaker::Edge,
+                                                       _EdgeMaker>;
+/*
   // make an edge container from a node and a container of nodes; makes edges with the function object EdgeMaker
   template<std::IterableType _AdjContainer, class _EdgeMaker = EdgeMaker>
   class InOutEdgeIterator
   {
   public:
-    using iterator = std::iterator_of_t<_AdjContainer>;
+    using iterator          = std::iterator_of_t<_AdjContainer>;
+    using const_iterator    = std::iterator_of_t<const _AdjContainer>;
     using iterator_category = typename std::my_iterator_traits<iterator>::iterator_category;
     using Adjacency         = typename std::my_iterator_traits<iterator>::value_type;
     using AdjacencyRef      = typename std::my_iterator_traits<iterator>::reference;
@@ -67,10 +87,10 @@ namespace PT{
     pointer operator->()             { return _EdgeMaker::make_edge(u, *node_it); }
 
   };
-
+*/
   // make an edge container from a head and a container of tails
   template<std::IterableType _AdjContainer>
-  using InEdgeIterator = InOutEdgeIterator<_AdjContainer, ReverseEdgeMaker>;
+  using InEdgeIterator = InOutEdgeIterator<_AdjContainer, ReverseEdgeMaker<_AdjContainer>>;
   // make an edge container from a tail and a container of heads
   template<std::IterableType _AdjContainer>
   using OutEdgeIterator = InOutEdgeIterator<_AdjContainer>;

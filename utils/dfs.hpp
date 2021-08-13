@@ -121,7 +121,7 @@ namespace PT{
     }
 
     // get the node whose child-iterators are on top of the stack
-    NodeDesc node_on_top() const
+    const NodeDesc& node_on_top() const
     {
       // if there are at least 2 ranges on the stack, dereference the second to last to get the current node, otherwise, it's root
       return (child_history.size() > 1) ? get_node(*(child_history[child_history.size() - 2])) : root;

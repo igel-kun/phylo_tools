@@ -32,14 +32,14 @@ namespace PT {
   class ProtoPhylogeny: public NodeAccess<_Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType>> {
   public:
     static constexpr StorageEnum RootStorage = _RootStorage;
-    using RootContainer = StorageType<_RootStorage, NodeDesc>;
+    using RootContainer = StorageClass<_RootStorage, NodeDesc>;
   protected:
     RootContainer _roots;
-		size_t _num_nodes = 0;
-		size_t _num_edges = 0;
+		size_t _num_nodes = 0u;
+		size_t _num_edges = 0u;
 
-		void count_node(const int nr = 1) { _num_nodes += nr; std::cout << "counted "<<_num_nodes<<" nodes\n"; }
-		void count_edge(const int nr = 1) { _num_edges += nr; std::cout << "counted "<<_num_edges<<" edges\n"; }
+		void count_node(const int nr = 1) { _num_nodes += nr; std::cout << "++ counted "<<_num_nodes<<" nodes\n"; }
+		void count_edge(const int nr = 1) { _num_edges += nr; std::cout << "++ counted "<<_num_edges<<" edges\n"; }
 	public:
     static constexpr bool is_declared_tree = false;
 		size_t num_nodes() const { return _num_nodes; }
@@ -59,7 +59,7 @@ namespace PT {
     public NodeAccess<_Node<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType>> {
   public:
     static constexpr StorageEnum RootStorage = _RootStorage;
-    using RootContainer = StorageType<_RootStorage, NodeDesc>;
+    using RootContainer = StorageClass<_RootStorage, NodeDesc>;
   protected:
     RootContainer _roots;
 		size_t _num_nodes = 0;
@@ -117,33 +117,31 @@ namespace PT {
     using Parent::out_edges;
     using Parent::name;
     using Parent::label;
-		using Parent::num_nodes;
-		using Parent::num_edges;
+		using Parent::_num_nodes;
+		using Parent::_num_edges;
     using Parent::root;
     using Parent::_roots;
     
     using IgnoreNodeDataFunc = std::IgnoreFunction<NodeDataOr<Phylogeny>>;
     using IgnoreEdgeDataFunc = std::IgnoreFunction<EdgeDataOr<Phylogeny>>;
   protected:
-    size_t _num_nodes = 0u;
 
     void delete_node(const NodeDesc x) {
 			count_node(-1);
       PT::delete_node<Node>(x);
     }
 
+    // add an edge between two nodes of the tree/network
+    // NOTE: the nodes are assumed to have been added by add_root(), add_child(), or add_parent() (of another node) before!
 	  // NOTE: Edge data can be passed either in the Adjacency v or with additional args (the latter takes preference)
     template<AdjacencyType Adj, class... Args>
     std::pair<Adjacency*, bool> add_edge(const NodeDesc u, Adj&& v, Args&&... args) {
       const auto [iter, success] = node_of(u).add_child(std::forward<Adj>(v), std::forward<Args>(args)...);
       if(success) {
-#ifndef NDEBUG
-        const bool res =
-#endif
-        node_of(v).add_parent(u, *iter).second;
+        const bool res = node_of(v).add_parent(u, *iter).second;
         assert(res);
 				count_edge();
-        std::cout << "node count: " << num_nodes() << " edge count: " << num_edges() << '\n';
+        std::cout << "node count: " << _num_nodes << " edge count: " << _num_edges << '\n';
         return {&(*iter), true};
       } else return {nullptr, false};
     }
@@ -172,6 +170,8 @@ namespace PT {
   public:
 
     // ================ modification ======================
+    // create a node in the void
+    // NOTE: this does not count the created node as part of the tree/network yet (for this, use add_root() or add_child() or add_parent())
     template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
       return reinterpret_cast<uintptr_t>(new Node(std::forward<Args>(args)...));
     }
@@ -187,6 +187,7 @@ namespace PT {
       count_node(result.second);
       return result;
     }
+
     template<AdjacencyType Adj, class... Args>
     bool add_parent(Adj&& v, const NodeDesc u, Args&&... args) {
       const auto result = add_edge(u, std::forward<Adj>(v), std::forward<Args>(args)...);
@@ -205,7 +206,6 @@ namespace PT {
       std::cout << "adding "<<new_root<<" to roots\n";
       if(append(_roots, new_root).second) {
         count_node();
-        std::cout << "mark1\n";
         return new_root;
       } else {
         delete_node(new_root);
@@ -395,11 +395,10 @@ namespace PT {
     
     // =============== variable query ======================
     constexpr bool is_tree() const { return true; }
-    bool empty() const { return num_nodes() == 0; }
-    bool edgeless() const { return num_edges() == 0; }
-    size_t num_edges() const { return empty() ? 0 : _num_nodes - 1; }
-    size_t num_nodes() const { return _num_nodes; }
+    bool empty() const { return _num_nodes == 0; }
+    bool edgeless() const { return _num_edges == 0; }
 
+#error this is wrong if we have multiple roots! Use concatenating_iter in this case!
     template<TraversalType o = postorder>
     auto nodes(const order<o> _o = order<o>()) const { return dfs().traversal(_o);  }
     auto nodes_preorder() const { return nodes(order<preorder>()); }
@@ -591,12 +590,14 @@ namespace PT {
         } else {
           x_copy = add_root();
         }
+        std::cout << "placed "<<NodeDesc{(uintptr_t)(&other_x)}<<" as new root node "<<x_copy<<"\n";
       } else {
         if constexpr (has_data<OtherNode>) {
           x_copy = create_node(ndt(std::forward<OtherNode>(other_x).data()));
         } else {
           x_copy = create_node();
         }
+        std::cout << "placed "<<NodeDesc{(uintptr_t)(&other_x)}<<" below "<<x<<" as node "<<x_copy<<"\n";
         const bool success = add_child(x, x_copy, std::forward<Args>(args)...).second;
         assert(success);
       }
@@ -616,12 +617,14 @@ namespace PT {
                                  EdgeDataTranslation&& edt = EdgeDataTranslation(),
                                  Args&&... args) {
       NodeTranslation old_to_new;
+      std::cout << "copying subtree below "<<other_x<<"...\n";
       // step 1: copy other_x
       const NodeDesc x_copy = place_node_below(other[other_x], x, ndt, std::forward<Args>(args)...);
       old_to_new.try_emplace(other_x, x_copy);
       // step 2: copy everything below other_x
       for(const NodeDesc other_u: other.dfs().preorder(other_x)) if(other_u != other_x) {
-        for(const auto& other_p: other[other_u].parents()) {
+        for(const auto& other_p: other[other_u].parents()) { // TODO: THIS IS WRONG! USE EDGE TRAVERSAL INSTEAD!!
+          std::cout << "  treating edge "<<other_p<<" --> "<<other_u<<"\n";
           NodeDesc u_copy = NoNode;
           if constexpr (std::remove_reference_t<_Phylo>::has_edge_data) {
             u_copy = place_node_below(other[other_u], old_to_new[other_p], ndt, edt(other_p.data()));
@@ -655,16 +658,16 @@ namespace PT {
         assert(success);
       } else append(_roots, other_x);
       // step 2: update node and edge numbers
-      size_t num_nodes = 0;
-      size_t num_edges = 0;
+      size_t node_count = 0;
+      size_t edge_count = 0;
       for(const NodeDesc u: dfs().postorder(other_x)) {
-        num_nodes += 1;
-        num_edges += out_degree(u);
+        node_count += 1;
+        edge_count += out_degree(u);
       }
-      count_node(num_nodes);
-      count_edge(num_edges);
-      other.count_node(-num_nodes);
-      other.count_edge(-num_edges);
+      count_node(node_count);
+      count_edge(edge_count);
+      other.count_node(-node_count);
+      other.count_edge(-edge_count);
       return other_x;
     }
 
@@ -698,8 +701,10 @@ namespace PT {
               NodeDataTranslation&& ndt = NodeDataTranslation(),
               EdgeDataTranslation&& edt = EdgeDataTranslation(),
               const policy_copy_t = policy_copy_t()) {
-      for(const NodeDesc r: in_roots)
+      for(const NodeDesc r: in_roots){
+        std::cout << "=== copying node "<<r<<" ===\n";
         place_below_by_copy(std::forward<_Phylo>(in_tree), r, NoNode, std::forward<NodeDataTranslation>(ndt), std::forward<EdgeDataTranslation>(edt));
+      }
     }
     
     // "copy" construction with single root
@@ -779,7 +784,7 @@ namespace PT {
 
     std::ostream& tree_summary(std::ostream& os) const
     {
-      DEBUG3(os << "tree has "<<num_edges()<<" edges and "<<num_nodes()<<" nodes, leaves: "<<leaves()<<"\n");
+      DEBUG3(os << "tree has "<<_num_edges<<" edges and "<<_num_nodes<<" nodes, leaves: "<<leaves()<<"\n");
       DEBUG3(os << "nodes: "<<nodes()<<'\n');
       DEBUG3(os << "edges: "<<Parent::edges()<<'\n');
       
@@ -793,8 +798,11 @@ namespace PT {
     void print_subtree(std::ostream& os, std::string prefix = "") const { print_subtree(os, front(_roots), std::move(prefix)); }
     void print_subtree(std::ostream& os, const NodeDesc u, std::string prefix = "") const {
       std::string u_name = std::to_string(name(u));
-      if constexpr (Node::has_label)
-        u_name += "[" + std::to_string(label(u)) + "]";
+      if constexpr (Node::has_label){
+        const std::string u_label = std::to_string(label(u));
+        if(!u_label.empty())
+          u_name += "[" + u_label + "]";
+      }
       if(u_name == "") u_name = "+";
       os << '-' << u_name;
 

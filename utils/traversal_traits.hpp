@@ -125,27 +125,29 @@ namespace PT {
     using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::ItemContainer;
-    // node traversals return fabricated rvalue nodes, no reason to fiddle with adjacency-data here, we're doing a Node traversal!
     using value_type      = NodeDesc;
-    using reference       = value_type;
-    using const_reference = value_type;
-    using pointer         = std::self_deref<value_type>;
-    using const_pointer   = pointer;
+    using reference       = const value_type&;
+    using const_reference = const value_type&;
+    using pointer         = const value_type*;
+    using const_pointer   = const value_type*;
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
 
     static constexpr ItemContainer& get_children(const Network& N, const NodeDesc u) { return N.children(u); }
-    static constexpr NodeDesc get_node(const NodeDesc u) { return u; }
+    static constexpr const NodeDesc& get_node(const NodeDesc& u) { return u; }
   };
 
   template<PhylogenyType _Network,
            OptionalNodeSetType _SeenSet = DefaultSeenSet<_Network>,
            OptionalNodeSetType _ForbiddenSet = void>
-  class EdgeTraversalTraits: public _TraversalTraits<_Network, typename _Network::OutEdgeContainerRef, _SeenSet, _ForbiddenSet>
+  class EdgeTraversalTraits: public _TraversalTraits<_Network, typename _Network::OutEdgeContainer, _SeenSet, _ForbiddenSet>
   {
-    using Parent = _TraversalTraits<_Network, typename _Network::OutEdgeContainerRef, _SeenSet, _ForbiddenSet>;
+    using Parent = _TraversalTraits<_Network, typename _Network::OutEdgeContainer, _SeenSet, _ForbiddenSet>;
   public:
+    // NOTE: the DFS traversal stack will hold auto-iters for iterators into _Network::OutEdgeContainer (which is an IterFactory)
+    //       such iterators construct edges from the child-adjacencies on the fly when they are de-referenced (rvalues instead of lvalue references).
+    //       Note that these edges **DO NOT EXIST IN MEMORY** (only on the return-stack), so we also return rvalues here.
     using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::ItemContainer;
@@ -153,14 +155,14 @@ namespace PT {
     using reference       = value_type;
     using const_reference = const value_type;
     using pointer         = std::self_deref<value_type>;
-    using const_pointer   = pointer;
+    using const_pointer   = std::self_deref<const value_type>;
 
     // an empty stack represents the end-iterator
     static constexpr unsigned char min_stacksize = 2;
 
     // NOTE: out_edges returns a temporary iterator factory, so we cannot return a reference to it!
     static constexpr ItemContainer get_children(Network& N, const NodeDesc u) { return N.out_edges(u); }
-    static constexpr NodeDesc get_node(const value_type& uv) { return uv.head(); }
+    static constexpr const NodeDesc& get_node(const value_type& uv) { return uv.head(); }
    
     // normally, we want to skip an edge if its head has been seen
     //NOTE: this will give us an edge-list of a DFS-tree
@@ -188,11 +190,12 @@ namespace PT {
 
     // so now, we want to skip an edge if its head is forbidden or its tail has been seen during the DFS
     //NOTE: this will give us all edges below some node, except for those with forbidden heads
+    //TODO: run some tests here, this doesn't seem right! In particular, seen and forbidden are not treated differently right now
     bool is_seen(const value_type& uv) const { return Parent::is_seen(uv.tail()); }
   };
 
   template<class T>
-  concept TraversalTraitsType = requires(T&& t, const typename T::value_type u) {
+  concept TraversalTraitsType = requires(T t, const typename T::value_type u) {
     typename T::Network;
     typename T::ItemContainer;
     T::track_seen;

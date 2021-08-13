@@ -15,10 +15,10 @@ namespace PT {
 
   // a label matching maps labels (strings) to pairs of node-containers (singleton_set for single-labeled networks)
   template<StorageEnum _LabelStorageA = singleS, StorageEnum _LabelStorageB = singleS, class _LabelType = std::string>
-  class LabelMatching: public std::unordered_map<_LabelType, std::pair<StorageType<_LabelStorageA, NodeDesc>, StorageType<_LabelStorageB, NodeDesc>>> {
+  class LabelMatching: public std::unordered_map<_LabelType, std::pair<StorageClass<_LabelStorageA, NodeDesc>, StorageClass<_LabelStorageB, NodeDesc>>> {
   public:
-    using StorageA = StorageType<_LabelStorageA, NodeDesc>;
-    using StorageB = StorageType<_LabelStorageB, NodeDesc>;
+    using StorageA = StorageClass<_LabelStorageA, NodeDesc>;
+    using StorageB = StorageClass<_LabelStorageB, NodeDesc>;
   protected:
     using Parent = std::unordered_map<_LabelType, std::pair<StorageA, StorageB>>;
   public:

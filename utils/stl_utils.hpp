@@ -66,6 +66,11 @@ namespace std{
     using const_reference = get_const_ref_t<T>;
     using const_pointer   = get_const_ptr_t<T>;
   };
+  template<class T> using value_type_of_t = typename my_iterator_traits<iterator_of_t<T>>::value_type;
+  template<class T> using reference_of_t  = typename my_iterator_traits<iterator_of_t<T>>::reference;
+  template<class T> using const_reference_of_t  = typename my_iterator_traits<iterator_of_t<T>>::const_reference;
+  template<class T> using pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::pointer;
+  template<class T> using const_pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::const_pointer;
 
   template<class _Iterator>
   constexpr bool is_forward_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, forward_iterator_tag>;

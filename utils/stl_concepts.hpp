@@ -32,10 +32,10 @@ namespace std {
     // NOTE: it seems forward_iterator concept cannot be satisfied by the proxy iterator of raw_vector_map :/
     //requires forward_iterator<typename T::iterator>;
     //requires forward_iterator<typename T::const_iterator>;
-    { a.begin() }   -> convertible_to<iterator_of_t<T>>;
-    { a.end() }     -> convertible_to<iterator_of_t<T>>;
-    { b.begin() }   -> convertible_to<iterator_of_t<const T>>;
-    { b.end() }     -> convertible_to<iterator_of_t<const T>>;
+    { begin(a) }   -> convertible_to<iterator_of_t<T>>;
+    { end(a) }     -> convertible_to<iterator_of_t<T>>;
+    { begin(b) }   -> convertible_to<iterator_of_t<const T>>;
+    { end(b) }     -> convertible_to<iterator_of_t<const T>>;
 	};
   //template<class T>
   //concept IterableType = StrictIterableType<remove_cvref_t<T>>;

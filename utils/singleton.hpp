@@ -1,45 +1,16 @@
 
 #pragma once
 
-#include <optional>
+#include "optional.hpp"
 
 namespace std{
 
-  // if a type has a specific invalid element (like nullptr), then this can be used to indicate that the singleton is absent
-  template<class T, T invalid>
-  struct SingletonByInvalid {
-    using value_type = T;
-    T element = invalid;
-
-    // in-place construct the element
-    template<class... Args>
-    SingletonByInvalid(const std::in_place_t, Args&&... args):
-      T(std::forward<Args>(args)...) {}
-    
-    // re-construct the element
-    template<class... Args>
-    T& emplace(Args&&... args){
-      T const * addr = &element;
-      addr->~T();
-      new(addr) T(std::forward<Args>(args)...);
-      return *addr;
-    }
-    T& operator*() { return element; }
-    const T& operator*() const { return element; }
-
-    void reset() { emplace(invalid); }
-    operator bool() const { return element == invalid; }
-  };
-  // if a type does not have a specific invalid element, then we'll use std::optional (which stores 1 additional byte for the "absence" information)
-
-
-
   // a set holding at most one element, but having a set-interface
-  template<class ElementContainer>
-  class _singleton_set {
-    ElementContainer storage;
+  template<Optional Container>
+  class singleton_set {
+    Container storage;
   public:
-    using value_type = typename ElementContainer::value_type;
+    using value_type = typename Container::value_type;
     using difference_type = ptrdiff_t;
     using size_type = size_t;
     using iterator = value_type*;
@@ -50,22 +21,25 @@ namespace std{
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-    _singleton_set() = default;
-    _singleton_set(const value_type& el): storage(std::in_place_t(), el) {}
-    _singleton_set(value_type&& el): storage(std::in_place_t(), std::move(el)) {}
+    singleton_set() = default;
+    singleton_set(const value_type& el): storage(std::in_place_t(), el) {}
+    singleton_set(value_type&& el): storage(std::in_place_t(), std::move(el)) {}
 
-    bool non_empty() const { return static_cast<bool>(storage); }
+    bool non_empty() const { return storage.has_value(); }
     bool empty() const { return !non_empty(); }
     void clear() { storage.reset(); }
 
-    template<class X, class = enable_if_t<is_same_v<remove_cvref_t<X>, remove_cvref_t<value_type>>>>
-    void push_back(X&& el) {
+    void push_back(value_type&& el) {
       assert((non_empty(), "trying to add second element to singleton set"));
-      storage.emplace(forward<X>(el));
+      storage.emplace(move(el));
+    }
+    void push_back(const value_type& el) {
+      assert((non_empty(), "trying to add second element to singleton set"));
+      storage.emplace(el);
     }
 
-    template<class X, class = enable_if_t<is_same_v<remove_cvref_t<X>, remove_cvref_t<value_type>>>>
-    _singleton_set& operator=(X&& x) { clear(); push_back(forward<X>(x)); return *this; }
+    singleton_set& operator=(value_type&& x) { clear(); push_back(move(x)); return *this; }
+    singleton_set& operator=(const value_type& x) { clear(); push_back(x); return *this; }
     //singleton_set& operator=(const singleton_set& s) = default;
 
     bool erase(const iterator& it) {
@@ -73,16 +47,16 @@ namespace std{
       clear();
       return true;
     }
-    bool erase(const_reference el) {
+    bool erase(const value_type& el) {
       if(empty() || (el != *storage)) return false;
       clear();
       return true;
     }
 
     template<class... Args>
-    pair<iterator, bool> emplace(Args&&... args) {
+    constexpr pair<iterator, bool> emplace(Args&&... args) {
       if(empty()){
-        reference emplace_result = storage.emplace(forward<Args>(args)...);
+        value_type& emplace_result = storage.emplace(forward<Args>(args)...);
         return {&emplace_result, true};
       } else {
         assert(false && "trying to add second element to singleton set");
@@ -128,19 +102,10 @@ namespace std{
     reverse_iterator rend() { return rbegin() + non_empty(); }
     const_reverse_iterator rend() const { return rbegin() + non_empty(); }
 
-    bool operator==(const _singleton_set& other) const {
+    bool operator==(const singleton_set& other) const {
       return empty() ? other.empty() : (storage == other.storage);
     }
-    bool operator!=(const _singleton_set& other) const { return !operator==(other); }
+    bool operator!=(const singleton_set& other) const { return !operator==(other); }
   };
-
-  // to declare a singleton set, you can either provide an invalid-getter (a struct containing a value attribute) or void (triggering the use of std::optional)
-  template<class T, class InvalidGetter>
-  struct __singleton_set { using type = _singleton_set<SingletonByInvalid<T, InvalidGetter::value>>; };
-  template<class T>
-  struct __singleton_set<T, void> { using type = _singleton_set<std::optional<T>>; };
-
-  template<class T, class InvalidGetter = void>
-  using singleton_set = typename __singleton_set<T, InvalidGetter>::type;
 
 }

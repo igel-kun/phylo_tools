@@ -15,6 +15,7 @@ namespace PT{
     using Adjacency = PT::Adjacency<EdgeData>;
     using Parent = std::pair<NodeDesc, Adjacency>;
     using Parent::Parent;
+    static constexpr bool has_data = Adjacency::has_data;
 
     ProtoEdge(const reverse_edge_t, const NodeDesc u, const Adjacency& v):
       Parent(v.nd, {u, v})

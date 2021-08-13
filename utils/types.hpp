@@ -27,15 +27,16 @@ namespace PT{
     singleS  // store a single item (like the parent for a tree node)
   };
 
-  template<StorageEnum storage, class Element> struct _StorageType { };
-  template<class Element> struct _StorageType<vecS, Element>     { using type = std::vector<Element>; };
-  template<class Element> struct _StorageType<sortvecS, Element> { using type = std::sorted_vector<Element>; };
-  template<class Element> struct _StorageType<setS, Element>     { using type = std::set<Element>; };
-  template<class Element> struct _StorageType<hashsetS, Element> { using type = std::unordered_set<Element>; };
-  template<class Element> struct _StorageType<vecsetS, Element>  { using type = std::vector_hash<Element>; };
-  template<std::PointerType Element> struct _StorageType<singleS, Element>  { using type = std::singleton_set<Element, std::default_invalid_t<Element>>; };
-  template<class Element> struct _StorageType<singleS, Element>  { using type = std::singleton_set<Element>; };
-  template<StorageEnum storage, class Element> using StorageType = typename _StorageType<storage, Element>::type;
+  template<StorageEnum storage, class Element> struct _StorageClass { };
+  template<class Element> struct _StorageClass<vecS, Element>     { using type = std::vector<Element>; };
+  template<class Element> struct _StorageClass<sortvecS, Element> { using type = std::sorted_vector<Element>; };
+  template<class Element> struct _StorageClass<setS, Element>     { using type = std::set<Element>; };
+  template<class Element> struct _StorageClass<hashsetS, Element> { using type = std::unordered_set<Element>; };
+  template<class Element> struct _StorageClass<vecsetS, Element>  { using type = std::vector_hash<Element>; };
+  template<std::PointerType Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, nullptr>>; };
+  template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, -1>>; };
+  template<class Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional<Element>>; };
+  template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
 
 
 
@@ -110,7 +111,7 @@ namespace PT {
   using InOutDegree = std::pair<Degree, Degree>;
 
   // sets and containers of node descriptors
-  using NodeSingleton = std::singleton_set<NodeDesc, std::default_invalid_t<NodeDesc>>;
+  using NodeSingleton = StorageClass<singleS, NodeDesc>;
   using ConsecutiveNodeSet = std::ordered_bitset;
   template<class T>
   using NodeWith = std::pair<NodeDesc, T>;

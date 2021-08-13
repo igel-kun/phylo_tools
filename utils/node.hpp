@@ -42,8 +42,8 @@ namespace PT{
     static constexpr StorageEnum PredStorage = _PredStorage;
     static constexpr bool _is_tree_node = (PredStorage == singleS);
     static constexpr bool has_edge_data = Adjacency::has_data;
-    using SuccContainer = StorageType<SuccStorage, Adjacency>;
-    using PredContainer = StorageType<PredStorage, Adjacency>;
+    using SuccContainer = StorageClass<SuccStorage, Adjacency>;
+    using PredContainer = StorageClass<PredStorage, Adjacency>;
     using LabelType = void;
   protected:
     SuccContainer _successors;
