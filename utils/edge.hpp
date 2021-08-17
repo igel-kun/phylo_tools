@@ -4,9 +4,6 @@
 
 namespace PT{
 
-  // this tag allows creating an edge u-->v from an existing adjacency v-->u
-  struct reverse_edge_t {};
-
   // an edge is a node (head) with another node (->tail)
   template<class EdgeData = void>
   struct ProtoEdge: public std::pair<NodeDesc, PT::Adjacency<EdgeData>>

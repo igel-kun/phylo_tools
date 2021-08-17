@@ -53,16 +53,27 @@ namespace PT{
   // node descriptors
 #ifndef NDEBUG
   struct NodeDesc {
-    uintptr_t data;
-    // construct from anything
-    template<class T> requires (std::integral<T> || std::is_same_v<T,std::nullptr_t>)
-    constexpr NodeDesc(T&& t): data((uintptr_t)t) {}
-    constexpr NodeDesc(): NodeDesc(nullptr) {}
+    uintptr_t data = (uintptr_t)nullptr;
+    NodeDesc() {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    NodeDesc(const NodeDesc& other): data(other.data) {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    NodeDesc(NodeDesc&& other): data(std::move(other.data)) {} //std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    NodeDesc& operator=(const NodeDesc& other) {
+      data = other.data;
+      //std::cout << "assigned new ND pointing to "<<data<<"\n";
+      return *this;
+    }
+    NodeDesc& operator=(NodeDesc&& other) {
+      data = std::move(other.data);
+      //std::cout << "assigned new ND pointing to "<<data<<"\n";
+      return *this;
+    }
+    template<class T>
+    NodeDesc(const T* t): data((uintptr_t)t) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
 
     operator uintptr_t() const { return data; }
     
     // we have to forward-declare the output here to avoid having operator<< pick up the implicit conversion to uintptr_t and output the address
-    friend std::ostream& operator<<(std::ostream& os, const PT::NodeDesc& nd);
+    friend std::ostream& operator<<(std::ostream& os, const NodeDesc& nd);
   };
 }
 
@@ -79,10 +90,14 @@ namespace PT {
   using NodeDesc = uintptr_t;
 #endif
 
-  inline constexpr NodeDesc NoNode = (uintptr_t)nullptr;
+  inline const NodeDesc NoNode = (void*)nullptr;
   inline const std::string NoName = "";
 
   template<class = void> class Edge;
+
+  // this tag allows creating an edge u-->v from an existing adjacency v-->u
+  struct reverse_edge_t {};
+
 
   template<class C>
   concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<std::iterator_of_t<C>>::value_type, NodeDesc>;

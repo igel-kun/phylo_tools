@@ -11,18 +11,19 @@ namespace std {
   // Iterator = the internal iterator type
   // BeginEndTransformation = a transformation function transforming the internal iterator to the result of begin() / end()
   template<class Iterator>
-  class __IterFactory: public my_iterator_traits<Iterator>
+  class ProtoIterFactory: public my_iterator_traits<Iterator>
   {
   protected:
     using InternalIter = auto_iter<Iterator>;
     InternalIter it;
   public:
     using iterator = Iterator;
+    using const_iterator = Iterator;
 
     template<class... Args>
-    __IterFactory(Args&&... args): it(forward<Args>(args)...) {}
+    ProtoIterFactory(Args&&... args): it(forward<Args>(args)...) {}
 
-    auto begin() const { return it; }
+    auto begin() const { return it.get_iter(); }
     auto end() const { return it.get_end(); }
 
     bool empty() const { return !(it.is_valid()); }
@@ -36,9 +37,10 @@ namespace std {
     _Container to_container() const { _Container result; append(result, *this); return result; }
   };
 
+
   template<class Iterator, class BeginEndTransformation = void>
-  class _IterFactory: public __IterFactory<Iterator> {
-    using Parent = __IterFactory<Iterator>;
+  class _IterFactory: public ProtoIterFactory<Iterator> {
+    using Parent = ProtoIterFactory<Iterator>;
     BeginEndTransformation trans;
   public:
     // construct from an auto_iter and a BeginEndTransformation
@@ -56,15 +58,13 @@ namespace std {
     auto end() const { return it_trans(Parent::end()); }
 
   };
-  template<class Iterator>
-  class _IterFactory<Iterator, void>: public __IterFactory<Iterator> {
-    using Parent = __IterFactory<Iterator>;
-  public:
-    using Parent::Parent;
-  };
 
+  template<class Iterator, class BeginEndTransformation = void>
+  struct __IterFactory { using type = _IterFactory<Iterator, BeginEndTransformation>; };
+  template<class Iterator>
+  struct __IterFactory<Iterator, void> { using type = ProtoIterFactory<Iterator>; };
 
   template<class T, class BeginEndTransformation = void>
-  using IterFactory = _IterFactory<iterator_of_t<T>, BeginEndTransformation>;
+  using IterFactory = typename __IterFactory<iterator_of_t<T>, BeginEndTransformation>::type;
 
 }

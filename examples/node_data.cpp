@@ -53,18 +53,21 @@ int main(const int argc, const char** argv)
   //generate_random_binary_network_nr(N, 51, 10);
   generate_random_binary_network_nr(N, 13, 2);
   std::cout << N;
+  std::cout << "\n\ndone generating network\n\n";
 
+  std::cout << "setting node data for all nodes:\n";
   for(const NodeDesc u: N.nodes()) N[u].data() = number++;
   std::cout << "leaf-nums:\n";
   for(const NodeDesc u: N.leaves()) std::cout << u << ": "<<N[u].data()<<'\n';
 
+  std::cout << "\n\n assigning leaf-taxa\n\n";
   PT::sequential_taxon_name sqn;
-  for(const auto& u: N.nodes())
+  for(const auto& u: N.leaves())
     N[u].label() = sqn;
+
   // play with numbered nodes: this gives each node the number in which it occurs in a DFS search (starting at 0)
+  std::cout << "\n\n assigning DFS numbers\n\n";
   uint32_t DFS_counter = 0;
-  
-  std::cout << "\n\ndone generating network\n\n";
   assign_DFS_numbers(N, N.root(), DFS_counter);
 
   std::cout << "edges:\n";

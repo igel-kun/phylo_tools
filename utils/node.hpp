@@ -23,11 +23,11 @@ namespace PT{
     uintptr_t name() const { return _name; }
   };
   inline uintptr_t _ProtoNode::num_names = 0;
-  std::ostream& operator<<(std::ostream& os, const PT::NodeDesc& nd) { return os << ((PT::_ProtoNode*)((uintptr_t)nd))->name(); }
+  std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) { return os << ((_ProtoNode*)((uintptr_t)nd))->name(); }
 #else
   struct _ProtoNode {
     // by default, the name of a node is its address
-    NodeDesc name() const { return (NodeDesc)this; }
+    uintptr_t name() const { return (uintptr_t)this; }
   };
 #endif
   // NOTE: we specifically refrain from polymorphic nodes (one node pointer that may point to a TreeNode or a NetworkNode) because
@@ -71,8 +71,8 @@ namespace PT{
     }
     template<class... Args>
     auto add_child(Args&&... args) { return add_successor(std::forward<Args>(args)...); }
-    size_t remove_successor(const NodeDesc n) { return std::erase(successors(), n); }
-    size_t remove_child(const NodeDesc n) { return remove_successor(n); }
+    size_t remove_successor(const NodeDesc& n) { return std::erase(successors(), n); }
+    size_t remove_child(const NodeDesc& n) { return remove_successor(n); }
     void remove_any_successor() { std::pop(successors()); }
     void remove_any_child() { remove_any_successor(); }
 
@@ -82,26 +82,27 @@ namespace PT{
     auto add_predecessor(Args&&... args) { return append(predecessors(), std::forward<Args>(args)...); }
     template<class... Args>
     auto add_parent(Args&&... args) { return add_predecessor(std::forward<Args>(args)...); }
-    size_t remove_predecessor(const NodeDesc n) { return predecessors().erase(n); }
-    size_t remove_parent(const NodeDesc n) { return remove_predecessor(n); }
+    size_t remove_predecessor(const NodeDesc& n) { return predecessors().erase(n); }
+    size_t remove_parent(const NodeDesc& n) { return remove_predecessor(n); }
     void remove_any_predecessor() { std::pop(predecessors()); }
     void remove_any_parent() { remove_any_predecessor(); }
 
     size_t degree() const { return in_degree() + out_degree(); }
     bool is_root() const { return predecessors().empty(); }
     bool is_tree_node() const { if constexpr(_is_tree_node) return true; else return in_degree() < 2; }
+    bool is_reti() const { return !is_tree_node(); }
     bool is_leaf() const { return successors().empty(); }
     bool is_suppressible() const { return (in_degree() == 1) && (out_degree() == 1); }
     bool is_inner_node() const { return !successors().empty(); }
     bool is_isolated() const { return predecessors().empty() && successors().empty(); }
 
     template<AdjacencyType Adj>
-    void replace_parent(const NodeDesc old_parent, Adj&& new_parent) {
+    void replace_parent(const NodeDesc& old_parent, Adj&& new_parent) {
       assert(test(predecessors(), old_parent));
       std::replace(predecessors(), old_parent, forward<Adj>(new_parent));
     }
     template<AdjacencyType Adj>
-    void replace_child(const NodeDesc old_child, Adj&& new_child) {
+    void replace_child(const NodeDesc& old_child, Adj&& new_child) {
       assert(test(successors(), old_child));
       std::replace(successors(), old_child, forward<Adj>(new_child));
     }
@@ -109,12 +110,12 @@ namespace PT{
     // convenient way of applying some function to all nodes of a subtree
     void apply_to_subtree(auto&& function) const {
       function(*this);
-      for(const NodeDesc v: successors())
+      for(const NodeDesc& v: successors())
         static_cast<const ProtoNode*>(v)->apply_to_subtree(std::as_const(function));
     }
     void apply_to_subtree(auto&& function) {
       function(*this);
-      for(const NodeDesc v: successors())
+      for(const NodeDesc& v: successors())
         static_cast<ProtoNode*>(v)->apply_to_subtree(std::as_const(function));
     }
 
@@ -138,10 +139,10 @@ namespace PT{
     using InEdgeContainer       = InEdgeFactory<PredContainer>;
     using ConstInEdgeContainer  = InEdgeFactory<const PredContainer>;
 
-    OutEdgeContainer out_edges() { return {this, successors()}; }
-    ConstOutEdgeContainer out_edges() const { return {this, successors()}; }
-    InEdgeContainer in_edges() { return {this, predecessors()}; }
-    ConstInEdgeContainer in_edges() const { return {this, predecessors()}; }
+    OutEdgeContainer out_edges() { return make_outedge_factory<SuccContainer>(this, _successors); }
+    ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(this, _successors); }
+    InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(this, _predecessors); }
+    ConstInEdgeContainer in_edges() const { return make_inedge_factory<const PredContainer>(this, _predecessors); }
   };
 
   // A Node is a ProtoNode with possible NodeData
@@ -217,7 +218,7 @@ namespace PT{
   NodeDesc make_node(Args&&... args) { return new _Node(std::forward<Args>(args)...); }
 
   template<NodeType _Node>
-  void delete_node(const NodeDesc u) { delete reinterpret_cast<_Node*>((uintptr_t)u); }
+  void delete_node(const NodeDesc& u) { delete reinterpret_cast<_Node*>((uintptr_t)u); }
 
   // create a new node from the data of some other node
   template<NodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
@@ -237,10 +238,10 @@ namespace PT{
   }
 
   template<NodeType Node>
-  Node& node_of(const NodeDesc x) { return *(reinterpret_cast<Node*>((uintptr_t)x)); }
+  Node& node_of(const NodeDesc& x) { return *(reinterpret_cast<Node*>((uintptr_t)x)); }
 
   template<PhylogenyType Network>
-  typename Network::Node& node_of(const NodeDesc x) { return node_of<typename Network::Node>(x); }
+  typename Network::Node& node_of(const NodeDesc& x) { return node_of<typename Network::Node>(x); }
 
   template<NodeType _Node>
   struct NodeAccess {
@@ -270,61 +271,62 @@ namespace PT{
     static constexpr uintptr_t name(const NodeDesc& u) { return node_of(u).name(); }
     static constexpr std::string& label(const NodeDesc& u) { return node_of(u).label(); }
 
-    static constexpr SuccContainer& successors(const NodeDesc u) { return node_of(u).successors(); }
-    static constexpr SuccContainer& children(const NodeDesc u) { return node_of(u).successors(); }
+    static constexpr SuccContainer& successors(const NodeDesc& u) { return node_of(u).successors(); }
+    static constexpr SuccContainer& children(const NodeDesc& u) { return node_of(u).successors(); }
 
-    static constexpr PredContainer& predecessors(const NodeDesc u) { return node_of(u).predecessors(); }
-    static constexpr PredContainer& parents(const NodeDesc u) { return node_of(u).predecessors(); }
+    static constexpr PredContainer& predecessors(const NodeDesc& u) { return node_of(u).predecessors(); }
+    static constexpr PredContainer& parents(const NodeDesc& u) { return node_of(u).predecessors(); }
 
-    static constexpr NodeDesc any_successor(const NodeDesc u) { return node_of(u).any_successor(); }
-    static constexpr NodeDesc any_child(const NodeDesc u) { return node_of(u).any_successor(); }
-    static constexpr NodeDesc child(const NodeDesc u) { return node_of(u).any_successor(); }
-
-    template<class... Args>
-    static constexpr auto add_successor(const NodeDesc u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
-    template<class... Args>
-    static constexpr auto add_child(const NodeDesc u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
-
-    static constexpr size_t remove_successor(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_successor(n); }
-    static constexpr size_t remove_child(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_successor(n); }
-
-    static constexpr void remove_any_successor(const NodeDesc u) { return node_of(u).remove_any_successors(); }
-    static constexpr void remove_any_child(const NodeDesc u) { return node_of(u).remove_any_successors(); }
-
-    static constexpr NodeDesc any_predecessor(const NodeDesc u) { return node_of(u).any_predecessor(); }
-    static constexpr NodeDesc any_parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
-    static constexpr NodeDesc parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
+    static constexpr NodeDesc& any_successor(const NodeDesc& u) { return node_of(u).any_successor(); }
+    static constexpr NodeDesc& any_child(const NodeDesc& u) { return node_of(u).any_successor(); }
+    static constexpr NodeDesc& child(const NodeDesc& u) { return node_of(u).any_successor(); }
 
     template<class... Args>
-    static constexpr auto add_predecessor(const NodeDesc u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+    static constexpr auto add_successor(const NodeDesc& u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
     template<class... Args>
-    static constexpr auto add_parent(const NodeDesc u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+    static constexpr auto add_child(const NodeDesc& u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
 
-    static constexpr size_t remove_predecessor(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_predecessor(n); }
-    static constexpr size_t remove_parent(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_predecessor(n); }
+    static constexpr size_t remove_successor(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_successor(n); }
+    static constexpr size_t remove_child(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_successor(n); }
 
-    static constexpr void remove_any_predecessor(const NodeDesc u) { return node_of(u).remove_any_predecessor(); }
-    static constexpr void remove_any_parent(const NodeDesc u) { return node_of(u).remove_any_predecessor(); }
+    static constexpr void remove_any_successor(const NodeDesc& u) { return node_of(u).remove_any_successors(); }
+    static constexpr void remove_any_child(const NodeDesc& u) { return node_of(u).remove_any_successors(); }
 
-    static constexpr size_t in_degree(const NodeDesc u) { return node_of(u).in_degree(); }
-    static constexpr size_t out_degree(const NodeDesc u) { return node_of(u).out_degree(); }
-    static constexpr size_t degree(const NodeDesc u) { return node_of(u).degree(); }
-    static constexpr bool is_root(const NodeDesc u) { return node_of(u).is_root(); }
-    static constexpr bool is_tree_node(const NodeDesc u) { return node_of(u).is_tree_node(); }
-    static constexpr bool is_leaf(const NodeDesc u) { return node_of(u).is_leaf(); }
-    static constexpr bool is_suppressible(const NodeDesc u) { return node_of(u).is_suppressible(); }
-    static constexpr bool is_inner_node(const NodeDesc u) { return node_of(u).is_inner_node(); }
-    static constexpr bool is_isolated(const NodeDesc u) { return node_of(u).is_isolated(); }
+    static constexpr NodeDesc& any_predecessor(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+    static constexpr NodeDesc& any_parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+    static constexpr NodeDesc& parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+
+    template<class... Args>
+    static constexpr auto add_predecessor(const NodeDesc& u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+    template<class... Args>
+    static constexpr auto add_parent(const NodeDesc& u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+
+    static constexpr size_t remove_predecessor(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_predecessor(n); }
+    static constexpr size_t remove_parent(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_predecessor(n); }
+
+    static constexpr void remove_any_predecessor(const NodeDesc& u) { return node_of(u).remove_any_predecessor(); }
+    static constexpr void remove_any_parent(const NodeDesc& u) { return node_of(u).remove_any_predecessor(); }
+
+    static constexpr size_t in_degree(const NodeDesc& u) { return node_of(u).in_degree(); }
+    static constexpr size_t out_degree(const NodeDesc& u) { return node_of(u).out_degree(); }
+    static constexpr size_t degree(const NodeDesc& u) { return node_of(u).degree(); }
+    static constexpr bool is_root(const NodeDesc& u) { return node_of(u).is_root(); }
+    static constexpr bool is_tree_node(const NodeDesc& u) { return node_of(u).is_tree_node(); }
+    static constexpr bool is_reti(const NodeDesc& u) { return node_of(u).is_reti(); }
+    static constexpr bool is_leaf(const NodeDesc& u) { return node_of(u).is_leaf(); }
+    static constexpr bool is_suppressible(const NodeDesc& u) { return node_of(u).is_suppressible(); }
+    static constexpr bool is_inner_node(const NodeDesc& u) { return node_of(u).is_inner_node(); }
+    static constexpr bool is_isolated(const NodeDesc& u) { return node_of(u).is_isolated(); }
 
     template<AdjacencyType Adj>
-    static constexpr void replace_parent(const NodeDesc u, const NodeDesc old_parent, Adj&& new_parent) { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
+    static constexpr void replace_parent(const NodeDesc& u, const NodeDesc& old_parent, Adj&& new_parent) { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
     template<AdjacencyType Adj>
-    static constexpr void replace_child(const NodeDesc u, const NodeDesc old_child, Adj&& new_child) { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
+    static constexpr void replace_child(const NodeDesc& u, const NodeDesc& old_child, Adj&& new_child) { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
 
     // convenient way of applying some function to all nodes of a subtree
     template<class Func>
-    static constexpr void apply_to_subtree(const NodeDesc u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
-    static constexpr size_t count_nodes_below(const NodeDesc u) { return node_of(u).count_nodes_below(); }
+    static constexpr void apply_to_subtree(const NodeDesc& u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
+    static constexpr size_t count_nodes_below(const NodeDesc& u) { return node_of(u).count_nodes_below(); }
 
     // ================ Edges =======================
     using OutEdgeContainer = typename _Node::OutEdgeContainer;
@@ -332,8 +334,8 @@ namespace PT{
     using InEdgeContainer = typename _Node::InEdgeContainer;
     using ConstInEdgeContainer = typename _Node::ConstInEdgeContainer;
 
-    static constexpr OutEdgeContainer out_edges(const NodeDesc u) { return node_of(u).out_edges(); }
-    static constexpr InEdgeContainer in_edges(const NodeDesc u) { return node_of(u).in_edges(); }
+    static constexpr OutEdgeContainer out_edges(const NodeDesc& u) { return node_of(u).out_edges(); }
+    static constexpr InEdgeContainer in_edges(const NodeDesc& u) { return node_of(u).in_edges(); }
   };
 }
 

@@ -65,9 +65,21 @@ namespace PT{
 
 
 
+  // template specizalization to select the right DFS Iterator using a tag
+  struct traversal_t {};
+  struct node_traversal_t: public traversal_t {};
+  struct edge_traversal_t: public traversal_t {};
+  struct all_edges_traversal_t: public traversal_t {};
 
+  template<class T>
+  concept TraversalTag = std::derived_from<T, traversal_t>;
 
-
+  // forward-declare Traversals
+  template<TraversalType o,
+           TraversalTag Tag,
+           PhylogenyType _Network,
+           OptionalNodeSetType _SeenSet = typename _Network::NodeSet>
+  struct Traversal;
 
   template<TraversalType o, TraversalTraitsType Traits>
   class DFSIterator: public Traits
@@ -75,7 +87,6 @@ namespace PT{
   public:
     using typename Traits::Network;
     using Traits::track_seen;
-    using Traits::Traits;
    
   protected:
     using ChildIter = std::auto_iter<typename Traits::child_iterator>;
@@ -85,6 +96,7 @@ namespace PT{
     using Traits::min_stacksize;
     using Traits::mark_seen;
     using Traits::is_seen;
+    using ChildContainerRef = typename Traits::ItemContainerRef;
   
     Network& N;
     const NodeDesc root;
@@ -94,9 +106,9 @@ namespace PT{
 
     // dive deeper into the network, up to the next emittable node x, putting ranges on the stack (including that of x); return the current node
     // if we hit a node that is already seen, return that node
-    void dive(const NodeDesc u)
+    void dive(const NodeDesc& u)
     {
-      auto& u_children = get_children(N, u);
+      ChildContainerRef u_children = get_children(N, u);
       child_history.emplace_back(u_children);
 
       // make sure we start with an unseen child
@@ -126,7 +138,9 @@ namespace PT{
     const NodeDesc& node_on_top() const
     {
       // if there are at least 2 ranges on the stack, dereference the second to last to get the current node, otherwise, it's root
-      return (child_history.size() > 1) ? get_node(*(child_history[child_history.size() - 2])) : root;
+      const NodeDesc& result = (child_history.size() > 1) ? get_node(*(child_history[child_history.size() - 2])) : root;
+      //std::cout << "node on top is " << result << "\n";
+      return result;
     }
 
     // when we're done treating all children, go back and continue with the parent
@@ -173,10 +187,14 @@ namespace PT{
   public:
     // NOTE: use this to construct an end-iterator
     DFSIterator(Network& _N): Traits(), N(_N), root(NoNode) {}
-    
+
+    // construct from a given traversal
+    template<TraversalType _o, TraversalTag Tag, OptionalNodeSetType _SeenSet>
+    DFSIterator(const Traversal<_o, Tag, Network, _SeenSet>& traversal): DFSIterator(traversal.begin()) {}
+
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class... Args>
-    DFSIterator(Network& _N, const NodeDesc _root, Args&&... args):
+    DFSIterator(Network& _N, const NodeDesc& _root, Args&&... args):
       Traits(std::forward<Args>(args)...), N(_N), root(_root)
     { 
       DEBUG5(std::cout << "making new non-end DFS iterator (type "<< o <<") starting at "<<_root<<" (tracking? "<<track_seen<<")\n");
@@ -235,8 +253,16 @@ namespace PT{
     using typename Parent::reference;
     using typename Parent::pointer;
 
-    pointer operator->() const { DEBUG4(std::cout << "\temitting ptr to node "<<node_on_top()<<"\n";) return node_on_top(); }
-    reference operator*() const { DEBUG4(std::cout << "\temitting node "<< node_on_top()<<"\n";) return node_on_top(); }
+    pointer operator->() const {
+      const auto& result = node_on_top();
+      DEBUG4(std::cout << "\temitting ptr to node " << result << "\n");
+      return &result;
+    }
+    reference operator*() const {
+      const auto& result = node_on_top();
+      DEBUG4(std::cout << "\temitting node "<< result<<"\n");
+      return result;
+    }
   };
 
   template<TraversalType o,
@@ -264,7 +290,7 @@ namespace PT{
 
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class... Args>
-    DFSEdgeIterator(const Network& _N, const NodeDesc _root, Args&&... args):
+    DFSEdgeIterator(const Network& _N, const NodeDesc& _root, Args&&... args):
       Parent(_N, _root, std::forward<Args>(args)...)
     {
       if constexpr (o & preorder) Parent::operator++();
@@ -275,15 +301,6 @@ namespace PT{
            PhylogenyType _Network,
            OptionalNodeSetType _SeenSet = typename _Network::NodeSet>
   using DFSAllEdgesIterator = DFSEdgeIterator<o, _Network, _SeenSet, AllEdgesTraits<_Network, _SeenSet>>;
-
-  // template specizalization to select the right DFS Iterator using a tag
-  struct traversal_t {};
-  struct node_traversal_t: public traversal_t {};
-  struct edge_traversal_t: public traversal_t {};
-  struct all_edges_traversal_t: public traversal_t {};
-
-  template<class T>
-  concept TraversalTag = std::derived_from<T, traversal_t>;
 
   template<TraversalType o, TraversalTag Tag, OptionalNodeSetType _SeenSet>
   struct _choose_iterator
@@ -311,7 +328,7 @@ namespace PT{
   template<TraversalType o,
            TraversalTag Tag,
            PhylogenyType _Network,
-           OptionalNodeSetType _SeenSet = typename _Network::NodeSet>
+           OptionalNodeSetType _SeenSet>
   struct Traversal
   {
     template<class _Net>
@@ -329,11 +346,11 @@ namespace PT{
     static constexpr bool track_seen = iterator::track_seen;
 
     _Network& N;
-    NodeDesc root;
+    const NodeDesc root;
     _SeenSet seen; // this is the gloabl SeenSet with which each non-end iterator is instanciated
 
     template<class... Args>
-    Traversal(_Network& _N, const NodeDesc _root, Args&&... args):
+    Traversal(_Network& _N, const NodeDesc& _root, Args&&... args):
       N(_N), root(_root), seen(std::forward<Args>(args)...)
     {
       DEBUG4(
@@ -423,21 +440,21 @@ namespace PT{
 
     // this one is the general form that can do any order, but is a little more difficult to use
     template<TraversalType o>
-    Traversal<o> traversal(const NodeDesc u, const order<o> = order<o>()) { return Traversal<o>(N, u, seen); }
+    Traversal<o> traversal(const NodeDesc& u, const order<o> = order<o>()) { return Traversal<o>(N, u, seen); }
     template<TraversalType o>
     Traversal<o> traversal(const order<o> = order<o>()) { return Traversal<o>(N, N.root(), seen); }
 
     // then, we add 3 predefined orders: preorder, inorder, postorder, that are easier to use
     // preorder:
-    Traversal<PT::preorder> preorder(const NodeDesc u) { return traversal<PT::preorder>(u); }
+    Traversal<PT::preorder> preorder(const NodeDesc& u) { return traversal<PT::preorder>(u); }
     Traversal<PT::preorder> preorder() { return preorder(N.root()); }
 
     // inorder:
-    Traversal<PT::inorder> inorder(const NodeDesc u) { return traversal<PT::inorder>(u); }
+    Traversal<PT::inorder> inorder(const NodeDesc& u) { return traversal<PT::inorder>(u); }
     Traversal<PT::inorder> inorder() { return inorder(N.root()); }
 
     // postorder:
-    Traversal<PT::postorder> postorder(const NodeDesc u) { return traversal<PT::postorder>(u); }
+    Traversal<PT::postorder> postorder(const NodeDesc& u) { return traversal<PT::postorder>(u); }
     Traversal<PT::postorder> postorder() { return postorder(N.root()); }
   };
 
@@ -460,21 +477,21 @@ namespace PT{
 
     // this one is the general form that can do any order, but is a little more difficult to use
     template<TraversalType o>
-    Traversal<o> traversal(const NodeDesc u, const order<o> = order<o>()) { return Traversal<o>(N, u); }
+    Traversal<o> traversal(const NodeDesc& u, const order<o> = order<o>()) { return Traversal<o>(N, u); }
     template<TraversalType o>
     Traversal<o> traversal(const order<o> = order<o>()) { return Traversal<o>(N, N.root()); }
 
     // then, we add 3 predefined orders: preorder, inorder, postorder, that are easier to use
     // preorder:
-    Traversal<PT::preorder> preorder(const NodeDesc u) { return traversal<PT::preorder>(u); }
+    Traversal<PT::preorder> preorder(const NodeDesc& u) { return traversal<PT::preorder>(u); }
     Traversal<PT::preorder> preorder() { return preorder(N.root()); }
 
     // inorder:
-    Traversal<PT::inorder> inorder(const NodeDesc u) { return traversal<PT::inorder>(u); }
+    Traversal<PT::inorder> inorder(const NodeDesc& u) { return traversal<PT::inorder>(u); }
     Traversal<PT::inorder> inorder() { return inorder(N.root()); }
 
     // postorder:
-    Traversal<PT::postorder> postorder(const NodeDesc u) { return traversal<PT::postorder>(u); }
+    Traversal<PT::postorder> postorder(const NodeDesc& u) { return traversal<PT::postorder>(u); }
     Traversal<PT::postorder> postorder() { return postorder(N.root()); }
   };
 

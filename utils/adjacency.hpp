@@ -8,8 +8,8 @@ namespace PT {
   struct ProtoAdjacency {
     NodeDesc nd;
 
-    operator NodeDesc() { return nd; }
-    operator NodeDesc() const { return nd; }
+    operator NodeDesc&() { return nd; }
+    operator const NodeDesc&() const { return nd; }
   };
 
   template<class EdgeData> struct Edge;
@@ -53,7 +53,7 @@ namespace PT {
     static constexpr bool has_data = false;
 
     template<class... Args>
-    Adjacency(const NodeDesc _nd, Args&&... args): Parent(_nd) {}
+    Adjacency(const NodeDesc& _nd, Args&&... args): Parent(_nd) {}
     
     void free_edge_data() const {}
   };

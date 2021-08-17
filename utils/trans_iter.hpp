@@ -29,7 +29,7 @@ namespace std {
     _transforming_iterator(const _transforming_iterator&) = default;
 
     // construct from an iterator alone, default-construct the transformation
-    template<class T>
+    template<class T> requires (!is_same_v<remove_cvref_t<T>, _transforming_iterator>)
     _transforming_iterator(T&& iter): it(forward<T>(iter)), trans() {}
     // construct from iter and transformaiton
     template<class T, class F>
@@ -50,14 +50,14 @@ namespace std {
     _transforming_iterator& operator=(const Iter& other) { it = other; }
     _transforming_iterator& operator=(Iter&& other) { it = other; }
 
-    bool operator==(const _transforming_iterator& other) { return it == other.it; }
-    bool operator==(const Iter& other) { return it == other.it; }
+    bool operator==(const _transforming_iterator& other) const { return it == other.it; }
+    bool operator==(const Iter& other) const { return it == other.it; }
   
     template<class T>
-    bool operator!=(const T& other) { return !operator==(other); }
+    bool operator!=(const T& other) const { return !operator==(other); }
 
     // NOTE: do not attempt to call ++ on the end-iterator lest you see segfaults
-    _transforming_iterator& operator++() { ++it; }
+    _transforming_iterator& operator++() { ++it; return *this; }
     _transforming_iterator& operator++(int) { _transforming_iterator result(*this); ++this; return result; }
 
     reference operator*() const { return trans(*it); }

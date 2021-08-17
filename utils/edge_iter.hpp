@@ -3,7 +3,7 @@
 
 #include "trans_iter.hpp"
 #include "iter_factory.hpp"
-#include "edge.hpp"
+#include "types.hpp"
 
 namespace PT{
 
@@ -101,5 +101,20 @@ namespace PT{
   using InEdgeFactory = std::IterFactory<InEdgeIterator<_AdjContainer>, BeginEndTransformation>;
   template<std::IterableType _AdjContainer, class BeginEndTransformation = void>
   using OutEdgeFactory = std::IterFactory<OutEdgeIterator<_AdjContainer>, BeginEndTransformation>;
+
+  // convenience functions
+  template<std::IterableType _AdjContainer, class BeginEndTransformation = void>
+  InEdgeFactory<_AdjContainer, BeginEndTransformation> make_inedge_factory(const NodeDesc& u, _AdjContainer& c) {
+    return {std::piecewise_construct,
+      std::forward_as_tuple(std::begin(c), u), // make first part of the auto_iter
+      std::forward_as_tuple(std::end(c), u)};  // make end-iterator of the auto_iter
+  }
+  template<std::IterableType _AdjContainer, class BeginEndTransformation = void>
+  OutEdgeFactory<_AdjContainer, BeginEndTransformation> make_outedge_factory(const NodeDesc& u, _AdjContainer& c) {
+    return {std::piecewise_construct,
+      std::forward_as_tuple(std::begin(c), u), // make first part of the auto_iter
+      std::forward_as_tuple(std::end(c), u)};  // make end-iterator of the auto_iter
+  }
+
 
 }

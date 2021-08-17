@@ -122,6 +122,8 @@ namespace PT {
 		using Parent::_num_edges;
     using Parent::root;
     using Parent::_roots;
+    using Parent::is_reti;
+    using Parent::is_leaf;
     
     using IgnoreNodeDataFunc = std::IgnoreFunction<NodeDataOr<Phylogeny>>;
     using IgnoreEdgeDataFunc = std::IgnoreFunction<EdgeDataOr<Phylogeny>>;
@@ -174,7 +176,7 @@ namespace PT {
     // create a node in the void
     // NOTE: this does not count the created node as part of the tree/network yet (for this, use add_root() or add_child() or add_parent())
     template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
-      return reinterpret_cast<uintptr_t>(new Node(std::forward<Args>(args)...));
+      return (NodeDesc)(new Node(std::forward<Args>(args)...));
     }
 
     // new nodes can only be added as children or parents of existing nodes
@@ -600,7 +602,7 @@ namespace PT {
              class NodeDataTranslation = IgnoreNodeDataFunc,
              class... Args>
     NodeDesc place_node_below(OtherNode&& other_x,
-                              const NodeDesc x,
+                              const NodeDesc& x,
                               NodeDataTranslation&& ndt = NodeDataTranslation(),
                               Args&&... args) {
       NodeDesc x_copy = NoNode;
@@ -610,14 +612,14 @@ namespace PT {
         } else {
           x_copy = add_root();
         }
-        std::cout << "placed "<<NodeDesc{(uintptr_t)(&other_x)}<<" as new root node "<<x_copy<<"\n";
+        std::cout << "placed "<<NodeDesc(&other_x)<<" as new root node "<<x_copy<<"\n";
       } else {
         if constexpr (has_data<OtherNode>) {
           x_copy = create_node(ndt(std::forward<OtherNode>(other_x).data()));
         } else {
           x_copy = create_node();
         }
-        std::cout << "placed "<<NodeDesc{(uintptr_t)(&other_x)}<<" below "<<x<<" as node "<<x_copy<<"\n";
+        std::cout << "placed "<<NodeDesc(&other_x)<<" below "<<x<<" as node "<<x_copy<<"\n";
         const bool success = add_child(x, x_copy, std::forward<Args>(args)...).second;
         assert(success);
       }
@@ -631,8 +633,8 @@ namespace PT {
              class EdgeDataTranslation = IgnoreEdgeDataFunc,
              class... Args>
     NodeDesc place_below_by_copy(_Phylo&& other,
-                                 const NodeDesc other_x,
-                                 const NodeDesc x,
+                                 const NodeDesc& other_x,
+                                 const NodeDesc& x,
                                  NodeDataTranslation&& ndt = NodeDataTranslation(),
                                  EdgeDataTranslation&& edt = EdgeDataTranslation(),
                                  Args&&... args) {
@@ -642,18 +644,17 @@ namespace PT {
       const NodeDesc x_copy = place_node_below(other[other_x], x, ndt, std::forward<Args>(args)...);
       old_to_new.try_emplace(other_x, x_copy);
       // step 2: copy everything below other_x
-      for(const NodeDesc other_u: other.dfs().preorder(other_x)) if(other_u != other_x) {
-        for(const auto& other_p: other[other_u].parents()) { // TODO: THIS IS WRONG! USE EDGE TRAVERSAL INSTEAD!!
-          std::cout << "  treating edge "<<other_p<<" --> "<<other_u<<"\n";
-          NodeDesc u_copy = NoNode;
-          if constexpr (std::remove_reference_t<_Phylo>::has_edge_data) {
-            u_copy = place_node_below(other[other_u], old_to_new[other_p], ndt, edt(other_p.data()));
-          } else {
-            u_copy = place_node_below(other[other_u], old_to_new[other_p], ndt);
-          }
-          const bool success = old_to_new.try_emplace(other_u, u_copy).second;
-          assert(success);
+      for(const auto other_uv: other.all_edges_dfs().preorder(other_x)) {
+        const auto& [other_u, other_v] = other_uv.as_pair();
+        std::cout << "  treating edge "<<other_u<<" --> "<<other_v<<"\n";
+        NodeDesc v_copy = NoNode;
+        if constexpr (std::remove_reference_t<_Phylo>::has_edge_data) {
+          v_copy = place_node_below(other[other_v], old_to_new[other_u], ndt, edt(other_uv.data()));
+        } else {
+          v_copy = place_node_below(other[other_v], old_to_new[other_u], ndt);
         }
+        const bool success = old_to_new.try_emplace(other_v, v_copy).second;
+        assert(success);
       }
       return x_copy;
     }
@@ -807,44 +808,56 @@ namespace PT {
       DEBUG3(os << "tree has "<<_num_edges<<" edges and "<<_num_nodes<<" nodes, leaves: "<<leaves()<<"\n");
       DEBUG3(os << "nodes: "<<nodes()<<'\n');
       DEBUG3(os << "edges: "<<Parent::edges()<<'\n');
-      
-      for(const NodeDesc u: nodes()){
-        os << u;
-        os << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << std::endl;
-      }
+      for(const NodeDesc u: nodes())
+        os << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
       return os << "\n";
     }
- 
-    void print_subtree(std::ostream& os, std::string prefix = "") const { print_subtree(os, front(_roots), std::move(prefix)); }
-    void print_subtree(std::ostream& os, const NodeDesc u, std::string prefix = "") const {
+
+
+    void print_subtree(std::ostream& os, const NodeDesc& u, std::string prefix, std::unordered_bitset& seen) const {
+      const bool u_reti = is_reti(u);
       std::string u_name = std::to_string(name(u));
       if constexpr (Node::has_label){
         const std::string u_label = std::to_string(label(u));
         if(!u_label.empty())
           u_name += "[" + u_label + "]";
+        if(!u_name.empty() && u_reti)
+          u_name += 'R';
       }
-      if(u_name == "") u_name = "+";
+      if(u_name == "") u_name = (is_reti(u)) ? std::string("(" + std::to_string(u) + ")R") : (is_leaf(u) ? std::string() : std::string("+"));
       os << '-' << u_name;
+      
+      bool u_seen = true;
+      if(!u_reti || !(u_seen = test(seen, name(u)))) {
+        const auto& u_childs = children(u);
+        if(u_reti) append(seen, name(u));
+        switch(u_childs.size()){
+          case 0:
+            os << std::endl;
+            break;
+          case 1:
+            prefix += std::string(u_name.length() + 1, ' ');
+            print_subtree(os, std::front(children(u)), prefix, seen);
+            break;
+          default:
+            prefix += std::string(u_name.length(), ' ') + '|';
 
-      const auto& u_childs = children(u);
-      switch(u_childs.size()) {
-        case 0:
-          os << std::endl;
-          break;
-        case 1:
-          print_subtree(os, std::front(u_childs), prefix + std::string(u_name.length() + 1u, ' '));
-          break;
-        default:
-          prefix += std::string(u_name.length(), ' ') + '|';
+            uint32_t count = u_childs.size();
+            for(const auto c: u_childs){
+              print_subtree(os, c, prefix, seen);
+              if(--count > 0) os << prefix;
+              if(count == 1) prefix.back() = ' ';
+            }
+        }
+      } else os << std::endl;
+    }
 
-          uint32_t count = u_childs.size();
-          for(const auto c: u_childs){
-            print_subtree(os, c, prefix);
-            if(--count > 0) os << prefix;
-            if(count == 1) prefix.back() = ' ';
-          }
-      }
-    }    
+    void print_subtree(std::ostream& os) const { print_subtree(os, front(_roots)); }
+    void print_subtree(std::ostream& os, const NodeDesc& u) const {
+      std::unordered_bitset seen(_num_nodes);
+      print_subtree(os, u, "", seen);
+    }
+
   };
 
   template<PhylogenyType _Phylo>

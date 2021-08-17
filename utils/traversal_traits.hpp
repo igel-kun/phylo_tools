@@ -52,8 +52,8 @@ namespace PT {
     _TraversalTraits(FSet&& _forbidden, Args&&... args): forbidden(std::forward<FSet>(_forbidden)), seen(std::forward<Args>(args)...) {}
    
 
-    bool is_seen(const NodeDesc u) const { return test(seen, u) || test(forbidden, u); }
-    void mark_seen(const NodeDesc u) { append(seen, u); }
+    bool is_seen(const NodeDesc& u) const { return test(seen, u) || test(forbidden, u); }
+    void mark_seen(const NodeDesc& u) { append(seen, u); }
   };
 
   template<PhylogenyType _Network,
@@ -72,8 +72,8 @@ namespace PT {
     template<class... Args>
     constexpr _TraversalTraits(Args&&... args): seen(std::forward<Args>(args)...) {}
    
-    bool is_seen(const NodeDesc u) const { return test(seen, u); }
-    void mark_seen(const NodeDesc u) { append(seen, u); }
+    bool is_seen(const NodeDesc& u) const { return test(seen, u); }
+    void mark_seen(const NodeDesc& u) { append(seen, u); }
   };
 
   template<PhylogenyType _Network,
@@ -92,8 +92,8 @@ namespace PT {
     template<class... Args>
     constexpr _TraversalTraits(Args&&... args): forbidden(std::forward<Args>(args)...) {}
    
-    bool is_seen(const NodeDesc u) const { return test(forbidden, u); }
-    static constexpr void mark_seen(const NodeDesc u) { }
+    bool is_seen(const NodeDesc& u) const { return test(forbidden, u); }
+    static constexpr void mark_seen(const NodeDesc& u) { }
   };
 
   template<PhylogenyType _Network,
@@ -109,8 +109,8 @@ namespace PT {
     template<class... Args>
     constexpr _TraversalTraits(Args&&... args) {}
    
-    static constexpr bool is_seen(const NodeDesc u) { return false; }
-    static constexpr void mark_seen(const NodeDesc u) { }
+    static constexpr bool is_seen(const NodeDesc& u) { return false; }
+    static constexpr void mark_seen(const NodeDesc& u) { }
   };
 
 
@@ -128,16 +128,17 @@ namespace PT {
     using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::ItemContainer;
-    using value_type      = NodeDesc;
-    using reference       = const value_type&;
-    using const_reference = const value_type&;
-    using pointer         = const value_type*;
-    using const_pointer   = const value_type*;
+    using value_type      = const NodeDesc;
+    using reference       = value_type&;
+    using const_reference = value_type&;
+    using pointer         = value_type*;
+    using const_pointer   = value_type*;
+    using ItemContainerRef = ItemContainer&;
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
 
-    static constexpr ItemContainer& get_children(const Network& N, const NodeDesc u) { return N.children(u); }
+    static constexpr ItemContainerRef get_children(Network& N, const NodeDesc& u) { return N.children(u); }
     static constexpr const NodeDesc& get_node(const NodeDesc& u) { return u; }
   };
 
@@ -159,17 +160,19 @@ namespace PT {
     using const_reference = const value_type;
     using pointer         = std::self_deref<value_type>;
     using const_pointer   = std::self_deref<const value_type>;
+    using ItemContainerRef = ItemContainer;
 
     // an empty stack represents the end-iterator
     static constexpr unsigned char min_stacksize = 2;
 
     // NOTE: out_edges returns a temporary iterator factory, so we cannot return a reference to it!
-    static constexpr ItemContainer get_children(Network& N, const NodeDesc u) { return N.out_edges(u); }
+    static constexpr ItemContainerRef get_children(Network& N, const NodeDesc& u) { return N.out_edges(u); }
     static constexpr const NodeDesc& get_node(const value_type& uv) { return uv.head(); }
    
     // normally, we want to skip an edge if its head has been seen
     //NOTE: this will give us an edge-list of a DFS-tree
     bool is_seen(const value_type& uv) const { return Parent::is_seen(uv.head()); }
+    bool is_seen(const NodeDesc& u) const { return Parent::is_seen(u); }
     void mark_seen(const value_type& uv) { Parent::mark_seen(uv.head()); }    
   };
 
@@ -186,15 +189,16 @@ namespace PT {
     using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::value_type;
-    using typename Parent::ItemContainer;
+    using typename Parent::ItemContainerRef;
 
     // if u has been seen, just return an empty OutEdgeContainer (because all of u's out-edges will be skipped anyways)
-    ItemContainer get_children(Network& N, const NodeDesc u) const { if(Parent::is_seen(u)) return {}; else return N.out_edges(u); }
+    ItemContainerRef get_children(Network& N, const NodeDesc& u) const { if(Parent::is_seen(u)) return {}; else return N.out_edges(u); }
 
     // so now, we want to skip an edge if its head is forbidden or its tail has been seen during the DFS
     //NOTE: this will give us all edges below some node, except for those with forbidden heads
     //TODO: run some tests here, this doesn't seem right! In particular, seen and forbidden are not treated differently right now
     bool is_seen(const value_type& uv) const { return Parent::is_seen(uv.tail()); }
+    bool is_seen(const NodeDesc& u) const { return Parent::is_seen(u); }
   };
 
   template<class T>
