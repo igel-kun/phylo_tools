@@ -13,13 +13,13 @@ namespace std {
 
 
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
-  template<class T> struct iterator_of {
+  template<class T> struct _iterator_of {
     using type = conditional_t<is_const_v<T>, typename T::const_iterator, typename T::iterator>;
   };
-  template<class T> struct iterator_of<T*> { using type = T*; };
-  template<class T, std::size_t N> struct iterator_of<T (&)[N]> { using type = T*; };
-  template<class T> using iterator_of_t = typename iterator_of<remove_reference_t<T>>::type;
-  template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
+  template<class T> struct _iterator_of<T*> { using type = T*; };
+  template<class T, std::size_t N> struct _iterator_of<T (&)[N]> { using type = T*; };
+  template<class T>
+  using _iterator_of_t = typename _iterator_of<remove_reference_t<T>>::type;
 
   template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
   template<class T> concept PointerType = is_pointer_v<remove_cvref_t<T>>;
@@ -32,11 +32,17 @@ namespace std {
     // NOTE: it seems forward_iterator concept cannot be satisfied by the proxy iterator of raw_vector_map :/
     //requires forward_iterator<typename T::iterator>;
     //requires forward_iterator<typename T::const_iterator>;
-    { begin(a) }   -> convertible_to<iterator_of_t<T>>;
-    { end(a) }     -> convertible_to<iterator_of_t<T>>;
-    { begin(b) }   -> convertible_to<iterator_of_t<const T>>;
-    { end(b) }     -> convertible_to<iterator_of_t<const T>>;
+    { begin(a) }   -> convertible_to<_iterator_of_t<T>>;
+    { end(a) }     -> convertible_to<_iterator_of_t<T>>;
+    { begin(b) }   -> convertible_to<_iterator_of_t<const T>>;
+    { end(b) }     -> convertible_to<_iterator_of_t<const T>>;
 	};
+
+  template<class T> struct iterator_of { using type = T; };
+  template<IterableType T> struct iterator_of<T>: public _iterator_of<T> {};
+  template<class T> using iterator_of_t = typename iterator_of<remove_reference_t<T>>::type;
+  template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
+
   //template<class T>
   //concept IterableType = StrictIterableType<remove_cvref_t<T>>;
   template<class T>
@@ -103,4 +109,9 @@ namespace std {
       { std::cout << t } -> std::same_as<std::ostream&>;
   };
 
+  template<class T>
+  concept TupleType = requires(T t) {
+    typename tuple_size<T>::type;
+    requires derived_from<tuple_size<T>, integral_constant<size_t, tuple_size_v<T>>>;
+  };
 }

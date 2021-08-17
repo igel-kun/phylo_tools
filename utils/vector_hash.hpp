@@ -15,10 +15,11 @@
 #pragma once
 
 #include <cstring> // for memmove
+#include <vector>
 #include "utils.hpp"
 #include "stl_utils.hpp"
+#include "predicates.hpp"
 #include "filter.hpp"
-#include <vector>
 #ifdef STATISTICS
 #include <unordered_map>
 #endif
@@ -42,25 +43,29 @@
 
 namespace std{
 
-  template<ContainerType Container,
-           ContainerType ParentContainer,
-           bool reverse = false>
-  using linear_vector_hash_iterator = filtered_iterator<
-        Container,
-        std::function<bool(const typename Container::valuetype&)>,
-        reverse,
-        std::conditional_t<reverse, std::reverse_iterator_of_t<typename Container::Parent>, std::iterator_of_t<typename Container::Parent>>,
-        std::BeginEndIters<typename Container::Parent, reverse>>;
+  template<class Container>
+  struct VacantPredicate {
+    const Container& c;
+    
+    VacantPredicate(const Container& _c): c(_c) {}
+
+    template<class Iter>
+    bool value(const Iter& it) { return c.is_vacant(it); }
+  };
+  template<class Container>
+  using OccupiedPredicate = NotPredicate<VacantPredicate<Container>>;
+
+  template<IterableType Container, class Iterator = iterator_of_t<Container>>
+  using linear_vector_hash_iterator = filtered_iterator<Iterator, VacantPredicate<Container>>;
 
   template<
     class Key,
     class Hash = std::hash<Key>,
     class KeyEqual = std::equal_to<Key>,
     class Allocator = std::allocator<Key>>
-  class vector_hash: private vector<Key>
-  {
+  class vector_hash: private vector<Key> {
   public:
-    using Parent = vector<Key>;
+    using Parent = vector<Key, Allocator>;
   protected:
     using Parent::Parent;
 
@@ -80,17 +85,17 @@ namespace std{
     using typename Parent::reference;
     using typename Parent::const_reference;
   
-    using vector_iterator = typename Parent::iterator;
-    using const_vector_iterator = typename Parent::const_iterator;
+    using vector_iterator         = typename Parent::iterator;
+    using const_vector_iterator   = typename Parent::const_iterator;
     using reverse_vector_iterator = typename Parent::reverse_iterator;
     using const_reverse_vector_iterator = typename Parent::const_reverse_iterator;
 
-    using iterator = linear_vector_hash_iterator<vector_hash, Parent>;
-    using const_iterator = linear_vector_hash_iterator<const vector_hash, const Parent>;
-    using reverse_iterator = linear_vector_hash_iterator<vector_hash, Parent, true>;
-    using const_reverse_iterator = linear_vector_hash_iterator<const vector_hash, const Parent, true>;
+    using iterator          = linear_vector_hash_iterator<Parent>;
+    using const_iterator    = linear_vector_hash_iterator<const Parent>;
+    using reverse_iterator  = linear_vector_hash_iterator<Parent, reverse_iterator_of_t<Parent>>;
+    using const_reverse_iterator = linear_vector_hash_iterator<const Parent, reverse_iterator_of_t<const Parent>>;
     
-    using insert_result = pair<vector_iterator, bool>;
+    using insert_result       = pair<vector_iterator, bool>;
     using const_insert_result = pair<const_vector_iterator, bool>;
 
 #ifdef STATISTICS
@@ -111,9 +116,9 @@ namespace std{
 
     // make an iterator poiting to the index
     iterator make_iterator(const uintptr_t index) 
-    { return {*this, make_vector_iterator(index), false, *this}; }
+    { return {do_not_fix_index_tag(), piecewise_construct, forward_as_tuple(make_vector_iterator(index), vector_end()), forward_as_tuple(*this)}; }
     const_iterator make_iterator(const uintptr_t index) const
-    { return {*this, make_vector_iterator(index), false, *this}; }
+    { return {do_not_fix_index_tag(), piecewise_construct, forward_as_tuple(make_vector_iterator(index), vector_end()), forward_as_tuple(*this)}; }
     vector_iterator make_vector_iterator(const uintptr_t index) 
     { return next(Parent::begin(), index); }
     const_vector_iterator make_vector_iterator(const uintptr_t index) const
@@ -456,28 +461,28 @@ namespace std{
     template<class Container>
     inline bool operator!=(const Container& c) const { return !operator==(c); }
  
-    iterator       begin()       { return {*this, vector_begin(), VacantPredicate(*this)}; }
-    const_iterator begin() const { return {*this, vector_begin(), VacantPredicate(*this)}; }
+    iterator       begin()       { return {piecewise_construct, forward_as_tuple(vector_begin(), vector_end()), forward_as_tuple(*this)}; }
+    const_iterator begin() const { return {piecewise_construct, forward_as_tuple(vector_begin(), vector_end()), forward_as_tuple(*this)}; }
     vector_iterator       vector_begin()       { return Parent::begin(); }
     const_vector_iterator vector_begin() const { return Parent::begin(); }
 
-    iterator       end()       { return {*this, vector_end(), VacantPredicate(*this), false}; }
-    const_iterator end() const { return {*this, vector_end(), VacantPredicate(*this), false}; }
+    iterator       end()       { return {do_not_fix_index_tag(), piecewise_construct, forward_as_tuple(), forward_as_tuple(*this)}; }
+    const_iterator end() const { return {do_not_fix_index_tag(), piecewise_construct, forward_as_tuple(), forward_as_tuple(*this)}; }
     vector_iterator       vector_end()       { return Parent::end(); }
     const_vector_iterator vector_end() const { return Parent::end(); }
  
-    reverse_iterator       rbegin()       { return {*this, vector_rbegin(), VacantPredicate(*this)}; }
-    const_reverse_iterator rbegin() const { return {*this, vector_rbegin(), VacantPredicate(*this)}; }
+    reverse_iterator       rbegin()       { return {piecewise_construct, forward_as_tuple(vector_rbegin(), vector_rend()), forward_as_tuple(*this)}; }
+    const_reverse_iterator rbegin() const { return {piecewise_construct, forward_as_tuple(vector_rbegin(), vector_rend()), forward_as_tuple(*this)}; }
     reverse_vector_iterator       vector_rbegin()       { return Parent::rbegin(); }
     const_reverse_vector_iterator vector_rbegin() const { return Parent::rbegin(); }
  
-    reverse_iterator       rend()       { return {*this, vector_rend(), VacantPredicate(*this), false }; }
-    const_reverse_iterator rend() const { return {*this, vector_rend(), VacantPredicate(*this), false }; }
+    reverse_iterator       rend()       { return {do_not_fix_index_tag(), piecewise_construct, forward_as_tuple(), forward_as_tuple(*this)}; }
+    const_reverse_iterator rend() const { return {do_not_fix_index_tag(), piecewise_construct, forward_as_tuple(), forward_as_tuple(*this)}; }
     reverse_vector_iterator       vector_rend()       { return Parent::rend(); }
     const_reverse_vector_iterator vector_rend() const { return Parent::rend(); }
   
-    template<class Container, class Predicate, bool reverse, class NormalIterator, class BeginEndIters>
-    friend class filtered_iterator;
+//    template<class Container, class Predicate, bool reverse, class NormalIterator, class BeginEndIters>
+//    friend class filtered_iterator;
   };
 
 }// namespace

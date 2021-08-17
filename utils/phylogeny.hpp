@@ -2,7 +2,7 @@
 #pragma once
 
 #include <ranges>
-#include "pair_iter.hpp"
+#include "tuple_iter.hpp"
 #include "set_interface.hpp"
 
 #include "utils.hpp"
@@ -99,6 +99,7 @@ namespace PT {
 		using Parent::count_edge;
   public:
     using typename Parent::Node;
+    using typename Parent::RootContainer;
     using LabelType = typename Node::LabelType;
     using typename Parent::Adjacency;
     using typename Parent::Edge;
@@ -398,9 +399,21 @@ namespace PT {
     bool empty() const { return _num_nodes == 0; }
     bool edgeless() const { return _num_edges == 0; }
 
-#error this is wrong if we have multiple roots! Use concatenating_iter in this case!
+    // list all nodes below u in order _o (default: postorder)
     template<TraversalType o = postorder>
-    auto nodes(const order<o> _o = order<o>()) const { return dfs().traversal(_o);  }
+    auto nodes_below(const NodeDesc& u, const order<o> _o = order<o>()) const { return dfs().traversal(u, _o);  }
+    auto nodes_below_preorder(const NodeDesc& u)  const { return nodes_below(u, order<preorder>()); }
+    auto nodes_below_inorder(const NodeDesc& u)   const { return nodes_below(u, order<inorder>()); }
+    auto nodes_below_postorder(const NodeDesc& u) const { return nodes_below(u, order<postorder>()); }
+
+    template<TraversalType o = postorder>
+    auto nodes(const order<o> _o = order<o>()) const {
+      if constexpr (Parent::RootStorage == singleS) {
+        return nodes_below(front(_roots), _o); 
+      } else {
+        return MultiRootMetaTraversal<const Phylogeny, const RootContainer, NodeTraversal>(*this).template traversal<o>(_roots);
+      }
+    }
     auto nodes_preorder() const { return nodes(order<preorder>()); }
     auto nodes_inorder() const { return nodes(order<inorder>()); }
     auto nodes_postorder() const { return nodes(order<postorder>()); }
@@ -420,13 +433,20 @@ namespace PT {
     auto leaves() const { return nodes() | std::views::filter([](const auto& n){ return n.is_leaf();});  }
     */
     template<TraversalType o = postorder>
-    auto leaves(const order<o> _o = order<o>()) {
-      auto nodes_sp = std::make_shared<decltype(nodes())>(nodes(_o));
-      return std::FilteredIterFactory<decltype(nodes())>(nodes_sp, nodes_sp->end(), [](const NodeDesc& n){return node_of(n).is_leaf();});
+    auto leaves_below(const NodeDesc& u, const order<o> _o = order<o>()) const {
+      return std::make_filtered_factory(nodes_below(u, _o), [](const NodeDesc& n){return node_of(n).is_leaf();});
     }
-    auto leaves_preorder() { return leaves(order<preorder>()); }
-    auto leaves_inorder() { return leaves(order<inorder>()); }
-    auto leaves_postorder() { return leaves(order<postorder>()); }
+    auto leaves_below_preorder(const NodeDesc& u) const { return leaves_below(u, order<preorder>()); }
+    auto leaves_below_inorder(const NodeDesc& u) const { return leaves_below(u, order<inorder>()); }
+    auto leaves_below_postorder(const NodeDesc& u) const { return leaves_below(u, order<postorder>()); }
+
+    template<TraversalType o = postorder>
+    auto leaves(const order<o> _o = order<o>()) const {
+      return std::make_filtered_factory(nodes(_o), [](const NodeDesc& n){return node_of(n).is_leaf();});
+    }
+    auto leaves_preorder() const { return leaves(order<preorder>()); }
+    auto leaves_inorder() const { return leaves(order<inorder>()); }
+    auto leaves_postorder() const { return leaves(order<postorder>()); }
 
 
     // =============== traversals ======================
@@ -436,31 +456,31 @@ namespace PT {
     // say "NodeVec(dfs_except(forbidden).inorder(u))" to get a vector of nodes below u but strictly above the nodes of "forbidden" in inorder
     //NOTE: refrain from taking "const auto x = dfs();" since const MetaTraversals are useless...
     //NOTE: if you say "const auto x = dfs().preorder();" you won't be able to track seen nodes (which might be OK for trees...)
-  protected: // per default, disable tracking of seen nodes iff we're a tree
+  protected: // by default, disable tracking of seen nodes iff we're a tree
     using TreeDefaultSeen = void;
     using NetworkDefaultSeen = NodeSet;
   public:
     using DefaultSeen = std::conditional_t<is_declared_tree, TreeDefaultSeen, NetworkDefaultSeen>;
 
-    MetaTraversal<      Phylogeny, DefaultSeen, NodeTraversal> dfs() { return *this; }
-    MetaTraversal<const Phylogeny, DefaultSeen, NodeTraversal> dfs() const { return *this; }
-    MetaTraversal<      Phylogeny, DefaultSeen, EdgeTraversal> edge_dfs() { return *this; }
-    MetaTraversal<const Phylogeny, DefaultSeen, EdgeTraversal> edge_dfs() const { return *this; }
-    MetaTraversal<      Phylogeny, DefaultSeen, AllEdgesTraversal> all_edges_dfs() { return *this; }
-    MetaTraversal<const Phylogeny, DefaultSeen, AllEdgesTraversal> all_edges_dfs() const { return *this; }
+    MetaTraversal<      Phylogeny, NodeTraversal> dfs() { return *this; }
+    MetaTraversal<const Phylogeny, NodeTraversal> dfs() const { return *this; }
+    MetaTraversal<      Phylogeny, EdgeTraversal> edge_dfs() { return *this; }
+    MetaTraversal<const Phylogeny, EdgeTraversal> edge_dfs() const { return *this; }
+    MetaTraversal<      Phylogeny, AllEdgesTraversal> all_edges_dfs() { return *this; }
+    MetaTraversal<const Phylogeny, AllEdgesTraversal> all_edges_dfs() const { return *this; }
 
     template<std::OptionalSetType ExceptSet, std::OptionalSetType SeenSet = DefaultSeen>
-    MetaTraversal<      Phylogeny, SeenSet, NodeTraversal> dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
+    MetaTraversal<      Phylogeny, NodeTraversal, SeenSet> dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
     template<std::OptionalSetType ExceptSet, std::OptionalSetType SeenSet = DefaultSeen>
-    MetaTraversal<const Phylogeny, SeenSet, NodeTraversal> dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
+    MetaTraversal<const Phylogeny, NodeTraversal, SeenSet> dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
     template<std::OptionalSetType ExceptSet, std::OptionalSetType SeenSet = DefaultSeen>
-    MetaTraversal<      Phylogeny, SeenSet, EdgeTraversal> edge_dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
+    MetaTraversal<      Phylogeny, EdgeTraversal, SeenSet> edge_dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
     template<std::OptionalSetType ExceptSet, std::OptionalSetType SeenSet = DefaultSeen>
-    MetaTraversal<const Phylogeny, SeenSet, EdgeTraversal> edge_dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
+    MetaTraversal<const Phylogeny, EdgeTraversal, SeenSet> edge_dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
     template<std::OptionalSetType ExceptSet, std::OptionalSetType SeenSet = DefaultSeen>
-    MetaTraversal<      Phylogeny, SeenSet, AllEdgesTraversal> all_edges_dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
+    MetaTraversal<      Phylogeny, AllEdgesTraversal, SeenSet> all_edges_dfs_except(ExceptSet&& except) { return {*this, std::forward<ExceptSet>(except)}; }
     template<std::OptionalSetType ExceptSet, std::OptionalSetType SeenSet = DefaultSeen>
-    MetaTraversal<const Phylogeny, SeenSet, AllEdgesTraversal> all_edges_dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
+    MetaTraversal<const Phylogeny, AllEdgesTraversal, SeenSet> all_edges_dfs_except(ExceptSet&& except) const { return {*this, std::forward<ExceptSet>(except)}; }
 
     // ========================= LCA ===========================
     NaiveLCAOracle<Phylogeny> naiveLCA() const { return *this; }
@@ -483,7 +503,7 @@ namespace PT {
       if(!empty()) {
         // to detect cycles, we just run a non-tracking DFS and do our own tracking; as soon as we re-see a node, we know there is a cycle
         NodeSet seen;
-        MetaTraversal<Phylogeny, void, NodeTraversal> no_tracking_dfs(*this);
+        MetaTraversal<Phylogeny, NodeTraversal, void> no_tracking_dfs(*this);
         for(const NodeDesc x: no_tracking_dfs.preorder())
           if(!append(seen, x).second)
             return true;

@@ -52,7 +52,7 @@ int main(const int argc, const char** argv)
   NumberNetwork N;
   //generate_random_binary_network_nr(N, 51, 10);
   generate_random_binary_network_nr(N, 13, 2);
-  N.print_subtree(std::cout);
+  std::cout << N;
 
   for(const NodeDesc u: N.nodes()) N[u].data() = number++;
   std::cout << "leaf-nums:\n";
@@ -67,6 +67,9 @@ int main(const int argc, const char** argv)
   std::cout << "\n\ndone generating network\n\n";
   assign_DFS_numbers(N, N.root(), DFS_counter);
 
+  std::cout << "edges:\n";
+  //for(const auto e: N.
+  std::cout << N;
   // play with nodes that have a string attached: each node is initialized with a random string
   // to this end, we use the node-data translation function (that takes the node-data of N (aka uint32_t)
   // and returns something from which N2's node-data can be initialized (aka a string))

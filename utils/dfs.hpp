@@ -3,6 +3,8 @@
 
 #include "set_interface.hpp"
 #include "auto_iter.hpp"
+#include "concat_iter.hpp"
+#include "trans_iter.hpp"
 #include "traversal_traits.hpp"
 #include "types.hpp"
 
@@ -211,7 +213,8 @@ namespace PT{
     bool operator!=(const DFSIterator<__o, __Traits>& other) const { return !operator==(other); }
 
 
-    inline bool is_valid() const { return child_history.size() >= min_stacksize; }
+    bool is_valid() const { return child_history.size() >= min_stacksize; }
+    constexpr DFSIterator get_end() const { return N; }
 
     // DFSIterators for other traversal types are our friends!
     template<TraversalType, TraversalTraitsType>
@@ -401,22 +404,22 @@ namespace PT{
   // now this is the neat interface to the outer world - it can spawn any form of Traversal object and it's easy to interact with :)
   //NOTE: this is useless when const (but even const Networks can return a non-const MetaTraversal)
   template<PhylogenyType _Network,
-           OptionalNodeSetType _SeenSet,
-           template<TraversalType, class, class> class _Traversal>
+           template<TraversalType, class, class> class _Traversal,
+           OptionalNodeSetType _SeenSet = typename _Network::DefaultSeen>
   class MetaTraversal {
   public:
     using Network = _Network;
     using SeenSet = _SeenSet;
   protected:
-    _Network& N;
-    _SeenSet seen;
+    Network& N;
+    std::remove_reference_t<SeenSet> seen;
   public:
 
     template<TraversalType o>
-    using Traversal = _Traversal<o, _Network, SeenSet>;
+    using Traversal = _Traversal<o, Network, SeenSet>;
 
     template<class... Args>
-    MetaTraversal(_Network& _N, Args&&... args): N(_N), seen(std::forward<Args>(args)...) {}
+    MetaTraversal(Network& _N, Args&&... args): N(_N), seen(std::forward<Args>(args)...) {}
 
     // this one is the general form that can do any order, but is a little more difficult to use
     template<TraversalType o>
@@ -436,6 +439,83 @@ namespace PT{
     // postorder:
     Traversal<PT::postorder> postorder(const NodeDesc u) { return traversal<PT::postorder>(u); }
     Traversal<PT::postorder> postorder() { return postorder(N.root()); }
+  };
+
+
+  template<PhylogenyType _Network,
+           template<TraversalType, class, class> class _Traversal>
+  class MetaTraversal<_Network, _Traversal, void> {
+  public:
+    using Network = _Network;
+    using SeenSet = void;
+  protected:
+    Network& N;
+  public:
+
+    template<TraversalType o>
+    using Traversal = _Traversal<o, Network, void>;
+
+    template<class... Args>
+    MetaTraversal(Network& _N): N(_N) {}
+
+    // this one is the general form that can do any order, but is a little more difficult to use
+    template<TraversalType o>
+    Traversal<o> traversal(const NodeDesc u, const order<o> = order<o>()) { return Traversal<o>(N, u); }
+    template<TraversalType o>
+    Traversal<o> traversal(const order<o> = order<o>()) { return Traversal<o>(N, N.root()); }
+
+    // then, we add 3 predefined orders: preorder, inorder, postorder, that are easier to use
+    // preorder:
+    Traversal<PT::preorder> preorder(const NodeDesc u) { return traversal<PT::preorder>(u); }
+    Traversal<PT::preorder> preorder() { return preorder(N.root()); }
+
+    // inorder:
+    Traversal<PT::inorder> inorder(const NodeDesc u) { return traversal<PT::inorder>(u); }
+    Traversal<PT::inorder> inorder() { return inorder(N.root()); }
+
+    // postorder:
+    Traversal<PT::postorder> postorder(const NodeDesc u) { return traversal<PT::postorder>(u); }
+    Traversal<PT::postorder> postorder() { return postorder(N.root()); }
+  };
+
+
+  // a meta-traversal acting on multiple roots
+  template<PhylogenyType _Network,
+           NodeIterableType RootContainer,
+           template<TraversalType, class, class> class _Traversal,
+           OptionalNodeSetType _SeenSet = typename _Network::DefaultSeen>
+  class MultiRootMetaTraversal {
+    // NOTE: Since the SeenSet has to be carried over between the concatenated traversals, we're using a reference to a global SeenSet.
+    using MT = MetaTraversal<_Network, _Traversal, std::add_lvalue_reference<_SeenSet>>;
+    using RootIter = std::auto_iter<RootContainer>;
+
+    template<TraversalType o>
+    using Traversal = typename MT::template Traversal<o>;
+
+    // transformation turning each root into a traversal from that root
+    template<TraversalType o>
+    struct IterTrans {
+      MT meta_traversal;
+      Traversal<o> operator()(const NodeDesc& r) const { return meta_traversal.template traversal<o>(r); };
+    };
+
+    template<TraversalType o>
+    using Iterator = std::concatenating_iterator<
+                        std::transforming_iterator<RootIter, IterTrans<o>>
+                     >;
+    template<TraversalType o>
+    using Factory = std::IterFactory<Iterator<o>>;
+
+    _Network& N;
+  public:
+    MultiRootMetaTraversal(_Network& _N): N(_N) {}
+
+    template<TraversalType o>
+    Factory<o> traversal(const RootContainer& _roots, const order<o> = order<o>()) { return {_roots, N}; }
+    template<TraversalType o>
+    Factory<o> traversal(const RootIter& _roots, const order<o> = order<o>()) { return {_roots, N}; }
+
+
   };
 
 }// namespace

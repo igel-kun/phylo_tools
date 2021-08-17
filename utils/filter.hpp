@@ -8,21 +8,17 @@
 
 namespace std{
 
-  // construct a filtered_iterator with this tag in order to avoid the initial "fix" (skipping of invalid entries)
+  // construct a _filtered_iterator with this tag in order to avoid the initial "fix" (skipping of invalid entries)
   struct do_not_fix_index_tag {};
 
   // skip all items in a container for which the predicate is false (that is, list all items for which the predicate is true)
   // NOTE: while we could just always use lambda functions as predicate, the current way is more flexible
-  //       since it allows default initializing the filtered_iterator if our Predicate is static
-  // NOTE: filtered_iterators cannot be replaced by C++20's filtered_view because one has to derive a filtered_view object from the container and one can then iterate this filtered view object
+  //       since it allows default initializing the _filtered_iterator if our Predicate is static
+  // NOTE: _filtered_iterators cannot be replaced by C++20's filtered_view because one has to derive a filtered_view object from the container and one can then iterate this filtered view object
   //       while, here, we want the iterator to do the filtering!
-
-  template<IterableType Container,
-           class Predicate = std::function<bool(const typename Container::value_type&)>,
-           bool reverse = false,
-           class NormalIterator = conditional_t<reverse, reverse_iterator_of_t<Container>, iterator_of_t<Container>>,
-           class Category = typename NormalIterator::iterator_category>
-  class filtered_iterator: public auto_iter<NormalIterator>
+  template<class NormalIterator,
+           class Predicate = std::function<bool(const value_type_of_t<NormalIterator>&)>>
+  class _filtered_iterator: public auto_iter<NormalIterator>
   {
     using Parent = auto_iter<NormalIterator>;
     Predicate pred;
@@ -37,76 +33,78 @@ namespace std{
     using typename Parent::reference;
     using typename Parent::pointer;
     using Parent::is_valid;
+    // a filtered iterator cannot be random access, so random_access iterators will become bidirectional iterators instead
+    using iterator_category = conditional_t<is_same_v<typename Parent::iterator_category, random_access_iterator_tag>,
+                                            bidirectional_iterator_tag,
+                                            typename Parent::iterator_category>;
 
-    // the IterFactory expects us to tell it what we want for construction besides begin/end: we want a NormalIterator (the end) and a predicate
-    struct IteratorData {
-      NormalIterator first_invalid;
-      Predicate pred;
-
-      template<class... Args>
-      IteratorData(const NormalIterator& fi, Args&&... args): first_invalid(fi), pred(forward<Args>(args)...) {}
-    };
-
-    // make a filtered iterator from a start, an end, and arguments to build the predicate
+    // make a filtered iterator
     //NOTE: this will always fix the index (doing nothing if _i == _first_invalid),
     //      if you're sure this isn't necessary, call with do_not_fix_index as first argument (see below)
-    template<class... Args>
-    filtered_iterator(const NormalIterator& _i, const NormalIterator& _first_invalid, Args&&... args):
-      Parent(_i, _first_invalid),
-      pred(forward<Args>(args)...)
+    template<class _Parent, class _Pred = Predicate>
+      requires (is_constructible_v<Parent, remove_cvref_t<_Parent>> && is_constructible_v<Predicate, remove_cvref_t<_Pred>>)
+    _filtered_iterator(_Parent&& parent_init, _Pred&& pred_init = _Pred()):
+      Parent(forward<_Parent>(parent_init)),
+      pred(forward<_Pred>(pred_init))
     { fix_index(); }
 
-    template<class... Args>
-    filtered_iterator(const do_not_fix_index_tag, const NormalIterator& _i, const NormalIterator& _first_invalid, Args&&... args):
-      Parent(_i, _first_invalid),
-      pred(forward<Args>(args)...)
+    template<class _Parent, class _Pred = Predicate>
+      requires (is_constructible_v<Parent, remove_cvref_t<_Parent>> && is_constructible_v<Predicate, remove_cvref_t<_Pred>>)
+    _filtered_iterator(const do_not_fix_index_tag, _Parent&& parent_init, _Pred&& pred_init = _Pred()):
+      Parent(forward<_Parent>(parent_init)),
+      pred(forward<_Pred>(pred_init))
     {}
 
-    // make a filtered iterator from a start iterator and an Iteratordata, that is { end iterator, predicate }
-    template<class _IteratorData> requires is_convertible_v<_IteratorData, IteratorData>
-    filtered_iterator(const NormalIterator& _i, _IteratorData&& data):
-      filtered_iterator(_i, forward<_IteratorData>(data).first_invalid, forward<_IteratorData>(data).pred)
+    // piecewise construction of the auto_iter and the predicate
+    template<class ParentTuple, class PredicateTuple>
+    constexpr _filtered_iterator(const piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init):
+      Parent(forward<ParentTuple>(parent_init)),
+      pred(make_from_tuple<Predicate>(forward<PredicateTuple>(pred_init)))
+    { fix_index(); }
+
+    template<class ParentTuple, class PredicateTuple>
+    constexpr _filtered_iterator(const do_not_fix_index_tag, const piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init):
+      Parent(forward<ParentTuple>(parent_init)),
+      pred(make_from_tuple<Predicate>(forward<PredicateTuple>(pred_init)))
     {}
 
-    // make a filtered iterator from a start iterator and an Iteratordata, that is { end iterator, predicate }
-    template<class _IteratorData> requires is_convertible_v<_IteratorData, IteratorData>
-    filtered_iterator(const do_not_fix_index_tag, const NormalIterator& _i, _IteratorData&& data):
-      filtered_iterator(do_not_fix_index_tag(), _i, forward<_IteratorData>(data).first_invalid, forward<_IteratorData>(data).pred)
-    {}
 
-    filtered_iterator(const filtered_iterator& iter) = default;
-    filtered_iterator(filtered_iterator&& iter) = default;
-    filtered_iterator& operator=(const filtered_iterator& iter) = default;
-    filtered_iterator& operator=(filtered_iterator&& iter) = default;
+    constexpr _filtered_iterator() = default;
+    _filtered_iterator(const _filtered_iterator& iter) = default;
+    _filtered_iterator(_filtered_iterator&& iter) = default;
+    _filtered_iterator& operator=(const _filtered_iterator& iter) = default;
+    _filtered_iterator& operator=(_filtered_iterator&& iter) = default;
 
-    filtered_iterator& operator++()    { if(is_valid()) {Parent::operator++(); fix_index();} return *this; }
-    filtered_iterator  operator++(int) { filtered_iterator result(*this); ++(*this); return result; }
-    filtered_iterator& operator--()    { if(is_valid()) {Parent::operator--(); fix_index<true>();} return *this; }
-    filtered_iterator  operator--(int) { filtered_iterator result(*this); --(*this); return result; }
-
-    template<IterableType, class, bool, class, class>
-    friend class filtered_iterator;
+    _filtered_iterator& operator++()    { if(is_valid()) {Parent::operator++(); fix_index();} return *this; }
+    _filtered_iterator  operator++(int) { _filtered_iterator result(*this); ++(*this); return result; }
+    _filtered_iterator& operator--()    { if(is_valid()) {Parent::operator--(); fix_index<true>();} return *this; }
+    _filtered_iterator  operator--(int) { _filtered_iterator result(*this); --(*this); return result; }
   };
 
-  template<IterableType Container,
-           class Predicate,
-           bool reverse,
-           class NormalIterator>
-  class filtered_iterator<Container, Predicate, reverse, NormalIterator, random_access_iterator_tag>:
-    public filtered_iterator<Container, Predicate, reverse, NormalIterator, bidirectional_iterator_tag>
-  { using filtered_iterator<Container, Predicate, reverse, NormalIterator, bidirectional_iterator_tag>::filtered_iterator; };
+  // if the first template argument is iterable, then take the Iterator type from that
+  template<class Iterator, class Predicate = std::function<bool(const value_type_of_t<Iterator>&)>>
+  struct __filtered_iterator { using type = _filtered_iterator<Iterator, Predicate>; };
+  template<IterableType Container, class Predicate>
+  struct __filtered_iterator<Container, Predicate> { using type = _filtered_iterator<iterator_of_t<Container>, Predicate>; };
 
-  // std::BeginEndIters wants an iterator that can be instanciated with only a container, so here we go...
-  template<class Predicate, bool reverse>
-  struct FilteredIterFor{ template<class Container> using type = std::filtered_iterator<Container, Predicate, reverse>; };
+  template<class T, class Predicate = std::function<bool(const value_type_of_t<T>&)>>
+  using filtered_iterator = typename __filtered_iterator<T, Predicate>::type;
 
-  // as a factory, use an IterFactory with the predicate and end-iterator as factory data
-  template<IterableType Container,
-           class Predicate = std::function<bool(const typename Container::value_type&)>,
-           bool reverse = false>
-  using FilteredIterFactory = IterFactory<Container,
-            const typename filtered_iterator<Container, Predicate, reverse>::IteratorData,
-            BeginEndIters<Container, reverse, FilteredIterFor<Predicate, reverse>::template type>>;
+
+  template<class T,
+           class Predicate = std::function<bool(const value_type_of_t<T>&)>,
+           class IteratorTransformation = void>
+  using FilteredIterFactory = IterFactory<filtered_iterator<T, Predicate>, IteratorTransformation>;
+
+  template<class T, class Predicate, class IteratorTransformation>
+  FilteredIterFactory<T, Predicate, IteratorTransformation> make_filtered_factory(T&& _iter, Predicate&& _pred, IteratorTransformation&& trans) {
+    return {piecewise_construct, forward_as_tuple(forward<T>(_iter), forward<Predicate>(_pred)), forward_as_tuple(trans)};
+  }
+  template<class T, class Predicate>
+  FilteredIterFactory<T, Predicate, void> make_filtered_factory(T&& _iter, Predicate&& _pred) {
+    return FilteredIterFactory<T, Predicate, void>(forward<T>(_iter), forward<Predicate>(_pred));
+  }
+
 
 } // namespace std
 

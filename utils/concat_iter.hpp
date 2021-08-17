@@ -1,72 +1,63 @@
 
 #pragma once
 
-#include "std_utils.hpp"
+#include "stl_utils.hpp"
 
 namespace std {
   // this is an iterator over multiple iterable objects, passing over each of them in turn, effectively concatenating them
-  template<IterableType Container>
-  class concatenating_iterator: public my_iterator_traits<iterator_of_t<Container>> {
-    using Parent = my_iterator_traits<iterator_of_t<Container>>;
+  template<class ContainerIter, class ItemIter = iterator_of_t<value_type_of_t<ContainerIter>>>
+  class _concatenating_iterator: public my_iterator_traits<ItemIter> {
+    using Parent = my_iterator_traits<ItemIter>;
+    using Container = value_type_of_t<ContainerIter>;
 
-    using ContainerRef = reference_wrapper<Container>;
-    using ContainerIter = iterator_of_t<vector<ContainerRef>>;
-    using ItemIter = iterator_of_t<Container>;
-    vector<ContainerRef> containers;
-    ContainerIter cit;
+    auto_iter<ContainerIter> cit;
     ItemIter it;
   public:
-    using Parent::value_type;
-    using Parent::reference;
-    using Parent::pointer;
+    using typename Parent::value_type;
+    using typename Parent::reference;
+    using typename Parent::pointer;
     using iterator_category = std::forward_iterator_tag;
 
-    concatenating_iterator() = default;
-    concatenating_iterator(concatenating_iterator&&) = default;
-    concatenating_iterator(const concatenating_iterator&) = default;
+    _concatenating_iterator() = default;
+    _concatenating_iterator(_concatenating_iterator&&) = default;
+    _concatenating_iterator(const _concatenating_iterator&) = default;
 
-    concatenating_iterator& operator=(const concatenating_iterator&) = default;
-    concatenating_iterator& operator=(concatenating_iterator&&) = default;
+    _concatenating_iterator& operator=(const _concatenating_iterator&) = default;
+    _concatenating_iterator& operator=(_concatenating_iterator&&) = default;
 
-    bool operator==(const concatenating_iterator& other) const {
-      if(is_valid()){
-        return it == other.it;
-      } else return !other.is_valid();
+    bool operator==(const _concatenating_iterator& other) const {
+      return is_valid() ? (it == other.it) : !other.is_valid();
     }
-    bool operator!=(const concatenating_iterator& other) const { return !operator==(other); }
+    bool operator!=(const _concatenating_iterator& other) const { return !operator==(other); }
 
-    // construct from only one given container
-    template<class First> requires (!is_same_v<remove_cvref_t<First>,concatenating_iterator>)
-    concatenating_iterator(First&& first):
-      containers(1, first),
-      cit(containers.begin())
-    {
-      if(is_valid()) it = cit->begin();
-    }
-
-    // construct from n > 1 given containers by delegating construction to n-1 given containers
-    template<class First, class Last, class... Args> requires (!is_same_v<remove_cvref_t<First>,concatenating_iterator>)
-    concatenating_iterator(First&& first, Args&&... other, Last&& last):
-      concatenating_iterator(forward<First>(first), forward<Args>(other)...)
-    {
-      containers.push_back(forward<Last>(last));
+    // construct the container auto_iter from anything (could be a container of containers or a compatible auto_iter or 2 ContainerIter, etc)
+    template<class... Args>
+    _concatenating_iterator(Args&&... args): cit(forward<Args>(args)...) {
+      if(is_valid()) it = cit->begin(); // if the given list of containers is not empty, get the first item of the first container
     }
 
     // NOTE: do not attempt to call ++ on the end-iterator lest you see segfaults
-    concatenating_iterator& operator++() {
+    _concatenating_iterator& operator++() {
       ++it;
       if(it == cit->end())
-        while((cit != containers.end()) && cit->empty())
+        while(cit.is_valid() && cit->empty())
           ++cit;
-      if(cit != containers.end()) it = cit->begin();
+      if(cit.is_valid()) it = cit->begin();
       return *this;
     }
 
-    concatenating_iterator& operator++(int) { concatenating_iterator result(*this); ++this; return result; }
+    _concatenating_iterator& operator++(int) { _concatenating_iterator result(*this); ++this; return result; }
 
     reference operator*() const { return *it; }
     pointer operator->() const { return &(*it); }
-    bool is_valid() const { return cit != containers.end(); }
+    bool is_valid() const { return cit.is_valid(); }
   };
 
+  // if the first template argument is iterable, then derive the iterator type from it
+  template<class T, class ItemIter = iterator_of_t<value_type_of_t<T>>>
+  using concatenating_iterator = _concatenating_iterator<iterator_of_t<T>, ItemIter>;
+
+  // factories
+  template<class T, class ItemIter = iterator_of_t<value_type_of_t<T>>, class BeginEndTransformation = void>
+  using ConcatenatingIterFactory = IterFactory<concatenating_iterator<T, ItemIter>, BeginEndTransformation>;
 }

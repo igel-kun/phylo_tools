@@ -90,41 +90,6 @@ namespace std{
   template<typename T>
   bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
   
-  // begin() and end() for forward and reverse iterators
-  template<IterableType C,
-           bool reverse = false,
-           template<class> class Iterator = conditional_template<reverse, reverse_iterator_of_t, iterator_of_t>::template type>
-  struct BeginEndIters
-  {
-    using NonConstC = remove_cv_t<C>;
-    using iterator = Iterator<C>;
-    using const_iterator = Iterator<const C>;
-    template<class... Args>
-    static iterator begin(NonConstC& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static iterator end(NonConstC& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator begin(const C& c, Args&&... args) { return {std::begin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator end(const C& c, Args&&... args) { return {std::end(c), forward<Args>(args)...}; }
-  };
-  template<IterableType C, template<class> class Iterator>
-  struct BeginEndIters<C, true, Iterator>
-  {
-    using NonConstC = remove_cv_t<C>;
-    using iterator = reverse_iterator<Iterator<C>>;
-    using const_iterator = reverse_iterator<Iterator<const C>>;
-    template<class... Args>
-    static iterator begin(NonConstC& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static iterator end(NonConstC& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator begin(const C& c, Args&&... args) { return {std::rbegin(c), forward<Args>(args)...}; }
-    template<class... Args>
-    static const_iterator end(const C& c, Args&&... args) { return {std::rend(c), forward<Args>(args)...}; }
-  };
-
-
   // why are those things not defined per default by STL???
   template<IterableType C>
   inline typename my_iterator_traits<C>::const_iterator max_element(const C& c) { return max_element(begin(c), end(c)); }
@@ -133,26 +98,15 @@ namespace std{
 
   // a class that returns itself on dereference 
   // useful for iterators returning rvalues instead of lvalue references
-  template<class T, bool = is_really_arithmetic_v<remove_reference_t<T>>>
-  struct self_deref: public T
-  {
-    using T::T;
-    self_deref(const T& x): T(x) {}
-    T& operator*() { return *this; }
-    const T& operator*() const { return *this; }
-    T* operator->() { return this; }
-    const T* operator->() const { return this; }
-  };
   template<class T>
-  struct self_deref<T, true>
-  {
-    T value;
-
-    self_deref(const T& x): value(x) {}
-    T& operator*() { return value; }
-    const T& operator*() const { return value; }
-    T* operator->() { return &value; }
-    const T* operator->() const { return &value; }
+  struct self_deref {
+    T t;
+    template<class... Args>
+    self_deref(Args&&... args): t(forward<Args>(args)...) {}
+    T& operator*() { return t; }
+    const T& operator*() const { return t; }
+    T* operator->() { return &t; }
+    const T* operator->() const { return &t; }
   };
 
 
@@ -190,6 +144,10 @@ namespace std{
     const auto iter = m.find(key);
     return (iter == m.end()) ? default_val : iter->second;
   }
+
+  template<size_t get_num>
+  struct selector { template<class Tuple> auto operator()(Tuple&& p) { return std::get<get_num>(forward<Tuple>(p)); } };
+
 
   // --------------------------- sort and merge -------------------------------------
 

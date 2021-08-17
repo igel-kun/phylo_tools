@@ -45,10 +45,13 @@ namespace PT {
     using ItemContainer  = _ItemContainer;
     using child_iterator    = std::iterator_of_t<ItemContainer>;
     using iterator_category = std::forward_iterator_tag;
+    
+    constexpr _TraversalTraits() = default;
 
     template<class FSet, class... Args>
     _TraversalTraits(FSet&& _forbidden, Args&&... args): forbidden(std::forward<FSet>(_forbidden)), seen(std::forward<Args>(args)...) {}
    
+
     bool is_seen(const NodeDesc u) const { return test(seen, u) || test(forbidden, u); }
     void mark_seen(const NodeDesc u) { append(seen, u); }
   };
@@ -67,7 +70,7 @@ namespace PT {
     using iterator_category = std::forward_iterator_tag;
 
     template<class... Args>
-    _TraversalTraits(Args&&... args): seen(std::forward<Args>(args)...) {}
+    constexpr _TraversalTraits(Args&&... args): seen(std::forward<Args>(args)...) {}
    
     bool is_seen(const NodeDesc u) const { return test(seen, u); }
     void mark_seen(const NodeDesc u) { append(seen, u); }
@@ -87,7 +90,7 @@ namespace PT {
     using iterator_category = std::forward_iterator_tag;
 
     template<class... Args>
-    _TraversalTraits(Args&&... args): forbidden(std::forward<Args>(args)...) {}
+    constexpr _TraversalTraits(Args&&... args): forbidden(std::forward<Args>(args)...) {}
    
     bool is_seen(const NodeDesc u) const { return test(forbidden, u); }
     static constexpr void mark_seen(const NodeDesc u) { }
@@ -104,7 +107,7 @@ namespace PT {
     using iterator_category = std::forward_iterator_tag;
 
     template<class... Args>
-    _TraversalTraits(Args&&... args) {}
+    constexpr _TraversalTraits(Args&&... args) {}
    
     static constexpr bool is_seen(const NodeDesc u) { return false; }
     static constexpr void mark_seen(const NodeDesc u) { }

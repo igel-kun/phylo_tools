@@ -60,15 +60,15 @@ namespace std{
 
   template<class _ItemPredicate, size_t get_num>
   struct StaticSelectingPredicate: public _ItemPredicate
-  { template<class Pair> static constexpr bool value(const Pair& p) { return _ItemPredicate::value(std::get<get_num>(p)); } };
+  { template<class Tuple> static constexpr const auto& value(const Tuple& p) { return _ItemPredicate::value(std::get<get_num>(p)); } };
 
   template<class _ItemPredicate, size_t get_num>
   struct DynamicSelectingPredicate: public _ItemPredicate
   {
     using _ItemPredicate::_ItemPredicate;
 
-    template<class Pair> 
-    bool value(const Pair& p) const { return _ItemPredicate::value(std::get<get_num>(p)); }
+    template<class Tuple> 
+    bool value(const Tuple& p) const { return _ItemPredicate::value(std::get<get_num>(p)); }
   };
   template<class _ItemPred, size_t get_num>
   using SelectingPredicate = conditional_t<_ItemPred::is_static, StaticSelectingPredicate<_ItemPred, get_num>, DynamicSelectingPredicate<_ItemPred, get_num>>;

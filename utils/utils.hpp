@@ -43,6 +43,11 @@
 #define PWC std::piecewise_construct
 #define SIZE_T_BITS ((unsigned)(CHAR_BIT*sizeof(size_t)))
 
+#define MAKE_CONSTRUCTIBLE_FROM_TUPLE(x)      \
+template<std::TupleType Tuple, std::size_t... I>         \
+constexpr x(Tuple&& t, std::index_sequence<I...>): x(std::get<I>(std::forward<Tuple>(t))...) {} \
+template<std::TupleType Tuple>                            \
+constexpr x(Tuple&& t): x(std::forward<Tuple>(t), std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple>>>{}) {}
 /*
 #if __cplusplus < 201703L
 	//! a more readable containment check
