@@ -108,4 +108,9 @@ namespace std{
     bool operator!=(const singleton_set& other) const { return !operator==(other); }
   };
 
+  template<class T> struct is_singleton_set: std::false_type {};
+  template<class T> struct is_singleton_set<singleton_set<T>>: std::true_type {};
+  template<class T> constexpr bool is_singleton_set_v = is_singleton_set<T>::value;
+  template<class T> concept SingletonSetType = is_singleton_set_v<remove_cvref_t<T>>;
+
 }

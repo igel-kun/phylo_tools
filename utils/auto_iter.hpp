@@ -63,7 +63,7 @@ namespace std{
     reference operator*() const { return *it; }
     pointer operator->() const { return &(*it); }
 
-    constexpr bool is_valid() const { return *this != end_it; }
+    constexpr bool is_valid() const { return it != end_it; }
     constexpr bool is_invalid() const { return !is_valid(); }
     operator bool() const { return is_valid(); }
     operator bool() { return is_valid(); }

@@ -13,6 +13,9 @@ namespace PT {
 
   // this template can be used as sentinel to avoid the ugly "tree.template node_traversal<preoder>()" notation
   template<TraversalType> struct order{};
+  inline order<preorder> pre_order;
+  inline order<inorder> in_order;
+  inline order<postorder> post_order;
 
 	// the default set of nodes to track is void for trees
 	template<class T>

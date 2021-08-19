@@ -62,47 +62,50 @@ int main(const int argc, const char** argv)
 
   std::cout << "\n\n assigning leaf-taxa\n\n";
   PT::sequential_taxon_name sqn;
-  for(const auto& u: N.leaves())
-    N[u].label() = sqn;
+  for(const auto& u: N.leaves()) N[u].label() = sqn;
+  std::cout << N;
 
   // play with numbered nodes: this gives each node the number in which it occurs in a DFS search (starting at 0)
   std::cout << "\n\n assigning DFS numbers\n\n";
   uint32_t DFS_counter = 0;
   assign_DFS_numbers(N, N.root(), DFS_counter);
-
-  std::cout << "edges:\n";
-  //for(const auto e: N.
   std::cout << N;
+
   // play with nodes that have a string attached: each node is initialized with a random string
   // to this end, we use the node-data translation function (that takes the node-data of N (aka uint32_t)
   // and returns something from which N2's node-data can be initialized (aka a string))
-  ISeqNetwork N2(N, [](const uint32_t){ return "\0"; } );
-
-  for(const NodeDesc u: N2.leaves()){
+  std::cout << "\n\n copy & change node-data\n\n";
+  ISeqNetwork N2(N, [](const typename NumberNetwork::Node&){ return ""; } );
+  for(const NodeDesc& u: N2.leaves()){
     const std::string s = random_seq(10 + throw_die(10));
     auto& data = N2[u].data();
-    std::cout << "assigning new data "<<s<<" to "<<u<<'\n';
+    std::cout << "assigning new data "<<s<<" to leaf "<<u<<'\n';
     data.update(s);
   }
   
   // let's see who got what sequence
-  for(const NodeDesc i: N2.nodes()){
+  for(const NodeDesc& i: N2.nodes()){
     std::cout << "found data at "<<N2[i]<<" for "<<i<<'\n';
     if(!N2[i].data().seq.empty())
       std::cout << "node "<<i<<" has sequence: "<<N2[i].data().seq<<" with "<<N2[i].data().num_Ns<<" N's"<<std::endl;
     else
       std::cout << "node "<<i<<" has no sequence" <<std::endl;
   }
+  std::cout << N2;
 
 
   // finally, let's see how to deal with to initialize data instead of assigning data
-  ConstISeqNetwork N3(N, [](const uint32_t){ return random_seq(10 + throw_die(10)); });
-  for(const NodeDesc i: N3.nodes()){
+  std::cout << "\n\n initialize non-assignable node-data\n\n";
+  ConstISeqNetwork N3(N, [](const auto&){ return random_seq(10 + throw_die(10)); });
+  for(const NodeDesc& i: N3.nodes()){
     std::cout << "found data at "<<N3[i]<<" for "<<i<<'\n';
     if(!N3[i].data().seq.empty())
       std::cout << "node "<<i<<" has sequence: "<<N3[i].data().seq<<" with "<<N3[i].data().num_Ns<<" N's"<<std::endl;
     else
       std::cout << "node "<<i<<" has no sequence" <<std::endl;
   }
+  std::cout << N3;
+
+  std::cout << "all done\n";
 }
 

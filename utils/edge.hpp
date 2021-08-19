@@ -29,7 +29,7 @@ namespace PT{
   {
     using Parent = ProtoEdge<EdgeData>;
     using Parent::Parent;
-    EdgeData& get_data() const { return this->second.get_data(); }
+    EdgeData& data() const { return this->second.data(); }
   };
   template<>
   struct Edge<void>: public ProtoEdge<void>
