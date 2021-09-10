@@ -118,7 +118,11 @@ namespace PT {
   concept OptionalNodeSetType = (std::is_void_v<C> || (std::SetType<C> && HasNodeValue<C>));
   template<class C>
   concept OptionalNodeMapType = (std::is_void_v<C> || (std::MapType<C> && HasNodeKey<C>));
+  template<class C>
+  concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<std::mapped_type_of_t<C>, NodeDesc>);
 
+  template<class F>
+  concept NodeFunctionType = std::invocable<F, NodeDesc>;
 
   // degrees
   using Degree = uint_fast32_t;
@@ -204,9 +208,9 @@ namespace PT {
 
   // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
   template<PhylogenyType Net, class Else = bool>
-  using NodeDataOr = std::conditional_t<std::is_void_v<typename std::remove_cvref_t<Net>::NodeData>, Else, typename std::remove_cvref_t<Net>::NodeData>;
+  using NodeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_node_data, typename std::remove_cvref_t<Net>::NodeData, Else>;
   // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
   template<PhylogenyType Net, class Else = bool>
-  using EdgeDataOr = std::conditional_t<std::is_void_v<typename std::remove_cvref_t<Net>::EdgeData>, Else, typename std::remove_cvref_t<Net>::NodeData>;
+  using EdgeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_edge_data, typename std::remove_cvref_t<Net>::EdgeData, Else>;
 
 }

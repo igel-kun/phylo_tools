@@ -16,6 +16,21 @@
 
 namespace PT {
 
+  template<PhylogenyType Phylo, bool move_data = false>
+  struct _CopyOrMoveDataFunc {
+    using NodeData = NodeDataOr<Phylo>;
+    using NodeDataReturn = std::conditional_t<move_data && std::remove_reference_t<Phylo>::has_node_data, NodeData&&, NodeData>;
+    using EdgeData = EdgeDataOr<Phylo>;
+    using EdgeDataReturn = std::conditional_t<move_data && std::remove_reference_t<Phylo>::has_edge_data, EdgeData&&, EdgeData>;
+    using Node = typename std::remove_reference_t<Phylo>::Node;
+    using Edge = typename std::remove_reference_t<Phylo>::Edge;
+
+    NodeDataReturn operator()(const NodeDesc& u) const { if constexpr (Node::has_data) return node_of<Phylo>(u).data(); else return NodeData(); }
+    EdgeDataReturn operator()(const Edge& uv) const { if constexpr (Edge::has_data) return uv.data(); else return EdgeData(); }
+  };
+  template<PhylogenyType Phylo>
+  using CopyOrMoveDataFunc = _CopyOrMoveDataFunc<Phylo, std::is_rvalue_reference_v<Phylo&&>>;
+
 
 	// ================ ProtoPhylogeny ======================
 	// in the proto phylogeny, differences between trees (singleS predecessor storage)
@@ -32,6 +47,7 @@ namespace PT {
   class ProtoPhylogeny: public NodeAccess<_Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType>> {
   public:
     static constexpr StorageEnum RootStorage = _RootStorage;
+    static constexpr bool has_unique_root = (RootStorage == singleS);
     using RootContainer = StorageClass<_RootStorage, NodeDesc>;
   protected:
     RootContainer _roots;
@@ -59,6 +75,7 @@ namespace PT {
     public NodeAccess<_Node<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType>> {
   public:
     static constexpr StorageEnum RootStorage = _RootStorage;
+    static constexpr bool has_unique_root = (RootStorage == singleS);
     using RootContainer = StorageClass<_RootStorage, NodeDesc>;
   protected:
     RootContainer _roots;
@@ -152,14 +169,14 @@ namespace PT {
     void delete_edge(Node& u_node, Node& v_node) {
       // step 1: remove u-->v & free the edge data
       auto& u_children = u_node.children();
-      const auto uv_iter = u_children.find(&v_node);
+      const auto uv_iter = find(u_children, (NodeDesc)(&v_node));
       assert(uv_iter != u_children.end());
       uv_iter->free_edge_data();
       u_children.erase(uv_iter);
 
       // step 2: remove v-->u
       auto& v_parents = v_node.parents();
-      const auto vu_iter = v_parents.find(&u_node);
+      const auto vu_iter = find(v_parents, (NodeDesc)(&u_node));
       assert(vu_iter != v_parents.end());
       v_parents.erase(vu_iter);
 
@@ -174,17 +191,17 @@ namespace PT {
 
     // ================ modification ======================
     // create a node in the void
-    // NOTE: this does not count the created node as part of the tree/network yet (for this, use add_root() or add_child() or add_parent())
+    // NOTE: this is static and, as such, does not change the network,
+    //       indeed this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent())
     template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
       return (NodeDesc)(new Node(std::forward<Args>(args)...));
     }
 
-    // new nodes can only be added as children or parents of existing nodes
+    // new nodes can only be added as 1. new roots, 2. children or 3. parents of existing nodes
     // NOTE: the edge data can either be passed using the Adjacency v or constructed from the parameter args
-    // NOTE: if the tree is empty, it is acceptable to call add_parent(u, u); to emplace a root
     template<AdjacencyType Adj, class... Args>
     std::pair<Adjacency*, bool> add_child(const NodeDesc u, Adj&& v, Args&&... args) {
-      assert(u != v);
+      assert(u != (NodeDesc)v);
       std::cout << "adding edge from " << u << " to " << v <<"\n";
       const auto result = add_edge(u, std::forward<Adj>(v), std::forward<Args>(args)...);
       count_node(result.second);
@@ -202,18 +219,23 @@ namespace PT {
       return result;
     }
 
+    // this marks a node as new root
+    bool mark_root(const NodeDesc& u) {
+      assert(in_degree(u) == 0);
+      const bool result = append(_roots, u).second;
+      if(result) count_node();
+      return result;
+    };
+
     template<class... Args>
     NodeDesc add_root(Args&&... args) {
       std::cout << "creating root\n";
       const NodeDesc new_root = create_node(std::forward<Args>(args)...);
       std::cout << "adding "<<new_root<<" to roots\n";
-      if(append(_roots, new_root).second) {
-        count_node();
-        return new_root;
-      } else {
+      if(!mark_root(new_root)) {
         delete_node(new_root);
         return NoNode;
-      }
+      } else return new_root;
     }
 
 
@@ -313,7 +335,7 @@ namespace PT {
         auto& v_adj = front(u_children);
         const NodeDesc v = v_adj;
         if(u_node.is_root()) {
-          const auto iter = _roots.find(u);
+          const auto iter = find(_roots, u);
           assert(iter != _roots.end());
           std::replace(_roots, iter, v);
         } else transfer_parents(u_node, std::move(v_adj), std::forward<AdjAdaptor>(adapt));
@@ -443,7 +465,7 @@ namespace PT {
     template<class T> auto edges_below_postorder(T&& R) const { return edges_below(std::forward<T>(R), post_order); }
 
     template<TraversalType o = postorder>
-    auto edges(const order<o> _o = order<o>()) const { return edges(_roots, _o); }
+    auto edges(const order<o> _o = order<o>()) const { return edges_below(_roots, _o); }
     auto edges_preorder() const { return edges(pre_order); }
     auto edges_inorder() const { return edges(in_order); }
     auto edges_postorder() const { return edges(post_order); }
@@ -560,21 +582,15 @@ namespace PT {
 
     // ================== construction =====================
   protected:
-    static constexpr NodeDesc& lookup_or_create(NodeTranslation& translate, const NodeDesc x) {
-      const auto [iter, success] = translate.emplace(x);
-      NodeDesc& result = iter->second;
-      if(success) result = new Node();
-      return result;
-    }
     // construct a rooted tree structure from the given edges and return the node description of the root as well as the number of nodes
     // NOTE: index_to_desc will contain a translation of old descriptions to new descriptions
-    template<class Deleter = std::default_delete<NodeTranslation>, std::IterableType Edges>
-    static constexpr std::pair<NodeDesc, size_t> _nodes_from_edgelist(Edges&& el, std::unique_ptr<NodeTranslation, Deleter> old_to_new, const NodeDesc old_root = NoNode) {
+    template<std::IterableType Edges, NodeTranslationType Translation>
+    std::pair<NodeDesc, size_t> _nodes_from_edgelist(Edges&& el, Translation&& old_to_new = Translation(), const NodeDesc old_root = NoNode) {
       for(auto&& uv: el) {
         // step 1: create the copy of u
-        const NodeDesc new_u = lookup_or_create(*old_to_new, uv.tail());
+        const NodeDesc new_u = lookup_or_create(old_to_new, uv.tail());
         // step 2: create the copy of v
-        const NodeDesc new_v = lookup_or_create(*old_to_new, uv.head());
+        const NodeDesc new_v = lookup_or_create(old_to_new, uv.head());
         // step 3: create the edge uv with its EdgeData
         const auto adj_iter = append(children(new_u), new_v, uv.head()).first;
         append(parents(new_v), new_u, *adj_iter);
@@ -598,95 +614,171 @@ namespace PT {
           _nodes_from_edgelist(std::forward<Edges>(el), std::make_unique<NodeTranslation>(), old_root);
     }
 
-    // copy/move a node other_x and place it below x; if x == NoNode, the copy will be a new root
-    // return the description of the copy of other_x
-    template<NodeType OtherNode,
-             class NodeDataExtraction = IgnoreNodeDataFunc,
-             class... Args>
-    NodeDesc place_node_below(OtherNode&& other_x,
-                              const NodeDesc& x,
-                              NodeDataExtraction&& nde = NodeDataExtraction(),
-                              Args&&... args) {
-      NodeDesc x_copy = NoNode;
-      if(x == NoNode) {
-        if constexpr (has_data<OtherNode>)
-          x_copy = add_root(nde(std::forward<OtherNode>(other_x)));
-        else x_copy = add_root();
-        std::cout << "placed "<<NodeDesc(&other_x)<<" as new root node "<<x_copy<<"\n";
-      } else {
-        if constexpr (has_data<OtherNode>)
-          x_copy = create_node(nde(std::forward<OtherNode>(other_x)));
-        else x_copy = create_node();
-        std::cout << "placed "<<NodeDesc(&other_x)<<" below "<<x<<" as node "<<x_copy<<"\n";
-        const bool success = add_child(x, x_copy, std::forward<Args>(args)...).second;
-        assert(success);
-      }
-      return x_copy;
-    }
 
-    // place edges of another Phylogeny into *this
-    // NOTE: to extract node/edge data, use the data-extraction functions - they will receive a reference to a node/edge of the source phylogeny
-    // NOTE: node-/edge- data is passed into the extractor functions by move if the phylogeny is passed by rvalue_reference; otherwise by const ref
-    // NOTE: make sure the EdgeContainer is in pre-order, otherwise, we'll mis-detect roots
-    // NOTE: you can pass your own (partial) node translation old_to_new in order to pre-define node-correspondances (this is quite powerfull!)
-    template<PhylogenyType _Phylo,
-             std::IterableType EdgeContainer,
-             class OldToNewTranslation = NodeTranslation,
-             class NodeDataExtraction = IgnoreNodeDataFunc,
-             class EdgeDataExtraction = IgnoreEdgeDataFunc>
-    void place_below_by_copy(_Phylo&& other,
-                             EdgeContainer&& _edges,
-                             NodeDataExtraction&& nde = NodeDataExtraction(),
-                             EdgeDataExtraction&& ede = EdgeDataExtraction(),
-                             OldToNewTranslation&& old_to_new = OldToNewTranslation()) {
-      // step 1: copy other_x
-      // step 2: copy everything below other_x
-      for(const auto other_uv: _edges) {
-        const auto& [other_u, other_v] = other_uv.as_pair();
+
+    template<bool track_roots>
+    class edge_emplacement {
+      Phylogeny& N;
+
+      template<class... Args>
+      void add_an_edge(const NodeDesc& u, const NodeDesc& v) const { N.add_edge(u,v); }
+
+      // when tracking roots, we want to remove v from the root-candidate set
+      template<class First, class... Args>
+      void add_an_edge(const NodeDesc& u, const NodeDesc& v, First&& first, Args&&... args) const {
+        if constexpr (track_roots) {
+          erase(first, v);
+          N.add_edge(u,v,std::forward<Args>(args)...);
+        } else N.add_edge(u,v,std::forward<First>(first),std::forward<Args>(args)...);
+      }
+
+      // copy/move a node other_x and place it below x; if x == NoNode, the copy will be a new root
+      // return the description of the copy of other_x
+      template<class Data>
+      NodeDesc create_node_below(const NodeDesc& u, Data&& data) const {
+        static_assert(!track_roots); // if we're tracking roots, we should be given a root-container 
+        NodeDesc v;
+        if(u == NoNode) {
+          if constexpr (Phylogeny::has_node_data)
+            v = N.add_root(std::forward<Data>(data));
+          else v = N.add_root();
+        } else {
+          if constexpr (Phylogeny::has_node_data)
+            v = N.create_node(std::forward<Data>(data));
+          else v = N.create_node();
+          const bool success = N.add_child(u, v).second;
+          assert(success);
+        }
+        return v;
+      }
+
+      // copy/move a node other_x and place it below x; if x == NoNode, the copy will be a new root
+      // return the description of the copy of other_x
+      template<class Data,
+               class First,
+               class... Args>
+      NodeDesc create_node_below(const NodeDesc& u, Data&& data, First&& root_track, Args&&... args) const {
+        NodeDesc v;
+        if(u == NoNode) {
+          if constexpr (Phylogeny::has_node_data)
+            v = N.create_node(std::forward<Data>(data));
+          else v = N.create_node();
+          N.count_node();
+          if constexpr (track_roots) append(root_track, v);
+        } else {
+          if constexpr (Phylogeny::has_node_data)
+            v = N.create_node(std::forward<Data>(data));
+          else v = N.create_node();
+          if constexpr (track_roots){
+            const bool success = N.add_child(u, v, std::forward<Args>(args)...).second;
+            erase(root_track, v);
+            assert(success);
+          } else {
+            const bool success = N.add_child(u, v, std::forward<First>(root_track), std::forward<Args>(args)...).second;
+            assert(success);
+          }
+        }
+        return v;
+      }
+    public:
+
+
+      template<NodeTranslationType OldToNewTranslation = NodeTranslation,
+               class NodeDataExtract = IgnoreNodeDataFunc, // takes a NodeDesc and returns its data (possibly (rvalue-) reference)
+               class... MoreArgs>
+      void emplace_edge(const NodeDesc& other_u,
+                        const NodeDesc& other_v,
+                        NodeDataExtract&& nde = NodeDataExtract(),
+                        OldToNewTranslation& old_to_new = OldToNewTranslation(),
+                        MoreArgs&&... args) const // more args to be passed to create_node_below() when dangling v from u; root-tracking and edge data should be passed here
+      {
         std::cout << "  treating edge "<<other_u<<" --> "<<other_v<<"\n";
         // check if other_u is known to the translation
         const auto [u_iter, u_success] = old_to_new.try_emplace(other_u, NoNode);
-        const NodeDesc& u_copy = u_iter->second;
+        NodeDesc& u_copy = u_iter->second;
         // if other_u has not been seen before, insert it as new root
-        if(u_success) u_iter->second = place_node_below(other[other_u], NoNode, nde);
+        if(u_success) u_copy = create_node_below(NoNode, nde(other_u));
         // ckeck if we've already seen other_v before
         const auto [v_iter, success] = old_to_new.try_emplace(other_v, NoNode);
         NodeDesc& v_copy = v_iter->second;
         if(!success) { // if other_v is already in the translate map, then add a new edge
           std::cout << "only adding edge "<<u_copy<<" --> "<<v_copy<<"\n";
-          if constexpr (std::remove_reference_t<_Phylo>::has_edge_data) {
-            if constexpr (std::is_rvalue_reference_v<_Phylo&&>)
-              add_edge(u_copy, v_copy, ede(std::move(other_uv)));
-            else
-              add_edge(u_copy, v_copy, ede(other_uv)); 
-          } else add_edge(u_copy, v_copy);  
+          add_an_edge(u_copy, v_copy, std::forward<MoreArgs>(args)...);
           assert(is_reti(v_copy)); // other_v should now be a reticulation
         } else { // if other_v is not in the translate map yet, then add it
-          if constexpr (std::remove_reference_t<_Phylo>::has_edge_data) {
-            if constexpr (std::is_rvalue_reference_v<_Phylo&&>)
-              v_copy = place_node_below(other[other_v], u_copy, nde, ede(std::move(other_uv)));
-            else
-              v_copy = place_node_below(other[other_v], u_copy, nde, ede(other_uv));
-          } else v_copy = place_node_below(other[other_v], u_copy, nde);
+          v_copy = create_node_below(u_copy, nde(other_v), std::forward<MoreArgs>(args)...);
         }
       }
-    }
+
+      // place edges of another Phylogeny into *this
+      // NOTE: to extract node/edge data, use the data-extraction functions - they will receive a reference to a node/edge of the source phylogeny
+      // NOTE: node-/edge- data is passed into the extractor functions by move if the phylogeny is passed by rvalue_reference; otherwise by const ref
+      // NOTE: make sure the EdgeContainer is in pre-order, otherwise, we'll mis-detect roots
+      // NOTE: you can pass your own (partial) node translation old_to_new in order to pre-define node-correspondances (this is quite powerfull!)
+      template<std::IterableType EdgeContainer,
+               NodeTranslationType OldToNewTranslation = NodeTranslation,
+               class NodeDataExtract = IgnoreNodeDataFunc, // takes a Node (possible rvalue-ref) and returns (steals) its data
+               class EdgeDataExtract = IgnoreEdgeDataFunc> // takes an Edge (possible rvalue-ref) and returns (steals) its data
+      void build_from_edges(EdgeContainer&& _edges,
+                            NodeDataExtract&& nde = NodeDataExtract(),
+                            EdgeDataExtract&& ede = EdgeDataExtract(),
+                            OldToNewTranslation&& old_to_new = OldToNewTranslation()) const {
+        // step 1: copy other_x
+        // step 2: copy everything below other_x
+        for(const auto other_uv: _edges) {
+          const auto [other_u, other_v] = other_uv.as_pair();
+          if constexpr (track_roots) {
+            NodeSet root_candidates;
+            if constexpr (std::is_rvalue_reference_v<EdgeContainer&&>) {
+              emplace_edge(other_u, other_v,
+                           std::forward<NodeDataExtract>(nde),
+                           old_to_new,
+                           root_candidates,
+                           ede(std::move(other_uv)));
+            } else {
+              emplace_edge(other_u, other_v,
+                           std::forward<NodeDataExtract>(nde),
+                           old_to_new,
+                           root_candidates,
+                           ede(other_uv));
+            }
+            for(const NodeDesc& r: root_candidates) append(_roots, r);
+          } else {
+            if constexpr (std::is_rvalue_reference_v<EdgeContainer&&>) {
+              emplace_edge(other_u, other_v,
+                           std::forward<NodeDataExtract>(nde),
+                           old_to_new,
+                           ede(std::move(other_uv)));
+            } else {
+              emplace_edge(other_u, other_v,
+                           std::forward<NodeDataExtract>(nde),
+                           old_to_new,
+                           ede(other_uv));
+            }
+          }
+        }
+      }
+
+      edge_emplacement(Phylogeny& _N): N(_N) {}
+    };
+
 
     // move the subtree below other_x into us by changing the parents of other_x to {x}
     // NOTE: the edge x --> other_x will be initialized using "args"
     // NOTE: _Phylo needs to have the same NodeType as we do!
-    template<PhylogenyType _Phylo, class... Args> requires(std::is_same_v<Node, typename std::remove_reference_t<_Phylo>::Node>)
-    NodeDesc place_below_by_move(std::make_rvalue_reference<_Phylo> other, const NodeDesc other_x, const NodeDesc x, Args&&... args) {
+    template<PhylogenyType _Phylo, class... Args>
+        requires(std::is_same_v<Node, typename std::remove_reference_t<_Phylo>::Node> && !std::is_reference_v<_Phylo>)
+    NodeDesc place_below_by_move(_Phylo&& other, const NodeDesc other_x, const NodeDesc x, Args&&... args) {
       assert(other_x != NoNode);
       std::cout << "moving subtree below "<<other_x<<"...\n";
       // step 1: move other_x over to us
       auto& other_x_node = other[other_x];
       auto& other_x_parents = other_x_node.parents();
       
-      if(!parents.empty()){
+      if(!other_x_parents.empty()){
         while(!other_x_parents.empty())
           other.delete_edge(front(other_x_parents), other_x_node);
-      } else erase(other.roots(), other_x); // if other_x has no parents, remove it from other.roots()
+      } else erase(other._roots, other_x); // if other_x has no parents, remove it from other.roots()
 
       if(x != NoNode) {
         const bool success = add_child(x, other_x, std::forward<Args>(args)...).second;
@@ -711,8 +803,8 @@ namespace PT {
     Phylogeny() = default;
 
     // initialize tree from any std::IterableType, for example, std::vector<PT::Edge<>>
-    template<std::IterableType Edges>
-    Phylogeny(Edges&& edges, NodeTranslation* old_to_new = nullptr) {
+    template<std::IterableType Edges, NodeTranslationType Translate>
+    Phylogeny(Edges&& edges, Translate&& old_to_new = Translate()) {
       const auto [new_root, nnodes] = nodes_from_edgelist(edges, old_to_new);
       append(_roots, new_root);
       _num_nodes = nnodes;
@@ -729,51 +821,52 @@ namespace PT {
     // "copy" construction with root(s)
     template<PhylogenyType _Phylo,
              NodeIterableType RContainer,
-             class NodeDataExtraction = IgnoreNodeDataFunc,
-             class EdgeDataExtraction = IgnoreEdgeDataFunc>
+             class NodeDataExtract = CopyOrMoveDataFunc<_Phylo>,
+             class EdgeDataExtract = CopyOrMoveDataFunc<_Phylo>>
     Phylogeny(_Phylo&& in_tree,
               const RContainer& in_roots,
-              NodeDataExtraction&& nde = NodeDataExtraction(),
-              EdgeDataExtraction&& ede = EdgeDataExtraction(),
-              const policy_copy_t = policy_copy_t()) {
+              NodeDataExtract&& nde = NodeDataExtract(),
+              EdgeDataExtract&& ede = EdgeDataExtract(),
+              const policy_copy_t = policy_copy_t())
+    {
       if(!in_roots.empty()) {
+        edge_emplacement<false> emp(*this);
         if(in_roots.size() == 1) {
-          place_below_by_copy(std::forward<_Phylo>(in_tree), in_tree.edges_below_preorder(front(in_roots)),
-              std::forward<NodeDataExtraction>(nde), std::forward<EdgeDataExtraction>(ede));
+          emp.build_from_edges(in_tree.edges_below_preorder(front(in_roots)), std::forward<NodeDataExtract>(nde), std::forward<EdgeDataExtract>(ede));
         } else {
-          place_below_by_copy(std::forward<_Phylo>(in_tree), in_tree.edges_below_preorder(in_roots),
-              std::forward<NodeDataExtraction>(nde), std::forward<EdgeDataExtraction>(ede));
+          emp.build_from_edges(in_tree.edges_below_preorder(in_roots), std::forward<NodeDataExtract>(nde), std::forward<EdgeDataExtract>(ede));
         }
       }
     }
     
     // "copy" construction with single root
     template<PhylogenyType _Phylo,
-             class NodeDataExtraction = IgnoreNodeDataFunc,
-             class EdgeDataExtraction = IgnoreEdgeDataFunc>
+             class NodeDataExtract = CopyOrMoveDataFunc<_Phylo>,
+             class EdgeDataExtract = CopyOrMoveDataFunc<_Phylo>>
     Phylogeny(_Phylo&& in_tree,
               const NodeDesc& in_root,
-              NodeDataExtraction&& nde = NodeDataExtraction(),
-              EdgeDataExtraction&& ede = EdgeDataExtraction(),
-              const policy_copy_t = policy_copy_t()) {
-        place_below_by_copy(std::forward<_Phylo>(in_tree),
-                            in_tree.edges_below_preorder(in_root),
-                            std::forward<NodeDataExtraction>(nde),
-                            std::forward<EdgeDataExtraction>(ede));
+              NodeDataExtract&& nde = NodeDataExtract(),
+              EdgeDataExtract&& ede = EdgeDataExtract(),
+              const policy_copy_t = policy_copy_t())
+    {
+      edge_emplacement<false> emp(*this);
+      emp.build_from_edges(in_tree.edges_below_preorder(in_root),
+            std::forward<NodeDataExtract>(nde),
+            std::forward<EdgeDataExtract>(ede));
     }
 
     // "copy" construction without root (using all roots of in_tree)
     template<PhylogenyType _Phylo,
-             class NodeDataExtraction = IgnoreNodeDataFunc,
-             class EdgeDataExtraction = IgnoreEdgeDataFunc>
+             class NodeDataExtract = CopyOrMoveDataFunc<_Phylo>,
+             class EdgeDataExtract = CopyOrMoveDataFunc<_Phylo>>
     Phylogeny(_Phylo&& in_tree,
-              NodeDataExtraction&& nde = NodeDataExtraction(),
-              EdgeDataExtraction&& ede = EdgeDataExtraction(),
+              NodeDataExtract&& nde = NodeDataExtract(),
+              EdgeDataExtract&& ede = EdgeDataExtract(),
               const policy_copy_t = policy_copy_t()):
       Phylogeny(std::forward<_Phylo>(in_tree),
                 in_tree.roots(),
-                std::forward<NodeDataExtraction>(nde),
-                std::forward<EdgeDataExtraction>(ede),
+                std::forward<NodeDataExtract>(nde),
+                std::forward<EdgeDataExtract>(ede),
                 policy_copy_t())
     {}
 
@@ -781,9 +874,10 @@ namespace PT {
     // "move" construction with root(s) by unlinking the in_roots from their in_tree and using them as our new _roots
     // NOTE: This will go horribly wrong if the sub-network below in_root has incoming arcs from outside the subnetwork!
     //       It is the user's responsibility to make sure this is not the case.
+#warning TODO: check if this is still correct
     template<PhylogenyType _Phylo, NodeIterableType RContainer>
     Phylogeny(_Phylo&& in_tree, const RContainer& in_roots, const policy_move_t = policy_move_t()) {
-      for(const NodeDesc r: in_roots)
+      for(const NodeDesc& r: in_roots)
         place_below_by_move(std::forward<_Phylo>(in_tree), r, NoNode);
     }
     // "move" construction with single root
@@ -879,6 +973,17 @@ namespace PT {
       std::unordered_bitset seen(_num_nodes);
       print_subtree(os, u, "", seen);
     }
+
+
+    // other phylogenies are our friends
+    template<StorageEnum,
+             StorageEnum,
+             class,
+             class,
+             class,
+             StorageEnum,
+             template<StorageEnum, StorageEnum, class, class, class> class>
+    friend class Phylogeny;
 
   };
 

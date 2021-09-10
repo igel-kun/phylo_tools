@@ -23,7 +23,7 @@ namespace PT{
     uintptr_t name() const { return _name; }
   };
   inline uintptr_t _ProtoNode::num_names = 0;
-  std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) { return os << ((_ProtoNode*)((uintptr_t)nd))->name(); }
+  std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) { if(nd != NoNode) return os << ((_ProtoNode*)((uintptr_t)nd))->name(); else return os << "NoNode"; }
 #else
   struct _ProtoNode {
     // by default, the name of a node is its address

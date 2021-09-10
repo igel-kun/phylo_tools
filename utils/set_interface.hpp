@@ -71,11 +71,11 @@ namespace std { // since it was the job of STL to provide for it and they failed
     typename S1::const_iterator result;
     if(x.size() < y.size()){
       for(const auto& element: x)
-        if((result = y.find(element)) != y.end())
+        if((result = find(y, element)) != y.end())
           return {result, y.end()};
     } else {
       for(const auto& element: y)
-        if((result = x.find(element)) != x.end())
+        if((result = find(x, element)) != x.end())
           return {result, x.end()};
     }
     return {x.end(), x.end()};
@@ -258,11 +258,14 @@ namespace std { // since it was the job of STL to provide for it and they failed
 
   template<VectorType V> auto find(V&& v, const auto& x) { return std::find(begin(v), end(v), x); }
   template<SetType S>    auto find(S&& s, const auto& key) { return s.find(key); }
+  template<MapType M>    auto find(M&& m, const auto& key) { return m.find(key); }
 
   template<VectorType V> auto erase(V& v, const typename remove_reference_t<V>::const_iterator& _iter) { return v.erase(_iter); }
-  template<VectorType V> auto erase(V& c, const typename remove_reference_t<V>::value_type& x) { return c.erase(find(c,x)); }
-  template<SetType S>    auto erase(S& c, const typename remove_reference_t<S>::const_iterator& _iter) { return c.erase(_iter); }
-  template<SetType S>    auto erase(S& s, const typename remove_reference_t<S>::key_type& key) { return s.erase(key); }
+  template<VectorType V> auto erase(V& v, const typename remove_reference_t<V>::value_type& x) { return v.erase(find(v,x)); }
+  template<SetType S>    auto erase(S& s, const typename remove_reference_t<S>::const_iterator& _iter) { return s.erase(_iter); }
+  template<SetType S>    auto erase(S& s, const typename remove_reference_t<S>::value_type& key) { return s.erase(key); }
+  template<MapType M>    auto erase(M& m, const typename remove_reference_t<M>::const_iterator& _iter) { return m.erase(_iter); }
+  template<MapType M>    auto erase(M& m, const typename remove_reference_t<M>::key_type& key) { return m.erase(key); }
 
   template<ContainerType C>
   void pop(C& c) {

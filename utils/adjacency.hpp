@@ -10,6 +10,8 @@ namespace PT {
 
     operator NodeDesc&() { return nd; }
     operator const NodeDesc&() const { return nd; }
+    bool operator==(const NodeDesc& other) const { return nd == other; }
+    bool operator!=(const NodeDesc& other) const { return nd != other; }
   };
 
   template<class EdgeData> struct Edge;

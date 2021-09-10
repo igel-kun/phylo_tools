@@ -58,7 +58,7 @@ namespace std{
 
   // ------------------ ITERATORS -----------------------------------
 
-  // iterator_traits<const T*>::value_type is "T" not "const T"? What the hell, STL?
+  // not all iterator_traits of the STL provide "const_pointer" and "const_reference", so I'll do that for them
   template<typename T>
   struct my_iterator_traits: public iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
@@ -71,6 +71,8 @@ namespace std{
   template<class T> using const_reference_of_t  = typename my_iterator_traits<iterator_of_t<T>>::const_reference;
   template<class T> using pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::pointer;
   template<class T> using const_pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::const_pointer;
+  // oh my... in the STL, 'iterator_traits<map<...>::iterator>' does not contain 'mapped_type'....
+  template<class M> using mapped_type_of_t = typename remove_reference_t<M>::mapped_type;
 
   template<class _Iterator>
   constexpr bool is_forward_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, forward_iterator_tag>;

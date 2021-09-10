@@ -6,7 +6,7 @@
 
 using namespace PT;
 
-using MyNetwork = DefaultNetwork<void, float>;
+using MyNetwork = DefaultLabeledNetwork<void, float>;
 
 OptionMap options;
 
@@ -29,33 +29,32 @@ void parse_options(const int argc, const char** argv)
     }
 }
 
+const auto parse_branch_len = [](const NodeDesc& d, const std::string& s){ return typename MyNetwork::Adjacency(d, std::stof(s)); };
+
+MyNetwork read_network(std::ifstream& in) {
+  std::cout << "reading network..."<<std::endl;
+  try{
+    MyNetwork N(parse_newick<MyNetwork>(in, parse_branch_len));
+    return N;
+  } catch(const std::exception& err){
+    std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
+    exit(EXIT_FAILURE);
+  }
+}
 
 int main(const int argc, const char** argv)
 {
   parse_options(argc, argv);
 
   std::ifstream in(options[""][0]);
-  MyNetwork N;
-
-  std::cout << "reading network..."<<std::endl;
-  try{
-    parse_newick(in, N, DefaultNodeCreation<MyNetwork>, [](const NodeDesc d, const std::string& s){ return typename MyNetwork::Adjacency(d, std::stof(s)); });
-  } catch(const std::exception& err){
-    std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  DEBUG5(std::cout << "building N from "<<weighted_edges<< std::endl);
-
-  //EdgeWeightedNetwork<> N(weighted_edges, names);
-  //EdgeWeightedNetwork<float, void*, IndexSet, GrowingNetworkAdjacencyStorage<WEdge>> N(weighted_edges, names);
+  MyNetwork N(read_network(in));
 
   if(test(options, "-v"))
     std::cout << N << std::endl;
  
-  for(const Node u: N.nodes()){
-    for(const auto uv: N.out_edges(u))
-      std::cout << "branch "<<u<<"["<<N.label(u)<<"] -> "<<head(uv)<<"["<<N.label(uv.head())<<"] has length "<<uv.data()<<std::endl;
+  for(const auto uv: N.edges_preorder()){
+    const auto& [u, v] = uv.as_pair();
+    std::cout << "branch "<<u<<"["<<N.label(u)<<"] -> "<<uv.head()<<"["<<N.label(uv.head())<<"] has length "<<uv.data()<<std::endl;
   }
 }
 

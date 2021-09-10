@@ -25,7 +25,7 @@ namespace std {
   template<class T> concept PointerType = is_pointer_v<remove_cvref_t<T>>;
 
   template<class T>
-  concept VectorType = is_convertible_v<remove_cvref_t<T>, vector<typename T::value_type, typename T::allocator_type>>;
+  concept VectorType = is_convertible_v<remove_cvref_t<T>, vector<typename remove_reference_t<T>::value_type, typename remove_reference_t<T>::allocator_type>>;
 
   template <class T> 
   concept IterableType = requires(remove_cvref_t<T> a, const T& b) {
@@ -88,6 +88,7 @@ namespace std {
 		requires ContainerType<T>;
 		{ a[key] } -> same_as<typename T::mapped_type&>;
 	};
+
   //template<class T>
   //concept MapType = StrictMapType<remove_cvref_t<T>>;
   template<class T>

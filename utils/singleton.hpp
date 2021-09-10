@@ -88,7 +88,7 @@ namespace std{
     const_reference front() const { return *storage; }
     iterator       find(const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
     const_iterator find(const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
-    uint_fast8_t count(const_reference x) const { return non_empty() ? (x == front()) : 0; }
+    size_t count(const_reference x) const { return non_empty() ? (x == front()) : 0; }
     bool contains(const_reference x) const { return count(x); }
     void reserve(const size_t) const {} // compatibility with vector
 
