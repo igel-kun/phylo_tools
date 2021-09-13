@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8...9999.9)
 project (phylo_tools)
 # The version number.
 set (phylo_tools_VERSION_MAJOR 1)
@@ -39,6 +39,11 @@ if(${GRAPHITE})
   set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
 endif()
 
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-range-loop-construct")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=3 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200")
+
+
 # static linking
 if(${STATIC})
   SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
@@ -64,14 +69,13 @@ endif()
 if(${DEBUG})
   MESSAGE("building DEBUG version...")
 #  set(CMAKE_BUILD_TYPE DEBUG)
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Ddebuglevel=${DEBUG}")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ddebuglevel=${DEBUG}")
+  message("CXX flags are: ${CMAKE_CXX_FLAGS_DEBUG}")
 else()
+  message("CXX flags are: ${CMAKE_CXX_FLAGS_RELEASE}")
 #  set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=2 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200")
 
 ADD_EXECUTABLE( iso examples/iso.cpp )
 ADD_EXECUTABLE( tc examples/tc.cpp )

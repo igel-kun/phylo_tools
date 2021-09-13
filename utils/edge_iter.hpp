@@ -30,9 +30,7 @@ namespace PT{
 
 
   template<std::IterableType AdjContainer, class _EdgeMaker = EdgeMaker<AdjContainer>>
-  using InOutEdgeIterator = std::transforming_iterator<std::iterator_of_t<AdjContainer>,
-                                                       typename _EdgeMaker::Edge,
-                                                       _EdgeMaker>;
+  using InOutEdgeIterator = std::transforming_iterator<std::iterator_of_t<AdjContainer>, _EdgeMaker>;
 /*
   // make an edge container from a node and a container of nodes; makes edges with the function object EdgeMaker
   template<std::IterableType _AdjContainer, class _EdgeMaker = EdgeMaker>

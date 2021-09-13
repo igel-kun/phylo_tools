@@ -75,7 +75,7 @@ int main(const int argc, const char** argv)
   // to this end, we use the node-data translation function (that takes the node-data of N (aka uint32_t)
   // and returns something from which N2's node-data can be initialized (aka a string))
   std::cout << "\n\n copy & change node-data\n\n";
-  ISeqNetwork N2(N, [](const typename NumberNetwork::Node&){ return ""; } );
+  ISeqNetwork N2(N, [](const NodeDesc&){ return ""; } );
   for(const NodeDesc& u: N2.leaves()){
     const std::string s = random_seq(10 + throw_die(10));
     auto& data = N2[u].data();

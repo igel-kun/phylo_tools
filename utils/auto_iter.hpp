@@ -69,6 +69,7 @@ namespace std{
     operator bool() { return is_valid(); }
     Iterator get_iter() const { return it; }
     EndIterator get_end() const { return end_it; }
+    size_t size() const { return distance(it, end_it); }
   };
 
 

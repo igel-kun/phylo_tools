@@ -11,7 +11,7 @@ namespace PT{
 
   // const _Container& will be the return type of the dereference operator
   // for performance reasons, it should support fast std::test() queries, as well as insert() and erase()
-  template<class _Network, class _Container = HashSet<Node>>
+  template<class _Network, class _Container = NodeSet>
   class NetworkConstraintSubsetIterator
   {
   protected:
@@ -19,14 +19,14 @@ namespace PT{
     const bool ignore_deg2_nodes;
 
     _Container current; // current output set
-    std::map<size_t, Node> available; // this maps post-order numbers to their nodes for all available nodes, sorted by post-order number
-    std::iterable_stack<Node> branched; // nodes whose value has been branched
+    std::map<size_t, NodeDesc> available; // this maps post-order numbers to their nodes for all available nodes, sorted by post-order number
+    std::iterable_stack<NodeDesc> branched; // nodes whose value has been branched
 
-    std::unordered_map<Node, size_t> zero_fixed_children; // number of children that are not in the current set
-    std::unordered_map<Node, size_t> po_number; // save the post-order number for each node
+    std::unordered_map<NodeDesc, size_t> zero_fixed_children; // number of children that are not in the current set
+    std::unordered_map<NodeDesc, size_t> po_number; // save the post-order number for each node
   
     // mark all leaves available and initialize zero_fixed_children to the out-degrees
-    void init_DFS(const Node u, size_t& time)
+    void init_DFS(const NodeDesc u, size_t& time)
     {
       // use zero_fixed_children as indicator whether we've already seen u
       auto emp_res = zero_fixed_children.emplace(u, N.out_degree(u));
@@ -34,7 +34,7 @@ namespace PT{
         if(N.is_leaf(u))
           branched.push(u);
         else
-          for(Node v: N.children(u)){
+          for(NodeDesc v: N.children(u)){
             if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.children(v));
             init_DFS(v, time);
           }
@@ -42,25 +42,25 @@ namespace PT{
       }
     }
 
-    inline bool current_state(const Node u) const { return test(current, u); }
+    inline bool current_state(const NodeDesc u) const { return test(current, u); }
     inline void first_subset() {
       size_t time = 0;
       init_DFS(N.root(), time);
     }
 
     // set a branched-on node to 0 and mark it available
-    void un_branch(const Node u)
+    void un_branch(const NodeDesc u)
     {
       append(available, po_number.at(u), u);
       current.erase(u);
     }
 
     // propagate a change ?/1 -> 0 of u upwards
-    void propagate_zero_up(const Node u)
+    void propagate_zero_up(const NodeDesc u)
     {
       //std::cout << "propagating 0 to "<<u<<"\n";
       // if u was available, it no longer is, since a child of u is now 0-fixed
-      for(Node v: N.parents(u)){
+      for(NodeDesc v: N.parents(u)){
         if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
         if(++zero_fixed_children[v] == 1){
           available.erase(po_number.at(v));
@@ -70,10 +70,10 @@ namespace PT{
     }
 
     // propagate a change 0 -> 1/? of u upwards
-    void propagate_nonzero_up(const Node u)
+    void propagate_nonzero_up(const NodeDesc u)
     {
       //std::cout << "propagating non-0 to "<<u<<"\n";
-      for(Node v: N.parents(u)){
+      for(NodeDesc v: N.parents(u)){
         if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
         if(--zero_fixed_children[v] == 0){
           append(available, po_number.at(v), v);
@@ -84,7 +84,7 @@ namespace PT{
 
     // set a node to 1 and propagate
     // note: no need to change availability since it's already non-available due to its 0-branch
-    void branch_to_one(const Node u)
+    void branch_to_one(const NodeDesc u)
     {
       DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 1"<<std::endl);
       append(current, u);
@@ -93,7 +93,7 @@ namespace PT{
     }
 
     // first branch of a node u: mark u unavailable and propagate
-    void branch_to_zero(const Node u)
+    void branch_to_zero(const NodeDesc u)
     {
       DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 0"<<std::endl);
       available.erase(po_number.at(u));
@@ -104,7 +104,7 @@ namespace PT{
 
     void next_subset()
     {
-      Node last_branched;
+      NodeDesc last_branched;
       // eat up all the 1's on the branching-stack and mark them available
       while(is_valid() && current_state(last_branched = branched.top())){
         un_branch(last_branched);

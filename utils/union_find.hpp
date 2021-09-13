@@ -72,7 +72,7 @@ namespace std{
     using Parent::at;
 
     // add a new set to the forest
-    template<class _Container = std::initializer_list<T>>
+    template<IterableType _Container = std::initializer_list<T>>
     DSet<T>& add_new_set(const _Container& x)
     {
       const T* r = nullptr;

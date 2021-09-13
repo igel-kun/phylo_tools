@@ -80,7 +80,7 @@ namespace PT{
 namespace std {
   template<>
   struct hash<PT::NodeDesc> {
-    std::hash<unsigned long> uinthash;
+    std::hash<uintptr_t> uinthash;
     size_t operator()(const PT::NodeDesc& x) const { return uinthash(x.data); }
   };
 }
@@ -192,9 +192,9 @@ namespace PT {
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
 
   template<class P>
-  concept StrictTreeType = (StrictPhylogenyType<P> && P::is_declared_tree);
+  concept StrictTreeType = (StrictPhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
   template<class P>
-  concept TreeType = (PhylogenyType<P> && P::is_declared_tree);
+  concept TreeType = (PhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
 
   using NodeTranslation = NodeMap<NodeDesc>;
   template<PhylogenyType Network>

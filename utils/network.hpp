@@ -4,7 +4,6 @@
 #include "phylogeny.hpp"
 
 namespace PT{
-#warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
   template<StorageEnum _PredStorage,
            StorageEnum _SuccStorage,
@@ -14,6 +13,7 @@ namespace PT{
            template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
   using Network = Phylogeny<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType, singleS, _Node>;
   
+  // as opposed to a Network, a DAG may have multiple roots, so we take a 'RootStorage' template argument
   template<StorageEnum _PredStorage,
            StorageEnum _SuccStorage,
            StorageEnum _RootStorage,

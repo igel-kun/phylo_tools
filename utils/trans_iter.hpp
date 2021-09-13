@@ -1,28 +1,28 @@
 
 #pragma once
 
+#include <functional>
 #include "stl_utils.hpp"
 #include "iter_factory.hpp"
 
 namespace std {
   // this is an iterator that transforms items of a range on the fly
-  // **IMPORTANT NOTE**: dereferencing such an iterator will generate and return an rvalue, not an lvalue reference as people are used to!
-  //                     Thus, users must avoid drawing non-const references from the result of de-referencing this iterator (otherwise: ref to temporary)
+  // **IMPORTANT NOTE**: dereferencing such an iterator may (depending on the transformation) generate and return an rvalue, not an lvalue reference
+  //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
   template<class Iter,
-           class target_value_type,
            class Transformation>
   class _transforming_iterator {
     Iter it;
     Transformation trans;
-    using TransArg = typename Iter::reference;
   public:
     using difference_type = ptrdiff_t;
-    using value_type      = target_value_type;
-    using pointer         = self_deref<target_value_type>; // NOTE: the self-deref class returns itself on de-reference
-    using const_pointer   = self_deref<const target_value_type>;
-    using reference       = target_value_type;
-    using const_reference = const target_value_type;
+    using reference       = decltype(trans(*it));
+    using const_reference = decltype(trans(as_const(*it)));
+    using value_type      = remove_reference_t<reference>;
+    using pointer         = pointer_from_reference<reference>;
+    using const_pointer   = pointer_from_reference<const_reference>;
     using iterator_category = typename my_iterator_traits<Iter>::iterator_category;
+    static constexpr bool reference_is_rvalue = !is_reference_v<reference>;
 
     _transforming_iterator() = default;
     _transforming_iterator(_transforming_iterator&&) = default;
@@ -60,32 +60,37 @@ namespace std {
     _transforming_iterator& operator++() { ++it; return *this; }
     _transforming_iterator& operator++(int) { _transforming_iterator result(*this); ++this; return result; }
 
+    _transforming_iterator& operator+=(int diff) { it += diff; return *this; }
+    _transforming_iterator& operator-=(int diff) { it -= diff; return *this; }
+    size_t operator-(const _transforming_iterator& other) const { return it - other.it; }
+   
+
+    reference operator*() { return trans(*it); }
     reference operator*() const { return trans(*it); }
-    pointer operator->() const { return operator*(); }
+    pointer operator->() { if constexpr (reference_is_rvalue) return operator*(); else return &(trans(*it)); }
+    pointer operator->() const { if constexpr (reference_is_rvalue) return operator*(); else return &(trans(*it)); }
   };
   
-  // if the second template argument ("target_value_type") is invocable, then we interpret it as Transformation function
-  //    and we derive the correct target_value_type as the return type of it
-  template<class Iter, class target_value_type, class Transformation = std::function<target_value_type(value_type_of_t<Iter>)>>
+  // the second argument is either a transformation function or, if the second template argument ("T") is not invocable,
+  // then we interpret it as target_value_type and the transformation function will be std::function<target_value_type(Iter::reference)>
+  template<class Iter, class Result>
   struct __transforming_iterator {
-    using type = _transforming_iterator<Iter, target_value_type, Transformation>;
+    using F = std::function<Result(std::reference_of_t<Iter>)>;
+    using type = _transforming_iterator<Iter, F>;
   };  
   template<class Iter, invocable<reference_of_t<Iter>> Transformation>
-  struct __transforming_iterator<Iter, Transformation, std::function<Transformation(value_type_of_t<Iter>)>> {
-    using type = _transforming_iterator<Iter, invoke_result_t<Transformation, reference_of_t<Iter>>, Transformation>;
+  struct __transforming_iterator<Iter, Transformation> {
+    using type = _transforming_iterator<Iter, Transformation>;
   };
 
 
-  template<class Iter,
-           class target_value_type,
-           class Transformation = std::function<target_value_type(typename Iter::reference)>>
-  using transforming_iterator = typename __transforming_iterator<Iter, target_value_type, Transformation>::type;
+  template<class Iter, class T>
+  using transforming_iterator = typename __transforming_iterator<Iter, T>::type;
 
   // factories
   template<class Iter,
-           class target_value_type,
-           class Transformation = std::function<target_value_type(typename Iter::reference)>,
+           class T,
            class BeginEndTransformation = void>
-  using TransformingIterFactory = IterFactory<transforming_iterator<Iter, target_value_type, Transformation>, BeginEndTransformation>;
+  using TransformingIterFactory = IterFactory<transforming_iterator<Iter, T>, BeginEndTransformation>;
 
 }

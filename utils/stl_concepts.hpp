@@ -13,7 +13,7 @@ namespace std {
 
 
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
-  template<class T> struct _iterator_of {
+  template<class T> requires requires { typename T::iterator; typename T::const_iterator; } struct _iterator_of {
     using type = conditional_t<is_const_v<T>, typename T::const_iterator, typename T::iterator>;
   };
   template<class T> struct _iterator_of<T*> { using type = T*; };
@@ -28,20 +28,21 @@ namespace std {
   concept VectorType = is_convertible_v<remove_cvref_t<T>, vector<typename remove_reference_t<T>::value_type, typename remove_reference_t<T>::allocator_type>>;
 
   template <class T> 
-  concept IterableType = requires(remove_cvref_t<T> a, const T& b) {
+  concept IterableType = requires(remove_cvref_t<T> a) {
+    typename _iterator_of_t<T>;
+    typename _iterator_of_t<const T>;
     // NOTE: it seems forward_iterator concept cannot be satisfied by the proxy iterator of raw_vector_map :/
     //requires forward_iterator<typename T::iterator>;
     //requires forward_iterator<typename T::const_iterator>;
-    { begin(a) }   -> convertible_to<_iterator_of_t<T>>;
-    { end(a) }     -> convertible_to<_iterator_of_t<T>>;
-    { begin(b) }   -> convertible_to<_iterator_of_t<const T>>;
-    { end(b) }     -> convertible_to<_iterator_of_t<const T>>;
+    begin(a);
+    end(a);
 	};
 
   template<class T> struct iterator_of { using type = T; };
   template<IterableType T> struct iterator_of<T>: public _iterator_of<T> {};
   template<class T> using iterator_of_t = typename iterator_of<remove_reference_t<T>>::type;
   template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
+  template<class T> using const_iterator_of_t = typename iterator_of<const remove_reference_t<T>>::type;
 
   //template<class T>
   //concept IterableType = StrictIterableType<remove_cvref_t<T>>;
@@ -84,9 +85,9 @@ namespace std {
 
   // a map is something mapping key_type to value_type with operator[]
 	template<class T>
-	concept MapType = requires(T a, typename remove_cvref_t<T>::key_type key) {
+	concept MapType = requires(T a, typename remove_reference_t<T>::key_type key) {
 		requires ContainerType<T>;
-		{ a[key] } -> same_as<typename T::mapped_type&>;
+		{ a[key] } -> same_as<typename remove_reference_t<T>::mapped_type&>;
 	};
 
   //template<class T>

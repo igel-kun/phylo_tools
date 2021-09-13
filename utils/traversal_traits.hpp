@@ -27,7 +27,7 @@ namespace PT {
 	};
 	template<PhylogenyType Network>
 	struct _DefaultSeenSet<Network> {
-		using type = std::conditional_t<TreeNodeType<typename Network::Node>, void, typename Network::NodeSet>;
+		using type = std::conditional_t<TreeNodeType<typename Network::Node>, void, NodeSet>;
 	};
 	template<class T> requires (PhylogenyType<T> || NodeType<T>)
 	using DefaultSeenSet = typename _DefaultSeenSet<T>::type;

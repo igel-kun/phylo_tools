@@ -6,12 +6,7 @@
 namespace PT{
 
   // NOTE: the iterator is not publicly constructible, but only by the factory below
-  // NOTE: _Component has to be compatible to _Network (uses the same LabelMap type, but const (!))
-  // NOTE: if you insist on using an RONetwork as _Component, make sure that you translate nodes using the old_to_new NodeTranslation
-  template<class _Network,
-    bool enumerate_trivial = true,
-    class _Component = CompatibleRWNetwork<const _Network, void, void>,
-    class = std::enable_if_t<are_compatible_v<_Network, _Component>>>
+  template<class _Network, class _Component = _Network, bool enumerate_trivial = true>
   class BiconnectedComponentIter
   {
   public:
@@ -26,7 +21,7 @@ namespace PT{
     const EdgeVec& bridges;     // bridge-container
     bool is_end_iter;           // indicates whether we reached the end
     BridgeIter current_bridge;  // iterator into the bridge-container
-    HashSet<Node> seen;         // set of seen nodes
+    NodeSet seen;               // set of seen nodes
     EdgeVec current_edges;      // the current component to be output on operator*
     bool bridge_next = false;   // at alternating output, indicate whether to output the next bridge or its biconnected component
 
@@ -47,7 +42,7 @@ namespace PT{
             ++current_bridge;
           } else {
             // if we are to output the component below uv, then get "all edges below v, avoiding nodes that have been seen" from N
-            const Node v = uv.head();
+            const NodeDesc v = uv.head();
 
             std::cout << "collecting edges of BCC below "<<v<<", seen = "<<seen<<"\n";
             current_edges.clear();
@@ -88,7 +83,7 @@ namespace PT{
     }
 
     // NOTE: bridges MUST be in post-order!
-    BiconnectedComponentIter(const _Network& _N, const std::vector<Edge>& _bridges, const bool _construct_end_iterator = false):
+    BiconnectedComponentIter(const _Network& _N, const EdgeVec& _bridges, const bool _construct_end_iterator = false):
       N(_N), bridges(_bridges), is_end_iter(_construct_end_iterator), current_bridge(bridges.begin())
     {
       if(!_construct_end_iterator){
@@ -98,13 +93,10 @@ namespace PT{
     }
 
   public:
-    // NOTE: calling operator* is expensive, consider calling it at most once for each item
-    // NOTE: we can't be sure that the vertices of the component are consecutive, so if the user requested consecutive output networks, we need to translate
-    reference operator*() const {
-      static_assert(std::is_const_v<typename _Component::LabelMap>);
-      return _Component(current_edges, N.labels());
-    }
     BiconnectedComponentIter& operator++() { next_component(); return *this; }
+
+    // NOTE: calling operator* is expensive, consider calling it at most once for each item
+    reference operator*() const { return _Component(current_edges); }
 
     bool operator==(const BiconnectedComponentIter& _it) const
     {
@@ -116,37 +108,36 @@ namespace PT{
     }
     bool operator!=(const BiconnectedComponentIter& _it) const { return !operator==(_it); }
 
-    template<class, class, bool, class>
+    template<class, class, bool>
     friend class BiconnectedComponents;
   };
 
   // factory for biconnected components, see notes for BiconnectedComponentIter
-  template<class _Network, class _Component = CompatibleRWNetwork<const _Network, void, void>, bool enumerate_trivial = true,
-    class = std::enable_if_t<are_compatible_v<_Network, _Component>>>
+  template<class _Network, class _Component = _Network, bool enumerate_trivial = true>
   class BiconnectedComponents
   {
   public:
     using Component = _Component;
     using Edge = typename _Network::Edge;
-    using EdgeVec = std::vector<Edge>;
+    using EdgeVec = typename _Network::EdgeVec;
     using BridgeIter = typename std::vector<Edge>::const_iterator;
     using reference = _Component;
     using const_reference = _Component;
-    using iterator = BiconnectedComponentIter<_Network, enumerate_trivial, _Component>;
-    using const_iterator = BiconnectedComponentIter<_Network, enumerate_trivial, _Component>;
+    using iterator = BiconnectedComponentIter<_Network, _Component, enumerate_trivial>;
+    using const_iterator = BiconnectedComponentIter<_Network, _Component, enumerate_trivial>;
 
   protected:
     const _Network& N;
-    const std::vector<Edge> bridges;
+    const EdgeVec bridges;
 
   public:
 
     BiconnectedComponents(const _Network& _N):
-      N(_N), bridges(N.get_bridges_postorder())
+      N(_N), bridges(list_bridges<_Network,EdgeVec>(N))
     {}
     
     // NOTE: if you use this, make sure the bridges are in postorder!
-    BiconnectedComponents(const _Network& _N, const std::vector<Edge>& _bridges_postorder):
+    BiconnectedComponents(const _Network& _N, const EdgeVec& _bridges_postorder):
       N(_N), bridges(_bridges_postorder)
     {}
 

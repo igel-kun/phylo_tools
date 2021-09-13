@@ -10,7 +10,7 @@ namespace PT{
            class _NodeData = void,
            class _EdgeData = void,
            class _LabelType = void,
-           template<StorageEnum, StorageEnum, class, class> class _Node = PT::DefaultNode>
+           template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
   using Tree = Phylogeny<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType, singleS, _Node>;
 
   template<StorageEnum _SuccStorage,
@@ -18,7 +18,7 @@ namespace PT{
            class _NodeData = void,
            class _EdgeData = void,
            class _LabelType = void,
-           template<StorageEnum, StorageEnum, class, class> class _Node = PT::DefaultNode>
+           template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
   using Forest = Phylogeny<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node>;
 
   // if you have a tree and want a forest that uses the same NodeType, you can use these to declare the forest (or vice versa)

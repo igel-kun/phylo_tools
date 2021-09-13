@@ -44,7 +44,6 @@ namespace std{
 
 
   // ----------------- const_pointer and const_reference ---------------------
-
   // if a container has a const_pointer type, then return this type, otherwise return a pointer to const value_type
   template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
@@ -72,6 +71,7 @@ namespace std{
   template<class T> using pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::pointer;
   template<class T> using const_pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::const_pointer;
   // oh my... in the STL, 'iterator_traits<map<...>::iterator>' does not contain 'mapped_type'....
+  template<class M> using key_type_of_t = typename remove_reference_t<M>::key_type;
   template<class M> using mapped_type_of_t = typename remove_reference_t<M>::mapped_type;
 
   template<class _Iterator>
@@ -94,7 +94,7 @@ namespace std{
   
   // why are those things not defined per default by STL???
   template<IterableType C>
-  inline typename my_iterator_traits<C>::const_iterator max_element(const C& c) { return max_element(begin(c), end(c)); }
+  iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
 
 
 
@@ -110,6 +110,8 @@ namespace std{
     T* operator->() { return &t; }
     const T* operator->() const { return &t; }
   };
+  template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
+  using pointer_from_reference = conditional_t<is_reference_v<R>, add_pointer<remove_reference_t<R>>, self_deref<R>>;
 
 
   // ---------------- copy CV or & qualifiers from a type to the next -------------------

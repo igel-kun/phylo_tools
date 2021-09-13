@@ -47,12 +47,14 @@ namespace PT{
 
 }
 
-/*
 namespace std{
-  template<class PS, class SS, class ND, class ED>
-  struct hash<PT::Edge<PS, SS, ND, ED>>: public hash<pair<void*, void*>> {};
+  template<class EdgeData>
+  struct hash<PT::Edge<EdgeData>> {
+    hash<pair<uintptr_t, uintptr_t>> pair_hash;
+    size_t operator()(const PT::Edge<EdgeData>& edge) const { return pair_hash(edge.as_pair()); }
+  };
 }
-*/
+
 /*
   struct hash<PT::Edge<PS, SS, ND, ED> >{
     size_t operator()(const PT::Edge<PS, SS, ND, ED>& e) const {

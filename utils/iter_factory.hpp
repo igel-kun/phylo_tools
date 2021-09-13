@@ -11,7 +11,7 @@ namespace std {
   // Iterator = the internal iterator type
   // BeginEndTransformation = a transformation function transforming the internal iterator to the result of begin() / end()
   template<class Iterator>
-  class ProtoIterFactory: public my_iterator_traits<Iterator>
+  class ProtoIterFactory: public iterator_traits<Iterator>
   {
   protected:
     using InternalIter = auto_iter<Iterator>;
@@ -28,7 +28,7 @@ namespace std {
 
     bool empty() const { return !(it.is_valid()); }
     // even if we know the size of the container, this may not be equal to the size of the IterFactory (think of using skipping_iterator for example)
-    size_t size() const { return distance(*it, it.get_end()); }
+    size_t size() const { return it.size(); }
 
     // copy the elements in the traversal to a container using the 'append()'-function
     template<class _Container>

@@ -44,7 +44,8 @@ namespace PT{
     sw_t update_sw(const Net& N,
                    const NodeDesc u,
                    std::DisjointSetForest<typename Net::Edge>& weak_components,
-                   _Container& out) const {
+                   _Container& out) const
+    {
       try{
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         if(!N.is_leaf(u)) {

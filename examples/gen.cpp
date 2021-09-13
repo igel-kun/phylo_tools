@@ -102,7 +102,6 @@ int main(const int argc, const char** argv)
   DefaultNetwork N;
   generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0);
 
-  DEBUG5(std::cout << "building N from "<<el<< std::endl);
   if(test(options, "-v")) std::cout << N << std::endl;
 
   const std::string nw_string = get_extended_newick(N);

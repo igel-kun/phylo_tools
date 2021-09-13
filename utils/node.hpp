@@ -62,8 +62,11 @@ namespace PT{
     const PredContainer& parents() const { return _predecessors; }
     size_t in_degree() const { return predecessors().size(); }
 
-    const ProtoNode& any_successor() const { return front(successors()); }
-    const ProtoNode& any_child() const { return any_successor(); }
+    const Adjacency& any_successor() const { return front(successors()); }
+    const Adjacency& any_child() const { return any_successor(); }
+    Adjacency& any_successor() { return front(successors()); }
+    Adjacency& any_child() { return any_successor(); }
+
     template<class... Args>
     auto add_successor(Args&&... args) {
       std::cout << "adding new successor to " << successors() << "\n";
@@ -76,8 +79,11 @@ namespace PT{
     void remove_any_successor() { std::pop(successors()); }
     void remove_any_child() { remove_any_successor(); }
 
-    const ProtoNode& any_predecessor() const { return std::front(predecessors()); }
-    const ProtoNode& any_parent() const { return any_predecessor(); }
+    const Adjacency& any_predecessor() const { return std::front(predecessors()); }
+    const Adjacency& any_parent() const { return any_predecessor(); }
+    Adjacency& any_predecessor() { return std::front(predecessors()); }
+    Adjacency& any_parent() { return any_predecessor(); }
+
     template<class... Args>
     auto add_predecessor(Args&&... args) { return append(predecessors(), std::forward<Args>(args)...); }
     template<class... Args>
@@ -277,9 +283,9 @@ namespace PT{
     static constexpr PredContainer& predecessors(const NodeDesc& u) { return node_of(u).predecessors(); }
     static constexpr PredContainer& parents(const NodeDesc& u) { return node_of(u).predecessors(); }
 
-    static constexpr NodeDesc& any_successor(const NodeDesc& u) { return node_of(u).any_successor(); }
-    static constexpr NodeDesc& any_child(const NodeDesc& u) { return node_of(u).any_successor(); }
-    static constexpr NodeDesc& child(const NodeDesc& u) { return node_of(u).any_successor(); }
+    static constexpr Adjacency& any_successor(const NodeDesc& u) { return node_of(u).any_successor(); }
+    static constexpr Adjacency& any_child(const NodeDesc& u) { return node_of(u).any_successor(); }
+    static constexpr Adjacency& child(const NodeDesc& u) { return node_of(u).any_successor(); }
 
     template<class... Args>
     static constexpr auto add_successor(const NodeDesc& u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
@@ -292,9 +298,9 @@ namespace PT{
     static constexpr void remove_any_successor(const NodeDesc& u) { return node_of(u).remove_any_successors(); }
     static constexpr void remove_any_child(const NodeDesc& u) { return node_of(u).remove_any_successors(); }
 
-    static constexpr NodeDesc& any_predecessor(const NodeDesc& u) { return node_of(u).any_predecessor(); }
-    static constexpr NodeDesc& any_parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
-    static constexpr NodeDesc& parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& any_predecessor(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& any_parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
 
     template<class... Args>
     static constexpr auto add_predecessor(const NodeDesc& u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }

@@ -69,7 +69,7 @@ namespace PT{
   struct traversal_t {};
   struct node_traversal_t: public traversal_t {};
   struct edge_traversal_t: public traversal_t {};
-  struct all_edges_traversal_t: public traversal_t {};
+  struct all_edges_traversal_t: public edge_traversal_t {};
 
   template<class T>
   concept TraversalTag = std::derived_from<T, traversal_t>;
@@ -318,6 +318,43 @@ namespace PT{
   using choose_iterator = typename _choose_iterator<o, Tag, _SeenSet>::template type<Net>;
 
 
+
+  // helper class to construct DFS iterators, keeping track of the seen nodes
+  template<PhylogenyType Network, OptionalNodeSetType SeenSet>
+  struct TraversalHelper {
+    Network& N;
+    const NodeDesc root;
+    SeenSet seen;
+
+    template<class Iterator> Iterator begin() & { return Iterator(N, root, seen); }
+    template<class Iterator> Iterator begin() const & { return Iterator(N, root, seen); }
+    // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
+    template<class Iterator> Iterator begin() && { return Iterator(N, root, std::move(seen)); }
+    // if called with one or more arguments, begin() constructs a new iterator using these arguments
+    template<class Iterator, class... Args> requires (sizeof...(Args) != 0)
+    Iterator begin(Args&&... args) { return Iterator(N, root, std::forward<Args>(args)...); }
+
+    template<class EndIterator> EndIterator end() { return EndIterator(N); }
+    template<class EndIterator> EndIterator end() const { return EndIterator(N); }
+  };
+  // specialization without seenset
+  template<PhylogenyType Network>
+  struct TraversalHelper<Network, void> {
+    Network& N;
+    const NodeDesc root;
+
+    template<class Iterator> Iterator begin() & { return Iterator(N, root); }
+    template<class Iterator> Iterator begin() const & { return Iterator(N, root); }
+    // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
+    template<class Iterator> Iterator begin() && { return Iterator(N, root); }
+    // if called with one or more arguments, begin() constructs a new iterator using these arguments
+    template<class Iterator, class... Args> requires (sizeof...(Args) != 0)
+    Iterator begin(Args&&... args) { return Iterator(N, root, std::forward<Args>(args)...); }
+
+    template<class EndIterator> EndIterator end() { return EndIterator(N); }
+    template<class EndIterator> EndIterator end() const { return EndIterator(N); }
+  };
+
   // this guy is our factory; begin()/end() can be called on it
   //NOTE: Traversal has its own _SeenSet so that multiple calls to begin() can be given the same set of forbidden nodes
   //      Thus, you can either call begin() - which uses the Traversal's _SeenSet, or you call begin(bla, ...) to construct a new _SeenSet from bla, ...
@@ -333,9 +370,14 @@ namespace PT{
   {
     template<class _Net>
     using _Iterator = choose_iterator<o, Tag, _SeenSet, _Net>;
+    template<class _Net>
+    using _EndIterator = choose_iterator<o, Tag, void, _Net>;
 
     using iterator = _Iterator<_Network>;
     using const_iterator = _Iterator<const _Network>;
+    using end_iterator = _EndIterator<_Network>;
+    using end_const_iterator = _EndIterator<const _Network>;
+
     using value_type = typename std::my_iterator_traits<iterator>::value_type;
     using difference_type = ptrdiff_t;
     using size_type = size_t;
@@ -345,53 +387,40 @@ namespace PT{
     using const_pointer   = typename std::my_iterator_traits<const_iterator>::const_pointer;
     static constexpr bool track_seen = iterator::track_seen;
 
-    _Network& N;
-    const NodeDesc root;
-    _SeenSet seen; // this is the gloabl SeenSet with which each non-end iterator is instanciated
+    TraversalHelper<_Network, _SeenSet> helper; // this contains a gloabl SeenSet with which each non-end iterator is instanciated
 
     template<class... Args>
     Traversal(_Network& _N, const NodeDesc& _root, Args&&... args):
-      N(_N), root(_root), seen(std::forward<Args>(args)...)
+      helper{_N, _root, std::forward<Args>(args)...}
     {
       DEBUG4(
       std::cout << "creating ";
       if constexpr (std::is_same_v<Tag, node_traversal_t>) std::cout << "node traversal"; else std::cout << "edge traversal";
-      std::cout << " from node "<<root<<'\n';
+      std::cout << " from node "<<helper.root<<'\n';
       );
     }
-    //~Traversal() noexcept {}
 
     // if called without arguments, begin() constructs an iterator using the root and _SeenSet created by our constructor
-    iterator begin() & { return iterator(N, root, seen); }
-    const_iterator begin() const & { return const_iterator(N, root, seen); }
-    // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
-    iterator begin() && { return iterator(N, root, std::move(seen)); }
+    iterator begin() & { return helper.template begin<iterator>(); }
+    const_iterator begin() const & { return helper.template begin<const_iterator>(); }
+    iterator begin() && { return std::move(helper).template begin<iterator>(); }
 
     // if called with one or more arguments, begin() constructs a new iterator using these arguments
     template<class... Args> requires (sizeof...(Args) != 0)
-    iterator begin(Args&&... args) { return iterator(N, root, std::forward<Args>(args)...); };
+    iterator begin(Args&&... args) { return helper.template begin<iterator>(std::forward<Args>(args)...); }
     template<class... Args> requires (sizeof...(Args) != 0)
-    const_iterator begin(Args&&... args) const { return iterator(N, root, std::forward<Args>(args)...); };
+    const_iterator begin(Args&&... args) const { return helper.template begin<const_iterator>(std::forward<Args>(args)...); }
 
-//#error TODO: if the traversal traits are to store a reference to a seen set, then end() cannot be created this way! If it is not a reference, then end() SHOULD be created this way! Solution: remove support for SeenSet being a reference as it has no use-case that I can see right now
-    iterator end() { return iterator(N); };
-    const_iterator end() const { return const_iterator(N); };
+    end_iterator end() { return helper.template end<end_iterator>(); }
+    end_const_iterator end() const { return helper.template end<end_const_iterator>(); }
 
     // allow the user to play with the _SeenSet at all times
     //NOTE: this gives you the power to change the _SeenSet while the DFS is running, and with great power comes great responsibility ;] so be careful!
-    _SeenSet& seen_nodes() { return seen; }
-    const _SeenSet& seen_nodes() const { return seen; }
+    auto& seen_nodes() { return helper.seen; }
+    const auto& seen_nodes() const { return helper.seen; }
 
-/*
-    // so STL containers provide construction by a pair of iterators; unfortunately, it's not a "pair of iterators" but two separate iterators,
-    // so we cannot have a function returning two seperate iterators :( thus, we'll just have to do it this way:
-    template<std::ContainerType Container>
-    operator Container() const& { return {begin(), end()}; }
-    template<std::ContainerType Container>
-    operator Container() & { return {begin(), end()}; }
-    template<std::ContainerType Container>
-    operator Container() && { return {begin(), end()}; }
-*/
+    bool empty() const { if constexpr (std::is_same_v<Tag, node_traversal_t>) return helper.N.empty(); else return helper.N.edgeless(); }
+
     template<std::ContainerType Container>
     //Container& append_to(Container& c) { append(c, *this); return c; }
     Container& append_to(Container& c) {

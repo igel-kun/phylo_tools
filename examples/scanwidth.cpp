@@ -6,35 +6,18 @@
 #include "utils/network.hpp"
 #include "utils/set_interface.hpp"
 
+#include "utils/tree.hpp"
 #include "utils/tree_extension.hpp"
 #include "utils/extension.hpp"
 #include "utils/scanwidth.hpp"
 
 using namespace PT;
- 
-using MyNetwork = RONetwork<>;
-using MyEdge = typename MyNetwork::Edge;
-using LabelMap = typename MyNetwork::LabelMap;
-using SWIter = SecondIterator<std::unordered_map<PT::Node, uint32_t>>;
 
- 
-bool read_from_stream(std::ifstream& in, EdgeVec& el, LabelMap& names)
-{
-  try{
-    DEBUG3(std::cout << "trying to read newick..." <<std::endl);
-    PT::parse_newick(in, el, names);
-  } catch(const MalformedNewick& nw_err){
-    DEBUG3(std::cout << "trying to read edgelist..." <<std::endl);
-    try{
-      in.seekg(0);
-      PT::parse_edgelist(in, el, names);
-    } catch(const MalformedEdgeVec& el_err){
-      std::cout << "reading Newick failed: "<<nw_err.what()<<std::endl;
-      return false;
-    }
-  }
-  return true;
-}
+static_assert(std::IterableType<std::unordered_map<PT::NodeDesc, uint32_t>>);
+
+using MyNetwork = DefaultNetwork<>;
+using MyEdge = typename MyNetwork::Edge;
+using SWIter = std::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
 
 OptionMap options;
 
@@ -90,9 +73,22 @@ unsigned parse_method()
   } 
 }
 
+MyNetwork read_network(std::ifstream& in) {
+  std::cout << "reading network..."<<std::endl;
+  try{
+    MyNetwork N(parse_newick<MyNetwork>(in));
+    return N;
+  } catch(const std::exception& err){
+    std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
+    exit(EXIT_FAILURE);
+  }
+}
+
+
+
 void print_extension(const MyNetwork& N, const Extension& ex)
 {
-  using GammaType = CompatibleROTree<const MyNetwork>;
+  using GammaType = CompatibleTree<const MyNetwork>;
 
   std::cout << "extension: " << ex << std::endl;
 
@@ -101,12 +97,9 @@ void print_extension(const MyNetwork& N, const Extension& ex)
 
   std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(seconds(sw)))<<")"<<std::endl;
 
-  std::vector<MyEdge> gamma_el;
-  ext_to_tree(N, ex, gamma_el);
-
   std::cout << "constructing extension tree\n";
-  //const ROTree<void, void, typename MyNetwork::LabelTag, const typename MyNetwork::LabelMap> Gamma(gamma_el, N.labels());
-  const GammaType Gamma(gamma_el, N.labels());
+  GammaType Gamma;
+  ext_to_tree(N, ex, Gamma);
   std::cout << "extension tree:\n" << Gamma << std::endl;
   
   const auto gamma_sw = ext_tree_sw_map(Gamma, N);
@@ -121,17 +114,8 @@ int main(const int argc, const char** argv)
 
   std::ifstream in(options[""][0]);
 
-  EdgeVec el;
-  typename MyNetwork::LabelMap names;
-
   std::cout << "reading network..."<<std::endl;
-  if(!read_from_stream(in, el, names)){
-    std::cerr << "could not read network from "<<options[""][0]<<std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  DEBUG5(std::cout << "building N ("<<names.size()<<" nodes) from edges: "<<el<< std::endl);
-  MyNetwork N(el, names);
+  MyNetwork N(read_network(in));
 
   if(test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
