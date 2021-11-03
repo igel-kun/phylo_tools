@@ -1,7 +1,9 @@
 
 #pragma once
 
+#include "optional_tuple.hpp"
 #include "set_interface.hpp"
+#include "predicates.hpp"
 #include "types.hpp"
 
 namespace PT {
@@ -33,124 +35,77 @@ namespace PT {
 	using DefaultSeenSet = typename _DefaultSeenSet<T>::type;
 
 
-	// NOTE: _SeenSet and _ForbiddenSet may both be references (or even void)
+	// NOTE: _SeenSet may be a reference (or even void)
   template<PhylogenyType _Network,
            std::IterableType _ItemContainer,
            OptionalNodeSetType _SeenSet,
-           OptionalNodeSetType _ForbiddenSet>
-  class _TraversalTraits: public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>> {
-  protected:
-    _SeenSet seen;
-    _ForbiddenSet forbidden;
-  public:
-    static constexpr bool track_seen = true;
+           class _Forbidden>
+  struct _TraversalTraits: public std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
+                           public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>> {
+    using Parent = std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>;
+
+    static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
+    static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
+    static constexpr bool track_nodes = has_seen || has_forbidden;
+
     using Network = _Network;
     using ItemContainer  = _ItemContainer;
     using child_iterator    = std::iterator_of_t<ItemContainer>;
     using iterator_category = std::forward_iterator_tag;
-    
-    constexpr _TraversalTraits() = default;
-
-    template<class FSet, class... Args>
-    _TraversalTraits(FSet&& _forbidden, Args&&... args): forbidden(std::forward<FSet>(_forbidden)), seen(std::forward<Args>(args)...) {}
    
-
-    bool is_seen(const NodeDesc& u) const { return test(seen, u) || test(forbidden, u); }
-    void mark_seen(const NodeDesc& u) { append(seen, u); }
-  };
-
-  template<PhylogenyType _Network,
-           std::IterableType _ItemContainer,
-           OptionalNodeSetType _SeenSet>
-  class _TraversalTraits<_Network, _ItemContainer, _SeenSet, void>: public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>> {
-  protected:
-    _SeenSet seen;
-  public:
-    static constexpr bool track_seen = true;
-    using Network = _Network;
-    using ItemContainer  = _ItemContainer;
-    using child_iterator    = std::iterator_of_t<ItemContainer>;
-    using iterator_category = std::forward_iterator_tag;
-
     template<class... Args>
-    constexpr _TraversalTraits(Args&&... args): seen(std::forward<Args>(args)...) {}
-   
-    bool is_seen(const NodeDesc& u) const { return test(seen, u); }
-    void mark_seen(const NodeDesc& u) { append(seen, u); }
+    _TraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
+
+    bool is_forbidden(const NodeDesc& u) const {
+      if constexpr (has_forbidden)
+        return this->template get<0>()(u);
+      else
+        return false;
+    }
+    // we consider a node 'seen' if it's either seen or forbidden
+    bool is_seen(const NodeDesc& u) const {
+      bool result = is_forbidden(u);
+      if constexpr (has_seen) result |= test(this->template get<1>(), u);
+      return result;
+    }
+    void mark_seen(const NodeDesc& u) { append(this->template get<1>(), u); }
   };
-
-  template<PhylogenyType _Network,
-           std::IterableType _ItemContainer,
-           OptionalNodeSetType _ForbiddenSet>
-  class _TraversalTraits<_Network, _ItemContainer, void, _ForbiddenSet>: public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>> {
-  protected:
-    _ForbiddenSet forbidden;
-  public:
-    static constexpr bool track_seen = true;
-    using Network = _Network;
-    using ItemContainer  = _ItemContainer;
-    using child_iterator    = std::iterator_of_t<ItemContainer>;
-    using iterator_category = std::forward_iterator_tag;
-
-    template<class... Args>
-    constexpr _TraversalTraits(Args&&... args): forbidden(std::forward<Args>(args)...) {}
-   
-    bool is_seen(const NodeDesc& u) const { return test(forbidden, u); }
-    static constexpr void mark_seen(const NodeDesc& u) { }
-  };
-
-  template<PhylogenyType _Network,
-           std::IterableType _ItemContainer>
-  class _TraversalTraits<_Network, _ItemContainer, void, void>: public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>> {
-  public:
-    static constexpr bool track_seen = false;
-    using Network = _Network;
-    using ItemContainer  = _ItemContainer;
-    using child_iterator    = std::iterator_of_t<ItemContainer>;
-    using iterator_category = std::forward_iterator_tag;
-
-    template<class... Args>
-    constexpr _TraversalTraits(Args&&... args) {}
-   
-    static constexpr bool is_seen(const NodeDesc& u) { return false; }
-    static constexpr void mark_seen(const NodeDesc& u) { }
-  };
-
-
 
 
 
 
   template<PhylogenyType _Network,
            OptionalNodeSetType _SeenSet = DefaultSeenSet<_Network>,
-           OptionalNodeSetType _ForbiddenSet = void>
-  class NodeTraversalTraits: public _TraversalTraits<_Network, typename _Network::ChildContainer, _SeenSet, _ForbiddenSet>
-  {
-    using Parent = _TraversalTraits<_Network, typename _Network::ChildContainer, _SeenSet, _ForbiddenSet>;
+           class _Forbidden = void>
+  class NodeTraversalTraits: public _TraversalTraits<_Network, typename _Network::ChildContainer, _SeenSet, _Forbidden> {
+    using Parent = _TraversalTraits<_Network, typename _Network::ChildContainer, _SeenSet, _Forbidden>;
+    using IterTraits = std::my_iterator_traits<typename _Network::ChildContainer::iterator>;
   public:
-    using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::ItemContainer;
-    using value_type      = const NodeDesc;
+    using value_type      = std::copy_cv_t<Network, NodeDesc>;
     using reference       = value_type&;
-    using const_reference = value_type&;
-    using pointer         = value_type*;
-    using const_pointer   = value_type*;
+    using const_reference = const value_type&;
+    using pointer         = std::pointer_from_reference<reference>;
+    using const_pointer   = std::pointer_from_reference<const_reference>;
     using ItemContainerRef = ItemContainer&;
+
+    template<class... Args>
+    NodeTraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
 
-    static constexpr ItemContainerRef get_children(Network& N, const NodeDesc& u) { return N.children(u); }
+    static constexpr ItemContainerRef get_children(const NodeDesc& u) { return node_of<Network>(u).children(); }
     static constexpr const NodeDesc& get_node(const NodeDesc& u) { return u; }
   };
 
   template<PhylogenyType _Network,
            OptionalNodeSetType _SeenSet = DefaultSeenSet<_Network>,
-           OptionalNodeSetType _ForbiddenSet = void>
-  class EdgeTraversalTraits: public _TraversalTraits<_Network, typename _Network::OutEdgeContainer, _SeenSet, _ForbiddenSet>
-  {
-    using Parent = _TraversalTraits<_Network, typename _Network::OutEdgeContainer, _SeenSet, _ForbiddenSet>;
+           class _Forbidden = void>
+  class EdgeTraversalTraits: public _TraversalTraits<_Network, typename _Network::OutEdgeContainer, _SeenSet, _Forbidden> {
+    using Parent = _TraversalTraits<_Network, typename _Network::OutEdgeContainer, _SeenSet, _Forbidden>;
+    using OutEdgeIterTraits = std::my_iterator_traits<typename _Network::OutEdgeContainer::iterator>;
   public:
     // NOTE: the DFS traversal stack will hold auto-iters for iterators into _Network::OutEdgeContainer (which is an IterFactory)
     //       such iterators construct edges from the child-adjacencies on the fly when they are de-referenced (rvalues instead of lvalue references).
@@ -158,25 +113,30 @@ namespace PT {
     using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::ItemContainer;
-    using value_type      = typename Network::Edge;
-    using reference       = value_type;
-    using const_reference = const value_type;
-    using pointer         = std::self_deref<value_type>;
-    using const_pointer   = std::self_deref<const value_type>;
+    using value_type      = typename OutEdgeIterTraits::value_type;
+    using reference       = typename OutEdgeIterTraits::reference;
+    using const_reference = typename OutEdgeIterTraits::const_reference;
+    using pointer         = typename OutEdgeIterTraits::pointer;
+    using const_pointer   = typename OutEdgeIterTraits::const_pointer;
     using ItemContainerRef = ItemContainer;
+    using Adjacency = typename _Network::Adjacency;
+    using Parent::mark_seen;
+    using Parent::is_seen;
+
+    template<class... Args>
+    EdgeTraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     // an empty stack represents the end-iterator
     static constexpr unsigned char min_stacksize = 2;
 
     // NOTE: out_edges returns a temporary iterator factory, so we cannot return a reference to it!
-    static constexpr ItemContainerRef get_children(Network& N, const NodeDesc& u) { return N.out_edges(u); }
+    static constexpr ItemContainerRef get_children(const NodeDesc& u) { return node_of<Network>(u).out_edges(); }
     static constexpr const NodeDesc& get_node(const value_type& uv) { return uv.head(); }
    
     // normally, we want to skip an edge if its head has been seen
     //NOTE: this will give us an edge-list of a DFS-tree
-    bool is_seen(const value_type& uv) const { return Parent::is_seen(uv.head()); }
-    bool is_seen(const NodeDesc& u) const { return Parent::is_seen(u); }
-    void mark_seen(const value_type& uv) { Parent::mark_seen(uv.head()); }    
+    bool is_seen(const value_type& uv) const { return is_seen(uv.head()); }
+    void mark_seen(const value_type& uv) { mark_seen(uv.head()); }    
   };
 
   //NOTE: EdgeTraversalTraits gives us the edges of a dfs-tree, but the infrastructure can be used to compute all edges below a node (except some)
@@ -184,33 +144,35 @@ namespace PT {
   //      occur as head of any emitted edge, while the latter should not occur as tail of any emitted edge! Thus, we'll need a second storage
   template<PhylogenyType _Network,
            OptionalNodeSetType _SeenSet = DefaultSeenSet<_Network>,
-           OptionalNodeSetType _ForbiddenSet = void>
-  class AllEdgesTraits: public EdgeTraversalTraits<_Network, _SeenSet, _ForbiddenSet>
-  {
-    using Parent = EdgeTraversalTraits<_Network, _SeenSet, _ForbiddenSet>;
+           class _Forbidden = void>
+  class AllEdgesTraits: public EdgeTraversalTraits<_Network, _SeenSet, _Forbidden> {
+    using Parent = EdgeTraversalTraits<_Network, _SeenSet, _Forbidden>;
   public:
     using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::value_type;
     using typename Parent::ItemContainerRef;
+    using Parent::mark_seen;
+    using Parent::is_seen;
+
+    template<class... Args>
+    AllEdgesTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     // if u has been seen, just return an empty OutEdgeContainer (because all of u's out-edges will be skipped anyways)
-    ItemContainerRef get_children(Network& N, const NodeDesc& u) const { if(Parent::is_seen(u)) return {}; else return N.out_edges(u); }
+    ItemContainerRef get_children(const NodeDesc& u) const { if(Parent::is_seen(u)) return {}; else return node_of<Network>(u).out_edges(); }
 
     // so now, we want to skip an edge if its head is forbidden or its tail has been seen during the DFS
     //NOTE: this will give us all edges below some node, except for those with forbidden heads
-    //TODO: run some tests here, this doesn't seem right! In particular, seen and forbidden are not treated differently right now
-    bool is_seen(const value_type& uv) const { return Parent::is_seen(uv.tail()); }
-    bool is_seen(const NodeDesc& u) const { return Parent::is_seen(u); }
+    bool is_seen(const value_type& uv) const { return Parent::is_seen(uv.tail()) || Parent::is_forbidden(uv.head()); }
   };
 
   template<class T>
-  concept TraversalTraitsType = requires(T t, const typename T::value_type u) {
+  concept TraversalTraitsType = requires(T t, const typename T::value_type u, const NodeDesc& v) {
     typename T::Network;
     typename T::ItemContainer;
-    T::track_seen;
+    T::track_nodes;
     T::min_stacksize;
-    { t.mark_seen(u) } -> std::same_as<void>;
+    t.mark_seen(v);
     { t.is_seen(u) } -> std::same_as<bool>;
   };
 

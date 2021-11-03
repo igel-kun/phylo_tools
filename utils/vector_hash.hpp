@@ -53,7 +53,7 @@ namespace std{
     bool value(const Iter& it) { return c.is_vacant(it); }
   };
   template<class Container>
-  using OccupiedPredicate = NotPredicate<VacantPredicate<Container>>;
+  using OccupiedPredicate = pred::NotPredicate<VacantPredicate<Container>>;
 
   template<IterableType Container, class Iterator = iterator_of_t<Container>>
   using linear_vector_hash_iterator = filtered_iterator<Iterator, VacantPredicate<Container>>;

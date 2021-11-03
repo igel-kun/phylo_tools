@@ -16,8 +16,7 @@ namespace std{
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
   template<class Iterator, class EndIterator = conditional_t<iter_verifyable<Iterator>, void, Iterator>>
-  class _auto_iter: public my_iterator_traits<Iterator>
-  {
+  class _auto_iter: public my_iterator_traits<Iterator> {
     static_assert(!iter_verifyable<Iterator>);
     using Traits = my_iterator_traits<Iterator>;
     Iterator it;
@@ -73,7 +72,7 @@ namespace std{
   };
 
 
-
+/*
   template<class Iterator>
   class _auto_iter<Iterator, void>: public my_iterator_traits<Iterator>
   {
@@ -117,6 +116,36 @@ namespace std{
     // NOTE: default-constructed Iterator should be equivalent to the end-iterator (compare == with the end-iterator), this is the user's responsability!
     constexpr auto get_end() const { return it.get_end(); }
     Iterator get_iter() const { return it; }
+  };
+*/
+
+  template<class Iterator>
+  class _auto_iter<Iterator, void>: public Iterator {
+  public:
+    // NOTE: default-constructed Iterator should be equivalent to the end-iterator (compare == with the end-iterator), this is the user's responsability!
+    _auto_iter() {}
+
+    // construct from a container
+    template<IterableType Container> requires (is_convertible_v<iterator_of_t<Container>, Iterator>)
+    _auto_iter(Container&& c): Iterator(begin(c)) {}
+    // piecewise construct
+    template<class IterTuple>
+    _auto_iter(const piecewise_construct_t, IterTuple&& iter_init):
+      Iterator(make_from_tuple<Iterator>(forward<IterTuple>(iter_init)))
+    {}
+    // everything else just goes directly to the Iterator constructor
+    template<class... Args>
+    _auto_iter(Args&&... args): Iterator(forward<Args>(args)...) {}
+
+    // copy and move-construction & assignment are default
+    _auto_iter(const _auto_iter&) = default;
+    _auto_iter(_auto_iter&&) = default;
+    _auto_iter& operator=(const _auto_iter&) = default;
+    _auto_iter& operator=(_auto_iter&&) = default;
+
+    const Iterator& get_iter() const { return *this; }
+    Iterator& get_iter() { return *this; }
+    static auto get_end() { return std::GenericEndIterator(); }
   };
 
 

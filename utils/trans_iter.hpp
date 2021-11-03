@@ -9,8 +9,7 @@ namespace std {
   // this is an iterator that transforms items of a range on the fly
   // **IMPORTANT NOTE**: dereferencing such an iterator may (depending on the transformation) generate and return an rvalue, not an lvalue reference
   //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
-  template<class Iter,
-           class Transformation>
+  template<class Iter, class Transformation>
   class _transforming_iterator {
     Iter it;
     Transformation trans;

@@ -51,7 +51,7 @@ namespace PT{
   {
     size_t counter = 0;
     // get a preorder because we need to access the distance to the root of the parent
-    const auto preorder_dfs = t.dfs().preorder(); // const since our preorder doesn't need to track seen nodes (we're in a tree)
+    const auto preorder_dfs = t.nodes_preorder(); // const since our preorder doesn't need to track seen nodes (we're in a tree)
     auto iter = preorder_dfs.begin(); // this is the root now
     node_infos.try_emplace(*iter, 0, 0); // order number 0, distance to root 0
     for(++iter;iter.is_valid(); ++iter){

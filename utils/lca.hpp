@@ -24,7 +24,7 @@ namespace PT {
 		}
 	};
 
-	template<TreeType Tree>
+	template<PhylogenyType Tree> requires TreeType<Tree>
 	class NaiveLCAOracle<Tree>: public LCAOracle<Tree> {
 		using Parent = LCAOracle<Tree>;
 		using Parent::N;

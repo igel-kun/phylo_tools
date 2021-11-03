@@ -18,6 +18,10 @@ namespace std{
 
   // --------------------- FUNDAMENTALS -------------------------------------
 
+  // interpret pointer as fixed-width array
+  template<size_t dim, class T>
+  auto& cast_to_array(T* t) { return *static_cast<T(*)[dim]>(static_cast<void*>(t)); }
+
   template<class T> constexpr bool is_pair = false;
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
 
@@ -57,8 +61,49 @@ namespace std{
 
   // ------------------ ITERATORS -----------------------------------
 
+  // a lightweight end-iterator dummy that can be returned by calls to end() and compared to by other iterators
+  struct GenericEndIterator{
+    static bool is_valid() { return false; }
+    bool operator==(const GenericEndIterator& x) const { return true; }
+    template<class Other> bool operator==(const Other& x) const { return (x == *this); }
+    template<class Other> bool operator!=(const Other& x) const { return !operator==(x); }
+  };
+  template<class T>
+  bool operator==(const T& other, const GenericEndIterator&) { return !other.is_valid(); }
+  template<class T>
+  bool operator!=(const T& other, const GenericEndIterator&) { return other.is_valid(); }
+
+
+  // a class that returns itself on dereference 
+  // useful for iterators returning rvalues instead of lvalue references
+  template<class T>
+  struct self_deref {
+    T t;
+    template<class... Args>
+    self_deref(Args&&... args): t(forward<Args>(args)...) {}
+    T& operator*() { return t; }
+    const T& operator*() const { return t; }
+    T* operator->() { return &t; }
+    const T* operator->() const { return &t; }
+  };
+  template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
+  using pointer_from_reference = conditional_t<is_reference_v<R>, add_pointer<remove_reference_t<R>>, self_deref<R>>;
+
+
+  template<class Ref>
+  struct iter_traits_from_reference {
+    using reference = Ref;
+    using value_type = remove_reference_t<reference>;
+    using const_reference = conditional_t<is_reference_v<reference>, const value_type&, const value_type>;
+    using pointer = pointer_from_reference<reference>;
+    using const_pointer = pointer_from_reference<const_reference>;
+    using difference_type = ptrdiff_t;
+    using size_type = size_t;
+    using iterator_category = std::forward_iterator_tag; // by default we're a forward_iterator, overwrite this if you do bidirectional or random access
+  };
+
   // not all iterator_traits of the STL provide "const_pointer" and "const_reference", so I'll do that for them
-  template<typename T>
+  template<typename T> requires HasIterTraits<T>
   struct my_iterator_traits: public iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
     using value_type = conditional_t<!is_pointer_v<T>, typename iterator_traits<T>::value_type, remove_reference_t<typename iterator_traits<T>::reference>>;
@@ -95,23 +140,6 @@ namespace std{
   // why are those things not defined per default by STL???
   template<IterableType C>
   iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
-
-
-
-  // a class that returns itself on dereference 
-  // useful for iterators returning rvalues instead of lvalue references
-  template<class T>
-  struct self_deref {
-    T t;
-    template<class... Args>
-    self_deref(Args&&... args): t(forward<Args>(args)...) {}
-    T& operator*() { return t; }
-    const T& operator*() const { return t; }
-    T* operator->() { return &t; }
-    const T* operator->() const { return &t; }
-  };
-  template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
-  using pointer_from_reference = conditional_t<is_reference_v<R>, add_pointer<remove_reference_t<R>>, self_deref<R>>;
 
 
   // ---------------- copy CV or & qualifiers from a type to the next -------------------
@@ -375,16 +403,60 @@ namespace std{
 
 
   // --------------------- MISC ---------------------------------------------
+  template<class T, class Q>
+  concept CompatibleValueTypes = is_same_v<value_type_of_t<T>, value_type_of_t<Q>>;
+  template<class T, class Q>
+  concept ConvertibleValueTypes = convertible_to<value_type_of_t<Q>, value_type_of_t<T>>;
 
-  template<class T = int>
-  struct minus_one
-  {
-    static constexpr T value = -1;
+  // cheapo linear interval class - can merge and intersect
+  template<class T = uint32_t>
+  struct linear_interval {
+    T lo, hi;
+    linear_interval(const T& init): lo(init), hi(init) {}
+    linear_interval(const T& init_lo, const T& init_hi): lo(init_lo), hi(init_hi) {}
+    
+    void merge(const linear_interval& other) {
+      lo = min(lo, other.lo);
+      hi = max(hi, other.hi);
+    }
+    void intersect(const linear_interval& other) {
+      lo = max(lo, other.lo);
+      hi = min(hi, other.hi);
+    }
+    void update_lo(const T& low) { lo = min(lo, low); }
+    void update_hi(const T& high) { hi = max(hi, high); }
+    void update(const T& x) { update_lo(x); update_hi(x); }
+
+    bool contained_in(const linear_interval& other) const { return (lo >= other.lo) && (hi <= other.high); }
+
+    friend ostream& operator<<(ostream& os, const linear_interval& i) { return os << '[' << i.lo << ',' << i.hi << ']'; }
   };
 
+  // an operator that appends anything to a given container
+  template<ContainerType C>
+  struct appender {
+    C& target;
+    appender(C& _target): target(_target) {}
+
+    template<class... Args>
+    void operator()(Args&&... args) { append(target, std::forward<Args>(args)...); }
+  };
+
+  // an operator that stores something and returns it every time it is called
+  template<class T>
+  struct dispenser {
+    T data;
+    template<class... Args> dispenser(Args&&... args): data(forward<Args>(args)...) {}
+    template<class... Args> T& operator()(Args&&... args) { return data; }
+    template<class... Args> const T& operator()(Args&&... args) const { return data; }
+  };
+
+
+  template<class T = int>
+  struct minus_one { static constexpr T value = -1; };
+
   // specialize to your hearts desire
-  template<class T> struct default_invalid
-  {
+  template<class T> struct default_invalid {
     using type = conditional_t<is_basically_arithmetic_v<T>, minus_one<T>, void>;
   };
   template<class T> using default_invalid_t = typename default_invalid<T>::type;

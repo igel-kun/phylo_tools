@@ -11,8 +11,7 @@ namespace std {
   // Iterator = the internal iterator type
   // BeginEndTransformation = a transformation function transforming the internal iterator to the result of begin() / end()
   template<class Iterator>
-  class ProtoIterFactory: public iterator_traits<Iterator>
-  {
+  class ProtoIterFactory: public iterator_traits<Iterator> {
   protected:
     using InternalIter = auto_iter<Iterator>;
     InternalIter it;
@@ -38,33 +37,31 @@ namespace std {
   };
 
 
-  template<class Iterator, class BeginEndTransformation = void>
-  class _IterFactory: public ProtoIterFactory<Iterator> {
+  template<class Iterator, class BeginEndTransformation> requires (!is_void_v<BeginEndTransformation>)
+  class IterFactoryWithBeginEnd: public ProtoIterFactory<Iterator> {
     using Parent = ProtoIterFactory<Iterator>;
     BeginEndTransformation trans;
   public:
     // construct from an auto_iter and a BeginEndTransformation
     template<class T, class Q>
       requires (is_same_v<remove_cvref_t<T>, typename Parent::InternalIter> && is_same_v<remove_cvref_t<Q>, BeginEndTransformation>)
-    _IterFactory(T&& _iter, Q&& _trans): Parent(forward<T>(_iter)), trans(forward<Q>(_trans)) {}
-    // construct our internal auto_iter from anything and our transformation from a given Transformation function
+    IterFactoryWithBeginEnd(T&& _iter, Q&& _trans): Parent(forward<T>(_iter)), trans(forward<Q>(_trans)) {}
+    // construct our internal auto_iter and our transformation from two tuples
     template<class PTuple, class TTuple>
-    _IterFactory(const piecewise_construct_t, PTuple&& parent_init, TTuple&& trans_init):
-      Parent(forward<PTuple>(parent_init)),
+    IterFactoryWithBeginEnd(const piecewise_construct_t, PTuple&& parent_init, TTuple&& trans_init):
+      Parent(make_from_tuple<Parent>(forward<PTuple>(parent_init))),
       trans(make_from_tuple<BeginEndTransformation>(forward<TTuple>(trans_init)))
     {}
 
     auto begin() const { return it_trans(Parent::begin()); }
     auto end() const { return it_trans(Parent::end()); }
-
   };
 
   template<class Iterator, class BeginEndTransformation = void>
-  struct __IterFactory { using type = _IterFactory<Iterator, BeginEndTransformation>; };
+  struct _IterFactory { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation>; };
   template<class Iterator>
-  struct __IterFactory<Iterator, void> { using type = ProtoIterFactory<Iterator>; };
+  struct _IterFactory<Iterator, void> { using type = ProtoIterFactory<Iterator>; };
 
   template<class T, class BeginEndTransformation = void>
-  using IterFactory = typename __IterFactory<iterator_of_t<T>, BeginEndTransformation>::type;
-
+  using IterFactory = typename _IterFactory<iterator_of_t<T>, BeginEndTransformation>::type;
 }

@@ -1,7 +1,7 @@
 
 #pragma once
 
-namespace std{
+namespace pred {
   // Predicates
 #warning "TODO: automatically detect static and dynamic predicates"
   struct StaticPredicate { inline static constexpr bool is_static = true; };
@@ -20,7 +20,7 @@ namespace std{
   };
   
   template<class Predicate>
-  using NotPredicate = conditional_t<Predicate::is_static, StaticNotPredicate<Predicate>, DynamicNotPredicate<Predicate>>;
+  using NotPredicate = std::conditional_t<Predicate::is_static, StaticNotPredicate<Predicate>, DynamicNotPredicate<Predicate>>;
 
   struct TruePredicate: public StaticPredicate { template<class X> static constexpr bool value(const X& x) { return true; } };
   using FalsePredicate = NotPredicate<TruePredicate>;
@@ -71,7 +71,8 @@ namespace std{
     bool value(const Tuple& p) const { return _ItemPredicate::value(std::get<get_num>(p)); }
   };
   template<class _ItemPred, size_t get_num>
-  using SelectingPredicate = conditional_t<_ItemPred::is_static, StaticSelectingPredicate<_ItemPred, get_num>, DynamicSelectingPredicate<_ItemPred, get_num>>;
+  using SelectingPredicate = std::conditional_t<_ItemPred::is_static,
+                                        StaticSelectingPredicate<_ItemPred, get_num>, DynamicSelectingPredicate<_ItemPred, get_num>>;
 
   template<class _ItemPredicate>
   using MapKeyPredicate = SelectingPredicate<_ItemPredicate, 0>;
@@ -107,19 +108,22 @@ namespace std{
 
   // predicate for containers of sets, returning whether the given set is empty
   struct EmptySetPredicate: public StaticPredicate
-  { template<class _Set> static constexpr bool value(const _Set& x) {return x.empty();} };
+  { template<std::IterableType _Set> static constexpr bool value(const _Set& x) {return x.empty();} };
   using NonEmptySetPredicate = NotPredicate<EmptySetPredicate>;
 
   // a predicate returning true/or false depending whether the query is in a given set
-  template<class Container, bool is_in = true>
-  struct ContainmentPredicate: public DynamicPredicate
-  {
-    using Item = typename Container::value_type;
-    const Container* c;
+  template<std::IterableType Container, bool is_in = true>
+  struct ContainmentPredicate: public DynamicPredicate {
+    const std::remove_cvref_t<Container>* c;
     ContainmentPredicate(const Container& _c): c(&_c) {}
-    template<class Item>
-    bool value(const Item& x) const { return test(*c, x) == is_in; }
+    template<class Item> bool value(const Item& x) const { return test(*c, x) == is_in; }
   };
+
+  // if P is iterable, get its containment predicate
+  template<class P> struct _AsContainmentPred { using type = P; };
+  template<std::IterableType P> struct _AsContainmentPred<P> { using type = ContainmentPredicate<P>; };
+  template<class P> using AsContainmentPred = typename _AsContainmentPred<P>::type;
+
 
 #warning TODO: replace all this by lambdas
 #warning TODO: implement static predicates correctly

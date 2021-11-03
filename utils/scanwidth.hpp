@@ -46,9 +46,8 @@ namespace PT{
 
 
 
-  template<bool low_memory_version, class _Network, class _Extension>
-  class ScanwidthDP
-  {
+  template<bool low_memory_version, class _Network, class _Extension, bool ignore_deg2 = true>
+  class ScanwidthDP {
   public:
     using DPEntry = typename std::conditional_t<low_memory_version, _DPEntryLowMem<_Network>, _DPEntry<_Network>>;
  
@@ -56,12 +55,10 @@ namespace PT{
     using DPTable = std::unordered_map<NodeSet, DPEntry, std::set_hash<NodeSet>>;
     
     const _Network& N;
-    const bool ignore_deg2;
     DPTable dp_table;
 
     // return whether u is a root in N[c], that is, if u has parents in c
-    inline bool is_root_in_set(const NodeDesc u, const NodeSet& c)
-    {
+    bool is_root_in_set(const NodeDesc u, const NodeSet& c) {
       for(auto v: N.parents(u)){
         // ignore deg-2 nodes
         if(ignore_deg2) while(N.is_suppressible(v)) v = std::front(N.parents(v));
@@ -72,16 +69,14 @@ namespace PT{
 
   public:
 
-    ScanwidthDP(const _Network& _N, const bool _ignore_deg2 = true): N(_N), ignore_deg2(_ignore_deg2)
-    {}
+    ScanwidthDP(const _Network& _N): N(_N) {}
 
-    void compute_min_sw_extension_no_bridges(_Extension& ex)
-    {
+    void compute_min_sw_extension_no_bridges(_Extension& ex) {
       // this code asserts that the DPEntry can be move-assigned
       assert(std::is_move_assignable_v<DPEntry>);
       DEBUG4(std::cout << "computing scanwidth of block:\n"<<N<<"\n";);
 
-      // this is thee main dynamic programming table - it could grow exponentially large...
+      // this is the main dynamic programming table - it could grow exponentially large...
       // the table maps a set X of nodes to any extension with smallest sw for the graph where all nodes but X are contracted onto the root
       // start off with the empty set of scanwidth 0
 
@@ -143,9 +138,15 @@ namespace PT{
   template<bool low_memory_version, class _Network, class _Extension>
   void compute_min_sw_extension(const _Network& N, _Extension& ex)
   {
-    using Component = typename BiconnectedComponents<_Network>::Component;
-
-    for(const Component bcc: BiconnectedComponents<_Network>(N)){
+#warning "TODO: make this work for multiple roots"
+    assert(N.roots().size() == 1);
+    
+    // biconnected components only have node-data linking to the original node; no edge data, no labels
+    using Component = CompatibleNetwork<_Network, NodeDesc, void, void>;
+    
+    std::cout << "getting biconnected component factory\n";
+    auto bc_components = get_biconnected_components<Component>(N, NodeTranslation(), [](const NodeDesc& u){ return u; });
+    for(const auto& bcc: std::move(bc_components)){
       std::cout << "found biconnected component:\n"<< bcc <<"\n";
       if(bcc.num_edges() != 1){
         ScanwidthDP<low_memory_version, Component, _Extension> dp(bcc);
@@ -154,12 +155,10 @@ namespace PT{
         ex.pop_back();
       } else {
         std::cout << "only 1 edge, so adding its head to ex\n";
-        const auto edges = bcc.edges();
-        const auto uv = std::front(edges);
+        const auto uv = std::front(bcc.edges());
         //const auto& uv = std::front(bcc.edges());
         std::cout << "edge is "<<uv<<"\n";
         append(ex, uv.head());
-        std::cout << "E goes out of scope next\n";
       }
       std::cout << "done working with\n"<<bcc<<"\n";
     }

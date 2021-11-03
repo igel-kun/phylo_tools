@@ -27,8 +27,9 @@ namespace std {
 
   // ATTENTION: this does not do error checking if NDEBUG is on (except front())
   template<MapType _bucket_map = std::raw_vector_map<size_t, uint64_t> >
-  class iterable_bitset 
-  {
+  class iterable_bitset: public iter_traits_from_reference<uintptr_t> {
+    // NOTE: bitsets cannot provide meaningful references to their members
+    using traits = iter_traits_from_reference<uintptr_t>;
   public:
     using bucket_map = _bucket_map;
     using bucket_type = typename bucket_map::mapped_type;
@@ -36,14 +37,11 @@ namespace std {
     using bucket_iter = typename bucket_map::iterator;
     using bucket_const_iter = typename bucket_map::const_iterator;
 
-    using value_type = uintptr_t;
-    // NOTE: bitsets cannot provide meaningful references to their members
-    using reference  = value_type;
-    using const_reference = reference;
-    using pointer = std::self_deref<value_type>;
-    using const_pointer = pointer;
-    using difference_type = ptrdiff_t;
-    using size_type = size_t;
+    using typename traits::value_type;
+    using typename traits::reference;
+    using typename traits::const_reference;
+    using typename traits::pointer;
+    using typename traits::const_pointer;
 
     using iterator = bitset_iterator<bucket_map>;
     using const_iterator = iterator;

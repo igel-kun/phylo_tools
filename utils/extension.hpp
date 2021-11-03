@@ -70,7 +70,7 @@ namespace PT{
     void sw_map(const Net& N, _Container& out) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
       std::DisjointSetForest<typename Net::Edge> weak_components;
-      for(const NodeDesc u: *this) update_sw(N, u, weak_components, out);
+      for(const NodeDesc& u: *this) update_sw(N, u, weak_components, out);
     }
 
     template<PhylogenyType Net, NodeMapType _Container = std::unordered_map<NodeDesc, sw_t>>

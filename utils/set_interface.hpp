@@ -122,60 +122,51 @@ namespace std { // since it was the job of STL to provide for it and they failed
 
 
   // on non-map containers, append = emplace
-  template<ContainerType C, class ...Args> requires (!MapType<C> && !VectorType<C>)
-  emplace_result<C> append(C& container, Args&&... args) { return container.emplace(forward<Args>(args)...); }
+  template<ContainerType C, class First, class ...Args> requires (!MapType<C> && !VectorType<C> && !CompatibleValueTypes<C, First>)
+  emplace_result<C> append(C& container, First&& first, Args&&... args) { return container.emplace(forward<First>(first), forward<Args>(args)...); }
 
   // on vectors, append =  emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
-  template<class T, class A, class First, class ...Args> requires (!ContainerType<First>)
-  emplace_result<vector<T, A>> append(vector<T, A>& _vec, First&& first, Args&&... args)
-  { 
+  template<VectorType V, class First, class... Args> requires (!ConvertibleValueTypes<V, First>)
+  emplace_result<V> append(V& _vec, First&& first, Args&&... args) { 
     return {_vec.emplace(_vec.end(), forward<First>(first), forward<Args>(args)...), true};
   }
   // dummy function to not insert anything into an appended vector
-  template<class T, class A>
-  emplace_result<vector<T, A>> append(vector<T, A>& _vec) { return {_vec.begin(), true}; }
+  template<VectorType V>
+  emplace_result<V> append(V&& _vec) { return {_vec.begin(), true}; }
  
   // on maps to primitives, append = try_emplace
-  template<MapType M, class Key, class ...Args> requires (is_convertible_v<Key, key_type_of_t<M>> && !ContainerType<mapped_type_of_t<M>>)
+  template<MapType M, class Key, class... Args> requires (is_convertible_v<Key, key_type_of_t<M>> && !ContainerType<mapped_type_of_t<M>>)
   emplace_result<M> append(M& _map, Key&& _key, Args&&... args)
   { return _map.try_emplace(forward<Key>(_key), forward<Args>(args)...); }
 
-  // on maps to sets, append = append to set at map[key]
+  // on maps to containers, append = append to container at map[key]
   //NOTE: return an iterator to the pair in the map whose second now contains the newly constructed item
   //      also return a bool indicating whether insertion took place
   //NOTE: this also works for emplacing a string into a map that maps to strings, the "inserting" appends below are called in this case
   template<MapType M, class Key, class ...Args> requires (is_convertible_v<Key, key_type_of_t<M>> && ContainerType<mapped_type_of_t<M>>)
-  emplace_result<M> append(M& _map, Key&& _key, Args&&... args)
-  {
+  emplace_result<M> append(M& _map, Key&& _key, Args&&... args) {
     const auto iter = _map.try_emplace(forward<Key>(_key)).first;
     const bool success = append(iter->second, forward<Args>(args)...).second;
     return {iter, success};
   }
 
   // append with 2 containers means to add the second to the end of the first
-  template<ContainerType C1, ContainerType C2> requires (convertible_to<value_type_of_t<C2>, value_type_of_t<C1>> && !VectorType<C1>)
-  emplace_result<C1> append(C1& x, const C2& y)
-  {
+  template<ContainerType C1, ContainerType C2> requires (ConvertibleValueTypes<C1,C2> && !VectorType<C1>)
+  emplace_result<C1> append(C1& x, const C2& y) {
     x.insert(y.begin(), y.end());
     return {x.begin(), true};
   }
-  template<VectorType V, ContainerType C2> requires convertible_to<value_type_of_t<C2>, value_type_of_t<V>>
-  emplace_result<V> append(V& x, const C2& y)
-  {
+  template<VectorType V, ContainerType C2> requires ConvertibleValueTypes<V,C2>
+  emplace_result<V> append(V& x, const C2& y) {
     x.insert(x.end(), y.begin(), y.end());
     return {x.begin(), true};
   }
 
-  // all this BS with containers supporting contains() or not is really unnerving
   template<class T>
-  bool test(const T& _set, const value_type_of_t<T>& key) { return _set.count(key); }
-  template<MapType T>
-  bool test(const T& _map, const key_type_of_t<T>& key) { return _map.count(key); }
-
-
+  bool test(const T& _set, const auto& key) { return _set.count(key); }
 
   // I would write an operator= to assign unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
   template<SetType C1, SetType C2> requires is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>

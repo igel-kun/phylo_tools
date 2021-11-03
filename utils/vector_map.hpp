@@ -12,8 +12,7 @@
 namespace std{
 
   template<class _Key, class _Element, class _AbsentPredicate>
-  class _vector_map: public raw_vector_map<_Key, _Element>
-  {
+  class _vector_map: public raw_vector_map<_Key, _Element> {
     using Parent = raw_vector_map<_Key, _Element>;
 
   public:
@@ -89,10 +88,10 @@ namespace std{
   // if _Element is simple, we can use a given constexpr as "invalid element" instead of adding a bitset mask
   //NOTE: _Element must be constructible from and comparable to InvalidElement
   template<class _Key, class _Element, class InvalidElement>
-  class simple_vector_map: public _vector_map<_Key, _Element, MapValuePredicate<StaticUnequalPredicate<_Element, InvalidElement>>>
+  class simple_vector_map: public _vector_map<_Key, _Element, pred::MapValuePredicate<pred::StaticUnequalPredicate<_Element, InvalidElement>>>
   {
     static constexpr auto _invalid_element = InvalidElement::value();
-    using Parent = _vector_map<_Key, _Element, MapValuePredicate<StaticUnequalPredicate<_Element, InvalidElement>>>;
+    using Parent = _vector_map<_Key, _Element, pred::MapValuePredicate<pred::StaticUnequalPredicate<_Element, InvalidElement>>>;
   public:
     using Parent::Parent;
     using Parent::data;
@@ -119,16 +118,16 @@ namespace std{
     bool contains(const key_type key) const
     {
       assert(key < size());
-      return !StaticEqualPredicate<_Element, InvalidElement>::value(*(data() + key));
+      return !pred::StaticEqualPredicate<_Element, InvalidElement>::value(*(data() + key));
     }
   };
 
   // for types that cannot have an invalid state, we'll have to keep a bitset around, indicating whether or not a key is present
   template<class _Key, class _Element>
   class bitset_vector_map:
-    public _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset>>>
+    public _vector_map<_Key, _Element, pred::MapKeyPredicate<pred::ContainmentPredicate<const ordered_bitset>>>
   {
-    using Parent = _vector_map<_Key, _Element, MapKeyPredicate<ContainmentPredicate<const ordered_bitset>>>;
+    using Parent = _vector_map<_Key, _Element, pred::MapKeyPredicate<pred::ContainmentPredicate<const ordered_bitset>>>;
 
     // use a bitset to check who is present - NOTE: internally, ordered_bitset uses a raw_vector_map, which forces this separation of header files
     // into raw_vector_map.hpp and vector_map.hpp

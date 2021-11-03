@@ -68,7 +68,7 @@ namespace PT{
     // compute component roots and return list of leaves encountered
     void compute_component_roots(NodeVec& trivial_roots, NodeVec& non_trivial_roots)
     {
-      auto dfs = N.dfs().preorder();
+      auto dfs = N.nodes_preorder();
       auto u_it = dfs.begin();
       while(++u_it != dfs.end()){
         const Node u = *u_it;

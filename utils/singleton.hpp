@@ -7,17 +7,15 @@ namespace std{
 
   // a set holding at most one element, but having a set-interface
   template<Optional Container>
-  class singleton_set {
+  class singleton_set: public iter_traits_from_reference<typename Container::value_type&> {
+    using traits = iter_traits_from_reference<typename Container::value_type&>;
     Container storage;
   public:
-    using value_type = typename Container::value_type;
-    using difference_type = ptrdiff_t;
-    using size_type = size_t;
+    using typename traits::value_type;
+    using typename traits::reference;
+    using typename traits::const_reference;
     using iterator = value_type*;
     using const_iterator = const value_type*;
-    using reference = value_type&;
-    using const_reference = const value_type&;
-    using rvalue_reference = value_type&&;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -108,8 +106,8 @@ namespace std{
     bool operator!=(const singleton_set& other) const { return !operator==(other); }
   };
 
-  template<class T> struct is_singleton_set: std::false_type {};
-  template<class T> struct is_singleton_set<singleton_set<T>>: std::true_type {};
+  template<class T> struct is_singleton_set: public std::false_type {};
+  template<class T> struct is_singleton_set<singleton_set<T>>: public std::true_type {};
   template<class T> constexpr bool is_singleton_set_v = is_singleton_set<T>::value;
   template<class T> concept SingletonSetType = is_singleton_set_v<remove_cvref_t<T>>;
 

@@ -49,6 +49,10 @@ namespace std {
   template<class T>
   concept OptionalIterableType = is_void_v<T> || IterableType<T>;
 
+
+  template<class T>
+  concept HasIterTraits = requires { typename iterator_traits<T>::value_type; };
+
   // concept checking for STL-style container (thanks to https://stackoverflow.com/questions/60449592 )
   template <class T> 
   concept ContainerType = requires(T a) {

@@ -94,6 +94,7 @@ namespace PT{
     void remove_any_parent() { remove_any_predecessor(); }
 
     size_t degree() const { return in_degree() + out_degree(); }
+    std::pair<size_t,size_t> degrees() const { return {in_degree(), out_degree()}; }
     bool is_root() const { return predecessors().empty(); }
     bool is_tree_node() const { if constexpr(_is_tree_node) return true; else return in_degree() < 2; }
     bool is_reti() const { return !is_tree_node(); }
@@ -249,6 +250,13 @@ namespace PT{
   template<PhylogenyType Network>
   typename Network::Node& node_of(const NodeDesc& x) { return node_of<typename Network::Node>(x); }
 
+  template<class T>
+  auto& children_of(const NodeDesc& x) { return node_of<T>(x).children(); }
+  template<class T>
+  auto& parents_of(const NodeDesc& x) { return node_of<T>(x).parents(); }
+
+
+
   template<NodeType _Node>
   struct NodeAccess {
     static constexpr auto PredStorage = _Node::PredStorage;
@@ -316,6 +324,7 @@ namespace PT{
     static constexpr size_t in_degree(const NodeDesc& u) { return node_of(u).in_degree(); }
     static constexpr size_t out_degree(const NodeDesc& u) { return node_of(u).out_degree(); }
     static constexpr size_t degree(const NodeDesc& u) { return node_of(u).degree(); }
+    static constexpr std::pair<size_t,size_t> degrees(const NodeDesc& u) { return node_of(u).degrees(); }
     static constexpr bool is_root(const NodeDesc& u) { return node_of(u).is_root(); }
     static constexpr bool is_tree_node(const NodeDesc& u) { return node_of(u).is_tree_node(); }
     static constexpr bool is_reti(const NodeDesc& u) { return node_of(u).is_reti(); }

@@ -149,7 +149,7 @@ namespace PT {
             }
           
             // step 3: go through the induced_subhost in postorder(!) and check containment for eligible nodes
-            for(Node v: induced_subhost.dfs().postorder()){
+            for(Node v: induced_subhost.nodes_postorder()){
               const auto& v_infos = induced_subhost[v];
               if(v_infos.nodes_for_poss.size() == guest.out_degree(u)){ // if all children of u have a child of u that can display them
                 std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n";
@@ -274,8 +274,8 @@ namespace PT {
       append(host_to_subtree, u, 0); // translate the root to 0
       node_infos->try_emplace(0, 0, 0); // distance to root and the order number of u are 0
 
-      MetaTraversal<const Host, void, EdgeTraversal> my_dfs(host);
-      for(const auto xy: my_dfs.preorder(u)){
+      EdgeTraversal<preorder, Host, void, void> my_dfs(u);
+      for(const auto xy: my_dfs){
         const Node x = xy.tail();
         Node y = xy.head();
         if(host.out_degree(x) != 1){
@@ -692,7 +692,7 @@ namespace PT {
         // cache how many paths there are between a parent (first parameter) and a child (second parameter)
         PathProfile num_paths;
         HashSet<Node> half_eligible;
-        for(const Node u: cDAG.dfs().postorder()) {
+        for(const Node u: cDAG.nodes_postorder()) {
           if(is_half_eligible(u, num_paths, half_eligible)){
             if(host[u].visible_leaf != NoNode) return u;
             half_eligible.emplace(u);

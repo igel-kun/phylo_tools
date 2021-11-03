@@ -13,7 +13,6 @@
 #include "vector_map.hpp"
 #include "stl_utils.hpp"
 #include "singleton.hpp"
-#include "filter.hpp"
 
 namespace PT{
 
@@ -131,15 +130,13 @@ namespace PT {
 
   // sets and containers of node descriptors
   using NodeSingleton = StorageClass<singleS, NodeDesc>;
+#warning "TODO: find out why this uses std::optional and not optional_by_invalid!"
+
   using ConsecutiveNodeSet = std::ordered_bitset;
   template<class T>
   using NodeWith = std::pair<NodeDesc, T>;
   using NodeWithDegree = NodeWith<Degree>;
   using NodePair = NodeWith<NodeDesc>;
-  template<NodeContainerType C>
-  using FilteredNodeContainer = std::FilteredIterFactory<C, std::function<bool(const typename C::value_type&)>>;
-  template<NodeMapType M>
-  using FilteredNodeMap = std::FilteredIterFactory<M, std::function<bool(const typename M::value_type&)>>;
 
 
   using NodeVec = std::vector<NodeDesc>;
@@ -194,7 +191,8 @@ namespace PT {
   template<class P>
   concept StrictTreeType = (StrictPhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
   template<class P>
-  concept TreeType = (PhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
+  concept TreeType = std::remove_reference_t<P>::is_declared_tree;
+  //concept TreeType = (PhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
 
   using NodeTranslation = NodeMap<NodeDesc>;
   template<PhylogenyType Network>
@@ -207,10 +205,10 @@ namespace PT {
 
 
   // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
-  template<PhylogenyType Net, class Else = bool>
+  template<PhylogenyType Net, class Else = uint_fast8_t>
   using NodeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_node_data, typename std::remove_cvref_t<Net>::NodeData, Else>;
   // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
-  template<PhylogenyType Net, class Else = bool>
+  template<PhylogenyType Net, class Else = uint_fast8_t>
   using EdgeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_edge_data, typename std::remove_cvref_t<Net>::EdgeData, Else>;
 
 }
