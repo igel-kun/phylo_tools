@@ -46,7 +46,7 @@ namespace PT {
   struct EdgeEmplacementHelper<true, Phylo> {
     Phylo& N;
     NodeSet root_candidates = {};
-
+    
     // when tracking roots, we want to remove v from the root-candidate set
     template<class... Args>
     void add_an_edge(const NodeDesc& u, const NodeDesc& v, Args&&... args) {
@@ -94,10 +94,9 @@ namespace PT {
     OldToNewTranslation old_to_new;
     NodeDataExtract nde;
 
-
     template<class... MoreArgs> // more args to be passed to create_node_below() when dangling v from u
     void emplace_edge(const NodeDesc& other_u, const NodeDesc& other_v, MoreArgs&&... args) {
-      std::cout << "  treating edge "<<other_u<<" --> "<<other_v<<"\n";
+      DEBUG5(std::cout << "  treating edge "<<other_u<<" --> "<<other_v<<"\n");
       // check if other_u is known to the translation
       const auto [u_iter, u_success] = old_to_new.try_emplace(other_u);
       NodeDesc& u_copy = u_iter->second;
@@ -107,9 +106,10 @@ namespace PT {
       const auto [v_iter, success] = old_to_new.try_emplace(other_v);
       NodeDesc& v_copy = v_iter->second;
       if(!success) { // if other_v is already in the translate map, then add a new edge
-        std::cout << "only adding edge "<<u_copy<<" --> "<<v_copy<<"\n";
+        DEBUG5(std::cout << "only adding edge "<<u_copy<<" --> "<<v_copy<<"\n");
         helper.add_an_edge(u_copy, v_copy, std::forward<MoreArgs>(args)...);
       } else { // if other_v is not in the translate map yet, then add it
+        DEBUG5(std::cout << "adding new child to "<<u_copy<<"\n");
         v_copy = helper.create_node_below(u_copy, nde(other_v), std::forward<MoreArgs>(args)...);
       }
     }
@@ -118,8 +118,7 @@ namespace PT {
     void emplace_edge(const NodePair& other_uv, MoreArgs&&... args) { emplace_edge(other_uv.first, other_uv.second, std::forward<MoreArgs>(args)...); }
 
     bool mark_root(const NodeDesc& r) {
-      assert(test(old_to_new, r));
-      return helper.mark_root(old_to_new[r]);
+      return helper.mark_root(old_to_new.at(r));
     }
     // translate the roots of N to use as our roots
     template<PhylogenyType _Phylo>

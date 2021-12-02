@@ -33,7 +33,7 @@ namespace PT{
   template<class Element> struct _StorageClass<hashsetS, Element> { using type = std::unordered_set<Element>; };
   template<class Element> struct _StorageClass<vecsetS, Element>  { using type = std::vector_hash<Element>; };
   template<std::PointerType Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, nullptr>>; };
-  template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, -1>>; };
+  template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, Element(-1)>>; };
   template<class Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional<Element>>; };
   template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
 
@@ -56,6 +56,7 @@ namespace PT{
     NodeDesc() {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
     NodeDesc(const NodeDesc& other): data(other.data) {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
     NodeDesc(NodeDesc&& other): data(std::move(other.data)) {} //std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    
     NodeDesc& operator=(const NodeDesc& other) {
       data = other.data;
       //std::cout << "assigned new ND pointing to "<<data<<"\n";
@@ -89,7 +90,7 @@ namespace PT {
   using NodeDesc = uintptr_t;
 #endif
 
-  inline const NodeDesc NoNode = (void*)nullptr;
+  inline const NodeDesc NoNode = NodeDesc((void*)nullptr);
   inline const std::string NoName = "";
 
   template<class = void> class Edge;
@@ -121,7 +122,9 @@ namespace PT {
   concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<std::mapped_type_of_t<C>, NodeDesc>);
 
   template<class F>
-  concept NodeFunctionType = std::invocable<F, NodeDesc>;
+  concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
+  template<class F>
+  concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
 
   // degrees
   using Degree = uint_fast32_t;
@@ -156,17 +159,22 @@ namespace PT {
   template<class A>
   concept AdjacencyContainerType = requires(A a){
     requires std::ContainerType<A>;
-    requires AdjacencyType<typename std::remove_cvref_t<A>::value_type>;
+    requires AdjacencyType<typename std::value_type_of_t<A>>;
   };
 
   // a node is something providing a bunch of types and whose predecessors and successors can be queried
   template<typename N>
-  concept NodeType = requires(N n) {
-    requires AdjacencyContainerType<typename std::remove_cvref_t<N>::PredContainer>;
-    requires AdjacencyContainerType<typename std::remove_cvref_t<N>::SuccContainer>;
-    { n.parents() } -> std::convertible_to<typename std::remove_cvref_t<N>::PredContainer>;
-    { n.children() } ->std::convertible_to<typename std::remove_cvref_t<N>::SuccContainer>;
+  concept StrictNodeType = requires(N n) {
+    typename N::PredContainer;
+    typename N::SuccContainer;
+    requires AdjacencyContainerType<typename N::PredContainer>;
+    requires AdjacencyContainerType<typename N::SuccContainer>;
+    { n.parents() } -> std::convertible_to<typename N::PredContainer>;
+    { n.children() } ->std::convertible_to<typename N::SuccContainer>;
   };
+
+  template<class N>
+  concept NodeType = StrictNodeType<std::remove_cvref_t<N>>;
   template<class N>
   concept TreeNodeType = (NodeType<N> && (N::is_tree_node));
 
@@ -176,15 +184,16 @@ namespace PT {
     { e.head() } -> std::convertible_to<NodeDesc>;
     { e.tail() } -> std::convertible_to<NodeDesc>;
   };
- 
-  template<class T>
-  concept EdgeContainerType = (std::ContainerType<T> && EdgeType<typename T::value_type>);
 
-  template<NodeType _Node> class NodeAccess;
-
-  // everything derived from NodeAccess is a phylogeny
-  template<class P>
-  concept StrictPhylogenyType = std::is_convertible_v<P, PT::NodeAccess<typename P::Node>>;
+  template<class P> 
+  concept StrictPhylogenyType = requires(NodeDesc u) {
+    typename P::Node;
+    typename P::SuccContainer;
+    typename P::PredContainer;
+    StrictNodeType<typename P::Node>;
+    { P::children(u) } -> std::same_as<typename P::SuccContainer&>;
+    { P::parents(u) } -> std::same_as<typename P::PredContainer&>;
+  };
   template<class P>
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
 
@@ -200,15 +209,11 @@ namespace PT {
   template<PhylogenyType Network>
   using NetEdgeSet = HashSet<typename Network::Edge>;
 
+
+  template<class T>
+  concept EdgeContainerType = (std::ContainerType<T> && EdgeType<typename T::value_type>);
+
   template<class T>
   constexpr bool has_data = std::remove_reference_t<T>::has_data;
-
-
-  // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
-  template<PhylogenyType Net, class Else = uint_fast8_t>
-  using NodeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_node_data, typename std::remove_cvref_t<Net>::NodeData, Else>;
-  // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
-  template<PhylogenyType Net, class Else = uint_fast8_t>
-  using EdgeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_edge_data, typename std::remove_cvref_t<Net>::EdgeData, Else>;
 
 }

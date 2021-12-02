@@ -1,66 +1,39 @@
 
 #pragma once
 
-#include <memory>
-#include "stl_utils.hpp"
 #include "auto_iter.hpp"
 
 namespace std {
-  // an IterFactory stores an auto_iter and can return begin()/end() iterators of the class Iterator,
-  //PARAMETERS:
-  // Iterator = the internal iterator type
-  // BeginEndTransformation = a transformation function transforming the internal iterator to the result of begin() / end()
-  template<class Iterator>
-  class ProtoIterFactory: public iterator_traits<Iterator> {
-  protected:
-    using InternalIter = auto_iter<Iterator>;
-    InternalIter it;
-  public:
-    using iterator = Iterator;
-    using const_iterator = Iterator;
-
-    template<class... Args>
-    ProtoIterFactory(Args&&... args): it(forward<Args>(args)...) {}
-
-    auto begin() const { return it.get_iter(); }
-    auto end() const { return it.get_end(); }
-
-    bool empty() const { return !(it.is_valid()); }
-    // even if we know the size of the container, this may not be equal to the size of the IterFactory (think of using skipping_iterator for example)
-    size_t size() const { return it.size(); }
-
-    // copy the elements in the traversal to a container using the 'append()'-function
-    template<class _Container>
-    _Container& append_to(_Container& c) const { append(c, *this); }
-    template<class _Container = vector<remove_cvref_t<value_type_of_t<Iterator>>>>
-    _Container to_container() const { _Container result; append(result, *this); return result; }
-  };
-
-
   template<class Iterator, class BeginEndTransformation> requires (!is_void_v<BeginEndTransformation>)
-  class IterFactoryWithBeginEnd: public ProtoIterFactory<Iterator> {
-    using Parent = ProtoIterFactory<Iterator>;
-    BeginEndTransformation trans;
+  class IterFactoryWithBeginEnd: public auto_iter<Iterator> {
+    using Parent = auto_iter<Iterator>;
+    BeginEndTransformation trans;    
   public:
+    IterFactoryWithBeginEnd() {}
     // construct from an auto_iter and a BeginEndTransformation
-    template<class T, class Q>
-      requires (is_same_v<remove_cvref_t<T>, typename Parent::InternalIter> && is_same_v<remove_cvref_t<Q>, BeginEndTransformation>)
-    IterFactoryWithBeginEnd(T&& _iter, Q&& _trans): Parent(forward<T>(_iter)), trans(forward<Q>(_trans)) {}
+    template<class T, class... Args> requires is_same_v<decay_t<T>, decay_t<BeginEndTransformation>>
+    IterFactoryWithBeginEnd(T&& _trans, Args&&... args): Parent(forward<Args>(args)...), trans(forward<T>(_trans)) {}
     // construct our internal auto_iter and our transformation from two tuples
     template<class PTuple, class TTuple>
-    IterFactoryWithBeginEnd(const piecewise_construct_t, PTuple&& parent_init, TTuple&& trans_init):
+    IterFactoryWithBeginEnd(const piecewise_construct_t, TTuple&& trans_init, PTuple&& parent_init):
       Parent(make_from_tuple<Parent>(forward<PTuple>(parent_init))),
       trans(make_from_tuple<BeginEndTransformation>(forward<TTuple>(trans_init)))
     {}
+    IterFactoryWithBeginEnd(const IterFactoryWithBeginEnd&) = default;
+    IterFactoryWithBeginEnd(IterFactoryWithBeginEnd&&) = default;
 
-    auto begin() const { return it_trans(Parent::begin()); }
-    auto end() const { return it_trans(Parent::end()); }
+    auto begin() const & { return trans(Parent::begin()); }
+    auto begin() & { return trans(Parent::begin()); }
+    auto begin() && { return trans(static_cast<Parent&&>(*this).begin()); }
+    auto end() const & { return trans(Parent::end()); }
+    auto end() & { return trans(Parent::end()); }
+    auto end() && { return trans(static_cast<Parent&&>(*this).end()); }
   };
 
   template<class Iterator, class BeginEndTransformation = void>
   struct _IterFactory { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation>; };
   template<class Iterator>
-  struct _IterFactory<Iterator, void> { using type = ProtoIterFactory<Iterator>; };
+  struct _IterFactory<Iterator, void> { using type = auto_iter<Iterator>; };
 
   template<class T, class BeginEndTransformation = void>
   using IterFactory = typename _IterFactory<iterator_of_t<T>, BeginEndTransformation>::type;

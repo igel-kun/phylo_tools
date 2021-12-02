@@ -10,8 +10,22 @@ namespace PT {
   // preorder: emit a node before all nodes below it
   // inorder: emit a node between each two consecutive subtrees below it (f.ex. node 0 with children 1, 2, 3 --> 1 0 2 0 3)
   // postorder: emit a node after all nodes below it
+  // add node_traversal or edge_traversal to decide on the traversal type
   // NOTE: these can be combined freely!
-  enum TraversalType {preorder = 1, inorder = 2, postorder = 4, pre_and_in_order = 3, pre_and_post_order = 5, in_and_post_order = 6, all_order = 7};
+  enum TraversalType {
+    preorder = 0x1, inorder = 0x2, postorder = 0x4, pre_and_inorder = 0x3, pre_and_post_order = 0x5, in_and_post_order = 0x6, node_traversal = 0x7,
+    tail_postorder = 0x8, // NOTE: this is only for use with AllEdgesTraversal
+    // edge traversals
+    edge_preorder = 0x10, edge_inorder = 0x20, edge_postorder = 0x40,
+    edge_pre_and_inorder = 0x30, edge_pre_and_post_order = 0x50, edge_in_and_post_order = 0x60,
+    edge_traversal = 0x70,
+    // all edge traversals
+    all_edge_preorder = 0x100, all_edge_inorder = 0x200, all_edge_postorder = 0x400,
+    all_edge_pre_and_inorder = 0x300, all_edge_pre_and_post_order = 0x500, all_edge_in_and_post_order = 0x600,
+    all_edge_traversal = 0x700,
+    // NOTE: all-edge-tail-postorder is a special all-edge-postorder in which the tails occur in node-post-order; it cannot be combined with other traversals
+    all_edge_tail_postorder = 0x800 
+  };
 
   // this template can be used as sentinel to avoid the ugly "tree.template node_traversal<preoder>()" notation
   template<TraversalType> struct order{};
@@ -40,9 +54,16 @@ namespace PT {
            std::IterableType _ItemContainer,
            OptionalNodeSetType _SeenSet,
            class _Forbidden>
-  struct _TraversalTraits: public std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
-                           public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>> {
+  struct _TraversalTraits:
+    public std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
+    public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>>
+  {
     using Parent = std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>;
+    using Parent::Parent;
+
+    // NOTE: this forwarding constructor is necessary to construct _TraversalTraits from optional_tuples
+    template<class... Args>
+    _TraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
     static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
@@ -53,9 +74,6 @@ namespace PT {
     using child_iterator    = std::iterator_of_t<ItemContainer>;
     using iterator_category = std::forward_iterator_tag;
    
-    template<class... Args>
-    _TraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
-
     bool is_forbidden(const NodeDesc& u) const {
       if constexpr (has_forbidden)
         return this->template get<0>()(u);
@@ -83,15 +101,12 @@ namespace PT {
   public:
     using typename Parent::Network;
     using typename Parent::ItemContainer;
-    using value_type      = std::copy_cv_t<Network, NodeDesc>;
+    using value_type      = const NodeDesc;
     using reference       = value_type&;
-    using const_reference = const value_type&;
+    using const_reference = reference;
     using pointer         = std::pointer_from_reference<reference>;
     using const_pointer   = std::pointer_from_reference<const_reference>;
     using ItemContainerRef = ItemContainer&;
-
-    template<class... Args>
-    NodeTraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
@@ -123,9 +138,6 @@ namespace PT {
     using Parent::mark_seen;
     using Parent::is_seen;
 
-    template<class... Args>
-    EdgeTraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
-
     // an empty stack represents the end-iterator
     static constexpr unsigned char min_stacksize = 2;
 
@@ -154,9 +166,6 @@ namespace PT {
     using typename Parent::ItemContainerRef;
     using Parent::mark_seen;
     using Parent::is_seen;
-
-    template<class... Args>
-    AllEdgesTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     // if u has been seen, just return an empty OutEdgeContainer (because all of u's out-edges will be skipped anyways)
     ItemContainerRef get_children(const NodeDesc& u) const { if(Parent::is_seen(u)) return {}; else return node_of<Network>(u).out_edges(); }

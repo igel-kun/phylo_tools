@@ -36,12 +36,12 @@ include_directories ("${PROJECT_SOURCE_DIR}")
 if(${GRAPHITE})
   message("setting graphite flags...")
   #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
-  set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
+  set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -funroll-loops -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
 endif()
 
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-range-loop-construct")
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -fcoroutines -Wno-range-loop-construct")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=3 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=3 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200")
 
 
 # static linking
@@ -68,12 +68,13 @@ endif()
 
 if(${DEBUG})
   MESSAGE("building DEBUG version...")
-#  set(CMAKE_BUILD_TYPE DEBUG)
+  set(CMAKE_BUILD_TYPE DEBUG)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ddebuglevel=${DEBUG}")
   message("CXX flags are: ${CMAKE_CXX_FLAGS_DEBUG}")
 else()
+  MESSAGE("building RELEASE version...")
+  set(CMAKE_BUILD_TYPE RELEASE)
   message("CXX flags are: ${CMAKE_CXX_FLAGS_RELEASE}")
-#  set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
 
@@ -82,6 +83,7 @@ ADD_EXECUTABLE( tc examples/tc.cpp )
 ADD_EXECUTABLE( gen examples/gen.cpp )
 ADD_EXECUTABLE( node_data examples/node_data.cpp )
 ADD_EXECUTABLE( branch_len examples/branch_len.cpp )
+ADD_EXECUTABLE( cuts examples/cuts.cpp )
 ADD_EXECUTABLE( scanwidth examples/scanwidth.cpp )
 
 

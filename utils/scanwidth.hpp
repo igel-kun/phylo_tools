@@ -4,7 +4,7 @@
 #include "set_interface.hpp"
 #include "extension.hpp"
 #include "tree_extension.hpp"
-#include "bridges.hpp"
+#include "cuts.hpp"
 #include "subsets_constraint.hpp"
 #include "biconnected_comps.hpp"
 
@@ -12,34 +12,31 @@ namespace PT{
 
 
   // this DP table entry recomputes the scanwidth each time, but only stores the essentials (the extension)
-  template<class _Network>
-  struct _DPEntryLowMem
-  {
+  template<PhylogenyType Network>
+  struct _DPEntryLowMem {
     Extension ex;
 
-    sw_t get_scanwidth(const _Network& N) const { return ex.scanwidth(N); }
+    sw_t get_scanwidth() const { return ex.template scanwidth<Network>(); }
     // update entry with the next node u
-    void update(const _Network& N, const NodeDesc u) { append(ex, u); }
+    void update(const NodeDesc u) { append(ex, u); }
   };
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
-  template<class _Network>
-  struct _DPEntry: public _DPEntryLowMem<_Network>
-  {
-    using Parent = _DPEntryLowMem<_Network>;
-    using Edge = typename _Network::Edge;
+  template<PhylogenyType Network>
+  struct _DPEntry: public _DPEntryLowMem<Network> {
+    using Parent = _DPEntryLowMem<Network>;
+    using Edge = typename Network::Edge;
     using Parent::ex;
 
     std::DisjointSetForest<Edge> weak_components;
     std::unordered_map<NodeDesc, sw_t> sw_map;
     sw_t scanwidth = 0;
 
-    sw_t get_scanwidth(const _Network& N) const { return scanwidth; }
+    sw_t get_scanwidth() const { return scanwidth; }
     // update entry with the next node u
-    void update(const _Network& N, const NodeDesc u)
-    {
-      Parent::update(N, u);
-      scanwidth = std::max(scanwidth, ex.update_sw(N, u, weak_components, sw_map));
+    void update(const NodeDesc u) {
+      Parent::update(u);
+      scanwidth = std::max(scanwidth, ex.template update_sw<Network>(u, weak_components, sw_map));
     }
   };
 
@@ -111,15 +108,15 @@ namespace PT{
               // add u at the end of it and compute the sw
               DEBUG5(std::cout << "looked up table for " <<lookup_set<<" (u = "<<u<<"): "<< entry.ex<<std::endl);
               // append u along with its direct deg-2 ancestors and update the sw-map
-              entry.update(N, u);
+              entry.update(u);
               // also append all suppressible ancestors of u
               for(NodeDesc v: N.parents(u))
                 while(N.is_suppressible(v)){
-                  entry.update(N, v);
+                  entry.update(v);
                   v = N.parent(v);
                 }
               // compute the new scanwidth
-              const sw_t sw = entry.get_scanwidth(N);
+              const sw_t sw = entry.get_scanwidth();
               if(sw < best_sw){
                 best_sw = sw;
                 best_entry = std::move(entry); // move assignment
@@ -138,10 +135,7 @@ namespace PT{
   template<bool low_memory_version, class _Network, class _Extension>
   void compute_min_sw_extension(const _Network& N, _Extension& ex)
   {
-#warning "TODO: make this work for multiple roots"
-    assert(N.roots().size() == 1);
-    
-    // biconnected components only have node-data linking to the original node; no edge data, no labels
+    // biconnected components only have node-data (linking to the original node), but no edge data and no labels
     using Component = CompatibleNetwork<_Network, NodeDesc, void, void>;
     
     std::cout << "getting biconnected component factory\n";

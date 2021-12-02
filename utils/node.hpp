@@ -21,6 +21,7 @@ namespace PT{
 
     // for debugging purposes, we may want to change the name to something more readable, like a successive numbering
     uintptr_t name() const { return _name; }
+    NodeDesc get_desc() const { return this; }
   };
   inline uintptr_t _ProtoNode::num_names = 0;
   std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) { if(nd != NoNode) return os << ((_ProtoNode*)((uintptr_t)nd))->name(); else return os << "NoNode"; }
@@ -28,6 +29,7 @@ namespace PT{
   struct _ProtoNode {
     // by default, the name of a node is its address
     uintptr_t name() const { return (uintptr_t)this; }
+    NodeDesc get_desc() const { return NodeDesc(this); }
   };
 #endif
   // NOTE: we specifically refrain from polymorphic nodes (one node pointer that may point to a TreeNode or a NetworkNode) because
@@ -68,10 +70,7 @@ namespace PT{
     Adjacency& any_child() { return any_successor(); }
 
     template<class... Args>
-    auto add_successor(Args&&... args) {
-      std::cout << "adding new successor to " << successors() << "\n";
-      return append(successors(), std::forward<Args>(args)...); 
-    }
+    auto add_successor(Args&&... args) { return append(successors(), std::forward<Args>(args)...); }
     template<class... Args>
     auto add_child(Args&&... args) { return add_successor(std::forward<Args>(args)...); }
     size_t remove_successor(const NodeDesc& n) { return std::erase(successors(), n); }
@@ -146,10 +145,10 @@ namespace PT{
     using InEdgeContainer       = InEdgeFactory<PredContainer>;
     using ConstInEdgeContainer  = InEdgeFactory<const PredContainer>;
 
-    OutEdgeContainer out_edges() { return make_outedge_factory<SuccContainer>(this, _successors); }
-    ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(this, _successors); }
-    InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(this, _predecessors); }
-    ConstInEdgeContainer in_edges() const { return make_inedge_factory<const PredContainer>(this, _predecessors); }
+    OutEdgeContainer out_edges() { return make_outedge_factory<SuccContainer>(get_desc(), _successors); }
+    ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(get_desc(), _successors); }
+    InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(get_desc(), _predecessors); }
+    ConstInEdgeContainer in_edges() const { return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
   };
 
   // A Node is a ProtoNode with possible NodeData
@@ -221,14 +220,14 @@ namespace PT{
 
 
   // create a new node and return its description
-  template<NodeType _Node, class... Args>
+  template<StrictNodeType _Node, class... Args>
   NodeDesc make_node(Args&&... args) { return new _Node(std::forward<Args>(args)...); }
 
-  template<NodeType _Node>
+  template<StrictNodeType _Node>
   void delete_node(const NodeDesc& u) { delete reinterpret_cast<_Node*>((uintptr_t)u); }
 
   // create a new node from the data of some other node
-  template<NodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
+  template<StrictNodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
   NodeDesc make_node(const Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>& other) {
     if constexpr (std::is_void_v<_NodeData> || std::is_void_v<typename _Node::NodeData>)
       return new _Node();
@@ -236,7 +235,7 @@ namespace PT{
       return new _Node(other.data());
   }
 
-  template<NodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
+  template<StrictNodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
   NodeDesc make_node(Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>&& other) {
     if constexpr (std::is_void_v<_NodeData> || std::is_void_v<typename _Node::NodeData>)
       return new _Node();
@@ -244,11 +243,11 @@ namespace PT{
       return new _Node(std::move(other.data()));
   }
 
-  template<NodeType Node>
+  template<StrictNodeType Node>
   Node& node_of(const NodeDesc& x) { return *(reinterpret_cast<Node*>((uintptr_t)x)); }
 
   template<PhylogenyType Network>
-  typename Network::Node& node_of(const NodeDesc& x) { return node_of<typename Network::Node>(x); }
+  auto& node_of(const NodeDesc& x) { return node_of<typename Network::Node>(x); }
 
   template<class T>
   auto& children_of(const NodeDesc& x) { return node_of<T>(x).children(); }
@@ -257,7 +256,7 @@ namespace PT{
 
 
 
-  template<NodeType _Node>
+  template<StrictNodeType _Node>
   struct NodeAccess {
     static constexpr auto PredStorage = _Node::PredStorage;
     static constexpr auto SuccStorage = _Node::SuccStorage;
@@ -332,12 +331,14 @@ namespace PT{
     static constexpr bool is_suppressible(const NodeDesc& u) { return node_of(u).is_suppressible(); }
     static constexpr bool is_inner_node(const NodeDesc& u) { return node_of(u).is_inner_node(); }
     static constexpr bool is_isolated(const NodeDesc& u) { return node_of(u).is_isolated(); }
-
+/*
     template<AdjacencyType Adj>
-    static constexpr void replace_parent(const NodeDesc& u, const NodeDesc& old_parent, Adj&& new_parent) { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
+    static constexpr void replace_parent(const NodeDesc& u, const NodeDesc& old_parent, Adj&& new_parent)
+    { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
     template<AdjacencyType Adj>
-    static constexpr void replace_child(const NodeDesc& u, const NodeDesc& old_child, Adj&& new_child) { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
-
+    static constexpr void replace_child(const NodeDesc& u, const NodeDesc& old_child, Adj&& new_child)
+    { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
+*/
     // convenient way of applying some function to all nodes of a subtree
     template<class Func>
     static constexpr void apply_to_subtree(const NodeDesc& u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
@@ -352,6 +353,16 @@ namespace PT{
     static constexpr OutEdgeContainer out_edges(const NodeDesc& u) { return node_of(u).out_edges(); }
     static constexpr InEdgeContainer in_edges(const NodeDesc& u) { return node_of(u).in_edges(); }
   };
+
+  using NoData = uint_fast8_t;
+  // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
+  template<PhylogenyType Net, class Else = NoData>
+  using NodeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_node_data, typename std::remove_cvref_t<Net>::NodeData, Else>;
+  // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
+  template<PhylogenyType Net, class Else = NoData>
+  using EdgeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_edge_data, typename std::remove_cvref_t<Net>::EdgeData, Else>;
+
+
 }
 
 

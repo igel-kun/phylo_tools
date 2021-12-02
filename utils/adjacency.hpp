@@ -36,6 +36,10 @@ namespace PT {
 
     template<class __EdgeData> requires (!std::is_void_v<__EdgeData> && !std::is_same_v<EdgeData,__EdgeData>)
     Adjacency(const Adjacency<__EdgeData>& adj): Parent(adj), data_ptr(new EdgeData(*(adj.data_ptr))) {}
+    // make from an iterator to an adjacency
+    template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
+    Adjacency(const AdjIter& iter): Adjacency(*iter) {}
+
     template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, Adjacency>)
     Adjacency(const NodeDesc _nd, First&& first, Args&&... args): Parent(_nd), data_ptr(new EdgeData(first, std::forward<Args>(args)...)) {}
     Adjacency(const NodeDesc _nd, const Adjacency& adj): Parent(_nd), data_ptr(adj.data_ptr) {}
@@ -54,11 +58,23 @@ namespace PT {
     using Edge = PT::Edge<void>;
     static constexpr bool has_data = false;
 
+    Adjacency(const Adjacency&) = default;
+    Adjacency(Adjacency&&) = default;
+
+    // make from an iterator to an adjacency
+    template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
+    Adjacency(const AdjIter& iter): Adjacency(*iter) {}
+
     template<class... Args>
     Adjacency(const NodeDesc& _nd, Args&&... args): Parent(_nd) {}
-    
+
+    Adjacency& operator=(const Adjacency&) = default;
+    Adjacency& operator=(Adjacency&&) = default;
+
     void free_edge_data() const {}
   };
+
+
 
   template<std::Printable T>
   std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {

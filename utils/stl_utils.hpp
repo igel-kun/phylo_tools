@@ -92,9 +92,10 @@ namespace std{
 
   template<class Ref>
   struct iter_traits_from_reference {
+    static constexpr bool returning_rvalue = !is_reference_v<Ref>;
     using reference = Ref;
     using value_type = remove_reference_t<reference>;
-    using const_reference = conditional_t<is_reference_v<reference>, const value_type&, const value_type>;
+    using const_reference = conditional_t<returning_rvalue, const value_type, const value_type&>;
     using pointer = pointer_from_reference<reference>;
     using const_pointer = pointer_from_reference<const_reference>;
     using difference_type = ptrdiff_t;
@@ -137,11 +138,6 @@ namespace std{
   template<typename T>
   bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
   
-  // why are those things not defined per default by STL???
-  template<IterableType C>
-  iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
-
-
   // ---------------- copy CV or & qualifiers from a type to the next -------------------
   // this is useful as what we're getting from a "const vector<int>" should be "const int", not "int" (the actualy value_type)
 
@@ -170,9 +166,8 @@ namespace std{
   // ----------------------- lookup ----------------------------------
 
   // a map lookup with default
-  template <typename _Map, typename _Key, typename _Ref = typename _Map::value_type>
-  inline _Ref map_lookup(_Map&& m, const _Key& key, _Ref&& default_val)
-  {
+  template <typename _Map, typename _Key, typename _Ref = mapped_type_of_t<_Map>>
+  _Ref map_lookup(_Map&& m, const _Key& key, _Ref&& default_val = _Ref()) {
     const auto iter = m.find(key);
     return (iter == m.end()) ? default_val : iter->second;
   }
@@ -337,7 +332,7 @@ namespace std{
 
   // ----------------------- OUTPUT ---------------------------------------
 
-  template<IterableType C> requires (!is_convertible_v<C,string>)
+  template<IterableType C> requires (!is_convertible_v<C,string_view>)
   inline std::ostream& operator<<(std::ostream& os, const C& objs)
   {
     os << '[';
@@ -401,6 +396,16 @@ namespace std{
   }
 
 
+  // --------------------- STRINGS & STRING_VIEW ------------------------------
+  string operator+(const string& s1, const string_view s2) { return string(s1).append(s2); }
+  string operator+(const string_view s1, const string& s2) { return string(s1).append(s2); }
+  string operator+(const string_view s1, const string_view s2) { return string(s1).append(s2); }
+  string operator+(const char* s1, const string_view s2) { return string(s1).append(s2); }
+  string operator+(const string_view s1, const char* s2) { return string(s1).append(s2); }
+  string operator+(const string_view s1, const char s2) { return string(s1) += s2; }
+  string operator+(const string& s1, const char s2) { return string(s1) += s2; }
+
+
 
   // --------------------- MISC ---------------------------------------------
   template<class T, class Q>
@@ -410,27 +415,47 @@ namespace std{
 
   // cheapo linear interval class - can merge and intersect
   template<class T = uint32_t>
-  struct linear_interval {
-    T lo, hi;
-    linear_interval(const T& init): lo(init), hi(init) {}
-    linear_interval(const T& init_lo, const T& init_hi): lo(init_lo), hi(init_hi) {}
+  struct linear_interval: public std::array<T, 2> {
+    using Parent = std::array<T,2>;
+    using Parent::at;
+
+    T& low() { return (*this)[0]; }
+    T& high() { return (*this)[1]; }
+    const T& low() const { return (*this)[0]; }
+    const T& high() const { return (*this)[1]; }
+
+    linear_interval(const T& init_lo, const T& init_hi): Parent{init_lo, init_hi} {}
+    linear_interval(const T& init): linear_interval(init, init) {}
     
     void merge(const linear_interval& other) {
-      lo = min(lo, other.lo);
-      hi = max(hi, other.hi);
+      update_lo(other.at(0));
+      update_hi(other.at(1));
     }
     void intersect(const linear_interval& other) {
-      lo = max(lo, other.lo);
-      hi = min(hi, other.hi);
+      at(0) = max(at(0), other.at(0));
+      at(1) = min(at(1), other.at(1));
     }
-    void update_lo(const T& low) { lo = min(lo, low); }
-    void update_hi(const T& high) { hi = max(hi, high); }
+    void update_lo(const T& lo) { at(0) = min(at(0), lo); }
+    void update_hi(const T& hi) { at(1) = max(at(1), hi); }
     void update(const T& x) { update_lo(x); update_hi(x); }
 
-    bool contained_in(const linear_interval& other) const { return (lo >= other.lo) && (hi <= other.high); }
+    bool contains(const linear_interval& other) const { return (at(0) <= other.at(0)) && (at(1) >= other.at(1)); }
+    bool contains(const T& val) const { return (at(0) <= val) && (at(1) >= val); }
+    bool overlaps(const linear_interval& other) const { return (at(0) >= other.at(0)) ? (at(0) <= other.at(1)) : (at(1) >= other.at(0)); }
+    bool contained_in(const linear_interval& other) const { return other.contains(*this); }
+    bool left_of(const T& val) { return at(1) <= val; }
+    bool strictly_left_of(const T& val) { return at(1) < val; }
+    bool right_of(const T& val) { return val <= at(0); }
+    bool strictly_right_of(const T& val) { return val < at(0); }
 
-    friend ostream& operator<<(ostream& os, const linear_interval& i) { return os << '[' << i.lo << ',' << i.hi << ']'; }
+    friend ostream& operator<<(ostream& os, const linear_interval& i) { return os << '[' << i.at(0) << ',' << i.at(1) << ']'; }
   };
+  // an interval is "bigger than" a value if it lies entirely on the right of that value
+  template<class T = uint32_t>
+  bool operator<(const T& value, const linear_interval<T>& interval) { return interval.strictly_right_of(value); }
+  template<class T = uint32_t>
+  bool operator>(const T& value, const linear_interval<T>& interval) { return interval.strictly_left_of(value); }
+
 
   // an operator that appends anything to a given container
   template<ContainerType C>

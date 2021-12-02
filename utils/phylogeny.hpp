@@ -16,11 +16,11 @@
 #include "edge_emplacement.hpp"
 
 namespace PT {
-  template<PhylogenyType Phylo, bool move_data = false>
+  template<StrictPhylogenyType Phylo, bool move_data = false>
   struct _CopyOrMoveDataFunc {
     using NodeData = NodeDataOr<Phylo>;
-    using NodeDataReturn = std::conditional_t<move_data && std::remove_reference_t<Phylo>::has_node_data, NodeData&&, NodeData>;
     using EdgeData = EdgeDataOr<Phylo>;
+    using NodeDataReturn = std::conditional_t<move_data && std::remove_reference_t<Phylo>::has_node_data, NodeData&&, NodeData>;
     using EdgeDataReturn = std::conditional_t<move_data && std::remove_reference_t<Phylo>::has_edge_data, EdgeData&&, EdgeData>;
     using Node = typename std::remove_reference_t<Phylo>::Node;
     using Edge = typename std::remove_reference_t<Phylo>::Edge;
@@ -29,7 +29,7 @@ namespace PT {
     EdgeDataReturn operator()(const Edge& uv) const { if constexpr (Edge::has_data) return uv.data(); else return EdgeData(); }
   };
   template<PhylogenyType Phylo>
-  using CopyOrMoveDataFunc = _CopyOrMoveDataFunc<Phylo, std::is_rvalue_reference_v<Phylo&&>>;
+  using CopyOrMoveDataFunc = _CopyOrMoveDataFunc<std::remove_reference_t<Phylo>, std::is_rvalue_reference_v<Phylo&&>>;
 
 
 	// ================ ProtoPhylogeny ======================
@@ -55,10 +55,12 @@ namespace PT {
 		size_t _num_nodes = 0u;
 		size_t _num_edges = 0u;
 
-		void count_node(const int nr = 1) { _num_nodes += nr; std::cout << "++ counted "<<_num_nodes<<" nodes\n"; }
-		void count_edge(const int nr = 1) { _num_edges += nr; std::cout << "++ counted "<<_num_edges<<" edges\n"; }
 	public:
     static constexpr bool is_declared_tree = false;
+
+		void count_node(const int nr = 1) { _num_nodes += nr; } 
+		void count_edge(const int nr = 1) { _num_edges += nr; }
+
     bool is_forest() const { return _num_nodes == _num_edges + _roots.size(); }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return _num_edges; }
@@ -84,10 +86,12 @@ namespace PT {
     RootContainer _roots;
 		size_t _num_nodes = 0;
 
-		void count_node(const int nr = 1) { _num_nodes += nr; }
-		void count_edge(const int nr = 1) const {}
-	public:
+  public:
     static constexpr bool is_declared_tree = true;
+
+		void count_node(const int nr = 1) { _num_nodes += nr; }
+		static constexpr void count_edge(const int nr = 1) {}
+
     static constexpr bool is_forest() { return true; }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - 1; }
@@ -116,8 +120,6 @@ namespace PT {
            template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
   class Phylogeny: public ProtoPhylogeny<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node> {
     using Parent = ProtoPhylogeny<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node>;
-		using Parent::count_node;
-		using Parent::count_edge;
   public:
     using typename Parent::Node;
     using typename Parent::RootContainer;
@@ -146,16 +148,24 @@ namespace PT {
     using Parent::_roots;
     using Parent::is_reti;
     using Parent::is_leaf;
-    
+		using Parent::count_node;
+		using Parent::count_edge;
+   
     using IgnoreNodeDataFunc = std::IgnoreFunction<NodeDataOr<Phylogeny>>;
     using IgnoreEdgeDataFunc = std::IgnoreFunction<EdgeDataOr<Phylogeny>>;
 
     template<PhylogenyType OtherPhylo>
-    using CopyOrMoveNodeDataFunc = std::conditional_t<OtherPhylo::has_node_data, CopyOrMoveDataFunc<OtherPhylo>, IgnoreNodeDataFunc>;
+    using CopyOrMoveNodeDataFunc = std::conditional_t<std::remove_reference_t<OtherPhylo>::has_node_data, CopyOrMoveDataFunc<OtherPhylo>, IgnoreNodeDataFunc>;
     template<PhylogenyType OtherPhylo>
-    using CopyOrMoveEdgeDataFunc = std::conditional_t<OtherPhylo::has_edge_data, CopyOrMoveDataFunc<OtherPhylo>, IgnoreNodeDataFunc>;
+    using CopyOrMoveEdgeDataFunc = std::conditional_t<std::remove_reference_t<OtherPhylo>::has_edge_data, CopyOrMoveDataFunc<OtherPhylo>, IgnoreNodeDataFunc>;
 
-  protected:
+    // ================ modification ======================
+    // create a node in the void
+    // NOTE: this is static and, as such, does not change the network,
+    //       indeed this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent())
+    template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
+      return (NodeDesc)(new Node(std::forward<Args>(args)...));
+    }
 
 #warning TODO: clean up when the phylogeny is destroyed! In particular delete nodes!
     void delete_node(const NodeDesc x) {
@@ -173,7 +183,6 @@ namespace PT {
         const bool res = node_of(v).add_parent(u, *iter).second;
         assert(res);
 				count_edge();
-        std::cout << "node count: " << _num_nodes << " edge count: " << num_edges() << '\n';
         return {&(*iter), true};
       } else return {nullptr, false};
     }
@@ -199,22 +208,12 @@ namespace PT {
     void delete_edge(const NodeDesc u, Node& v_node) { delete_edge(node_of(u), v_node); }
     void delete_edge(const NodeDesc u, const NodeDesc v) { delete_edge(node_of(u), node_of(v)); }
 
-  public:
-
-    // ================ modification ======================
-    // create a node in the void
-    // NOTE: this is static and, as such, does not change the network,
-    //       indeed this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent())
-    template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
-      return (NodeDesc)(new Node(std::forward<Args>(args)...));
-    }
-
     // new nodes can only be added as 1. new roots, 2. children or 3. parents of existing nodes
     // NOTE: the edge data can either be passed using the Adjacency v or constructed from the parameter args
     template<AdjacencyType Adj, class... Args>
     std::pair<Adjacency*, bool> add_child(const NodeDesc u, Adj&& v, Args&&... args) {
       assert(u != (NodeDesc)v);
-      std::cout << "adding edge from " << u << " to " << v <<"\n";
+      DEBUG5(std::cout << "adding edge from " << u << " to " << v <<"\n");
       const auto result = add_edge(u, std::forward<Adj>(v), std::forward<Args>(args)...);
       count_node(result.second);
       return result;
@@ -235,17 +234,16 @@ namespace PT {
     bool mark_root(const NodeDesc& u) {
       assert(in_degree(u) == 0);
       const bool result = append(_roots, u).second;
-      if(result) count_node();
       return result;
     };
 
     template<class... Args>
     NodeDesc add_root(Args&&... args) {
-      std::cout << "creating root\n";
       const NodeDesc new_root = create_node(std::forward<Args>(args)...);
-      std::cout << "adding "<<new_root<<" to roots\n";
+      DEBUG5(std::cout << "adding "<<new_root<<" to roots\n");
       const bool result = mark_root(new_root);
       assert(result);
+      count_node();
       return new_root;
     }
 
@@ -387,46 +385,49 @@ namespace PT {
       // step 3: free storage
       delete_node(&v_node);
     }  
-    void remove_leaf(const NodeDesc v) { remove_leaf(node_of(v)); }
+    void remove_leaf(const NodeDesc& v) { remove_leaf(node_of(v)); }
+
+    template<class LastRites = std::IgnoreFunction<void>>
+    void remove_leaf(const auto& v, const LastRites& goodbye = LastRites()) {
+      goodbye(v);
+      remove_leaf(v);
+    }
 
     // remove the subtree rooted at u
     // NOTE: LastRites can be used to say goodbye to your node(s) (remove it from other containers or whatever)
-    template<class LastRites = std::IgnoreFunction<void>>
-    void remove_subtree(const NodeDesc u, const LastRites goodbye = LastRites()){
+    template<class... Args>
+    void remove_subtree(const NodeDesc u, Args&&... args) {
       const auto& C = children(u);
-      while(!C.empty()) remove_subtree(back(C), goodbye);
-      goodbye(u);
-      remove_leaf(u);
+      while(!C.empty()) remove_subtree(back(C), std::forward<Args>(args)...);
+      remove_leaf(u, std::forward<Args>(args)...);
     }
     
-    template<class LastRites = std::IgnoreFunction<void>>
-    void clear(const LastRites goodbye = LastRites()) {
-      for(const NodeDesc r: _roots) remove_subtree(r, goodbye);
+    template<class... Args>
+    void clear(Args&&... args) {
+      for(const NodeDesc r: _roots) remove_subtree(r, std::forward<Args>(args)...);
       _roots.clear();
     }
 
-    template<class LastRites = std::IgnoreFunction<void>>
-    void remove_subtree_except(const NodeDesc u, const NodeDesc except, const LastRites goodbye = LastRites()) {
+    template<class... Args>
+    void remove_subtree_except(const NodeDesc u, const NodeDesc except, Args&&... args) {
       if(u != except) {
         const auto& C = children(u);
         auto C_iter = std::rbegin(C); // we will likely see vectors as child-containers and those are better treated from their back
         while(C_iter != std::rend(C)){
           const auto next_iter = std::next(C_iter);
-          remove_subtree_except(*C_iter, except, goodbye);
+          remove_subtree_except(*C_iter, except, std::forward<Args>(args)...);
           C_iter = std::move(next_iter);
         }
-        if(C.empty()) {
-          goodbye(u);
-          remove_leaf(u);
-        }
-      } else remove_subtree_except_root(u, goodbye);
+        if(C.empty())
+          remove_leaf(u, std::forward<Args>(args)...);
+      } else remove_subtree_except_root(u, std::forward<Args>(args)...);
     }
 
     // remove the subtree rooted at u, but leave u be
-    template<class LastRites = std::IgnoreFunction<void>>
-    void remove_subtree_except_root(const NodeDesc u, const LastRites goodbye = LastRites()) {
+    template<class... Args>
+    void remove_subtree_except_root(const NodeDesc u, Args&&... args) {
       const auto& C = children(u);
-      while(!C.empty()) remove_subtree(back(C), goodbye);
+      while(!C.empty()) remove_subtree(back(C), std::forward<Args>(args)...);
     }
     
     // =============== variable query ======================
@@ -438,9 +439,7 @@ namespace PT {
 
     // list all nodes below u in order _o (default: postorder)
     template<TraversalType o = postorder>
-    static auto nodes_below(const NodeDesc& u, const order<o> _o = order<o>()) {
-      return NodeTraversal<o, Phylogeny>(u);
-    }
+    static auto nodes_below(const NodeDesc& u, const order<o> _o = order<o>()) { return NodeTraversal<o, Phylogeny>(u); }
     // we can represent nodes that are forbidden to visit by passing either a container of forbidden nodes or a node-predicate
     template<class Forbidden, TraversalType o = postorder>
     static auto nodes_below(const NodeDesc& u, Forbidden&& forbidden, const order<o> _o = order<o>()) {
@@ -510,21 +509,15 @@ namespace PT {
     template<class... Args> auto edges_preorder(Args&&... args) const  { return edges<preorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_inorder(Args&&... args) const   { return edges<inorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_postorder(Args&&... args) const { return edges<postorder>(std::forward<Args>(args)...); }
+    template<class... Args> auto edges_tail_postorder(Args&&... args) const { return edges<tail_postorder>(std::forward<Args>(args)...); }
 
 
-    template<TraversalType o = postorder, class... Args>
+    template<class... Args>
     static auto leaves_below(Args&&... args) {
-      return std::make_filtered_factory(nodes_below(std::forward<Args>(args)..., o), [](const NodeDesc& n){return node_of(n).is_leaf();});
+      return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), [](const NodeDesc& n){return node_of(n).is_leaf();});
     }
-    template<class... Args> static auto leaves_below_preorder(Args&&... args)  { return leaves_below(std::forward<Args>(args)..., pre_order); }
-    template<class... Args> static auto leaves_below_inorder(Args&&... args)   { return leaves_below(std::forward<Args>(args)..., in_order); }
-    template<class... Args> static auto leaves_below_postorder(Args&&... args) { return leaves_below(std::forward<Args>(args)..., post_order); }
-
-    template<TraversalType o = postorder, class... Args>
-    auto leaves(Args&&... args) const { return leaves_below<RootContainer, o>(_roots, std::forward<Args>(args)...); }
-    template<class... Args> auto leaves_preorder(Args&&... args) const  { return leaves<preorder>(std::forward<Args>(args)...); }
-    template<class... Args> auto leaves_inorder(Args&&... args) const   { return leaves<inorder>(std::forward<Args>(args)...); }
-    template<class... Args> auto leaves_postorder(Args&&... args) const { return leaves<postorder>(std::forward<Args>(args)...); }
+    template<class... Args>
+    auto leaves(Args&&... args) const { return leaves_below<const RootContainer&>(_roots, std::forward<Args>(args)...); }
 
 
 
@@ -599,7 +592,7 @@ namespace PT {
     template<bool track_roots,
              std::IterableType Edges,
              NodeTranslationType OldToNewTranslation = NodeTranslation,
-             class NodeDataExtract = IgnoreNodeDataFunc, // takes a Node (possible rvalue-ref) and returns (steals) its data
+             NodeFunctionType NodeDataExtract = IgnoreNodeDataFunc, // takes a Node (possible rvalue-ref) and returns (steals) its data
              class EdgeDataExtract = IgnoreEdgeDataFunc> // takes an Edge (possible rvalue-ref) and returns (steals) its data
     void build_from_edges(Edges&& edges,
                          OldToNewTranslation&& old_to_new = OldToNewTranslation(),
@@ -661,7 +654,7 @@ namespace PT {
     // initialize tree from any std::IterableType, for example, std::vector<PT::Edge<>>
     template<std::IterableType Edges,
              NodeTranslationType OldToNewTranslation = NodeTranslation,
-             class NodeDataExtract = IgnoreNodeDataFunc, // takes a Node (possible rvalue-ref) and returns (steals) its data
+             NodeFunctionType NodeDataExtract = IgnoreNodeDataFunc, // takes a Node (possible rvalue-ref) and returns (steals) its data
              class EdgeDataExtract = IgnoreEdgeDataFunc> // takes an Edge (possible rvalue-ref) and returns (steals) its data
     Phylogeny(Edges&& edges,
              NodeDataExtract&& nde = NodeDataExtract(),
@@ -681,11 +674,12 @@ namespace PT {
     // 2. "move"                - simply moves the root from the given (sub-)phylogeny into *this as new root
     // NOTE: 2. requires that the given Phylogeny has the same type as us
 
+
     // "copy" construction with root(s)
     template<PhylogenyType _Phylo,
              NodeIterableType RContainer,
              NodeTranslationType OldToNewTranslation = NodeTranslation,
-             class NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
+             NodeFunctionType NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
              class EdgeDataExtract = CopyOrMoveEdgeDataFunc<_Phylo>>
     Phylogeny(_Phylo&& N,
               const RContainer& in_roots,
@@ -712,7 +706,7 @@ namespace PT {
     // "copy" construction with single root
     template<PhylogenyType _Phylo,
              NodeTranslationType OldToNewTranslation = NodeTranslation,
-             class NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
+             NodeFunctionType NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
              class EdgeDataExtract = CopyOrMoveEdgeDataFunc<_Phylo>>
     Phylogeny(_Phylo&& N,
               const NodeDesc& in_root,
@@ -731,7 +725,7 @@ namespace PT {
     // "copy" construction without root (using all roots of in_tree)
     template<PhylogenyType _Phylo,
              NodeTranslationType OldToNewTranslation = NodeTranslation,
-             class NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
+             NodeFunctionType NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
              class EdgeDataExtract = CopyOrMoveEdgeDataFunc<_Phylo>>
     Phylogeny(_Phylo&& N,
               NodeDataExtract&& nde = NodeDataExtract(),
@@ -751,44 +745,30 @@ namespace PT {
     // NOTE: This will go horribly wrong if the sub-network below in_root has incoming arcs from outside the subnetwork!
     //       It is the user's responsibility to make sure this is not the case.
 #warning TODO: check if this is still correct
-    template<PhylogenyType _Phylo, NodeIterableType RContainer>
+    template<StrictPhylogenyType _Phylo, NodeIterableType RContainer>
     Phylogeny(_Phylo&& in_tree, const RContainer& in_roots, const policy_move_t = policy_move_t()) {
       for(const NodeDesc& r: in_roots)
-        place_below_by_move(std::forward<_Phylo>(in_tree), r, NoNode);
+        place_below_by_move(std::move(in_tree), r, NoNode);
     }
     // "move" construction with single root
-    template<PhylogenyType _Phylo, NodeIterableType RContainer>
+    template<StrictPhylogenyType _Phylo, NodeIterableType RContainer>
     Phylogeny(_Phylo&& in_tree, const NodeDesc in_root, const policy_move_t = policy_move_t()):
-      Phylogeny(std::forward<_Phylo>(in_tree), std::array<NodeDesc,1>{in_root}, policy_move_t()) {}
+      Phylogeny(std::move(in_tree), std::array<NodeDesc,1>{in_root}, policy_move_t()) {}
     // "move" construction without root
     Phylogeny(Phylogeny&& in_tree, const policy_move_t):
       Phylogeny(std::move(in_tree), in_tree.roots(), policy_move_t()) {}
 
 
     // if we just want to copy a phylogeny, use the "copy" version
-    Phylogeny(const Phylogeny& in_tree): Phylogeny(in_tree, in_tree.roots(), policy_copy_t()) {}
-    // if we just want to move a phylogeny, use the "move" version
-    Phylogeny(Phylogeny&& in_tree): Phylogeny(std::move(in_tree), in_tree.roots(), policy_move_t()) {}
+    Phylogeny(const Phylogeny& in_tree):
+      Phylogeny(in_tree, in_tree.roots())
+    {}
+    // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
+    Phylogeny(Phylogeny&& in_tree): Parent(static_cast<Parent&&>(in_tree)) {}
 
-#warning TODO: make sure get_induced_edges handles rvalue_references for supertrees
-    // initialize a tree as the smallest subtree spanning a list L of nodes in a given supertree
-    //NOTE: we'll need to know for each node u its distance to the root, and we'd also like L to be in some order (any of pre-/in-/post- will do)
-    //      so if the caller doesn't provide them, we'll compute them from the given supertree
-    //NOTE: if the infos are provided, then this runs in O(|L| * LCA-query in supertree), otherwise, an O(|supertree|) DFS is prepended
-    //NOTE: when passed as a const container, the nodes are assumed to be in order; ATTENTION: this is not verified!
-    //NOTE: we force the given _Phylogeny to be declared a tree (tree_tag)
-    template<PhylogenyType _Phylo, NodeIterableType LeafList, NodeMapType NodeInfoMap = InducedSubtreeInfoMap>
-    Phylogeny(_Phylo&& supertree, LeafList&& _leaves, std::shared_ptr<NodeInfoMap> _node_infos = std::make_shared<NodeInfoMap>()):
-      Phylogeny(get_induced_edges(std::forward<_Phylo>(supertree), std::forward<LeafList>(_leaves), std::move(_node_infos)))
-    {}
-    // the caller can be explicit about the data transfer policy (policy_move, policy_copy, policy_inplace)
-    template<PhylogenyType _Phylo, DataPolicyTag Tag, NodeIterableType LeafList, NodeMapType NodeInfoMap = InducedSubtreeInfoMap>
-    Phylogeny(const Tag,
-          _Phylo&& supertree,
-          LeafList&& _leaves,
-          std::shared_ptr<NodeInfoMap> _node_infos = std::make_shared<NodeInfoMap>()):
-      Parent(get_induced_edges(Tag(), std::forward<_Phylo>(supertree), std::forward<LeafList>(_leaves), std::move(_node_infos)))
-    {}
+
+    Phylogeny& operator=(const Phylogeny& other) = default;
+    Phylogeny& operator=(Phylogeny&& other) = default;
 
     // =================== i/o ======================
 

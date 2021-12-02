@@ -7,12 +7,15 @@ namespace std {
   // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (much like nullptr)
   template<class T, T _invalid>
   class optional_by_invalid {
-    using value_type = T;
     T element = _invalid;
+  public:
+    using value_type = T;
+
+    optional_by_invalid() = default;
 
     // in-place construct the element
     template<class... Args>
-    explicit optional_by_invalid(const std::in_place_t, Args&&... args): element(std::forward<Args>(args)...) {}
+    optional_by_invalid(const std::in_place_t, Args&&... args): element(std::forward<Args>(args)...) {}
     template<class U, U I>
     optional_by_invalid(const optional_by_invalid<U, I>& other): element(other.element) {}
     template<class U, U I>
@@ -25,7 +28,7 @@ namespace std {
     // re-construct the element
     template<class... Args>
     constexpr T& emplace(Args&&... args) {
-      T const * addr = &element;
+      T* const addr = &element;
       addr->~T();
       new(addr) T(std::forward<Args>(args)...);
       return *addr;
@@ -35,6 +38,17 @@ namespace std {
     const T& operator*() const { return element; }
     T& value() { return element; }
     const T& value() const { return element; }
+
+    bool operator==(const optional_by_invalid& other) const { return element == other.element; }
+    bool operator!=(const optional_by_invalid& other) const { return element != other.element; }
+    bool operator==(const T& other) const { return element == other; }
+    bool operator!=(const T& other) const { return element != other; }
+
+    optional_by_invalid& operator=(const optional_by_invalid& other) = default;
+    optional_by_invalid& operator=(optional_by_invalid&& other) = default;
+    optional_by_invalid& operator=(const T& other) { element = other; return *this; }
+    optional_by_invalid& operator=(T&& other) { element = move(other); return *this; }
+
 
     template<class U>
     T& value_or(U&& default_value) { return has_value() ? element : static_cast<T>(std::forward<U>(default_value)); }

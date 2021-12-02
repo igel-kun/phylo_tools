@@ -28,7 +28,7 @@ namespace std {
   concept VectorType = is_convertible_v<remove_cvref_t<T>, vector<typename remove_reference_t<T>::value_type, typename remove_reference_t<T>::allocator_type>>;
 
   template <class T> 
-  concept IterableType = requires(remove_cvref_t<T> a) {
+  concept IterableType = requires(T a) {
     typename _iterator_of_t<T>;
     typename _iterator_of_t<const T>;
     // NOTE: it seems forward_iterator concept cannot be satisfied by the proxy iterator of raw_vector_map :/

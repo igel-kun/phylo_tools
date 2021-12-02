@@ -10,8 +10,7 @@ using namespace PT;
 
 OptionMap options;
 
-void parse_options(const int argc, const char** argv)
-{
+void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
   description["-n"] = {1,1};
@@ -28,14 +27,13 @@ void parse_options(const int argc, const char** argv)
       \t-n\tnumber of vertices in the network (this is ignored if -r and -l are present)\n\
       \t-a\tappend to file1 instead of replacing its contents\n\
       NOTE: if, of -n, -r, and -l, less than 2 are present, the network is assumed to have ~10% reticulations\n\
-      \tn = 99 is assumed if none are present\n");
+      NOTE: n = 99 is assumed if none are present\n");
 
   parse_options(argc, argv, description, help_message, options);
 }
 
 
-void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves)
-{
+void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
   //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
   const int total_input = test(options, "-n") + test(options, "-r") + test(options, "-l");
   try{
@@ -83,8 +81,7 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves)
   } catch(const std::logic_error& err){ std::cerr << "cannot generate such a network: "<<err.what()<<std::endl; }
 }
 
-int main(const int argc, const char** argv)
-{
+int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
   long num_nodes, num_retis, num_leaves;

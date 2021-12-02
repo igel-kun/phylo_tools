@@ -73,11 +73,9 @@ unsigned parse_method()
   } 
 }
 
-MyNetwork read_network(std::ifstream& in) {
-  std::cout << "reading network..."<<std::endl;
+MyNetwork read_network(std::ifstream&& in) {
   try{
-    MyNetwork N(parse_newick<MyNetwork>(in));
-    return N;
+    return parse_newick<MyNetwork>(in);
   } catch(const std::exception& err){
     std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
@@ -88,21 +86,21 @@ MyNetwork read_network(std::ifstream& in) {
 
 void print_extension(const MyNetwork& N, const Extension& ex)
 {
-  using GammaType = CompatibleTree<const MyNetwork>;
+  // for educational purposes, each Node of the extension tree will store the description of the corresponding node in the network
+  using GammaType = CompatibleTree<const MyNetwork, const NodeDesc>;
 
   std::cout << "extension: " << ex << std::endl;
 
   // compute scanwidth of ex
-  const auto sw = ex.sw_map(N);
+  const auto sw = ex.sw_map<MyNetwork>();
 
   std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(seconds(sw)))<<")"<<std::endl;
 
   std::cout << "constructing extension tree\n";
-  GammaType Gamma;
-  ext_to_tree(N, ex, Gamma);
+  GammaType Gamma(ExtToTree<GammaType>::ext_to_tree(N, ex, [](const NodeDesc& u){ return u; }));
   std::cout << "extension tree:\n" << Gamma << std::endl;
   
-  const auto gamma_sw = ext_tree_sw_map(Gamma, N);
+  const auto gamma_sw = ext_tree_sw_map(Gamma, [&](const NodeDesc& tree_u){ return N.degrees(Gamma.node_of(tree_u).data()); } );
   std::cout << "sw map: " << gamma_sw << std::endl;
 
   std::cout << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
@@ -110,42 +108,40 @@ void print_extension(const MyNetwork& N, const Extension& ex)
 
 int main(const int argc, const char** argv)
 {
+  std::cout << "parsing options...\n";
   parse_options(argc, argv);
 
-  std::ifstream in(options[""][0]);
-
-  std::cout << "reading network..."<<std::endl;
-  MyNetwork N(read_network(in));
+  std::cout << "reading network...\n";
+  MyNetwork N(read_network(std::ifstream(options[""][0])));
 
   if(test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
-//  if(contains(options, "-pp") sw_preprocess(N);
+//  if(test(options, "-pp") sw_preprocess(N);
 
   std::cout << "\n ==== computing silly post-order extension ===\n";
   
-  //const Extension ex(N.dfs().postorder());
   Extension ex;
-  auto PO = N.dfs().postorder();
-  auto it = PO.begin();
-  while(it != PO.end()) { ex.push_back(*it); ++it; }
-
+  ex.reserve(N.num_nodes());
+  for(const auto& x: N.nodes_postorder()) ex.push_back(x);
   std::cout << ex << "\n";
-  
-  std::cout << "\n ==== computing optimal extension ===\n";
 
+
+  std::cout << "\n ==== computing optimal extension ===\n";
   Extension ex_opt;
-  if(test(options, "-lm"))
+  if(test(options, "-lm")){
+    std::cout << "using low-memory version...\n";
     compute_min_sw_extension<true>(N, ex_opt);
-  else
+  } else {
+    std::cout << "using faster, more memory hungry version...\n";
     compute_min_sw_extension<false>(N, ex_opt);
+  }
   
-  std::cout << "silly extension:\n";
+  std::cout << "\n\nsilly extension:\n";
   print_extension(N, ex);
 
-  std::cout << "optimal extension:\n";
+  std::cout << "\n\noptimal extension:\n";
   print_extension(N, ex_opt);
-
 
   std::cout << "The End\n";
 //  if(contains(options, "-e")) sw_print_extension();

@@ -86,10 +86,16 @@ namespace std {
   template<class Iter, class T>
   using transforming_iterator = typename __transforming_iterator<Iter, T>::type;
 
+
   // factories
-  template<class Iter,
-           class T,
-           class BeginEndTransformation = void>
+  template<class Iter, class T, class BeginEndTransformation = void>
   using TransformingIterFactory = IterFactory<transforming_iterator<Iter, T>, BeginEndTransformation>;
+
+  template<IterableType Container, class Trans>
+  auto get_transforming(Container&& c, Trans&& trans) {
+    return TransformingIterFactory<iterator_of_t<Container>, Trans, void>(std::forward<Container>(c), std::forward<Trans>(trans));
+  }
+
+
 
 }

@@ -57,7 +57,7 @@
 
 
 #ifndef NDEBUG
-#include <string_view>
+#include <string>
 namespace std{
   // thanks @ https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c/56766138#56766138
   template <typename T>

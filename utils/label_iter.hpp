@@ -57,33 +57,5 @@ namespace PT {
                                                   const PropertyGetter,
                                                   std::BeginEndIters<NodeContainer, false,LabeledNodeIterFor<PropertyGetter>::template type>>;
 
-  /*
-  template<class NodeContainer, class PropertyGetter>
-  class LabeledNodeIterFactory
-  {
-    std::shared_ptr<NodeContainer> c;
-    PropertyGetter getter;
-  public:
-    using iterator = LabeledNodeIter<std::iterator_of_t<NodeContainer>, PropertyGetter>;
-
-    // if constructed via a reference, do not destruct the object, if constructed via a pointer (à la "new _AdjContainer()"), do destruct after use
-    template<class... Args>
-    LabeledNodeIterFactory(NodeContainer& _c, Args&&... args): c(&_c, std::NoDeleter()), getter(std::forward<Args>(args)...) {}
-    template<class... Args>
-    LabeledNodeIterFactory(std::shared_ptr<NodeContainer> _c, Args&&... args): c(_c), getter(std::forward<Args>(args)...) {}
-    template<class... Args>
-    LabeledNodeIterFactory(NodeContainer&& _c, Args&&... args):
-      c(std::make_shared<NodeContainer>(std::forward<NodeContainer>(_c))), getter(std::forward<Args>(args)...) {}
-
-    iterator begin() const { return {c->begin(), getter}; }
-    iterator end() const { return {c->end(), getter}; }
-    size_t size() const { return c->size(); }
-    size_t empty() const { return c->empty(); }
-  };
-
-  template<class NodeContainer, class PropertyGetter>
-  LabeledNodeIterFactory<NodeContainer, PropertyGetter> labeled_nodes(NodeContainer* const c, const PropertyGetter& pg, const bool del_on_exit = false)
-    { return {c, pg, del_on_exit}; }
-  */  
 }// namespace
 

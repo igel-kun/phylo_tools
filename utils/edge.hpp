@@ -6,8 +6,7 @@ namespace PT{
 
   // an edge is a node (head) with another node (->tail)
   template<class EdgeData = void>
-  struct ProtoEdge: public std::pair<NodeDesc, PT::Adjacency<EdgeData>>
-  {
+  struct ProtoEdge: public std::pair<NodeDesc, PT::Adjacency<EdgeData>> {
     using Data = EdgeData;
     using Adjacency = PT::Adjacency<EdgeData>;
     using Parent = std::pair<NodeDesc, Adjacency>;
@@ -25,8 +24,7 @@ namespace PT{
   };
 
   template<class EdgeData>
-  struct Edge: public ProtoEdge<EdgeData>
-  {
+  struct Edge: public ProtoEdge<EdgeData> {
     using Parent = ProtoEdge<EdgeData>;
     using Parent::Parent;
     EdgeData& data() const { return this->second.data(); }
@@ -45,6 +43,9 @@ namespace PT{
   template<class EdgeData = void>
   using EdgeSet = std::unordered_set<Edge<EdgeData>>;
 
+  template<class F, class Edge>
+  concept EdgeFunctionType = std::invocable<F, Edge>;
+
 }
 
 namespace std{
@@ -55,13 +56,4 @@ namespace std{
   };
 }
 
-/*
-  struct hash<PT::Edge<PS, SS, ND, ED> >{
-    size_t operator()(const PT::Edge<PS, SS, ND, ED>& e) const {
-      const hash<PT::NodePair<PS,SS,ND,ED> hasher;
-      return hasher(e);
-    }
-  };
-}
-*/
 

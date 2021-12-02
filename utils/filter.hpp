@@ -17,8 +17,7 @@ namespace std{
   // NOTE: _filtered_iterators cannot be replaced by C++20's filtered_view because one has to derive a filtered_view object from the container and one can then iterate this filtered view object
   //       while, here, we want the iterator to do the filtering!
   template<class NormalIterator, class Predicate = std::function<bool(const value_type_of_t<NormalIterator>&)>> // std::function is slower than lambdas
-  class _filtered_iterator: public auto_iter<NormalIterator>
-  {
+  class _filtered_iterator: public auto_iter<NormalIterator> {
     using Parent = auto_iter<NormalIterator>;
     Predicate pred;
 
@@ -40,18 +39,17 @@ namespace std{
     // make a filtered iterator
     //NOTE: this will always fix the index (doing nothing if _i == _first_invalid),
     //      if you're sure this isn't necessary, call with do_not_fix_index as first argument (see below)
-    template<class _Parent, class _Pred = Predicate>
-      requires (is_constructible_v<Parent, _Parent> && is_constructible_v<Predicate, _Pred>)
-    _filtered_iterator(_Parent&& parent_init, _Pred&& pred_init = _Pred()):
-      Parent(forward<_Parent>(parent_init)),
-      pred(forward<_Pred>(pred_init))
+    template<class ParentInit, class PredInit = Predicate>
+      requires (!is_same_v<remove_cvref_t<ParentInit>, _filtered_iterator>)
+    _filtered_iterator(ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
+      Parent(forward<ParentInit>(parent_init)),
+      pred(forward<PredInit>(pred_init))
     { fix_index(); }
 
-    template<class _Parent, class _Pred = Predicate>
-      requires (is_constructible_v<Parent, _Parent> && is_constructible_v<Predicate, _Pred>)
-    _filtered_iterator(const do_not_fix_index_tag, _Parent&& parent_init, _Pred&& pred_init = _Pred()):
-      Parent(forward<_Parent>(parent_init)),
-      pred(forward<_Pred>(pred_init))
+    template<class ParentInit, class PredInit = Predicate>
+    _filtered_iterator(const do_not_fix_index_tag, ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
+      Parent(forward<ParentInit>(parent_init)),
+      pred(forward<PredInit>(pred_init))
     {}
 
     // piecewise construction of the auto_iter and the predicate
@@ -68,7 +66,7 @@ namespace std{
     {}
 
 
-    constexpr _filtered_iterator() = default;
+    _filtered_iterator() = default;
     _filtered_iterator(const _filtered_iterator& iter) = default;
     _filtered_iterator(_filtered_iterator&& iter) = default;
     _filtered_iterator& operator=(const _filtered_iterator& iter) = default;
@@ -81,13 +79,8 @@ namespace std{
   };
 
   // if the first template argument is iterable, then take the Iterator type from that
-  template<class Iterator, class Predicate>
-  struct __filtered_iterator { using type = _filtered_iterator<Iterator, Predicate>; };
-  template<IterableType Container, class Predicate>
-  struct __filtered_iterator<Container, Predicate> { using type = _filtered_iterator<iterator_of_t<Container>, Predicate>; };
-
-  template<class T, class Predicate = std::function<bool(const value_type_of_t<T>&)>>
-  using filtered_iterator = typename __filtered_iterator<T, Predicate>::type;
+  template<class T, class Predicate>
+  using filtered_iterator = _filtered_iterator<iterator_of_t<T>, Predicate>;
 
   template<class T, class Predicate>
   auto make_filtered_iterator(T&& iter, Predicate&& pred) { return filtered_iterator<T,Predicate>(forward<T>(iter), forward<Predicate>(pred)); }
@@ -102,13 +95,13 @@ namespace std{
   template<class T, class Predicate, class IteratorTransformation>
   auto make_filtered_factory(T&& _iter, Predicate&& _pred, IteratorTransformation&& trans) {
     return  FilteredIterFactory<T, Predicate, IteratorTransformation>(piecewise_construct,
-                                                                      forward_as_tuple(forward<T>(_iter),
-                                                                      forward<Predicate>(_pred)),
-                                                                      forward_as_tuple(trans));
+                                                                      forward_as_tuple(trans),
+                                                                      forward_as_tuple(forward<T>(_iter), forward<Predicate>(_pred)));
   }
   template<class T, class Predicate>
   auto make_filtered_factory(T&& _iter, Predicate&& _pred) {
-    return FilteredIterFactory<T, Predicate, void>(forward<T>(_iter), forward<Predicate>(_pred));
+    //return FilteredIterFactory<T, Predicate, void>(forward<T>(_iter), forward<Predicate>(_pred));
+    return filtered_iterator<T, Predicate>(forward<T>(_iter), forward<Predicate>(_pred));
   }
 
 

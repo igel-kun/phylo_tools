@@ -80,30 +80,7 @@ namespace PT{
     static const_iterator end(const Container& c) { return {c, c.size() }; }
   };
 
-
-
   template<class _Container, class _OutputContainer = _Container>
   using SubsetFactory = IterFactory<_Container, void, SubsetBeginEndIters<_Container, _OutputContainer>>;
-
-  /*
-  template<class _Container, class _OutputContainer = _Container>
-  class SubsetFactory
-  {
-  protected:
-    _Container& c;
-
-  public:
-    using iterator = SubsetIterator<_Container, _OutputContainer>;
-    using const_iterator = SubsetIterator<const _Container, _OutputContainer>;
-
-    SubsetFactory(_Container& _c): c(_c) {}
-
-    iterator begin() { return {c}; }
-    iterator end() { return {c, c.size()}; }
-    const_iterator begin() const { return {c}; }
-    const_iterator end() const { return {c, c.size()}; }
-
-  };
-  */
 
 }// namespace

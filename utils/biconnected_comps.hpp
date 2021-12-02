@@ -3,147 +3,209 @@
 
 #pragma once
 
+#include "union_find.hpp"
+
 #include "types.hpp"
-#include "bridges.hpp"
+#include "cuts.hpp"
 
 namespace PT{
 
   // NOTE: only enumeration of vertical components of a **single-rooted** network is supported for now
-  // NOTE: make sure that the cut nodes passed to the constructor are in bottom-up order!
+  // NOTE: CreateNodeData::operator() must take a NodeDesc& and return something that is passed to Component::NodeData()
+  //       CreateEdgeData::operator() must take an Adjacency& and a const NodeDesc& and return something that is passed to Component::EdgeData()
   template<PhylogenyType _Network,
            PhylogenyType Component = _Network,
-           NodeIterableType CutNodeContainer = const NodeVec,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            class CreateNodeData = typename Component::IgnoreNodeDataFunc,
            class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
-  class BiconnectedComponentIter {
+  class BiconnectedComponentIter: public CutIter<_Network, CO_BCC, std::iter_traits_from_reference<NodeDesc>> {
+    using Parent = CutIter<_Network, CO_BCC, std::iter_traits_from_reference<NodeDesc>>;
+    using Traits = std::iter_traits_from_reference<Component&>;
   public:
     using Network = _Network;
     using Node = typename Network::Node;
-    using Edge = typename Network::Edge;
-    using ChildContainer = typename Network::ChildContainer;
-    using CutNodeIter = std::iterator_of_t<CutNodeContainer>;
-    using OneEdgeArray = const Edge[1];
-    using reference = Component&;
-    using const_reference = const Component&;
-  protected:
 
-    NodeDesc root;
-    NodeSet seen;               // set of seen nodes
-    Component output;          // the current component to be output on operator*
+    using value_type = typename Traits::value_type;
+    using reference = typename Traits::reference;
+    using const_reference = typename Traits::const_reference;
+    using pointer = typename Traits::pointer;
+    using const_pointer = typename Traits::const_pointer;
+    using Emplacer = EdgeEmplacer<false, Component, OldToNewTranslation&, CreateNodeData&>;
+
+    static constexpr bool custom_node_data_maker = !std::is_same_v<CreateNodeData, typename Component::IgnoreNodeDataFunc>;
+    static constexpr bool custom_edge_data_maker = !std::is_same_v<CreateEdgeData, typename Component::IgnoreEdgeDataFunc>;
+
+    using Parent::is_valid;
+  protected:
+    using Parent::node_infos;
+    // NOTE: for each cut node, we will add each of its child nodes into a disjoint set forest
+    //       and then merge children v & w when they are in the same biconnected component
+    // NOTE: we will use the CutNodeIter's interface to say when two siblings are in the same component
+    std::auto_iter<NodeVec> child_comp_iter;
+    NodeSet seen;
+
+    // storing a pointer to the output allows us to not compute the actual component up until the point where operator*() is called
+    std::unique_ptr<Component> output = nullptr; // the current component to be output on operator*
     OldToNewTranslation old_to_new;
     std::pair<CreateNodeData, CreateEdgeData> make_data;
-    std::auto_iter<CutNodeContainer> current_cut_node;
-    std::auto_iter<ChildContainer>   current_children;
-    EdgeEmplacer<false, Component, OldToNewTranslation&, CreateNodeData&> output_emplacer;
+
+    const NodeDesc& get_current_cut_node() const { assert(is_valid()); return Parent::operator*(); }
 
     // construct a vertical biconnected component containing the arc uv and store it in 'output'
-    //NOTE: this will mark all nodes of that component in 'seen'
     //NOTE: remember to set the root of the output component after calling this!
+    void make_component_along(const NodeDesc& rt, const NodeDesc& v, Emplacer& output_emplacer) {
+      if(append(seen, v).second){
+        DEBUG4(std::cout << "BCC: making component along " << v <<'\n');
+        Node& v_node = node_of<Node>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
+        for(auto& u: v_node.parents()) output_emplacer.emplace_edge(u, v, make_data.second(u,v));
+        for(const NodeDesc& u: v_node.parents()) 
+          if(u != rt)
+            make_component_along(rt, u, output_emplacer);
+        if(Parent::is_cut_node(v)) {
+          // if v is a cut-node, then not all children w of v are in the same BCC as rt (only those seeing an outside neighbor wrt. v)
+          const auto& v_info = node_infos.at(v);
+          for(const NodeDesc& w: v_node.children())
+            if(v_info.child_has_outside_neighbor(node_infos.at(w)))
+              make_component_along(rt, w, output_emplacer);
+        } else
+          for(const NodeDesc& w: v_node.children())
+            make_component_along(rt, w, output_emplacer);
+      }
+    }
+
     void make_component_along(const NodeDesc& v) {
-      if(!test(seen, v)) {
-        std::cout << "making component along "<<v<<'\n';
-        const Node& v_node = node_of<Node>(v);
-        for(const NodeDesc& w: v_node.children()) make_component_along(w);
-        for(const NodeDesc& u: v_node.parents()) output_emplacer.emplace_edge(u, v, make_data.second(u,v));
-        append(seen, v);
+      output = std::make_unique<Component>();
+      Emplacer output_emplacer{*output, old_to_new, make_data.first};
+      const NodeDesc& u = get_current_cut_node();
+      make_component_along(u, v, output_emplacer);
+      output_emplacer.mark_root(u);
+    }
+
+    // this is called when we're through with the current cut-node, in order to
+    // 1. advance to the next cut node
+    // 2. set up the queue of children of u that are in BCCs
+    // 3. initialize current_child
+    void advance_parent() {
+      assert(is_valid());
+      if(!child_comp_iter) {
+        // step 1: advance the cut-node iterator
+        Parent::operator++();
+        if(is_valid()) compute_new_child_comps();
       }
     }
 
     void next_component() {
-#warning "this is wrong if the cut node is the root of one component but in the middle of another component!"
       if(is_valid()) {
-        output.clear();
-        output_emplacer.clear();
+        output.reset();
         old_to_new.clear();
+        ++child_comp_iter;
 
-        std::cout << "getting next biconnected component...\n";
-        // step1: advance the current-children iterator (also skipping seen children)
-        while(current_children.is_valid() && test(seen, *current_children)) ++current_children;
-        while(!current_children.is_valid()) {
-          std::cout << "we scanned all children of the current cut node " << *current_cut_node << "\n";
-          // if we're now at the end of the current cut-node's children, go to the next cut-node
-          // NOTE: once all cut-nodes have been processed, we will process the root, so check for this special case
-          if(current_cut_node.is_valid()) {
-            assert(*current_cut_node != root);
-            ++current_cut_node;
-            if(current_cut_node.is_valid()) {
-              std::cout << "advanced current cut node, now at "<< *current_cut_node <<"\n";
-              current_children = children_of<Node>(*current_cut_node);
-              // if the root is a cut-node, then advance to the next (invalid) cut-node in order to avoid processing the root twice
-              if(*current_cut_node == root) ++current_cut_node;
-            } else {
-              std::cout << "advanced current cut node, now at root "<< root << "\n";
-              current_children = children_of<Node>(root); // if we reached the end of the cut-node container, treat the root next
-            }
-          } else return; // if the current cut-node iterator is invalid, then we just treated the root and are now done!
-          // skip over all seen children
-          while(current_children.is_valid() && test(seen, *current_children)) ++current_children;
-        }
-        // step2: construct the component along the current child
-        // NOTE: we either skipped all seen children or we just arrived here; in either case, the current child cannot have been seen
-        assert(!test(seen, *current_children));
-        make_component_along(*current_children);
-        output_emplacer.finalize( current_cut_node.is_valid() ? *current_cut_node : root );
-        std::cout << "--- done constructing component---\n";
+        DEBUG4(std::cout << "BCC: getting next biconnected component...\n");
+        // step1: advance the current-children iterator (also skipping cut-nodes)
+        advance_parent();
       }
+    }
+
+    void compute_new_child_comps() {
+      const NodeDesc& u = get_current_cut_node();
+      DEBUG4(std::cout << "BCC: cut node "<< u <<" with child stack "<<node_infos.at(u).cut_children<<"\n");
+      child_comp_iter = node_infos.at(u).cut_children;
+      assert(child_comp_iter.is_valid());
     }
 
   public:
     // NOTE: cut-nodes MUST be bottom-up (that is, no cut-node x can preceed any descendant of x)!
-    template<class CutNodeInit, NodeTranslationType _OldToNewTranslation, class... Args>
-    BiconnectedComponentIter(const NodeDesc& _root, _OldToNewTranslation&& _old_to_new, CutNodeInit&& _cut_nodes, Args&&... args):
-      root(_root),
+    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class... Args> requires (sizeof...(Args) != 1)
+    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, Args&&... args):
+      Parent(std::forward<ParentInit>(_parent)),
       old_to_new(std::forward<_OldToNewTranslation>(_old_to_new)),
-      make_data(std::forward<Args>(args)...),
-      current_cut_node(std::forward<CutNodeInit>(_cut_nodes)),
-      output_emplacer{{output}, old_to_new, make_data.first}
+      make_data(std::forward<Args>(args)...)
     {
-      if(root != NoNode) {
-        DEBUG4(std::cout << "iterating BCCs with root "<<root<<"\n");
-        if(current_cut_node.is_valid()) {
-          current_children = children_of<Node>(*current_cut_node);
-        } else current_children = children_of<Node>(root);
-        next_component();
-      } // if _root == NoNode, then this is the end-iterator so don't do anything here
+      if(Parent::is_valid())
+        compute_new_child_comps();
     }
+
+    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class First> requires (custom_node_data_maker && custom_edge_data_maker)
+    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, First&& first):
+      Parent(std::forward<ParentInit>(_parent)),
+      old_to_new(std::forward<_OldToNewTranslation>(_old_to_new)),
+      make_data(std::forward<First>(first))
+    {
+      if(Parent::is_valid())
+        compute_new_child_comps();
+    }
+
+
+    // if only 1 argument is passed to initialize the data makers, it's passed to the one that is not ignorant
+    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class First> requires (custom_node_data_maker && !custom_edge_data_maker)
+    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, First&& first):
+      BiconnectedComponentIter(
+          std::forward<ParentInit>(_parent),
+          std::forward<_OldToNewTranslation>(_old_to_new),
+          std::piecewise_construct,
+          std::forward_as_tuple(std::forward<First>(first)),
+          std::forward_as_tuple())
+    {}
+
+    // if only 1 argument is passed to initialize the data makers, it's passed to the one that is not ignorant
+    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class First> requires (!custom_node_data_maker && custom_edge_data_maker)
+    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, First&& first):
+      BiconnectedComponentIter(
+          std::forward<ParentInit>(_parent),
+          std::forward<_OldToNewTranslation>(_old_to_new),
+          std::piecewise_construct,
+          std::forward_as_tuple(),
+          std::forward_as_tuple(std::forward<First>(first)))
+    {}
+
+    BiconnectedComponentIter(const BiconnectedComponentIter& other):
+      Parent(other),
+      child_comp_iter(other.child_comp_iter),
+      seen(other.seen),
+      make_data(other.make_data)
+    {}
+    BiconnectedComponentIter(BiconnectedComponentIter&& other) = default;
+
+    BiconnectedComponentIter& operator=(const BiconnectedComponentIter& other) {
+      if(this != &other)
+        operator=(BiconnectedComponentIter(other));
+      return *this;
+    }
+    BiconnectedComponentIter& operator=(BiconnectedComponentIter&& other) = default;
 
     BiconnectedComponentIter& operator++() { next_component(); return *this; }
+    BiconnectedComponentIter& operator++(int) = delete;
+
+    bool operator!=(const BiconnectedComponentIter& other) const {
+      if(!is_valid()) return other.is_valid();
+      if(!other.is_valid()) return true;
+      return child_comp_iter != other.child_comp_iter;
+    }
+    bool operator==(const BiconnectedComponentIter& other) const { return !operator!=(other); }
 
     // NOTE: calling operator* is expensive, consider calling it at most once for each item
-    reference operator*() { return output; }
-    const_reference operator*() const { return output; }
-
-    bool operator==(const std::GenericEndIterator&) const { return is_end_iter(); }
-    template<class Other>
-    bool operator==(const Other& _it) const {
-      if(!_it.is_end_iter()){
-        if(is_end_iter()) return false;
-        // at this point, both are non-end iterators, so do a comparison
-        return current_children == _it.current_children;
-      } else return is_end_iter();
+    reference operator*() {
+      assert(is_valid());
+      if(!output) make_component_along(*child_comp_iter);  // step2: construct the component along the current child
+      return *output;
     }
-    template<class Other>
-    bool operator!=(const Other& _it) const { return !operator==(_it); }
-    
-    bool is_end_iter() const { return !is_valid(); }
-    bool is_valid() const { return current_children.is_valid(); }
+    const_reference operator*() const {
+      assert(is_valid());
+      if(!output) make_component_along(*child_comp_iter);  // step2: construct the component along the current child
+      return *output;
+    }
+    pointer operator->() { return &(operator*()); }
+    const_pointer operator->() const { return &(operator*()); }
 
     OldToNewTranslation& get_translation() { return old_to_new; }
     const OldToNewTranslation& get_translation() const { return old_to_new; }
-
-    template<PhylogenyType, PhylogenyType, NodeIterableType, NodeTranslationType, class, class>
-    friend class BiconnectedComponents;
-
-    template<PhylogenyType, PhylogenyType, NodeIterableType, NodeTranslationType, class, class>
-    friend class BiconnectedComponentIter;
   };
 
 
+  /*
   // factory for biconnected components, see notes for BiconnectedComponentIter
   template<PhylogenyType _Network,
            PhylogenyType Component = _Network,
-           NodeIterableType CutNodeContainer = const NodeVec,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            class CreateNodeData = typename Component::IgnoreNodeDataFunc,
            class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
@@ -151,130 +213,95 @@ namespace PT{
   public:
     using Network = _Network;
     using Edge = typename _Network::Edge;
-    using CutNodeIter = std::iterator_of_t<CutNodeContainer>;
+    using VcnContainer = CutNodeIterFactory<_Network>;
+    using VcnIter = std::iterator_of_t<VcnContainer>;
     using reference = Component;
     using const_reference = Component;
-    using iterator = BiconnectedComponentIter<_Network, Component, CutNodeContainer, OldToNewTranslation, CreateNodeData, CreateEdgeData>;
+    using iterator = BiconnectedComponentIter<_Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>;
     using const_iterator = iterator;
 
   protected:
     static constexpr bool custom_node_data_maker = !std::is_same_v<CreateNodeData, typename Component::IgnoreNodeDataFunc>;
     static constexpr bool custom_edge_data_maker = !std::is_same_v<CreateEdgeData, typename Component::IgnoreEdgeDataFunc>;
 
-    NodeDesc root;
-    CutNodeContainer cut_nodes;
+    VcnContainer vertical_cut_nodes;
     OldToNewTranslation old_to_new;
     std::pair<CreateNodeData, CreateEdgeData> make_data;
 
   public:
 
-    template<NodeIterableType CutNodeInit, class TranslateInit, class First, class Second, class... Args>
-    BiconnectedComponents(CutNodeInit&& _cut_nodes, const NodeDesc& _root, TranslateInit&& trans_init, First&& first, Second&& second, Args&&... args):
-      root(_root),
-      cut_nodes(std::forward<CutNodeInit>(_cut_nodes)),
+    // if at least 2 arguments are passed to initialize the data makers, we forward these arguments
+    template<std::IterableType VcnInit, class TranslateInit, class First, class Second, class... Args>
+    BiconnectedComponents(VcnInit&& _vertical_cut_nodes, TranslateInit&& trans_init, First&& first, Second&& second, Args&&... args):
+      vertical_cut_nodes(std::forward<VcnInit>(_vertical_cut_nodes)),
       old_to_new(std::forward<TranslateInit>(trans_init)),
       make_data(std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...)
     {}
 
     // if only 1 argument is passed to initialize the data makers, it's passed to the one that is not ignorant
-    template<NodeIterableType CutNodeInit, class TranslateInit, class First>
-      requires (custom_node_data_maker && !custom_edge_data_maker)
-    BiconnectedComponents(CutNodeInit&& _cut_nodes, const NodeDesc& _root, TranslateInit&& trans_init, First&& first):
-      root(_root),
-      cut_nodes(std::forward<CutNodeInit>(_cut_nodes)),
+    template<std::IterableType VcnInit, class TranslateInit, class First> requires (custom_node_data_maker && !custom_edge_data_maker)
+    BiconnectedComponents(VcnInit&& _vertical_cut_nodes, TranslateInit&& trans_init, First&& first):
+      vertical_cut_nodes(std::forward<VcnInit>(_vertical_cut_nodes)),
       old_to_new(std::forward<TranslateInit>(trans_init)),
       make_data(std::piecewise_construct, std::forward_as_tuple(std::forward<First>(first)), std::forward_as_tuple())
     {}
-    template<NodeIterableType CutNodeInit, class TranslateInit, class First>
-      requires (!custom_node_data_maker && custom_edge_data_maker)
-    BiconnectedComponents(CutNodeInit&& _cut_nodes, const NodeDesc& _root, TranslateInit&& trans_init, First&& first):
-      root(_root),
-      cut_nodes(std::forward<CutNodeInit>(_cut_nodes)),
+
+    template<std::IterableType VcnInit, class TranslateInit, class First> requires (!custom_node_data_maker && custom_edge_data_maker)
+    BiconnectedComponents(VcnInit&& _vertical_cut_nodes, TranslateInit&& trans_init, First&& first):
+      vertical_cut_nodes(std::forward<VcnInit>(_vertical_cut_nodes)),
       old_to_new(std::forward<TranslateInit>(trans_init)),
       make_data(std::piecewise_construct, std::forward_as_tuple(), std::forward_as_tuple(std::forward<First>(first)))
     {}
 
-
     template<class... Args>
-    BiconnectedComponents(const Network& N, const NodeDesc& _root, Args&&... args):
-      BiconnectedComponents(get_cut_nodes(N, _root), _root, std::forward<Args>(args)...)
+    BiconnectedComponents(const NodeDesc& _root, Args&&... args):
+      BiconnectedComponents(get_cut_nodes<Network>(_root), std::forward<Args>(args)...)
     {}
 
-    template<class CutNodeInitTuple, class NodeDataInitTuple, class EdgeDataInitTuple>
+    template<class VcnInitTuple, class TranslateInitTuple, class NodeDataInitTuple, class EdgeDataInitTuple>
     BiconnectedComponents(const std::piecewise_construct_t,
-                          CutNodeInitTuple&& cn_init,
-                          const NodeDesc& _root,
+                          VcnInitTuple&& cn_init,
+                          TranslateInitTuple&& tr_init,
                           NodeDataInitTuple&& nd_init,
                           EdgeDataInitTuple&& ed_init):
-      root(_root),
-      cut_nodes(std::make_from_tuple<CutNodeContainer>(std::forward<CutNodeInitTuple>(cn_init))),
+      vertical_cut_nodes(std::make_from_tuple<VcnIter>(std::forward<VcnInitTuple>(cn_init))),
+      old_to_new(std::make_from_tuple<OldToNewTranslation>(std::forward<TranslateInitTuple>(tr_init))),
       make_data(std::piecewise_construct, std::forward<NodeDataInitTuple>(nd_init), std::forward<EdgeDataInitTuple>(ed_init))
     {}
 
-    iterator begin() const & { return iterator(root, old_to_new, cut_nodes, make_data); }
-    iterator begin() & { return iterator(root, old_to_new, cut_nodes, make_data); }
-    iterator begin() && { return iterator(root, std::move(old_to_new), std::move(cut_nodes), std::move(make_data)); }
+    iterator begin() const & { return iterator(old_to_new, vertical_cut_nodes, make_data); }
+    iterator begin() & { return iterator(old_to_new, vertical_cut_nodes, make_data); }
+    iterator begin() && { return iterator(std::move(old_to_new), std::move(vertical_cut_nodes), std::move(make_data)); }
 
     static auto end() { return std::GenericEndIterator(); }
   };
+  */
 
 
+  template<PhylogenyType _Network,
+           PhylogenyType Component = _Network,
+           NodeTranslationType OldToNewTranslation = NodeTranslation,
+           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
+           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
+  using BiconnectedComponents = std::IterFactory<BiconnectedComponentIter<_Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>>;
 
   // deduce parameters from arguments
   template<PhylogenyType Component,
            PhylogenyType Network = Component,
-           NodeIterableType CutNodes,
+           class CutsInit,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            class CreateNodeData = typename Component::IgnoreNodeDataFunc,
            class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
-  auto get_biconnected_components(CutNodes&& cut_nodes,
-                                  const NodeDesc& root,
+  auto get_biconnected_components(CutsInit&& cuts,
                                   OldToNewTranslation&& old_to_new = OldToNewTranslation(),
                                   CreateNodeData&& nd = CreateNodeData(),
                                   CreateEdgeData&& ed = CreateEdgeData())
   {
-    return BiconnectedComponents<Network, Component, CutNodes, OldToNewTranslation, CreateNodeData, CreateEdgeData>(
-        std::forward<CutNodes>(cut_nodes),
-        root,
+    return BiconnectedComponents<Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>(
+        std::forward<CutsInit>(cuts),
         std::forward<OldToNewTranslation>(old_to_new),
         std::forward<CreateNodeData>(nd),
         std::forward<CreateEdgeData>(ed));
-  }
-
-  template<PhylogenyType Component,
-           PhylogenyType Network,
-           NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
-  auto get_biconnected_components(const NodeDesc& root,
-                                  OldToNewTranslation&& old_to_new = OldToNewTranslation(),
-                                  CreateNodeData&& nd = CreateNodeData(),
-                                  CreateEdgeData&& ed = CreateEdgeData())
-  {
-      return get_biconnected_components<Component, Network>(
-          get_cut_nodes<Network>(root),
-          root,
-          std::forward<OldToNewTranslation>(old_to_new),
-          std::forward<CreateNodeData>(nd),
-          std::forward<CreateEdgeData>(ed));
-  }
-
-  template<PhylogenyType Component,
-           PhylogenyType Network,
-           NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
-  auto get_biconnected_components(const Network& N,
-                                  OldToNewTranslation&& old_to_new = OldToNewTranslation(),
-                                  CreateNodeData&& nd = CreateNodeData(),
-                                  CreateEdgeData&& ed = CreateEdgeData())
-  {
-      return get_biconnected_components<Component, Network>(
-          get_cut_nodes(N),
-          N.root(),
-          std::forward<OldToNewTranslation>(old_to_new),
-          std::forward<CreateNodeData>(nd),
-          std::forward<CreateEdgeData>(ed));
   }
 
 }// namespace

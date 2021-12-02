@@ -68,7 +68,9 @@ namespace std {
     using value_type = T;
     T value;
     static constexpr bool has_value = true;
-    
+
+    optional_item() { }
+
     optional_item(const optional_item&) = default;
     optional_item(optional_item&&) = default;
     
@@ -148,8 +150,7 @@ namespace std {
   // specialization for the case that the next field is 'void'
   // NOTE: all initialization will just be delegated
   template<size_t i, class... Rest>
-  struct _optional_tuple<i, void, Rest...>: public _optional_tuple<i + 1, Rest...>
-  {
+  struct _optional_tuple<i, void, Rest...>: public _optional_tuple<i + 1, Rest...> {
     _optional_tuple(){};
 
     template<class _LastT, class... _Rest> requires (!is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, remove_cvref_t<_LastT>>)
@@ -181,7 +182,6 @@ namespace std {
   };
 
 
-
   // member access for the optional tuple
   template<size_t i, class LastT, class... Rest>
   LastT& _get(_optional_tuple<i, LastT, Rest...>& tuple) {
@@ -194,7 +194,7 @@ namespace std {
   }
 
   template<size_t i, class T>
-  struct _has_value { static constexpr bool value = false; };
+  struct _has_value { static constexpr bool value = !is_void_v<T>; };
   template<size_t i, class LastT, class... Rest>
   struct _has_value<i, _optional_tuple<i, LastT, Rest...>> { static constexpr bool value = !std::is_void_v<LastT>; };
 
@@ -202,8 +202,14 @@ namespace std {
   struct optional_tuple: public _optional_tuple<0, Ts...> {
     using _optional_tuple<0, Ts...>::_optional_tuple;
     optional_tuple(){}
-    template<size_t i> auto& get() { return _get<i>(*this); }
-    template<size_t i> const auto& get() const { return _get<i>(*this); }
+    template<size_t i> auto& get() {
+      static_assert(has_value<i>);
+      return _get<i>(*this);
+    }
+    template<size_t i> const auto& get() const {
+      static_assert(has_value<i>);
+      return _get<i>(*this);
+    }
     template<size_t i> static constexpr bool has_value = _has_value<i, optional_tuple>::value;
   };
 

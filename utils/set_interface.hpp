@@ -96,19 +96,14 @@ namespace std { // since it was the job of STL to provide for it and they failed
   }
 
 
-  template<class T> requires IterableType<std::remove_cvref_t<T>>
-  constexpr reference_of_t<T> front(T&& c)
-  {
-    assert(!c.empty());
-    return *(c.begin());
-  }
-
-  template<class T> requires IterableType<std::remove_cvref_t<T>>
-  constexpr reference_of_t<T> back(T&& c)
-  {
-    assert(!c.empty());
-    return *(c.rbegin());
-  }
+  template<IterableType T>
+  constexpr reference_of_t<T> front(T&& c) { assert(!c.empty()); return *(c.begin()); }
+  template<IterableType T>
+  constexpr reference_of_t<T> next_to_front(T&& c) { assert(!c.empty()); return *(next(c.begin())); }
+  template<IterableType T>
+  constexpr reference_of_t<T> back(T&& c) { assert(!c.empty()); return *(c.rbegin()); }
+  template<IterableType T>
+  constexpr reference_of_t<T> next_to_back(T&& c) { assert(!c.empty()); return *(next(c.rbegin())); }
 
   // unordered_set has no rbegin(), so we just alias it to begin()
   template<class Key, class Hash, class KE, class A>
@@ -122,24 +117,24 @@ namespace std { // since it was the job of STL to provide for it and they failed
 
 
   // on non-map containers, append = emplace
-  template<ContainerType C, class First, class ...Args> requires (!MapType<C> && !VectorType<C> && !CompatibleValueTypes<C, First>)
-  emplace_result<C> append(C& container, First&& first, Args&&... args) { return container.emplace(forward<First>(first), forward<Args>(args)...); }
+  template<class C, class First, class ...Args> requires (!MapType<C> && !VectorType<C> && !CompatibleValueTypes<C, First>)
+  auto append(C& container, First&& first, Args&&... args) { return container.emplace(forward<First>(first), forward<Args>(args)...); }
 
   // on vectors, append =  emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
   template<VectorType V, class First, class... Args> requires (!ConvertibleValueTypes<V, First>)
-  emplace_result<V> append(V& _vec, First&& first, Args&&... args) { 
-    return {_vec.emplace(_vec.end(), forward<First>(first), forward<Args>(args)...), true};
+  auto append(V& _vec, First&& first, Args&&... args) { 
+    return emplace_result<V>{_vec.emplace(_vec.end(), forward<First>(first), forward<Args>(args)...), true};
   }
   // dummy function to not insert anything into an appended vector
   template<VectorType V>
-  emplace_result<V> append(V&& _vec) { return {_vec.begin(), true}; }
+  auto append(V&& _vec) { return emplace_result<V>{_vec.begin(), true}; }
  
   // on maps to primitives, append = try_emplace
   template<MapType M, class Key, class... Args> requires (is_convertible_v<Key, key_type_of_t<M>> && !ContainerType<mapped_type_of_t<M>>)
-  emplace_result<M> append(M& _map, Key&& _key, Args&&... args)
+  auto append(M& _map, Key&& _key, Args&&... args)
   { return _map.try_emplace(forward<Key>(_key), forward<Args>(args)...); }
 
   // on maps to containers, append = append to container at map[key]
@@ -147,22 +142,22 @@ namespace std { // since it was the job of STL to provide for it and they failed
   //      also return a bool indicating whether insertion took place
   //NOTE: this also works for emplacing a string into a map that maps to strings, the "inserting" appends below are called in this case
   template<MapType M, class Key, class ...Args> requires (is_convertible_v<Key, key_type_of_t<M>> && ContainerType<mapped_type_of_t<M>>)
-  emplace_result<M> append(M& _map, Key&& _key, Args&&... args) {
+  auto append(M& _map, Key&& _key, Args&&... args) {
     const auto iter = _map.try_emplace(forward<Key>(_key)).first;
     const bool success = append(iter->second, forward<Args>(args)...).second;
-    return {iter, success};
+    return emplace_result<M>{iter, success};
   }
 
   // append with 2 containers means to add the second to the end of the first
   template<ContainerType C1, ContainerType C2> requires (ConvertibleValueTypes<C1,C2> && !VectorType<C1>)
-  emplace_result<C1> append(C1& x, const C2& y) {
+  auto append(C1& x, const C2& y) {
     x.insert(y.begin(), y.end());
-    return {x.begin(), true};
+    return emplace_result<C1>{x.begin(), true};
   }
   template<VectorType V, ContainerType C2> requires ConvertibleValueTypes<V,C2>
-  emplace_result<V> append(V& x, const C2& y) {
+  auto append(V& x, const C2& y) {
     x.insert(x.end(), y.begin(), y.end());
-    return {x.begin(), true};
+    return emplace_result<V>{x.begin(), true};
   }
 
   template<class T>
@@ -183,6 +178,13 @@ namespace std { // since it was the job of STL to provide for it and they failed
     q.pop();
     return result;
   }
+  template<VectorType Q>
+  value_type_of_t<Q> value_pop(Q& q) {
+    value_type_of_t<Q> result = move(q.back());
+    q.pop_back();
+    return result;
+  }
+
   template<ContainerType C>
   value_type_of_t<C> value_pop(C& q, const iterator_of_t<const C>& iter) {
     if(iter != end(q)) {
@@ -290,4 +292,9 @@ namespace std { // since it was the job of STL to provide for it and they failed
       return true;
     } else return false;
   }
+
+  template<IterableType C>
+  iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
+
+
 }

@@ -2,12 +2,13 @@
 #pragma once
 
 #include "types.hpp"
+#include "node.hpp"
 
 namespace PT {
 
 	// the LCA oracle is a class that answers LCA queries
 	// NOTE: when the tree/network changes, the oracle becomes invalid, so don't query it!
-	template<PhylogenyType Phylo>
+	template<StrictPhylogenyType Phylo>
 	class LCAOracle {
 	protected:
 		const Phylo& N;
@@ -15,7 +16,7 @@ namespace PT {
 		LCAOracle(const Phylo& _N): N(_N) {}
 	};
 
-	template<PhylogenyType Net>
+	template<StrictPhylogenyType Net>
 	class NaiveLCAOracle: public LCAOracle<Net> {
 #warning write me
 	public:
@@ -24,7 +25,7 @@ namespace PT {
 		}
 	};
 
-	template<PhylogenyType Tree> requires TreeType<Tree>
+	template<StrictPhylogenyType Tree> requires TreeType<Tree>
 	class NaiveLCAOracle<Tree>: public LCAOracle<Tree> {
 		using Parent = LCAOracle<Tree>;
 		using Parent::N;
