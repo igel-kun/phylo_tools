@@ -40,28 +40,32 @@ namespace PT{
     // add a node u and update sw using the set forest representing the current weak components in the extension
     // return the scanwidth of the given node
     template<PhylogenyType Net, std::ContainerType _Container>
-    sw_t update_sw(const NodeDesc& u,
+    sw_t update_sw(const NodeDesc u,
                    std::DisjointSetForest<typename Net::Edge>& weak_components,
                    _Container& out) const
     {
+      sw_t result;
       try{
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
-        const auto u_node = node_of<Net>(u);
+        const auto& u_node = node_of<Net>(u);
         if(!u_node.is_leaf()) {
           // step 1: merge all in-edges to the same weak component
           const auto& uv = std::front(u_node.out_edges());
-          for(const auto& wu: u_node.in_edges()) weak_components.add_item_to_set_of(wu, uv);
+          for(const auto& wu: u_node.in_edges())
+            weak_components.add_item_to_set_of(wu, uv);
           // step 2: merge all weak components of out-edges of u & remove all out-edges from the component
           for(const auto& uw: u_node.out_edges()) {
             weak_components.merge_sets_of(uv, uw);
             weak_components.remove_item(uw);
           }
           // step 3: record the size of the remaining component
-          return append(out, u, (typename _Container::mapped_type)(weak_components.size_of_set_of(uv))).first->second;
-        } else return append(out, u, (typename _Container::mapped_type)(weak_components.add_new_set(u_node.in_edges()).size())).first->second;
+          result = weak_components.size_of_set_of(uv);
+        } else result = weak_components.add_new_set(u_node.in_edges()).size();
       } catch(std::out_of_range& e){
         throw(std::logic_error("trying to compute scanwidth of a non-extension"));
       }
+      append(out, u, result);
+      return result;
     }
 
     // get mapping of nodes to their scanwidth in the extension
@@ -69,7 +73,7 @@ namespace PT{
     void sw_map(_Container& out) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
       std::DisjointSetForest<typename Net::Edge> weak_components;
-      for(const NodeDesc& u: *this) update_sw<Net>(u, weak_components, out);
+      for(const NodeDesc u: *this) update_sw<Net>(u, weak_components, out);
     }
 
     template<PhylogenyType Net, NodeMapType _Container = std::unordered_map<NodeDesc, sw_t>>

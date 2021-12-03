@@ -38,25 +38,22 @@ namespace PT{
           DEBUG3(std::cout << "highest ancestors of node "<<u<<": "<<highest<<std::endl);
           // step 2: establish u as the parent in Gamma of all highest nodes in all weakly connected components (in G[ex[1..u]]) of its children in N
           NodeSet new_children; // NOTE: many children of u in the network may have the same "highest current ancestor" in the tree; use a set to avoid dupes
-          std::cout << "old children of "<<u<<": "<<N.children(u)<<"\n";
-          for(const NodeDesc& v: N.children(u)){
+          for(const NodeDesc v: N.children(u)){
             try{
-              const NodeDesc& x = highest.set_of(v).get_representative();
-              append(new_children, x);
+              append(new_children, highest.set_of(v).get_representative());
             } catch(std::out_of_range& e) {
               throw(std::logic_error("trying to compute extension tree on a non-extension"));
             }
           }
-          std::cout << "new children of "<<u<<": "<<new_children<<"\n";
+          DEBUG3(std::cout << "new children of "<<u<<": "<<new_children<<"\n");
           // step 3: register u as the new hightest node in the weakly connected components of its new children 
           // step 4: add edges u->v to the edgelist
-          for(const NodeDesc& v: new_children){
+          for(const NodeDesc v: new_children){
             // NOTE: make sure the merge is not done by size but v is always plugged below u!
             highest.merge_sets_of(u, v, false);
             emplacer.emplace_edge(u, v);
           }
         }
-        std::cout << "finalizing extension tree...\n";
         emplacer.finalize(N);
       }
 
@@ -98,11 +95,10 @@ namespace PT{
   //       or by storing the network NodeDesc's inside the nodes themselves using the make_node_data function passed to ext_to_tree
   template<TreeType _Tree, class NetworkDegrees, std::ContainerType _Container = NodeMap<Degree>>
   _Container ext_tree_sw_map(const _Tree& ext, NetworkDegrees&& network_degrees, _Container&& out = _Container()) {
-    for(const NodeDesc& u: ext.nodes_postorder()){
+    for(const NodeDesc u: ext.nodes_postorder()){
       auto [indeg, outdeg] = network_degrees(u);
-      std::cout << "degrees of "<<u<<": "<<indeg<<" & "<<outdeg<<"\n";
       Degree sw_u = indeg;
-      for(const NodeDesc& v: ext.children(u))
+      for(const NodeDesc v: ext.children(u))
         sw_u += out[v];
       sw_u -= outdeg;
       append(out, u, sw_u);

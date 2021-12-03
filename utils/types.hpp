@@ -157,10 +157,7 @@ namespace PT {
   concept AdjacencyType = std::is_same_v<NodeDesc, std::remove_cvref_t<A>> || _AdjacencyType<A>;
 
   template<class A>
-  concept AdjacencyContainerType = requires(A a){
-    requires std::ContainerType<A>;
-    requires AdjacencyType<typename std::value_type_of_t<A>>;
-  };
+  concept AdjacencyContainerType = (std::ContainerType<A> && AdjacencyType<typename std::value_type_of_t<A>>);
 
   // a node is something providing a bunch of types and whose predecessors and successors can be queried
   template<typename N>
@@ -173,10 +170,8 @@ namespace PT {
     { n.children() } ->std::convertible_to<typename N::SuccContainer>;
   };
 
-  template<class N>
-  concept NodeType = StrictNodeType<std::remove_cvref_t<N>>;
-  template<class N>
-  concept TreeNodeType = (NodeType<N> && (N::is_tree_node));
+  template<class N> concept NodeType = StrictNodeType<std::remove_cvref_t<N>>;
+  template<class N> concept TreeNodeType = (NodeType<N> && (N::is_tree_node));
 
   // an Edge is something whose head and tail are Nodes
   template<class T>

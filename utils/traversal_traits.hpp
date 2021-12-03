@@ -74,19 +74,19 @@ namespace PT {
     using child_iterator    = std::iterator_of_t<ItemContainer>;
     using iterator_category = std::forward_iterator_tag;
    
-    bool is_forbidden(const NodeDesc& u) const {
+    bool is_forbidden(const NodeDesc u) const {
       if constexpr (has_forbidden)
         return this->template get<0>()(u);
       else
         return false;
     }
     // we consider a node 'seen' if it's either seen or forbidden
-    bool is_seen(const NodeDesc& u) const {
+    bool is_seen(const NodeDesc u) const {
       bool result = is_forbidden(u);
       if constexpr (has_seen) result |= test(this->template get<1>(), u);
       return result;
     }
-    void mark_seen(const NodeDesc& u) { append(this->template get<1>(), u); }
+    void mark_seen(const NodeDesc u) { append(this->template get<1>(), u); }
   };
 
 
@@ -102,7 +102,7 @@ namespace PT {
     using typename Parent::Network;
     using typename Parent::ItemContainer;
     using value_type      = const NodeDesc;
-    using reference       = value_type&;
+    using reference       = value_type;
     using const_reference = reference;
     using pointer         = std::pointer_from_reference<reference>;
     using const_pointer   = std::pointer_from_reference<const_reference>;
@@ -111,8 +111,8 @@ namespace PT {
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
 
-    static constexpr ItemContainerRef get_children(const NodeDesc& u) { return node_of<Network>(u).children(); }
-    static constexpr const NodeDesc& get_node(const NodeDesc& u) { return u; }
+    static constexpr ItemContainerRef get_children(const NodeDesc u) { return node_of<Network>(u).children(); }
+    static constexpr NodeDesc get_node(const NodeDesc u) { return u; }
   };
 
   template<PhylogenyType _Network,
@@ -142,8 +142,8 @@ namespace PT {
     static constexpr unsigned char min_stacksize = 2;
 
     // NOTE: out_edges returns a temporary iterator factory, so we cannot return a reference to it!
-    static constexpr ItemContainerRef get_children(const NodeDesc& u) { return node_of<Network>(u).out_edges(); }
-    static constexpr const NodeDesc& get_node(const value_type& uv) { return uv.head(); }
+    static constexpr ItemContainerRef get_children(const NodeDesc u) { return node_of<Network>(u).out_edges(); }
+    static constexpr NodeDesc get_node(const value_type& uv) { return uv.head(); }
    
     // normally, we want to skip an edge if its head has been seen
     //NOTE: this will give us an edge-list of a DFS-tree
@@ -168,7 +168,7 @@ namespace PT {
     using Parent::is_seen;
 
     // if u has been seen, just return an empty OutEdgeContainer (because all of u's out-edges will be skipped anyways)
-    ItemContainerRef get_children(const NodeDesc& u) const { if(Parent::is_seen(u)) return {}; else return node_of<Network>(u).out_edges(); }
+    ItemContainerRef get_children(const NodeDesc u) const { if(Parent::is_seen(u)) return {}; else return node_of<Network>(u).out_edges(); }
 
     // so now, we want to skip an edge if its head is forbidden or its tail has been seen during the DFS
     //NOTE: this will give us all edges below some node, except for those with forbidden heads

@@ -115,9 +115,12 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<class Key, class Hash, class KE, class A>
   auto rbend(unordered_set<Key, Hash, KE, A>& s) { return s.end(); }
 
+  // on callables, append will call the function and return the result
+  template<class T, invocable<T&&> F>
+  auto append(F&& f, T&& t) { return forward<F>(f)(forward<T>(t)); }
 
   // on non-map containers, append = emplace
-  template<class C, class First, class ...Args> requires (!MapType<C> && !VectorType<C> && !CompatibleValueTypes<C, First>)
+  template<IterableType C, class First, class ...Args> requires (!MapType<C> && !VectorType<C> && !CompatibleValueTypes<C, First>)
   auto append(C& container, First&& first, Args&&... args) { return container.emplace(forward<First>(first), forward<Args>(args)...); }
 
   // on vectors, append =  emplace_back 

@@ -68,7 +68,7 @@ namespace PT{
       tmp.reserve(u_children.size());
       std::DisjointSetForest<NodeDesc> child_partition;
       // step 2.1: add all intervals and nodes to tmp - NOTE: keep in mind that DFS-intervals are DISJOINT!
-      for(const NodeDesc& v: u_children) {
+      for(const NodeDesc v: u_children) {
         tmp.emplace_back(node_infos.at(v).get_DFS_interval(), v);
         child_partition.add_new_set(v);
       }
@@ -111,9 +111,9 @@ namespace PT{
       assert(cut_node_mark == -1);
       if(!u_node.is_leaf()) {
         if(u_node.is_root()) { // if u's in-degree is 0, we need to see at least 2 cut-node children for u to be a cut-node
-          CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc& v){ ++cut_node_mark; return cut_node_mark; });
+          CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ ++cut_node_mark; return cut_node_mark; });
         } else {
-          CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc& v){ return (cut_node_mark = 1); });
+          CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ return (cut_node_mark = 1); });
         }
         if(cut_node_mark == -1) cut_node_mark = 0;
       } else cut_node_mark = 0;
@@ -138,7 +138,7 @@ namespace PT{
     bool compute_mark(const Node& u_node, const auto& node_infos) {
       if(!u_node.is_leaf()) {
         // use the callback to put all cut-children of u into our cut_children vector
-        CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc& v){ append(cut_children, v); return false; });
+        CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ append(cut_children, v); return false; });
         cut_node_mark = !cut_children.empty();
       } else cut_node_mark = 0;
       return cut_node_mark;
@@ -174,12 +174,12 @@ namespace PT{
 
     // the first DFS sets up preorder numbers and numbers of descendants in the node_infos
     // NOTE: we use node_infos to indicate which nodes we have already visited
-    std::emplace_result<InfoMap> setup_DFS(const NodeDesc& u, uint32_t& time) {
+    std::emplace_result<InfoMap> setup_DFS(const NodeDesc u, uint32_t& time) {
       const auto emp_res = node_infos.emplace(u, time);
       if(emp_res.second){
         ++time;
         auto& u_info = emp_res.first->second;
-        for(const NodeDesc& v: node_of<Network>(u).children()) {
+        for(const NodeDesc v: node_of<Network>(u).children()) {
           const auto [v_iter, success] = setup_DFS(v, time);
           auto& v_info = v_iter->second;
           DEBUG5(std::cout << "CUT: first DFS for edge "<<u<<" "<<u_info<<" -----> "<<v<<" "<<v_info<<"\n");
@@ -195,10 +195,10 @@ namespace PT{
     }
 
     // the second DFS updates the lowest and highest seen neighbors upwards
-    InfoStruct& second_DFS(const NodeDesc& u, const size_t time_limit = 0) {
+    InfoStruct& second_DFS(const NodeDesc u, const size_t time_limit = 0) {
       InfoStruct& u_info = node_infos.at(u);
       if(u_info.disc_time >=  time_limit) {
-        for(const NodeDesc& v: children_of<Network>(u)) {
+        for(const NodeDesc v: children_of<Network>(u)) {
           const auto& v_info = second_DFS(v, u_info.disc_time);
           u_info.update_from_child(v_info);
           DEBUG5(std::cout << "CUT: 2nd: updated infos for "<< u <<": "<<u_info<<'\n');
@@ -226,7 +226,7 @@ namespace PT{
 
 
   public:
-    CutIter(const NodeDesc& _root):
+    CutIter(const NodeDesc _root):
       root(_root), iter(POTraversal(_root).begin())
     {
       if((_root != NoNode) && iter.is_valid()) {
@@ -250,7 +250,8 @@ namespace PT{
     bool operator==(const CutIter& other) const { return iter == other.iter; }
     template<class T> bool operator!=(const T& other) const { return !operator==(other); }
 
-    typename DFSIter::reference operator*() const { return *iter; }
+    template<class Iter = DFSIter, class Ref = typename Iter::reference>
+    Ref operator*() const { return *iter; }
     typename DFSIter::pointer operator->() const { return operator*(); }
 
     bool operator==(const std::GenericEndIterator&) const { return !is_valid(); }
@@ -258,10 +259,10 @@ namespace PT{
 
     // NOTE: this can be used as predicate, deciding whether a node is a vertical cut-node or an edge is a bridge
     // NOTE: if you want to use this as a Node predicate, be sure to pass over all nodes BEFOREHAND in order to fill the cache!
-    bool is_cut_node(const NodeDesc& u) const {
+    bool is_cut_node(const NodeDesc u) const {
       return node_infos.at(u).get_mark();
     }
-    bool operator()(const NodeDesc& u) const { return is_cut_node(u); }
+    bool operator()(const NodeDesc u) const { return is_cut_node(u); }
     template<EdgeType E> bool is_bridge(const E& uv) const { return node_infos.at(uv.head()).get_mark(); }
     template<EdgeType E> bool operator()(const E& uv) const { return is_bridge(uv); }
   };
@@ -276,8 +277,8 @@ namespace PT{
   template<StrictPhylogenyType Network> using CutNodeIterFactory = std::IterFactory<CutNodeIter<Network>>;
   template<StrictPhylogenyType Network> using BridgeIterFactory = std::IterFactory<BridgeIter<Network>>;
 
-  template<StrictPhylogenyType Network> CutNodeIterFactory<Network> get_cut_nodes(const NodeDesc& rt) { return rt; }
-  template<StrictPhylogenyType Network> BridgeIterFactory<Network> get_bridges(const NodeDesc& rt) { return rt; }
+  template<StrictPhylogenyType Network> CutNodeIterFactory<Network> get_cut_nodes(const NodeDesc rt) { return rt; }
+  template<StrictPhylogenyType Network> BridgeIterFactory<Network> get_bridges(const NodeDesc rt) { return rt; }
   template<StrictPhylogenyType Network> CutNodeIterFactory<Network> get_cut_nodes(const Network& N) { return N.root(); }
   template<StrictPhylogenyType Network> BridgeIterFactory<Network> get_bridges(const Network& N) { return N.root(); }
 

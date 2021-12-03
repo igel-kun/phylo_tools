@@ -37,7 +37,7 @@ namespace PT{
 
     // dive deeper into the network, up to the next emittable node x, putting ranges on the stack (including that of x); return the current node
     // if we hit a node that is already seen, return that node
-    void dive(const NodeDesc& u) {
+    void dive(const NodeDesc u) {
       ChildContainerRef u_children = get_children(u);
       child_history.emplace_back(u_children);
       DEBUG5(std::cout << "DFS: placing ref to children of "<<u<<" on child_history stack\n");
@@ -65,7 +65,7 @@ namespace PT{
     }
 
     // get the node whose child-iterators are on top of the stack
-    const NodeDesc& node_on_top() const {
+    NodeDesc node_on_top() const {
       // if there are at least 2 ranges on the stack, dereference the second to last to get the current node, otherwise, it's root
       //std::cout << "node on top is " << result << "\n";
       return (child_history.size() > 1) ? get_node(*(child_history[child_history.size() - 2])) : root;
@@ -92,7 +92,7 @@ namespace PT{
         if(!current_child.is_valid()){
           if constexpr (o & postorder) return; // in post-order, output the node instead of backtracking further
           // in in-order, if all but at most one child have been skipped, then output the node instead of backtrack
-          const NodeDesc& u = node_on_top();
+          const NodeDesc u = node_on_top();
           if((o & inorder) && (node_of<Network>(u).out_degree() <= num_skipped + 1)) return;
           if((o & inorder) && is_seen(u)) return;
           backtrack(); // if the children are spent then keep popping end-iterators unless postorder is requested
@@ -115,7 +115,7 @@ namespace PT{
 
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class... Args>
-    DFSIterator(const NodeDesc& _root, Args&&... args):
+    DFSIterator(const NodeDesc _root, Args&&... args):
       Traits(std::forward<Args>(args)...), root(_root)
     { 
       DEBUG5(std::cout << "DFS: making new non-end DFS iterator (type "<< o <<") starting at "<<_root<<" (tracking? "<<track_nodes<<")\n");
@@ -179,8 +179,8 @@ namespace PT{
       DEBUG4(std::cout << "DFS: emitting ptr to node " << result << "\n");
       return &result;
     }
-    const NodeDesc& operator*() const {
-      const NodeDesc& result = node_on_top();
+    NodeDesc operator*() const {
+      const NodeDesc result = node_on_top();
       DEBUG4(std::cout << "DFS: emitting node "<< result<<"\n");
       return result;
     }
@@ -212,7 +212,7 @@ namespace PT{
 
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class... Args>
-    DFSEdgeIterator(const NodeDesc& _root, Args&&... args):
+    DFSEdgeIterator(const NodeDesc _root, Args&&... args):
       Parent(_root, std::forward<Args>(args)...)
     {
       if constexpr (o & edge_preorder) Parent::operator++();
@@ -340,7 +340,7 @@ namespace PT{
       using Parent = std::optional_tuple<TransForbidden, TransSeen>;
       using Parent::Parent;
 
-      auto operator()(const NodeDesc& r) const {
+      auto operator()(const NodeDesc r) const {
         if constexpr (has_seen_set) {
           if constexpr (has_forbidden_pred) {
             return SingleRootIterFac(r, this->template get<0>(), this->template get<1>());
@@ -411,7 +411,7 @@ namespace PT{
     NodeDesc root;
 
     template<class... Args>
-    TraversalHelper(const NodeDesc& _root, Args&&... args):
+    TraversalHelper(const NodeDesc _root, Args&&... args):
       Parent(std::forward<Args>(args)...),
       root(_root)
     {}

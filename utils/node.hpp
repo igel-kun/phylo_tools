@@ -20,15 +20,16 @@ namespace PT{
     const uintptr_t _name = num_names++;
 
     // for debugging purposes, we may want to change the name to something more readable, like a successive numbering
-    uintptr_t name() const { return _name; }
+    std::string name() const { return std::to_string(_name); }
     NodeDesc get_desc() const { return this; }
   };
   inline uintptr_t _ProtoNode::num_names = 0;
-  std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) { if(nd != NoNode) return os << ((_ProtoNode*)((uintptr_t)nd))->name(); else return os << "NoNode"; }
+  std::ostream& operator<<(std::ostream& os, const NodeDesc& nd) {
+    if(nd != NoNode) return os << ((_ProtoNode*)((uintptr_t)nd))->name(); else return os << "NoNode";
+  }
 #else
   struct _ProtoNode {
-    // by default, the name of a node is its address
-    uintptr_t name() const { return (uintptr_t)this; }
+    static std::string name() { return ""; }
     NodeDesc get_desc() const { return NodeDesc(this); }
   };
 #endif
@@ -73,8 +74,8 @@ namespace PT{
     auto add_successor(Args&&... args) { return append(successors(), std::forward<Args>(args)...); }
     template<class... Args>
     auto add_child(Args&&... args) { return add_successor(std::forward<Args>(args)...); }
-    size_t remove_successor(const NodeDesc& n) { return std::erase(successors(), n); }
-    size_t remove_child(const NodeDesc& n) { return remove_successor(n); }
+    size_t remove_successor(const NodeDesc n) { return std::erase(successors(), n); }
+    size_t remove_child(const NodeDesc n) { return remove_successor(n); }
     void remove_any_successor() { std::pop(successors()); }
     void remove_any_child() { remove_any_successor(); }
 
@@ -87,8 +88,8 @@ namespace PT{
     auto add_predecessor(Args&&... args) { return append(predecessors(), std::forward<Args>(args)...); }
     template<class... Args>
     auto add_parent(Args&&... args) { return add_predecessor(std::forward<Args>(args)...); }
-    size_t remove_predecessor(const NodeDesc& n) { return predecessors().erase(n); }
-    size_t remove_parent(const NodeDesc& n) { return remove_predecessor(n); }
+    size_t remove_predecessor(const NodeDesc n) { return predecessors().erase(n); }
+    size_t remove_parent(const NodeDesc n) { return remove_predecessor(n); }
     void remove_any_predecessor() { std::pop(predecessors()); }
     void remove_any_parent() { remove_any_predecessor(); }
 
@@ -103,12 +104,12 @@ namespace PT{
     bool is_isolated() const { return predecessors().empty() && successors().empty(); }
 
     template<AdjacencyType Adj>
-    void replace_parent(const NodeDesc& old_parent, Adj&& new_parent) {
+    void replace_parent(const NodeDesc old_parent, Adj&& new_parent) {
       assert(test(predecessors(), old_parent));
       std::replace(predecessors(), old_parent, forward<Adj>(new_parent));
     }
     template<AdjacencyType Adj>
-    void replace_child(const NodeDesc& old_child, Adj&& new_child) {
+    void replace_child(const NodeDesc old_child, Adj&& new_child) {
       assert(test(successors(), old_child));
       std::replace(successors(), old_child, forward<Adj>(new_child));
     }
@@ -116,12 +117,12 @@ namespace PT{
     // convenient way of applying some function to all nodes of a subtree
     void apply_to_subtree(auto&& function) const {
       function(*this);
-      for(const NodeDesc& v: successors())
+      for(const NodeDesc v: successors())
         static_cast<const ProtoNode*>(v)->apply_to_subtree(std::as_const(function));
     }
     void apply_to_subtree(auto&& function) {
       function(*this);
-      for(const NodeDesc& v: successors())
+      for(const NodeDesc v: successors())
         static_cast<ProtoNode*>(v)->apply_to_subtree(std::as_const(function));
     }
 
@@ -162,9 +163,7 @@ namespace PT{
     
     // initialize only the data, leaving parents and children empty
     template<class First, class... Args> requires (!NodeType<First>)
-    _Node(First&& first, Args&&... args): _data(std::forward<First>(first), std::forward<Args>(args)...) {
-      std::cout << "created node named "<<this->name()<<" at "<<this <<"\n";
-    }
+    _Node(First&& first, Args&&... args): _data(std::forward<First>(first), std::forward<Args>(args)...) {}
     _Node() = default;
 
     NodeData& data() & { return _data; }
@@ -224,7 +223,7 @@ namespace PT{
   NodeDesc make_node(Args&&... args) { return new _Node(std::forward<Args>(args)...); }
 
   template<StrictNodeType _Node>
-  void delete_node(const NodeDesc& u) { delete reinterpret_cast<_Node*>((uintptr_t)u); }
+  void delete_node(const NodeDesc u) { delete reinterpret_cast<_Node*>((uintptr_t)u); }
 
   // create a new node from the data of some other node
   template<StrictNodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
@@ -244,15 +243,15 @@ namespace PT{
   }
 
   template<StrictNodeType Node>
-  Node& node_of(const NodeDesc& x) { return *(reinterpret_cast<Node*>((uintptr_t)x)); }
+  Node& node_of(const NodeDesc x) { return *(reinterpret_cast<Node*>((uintptr_t)x)); }
 
   template<PhylogenyType Network>
-  auto& node_of(const NodeDesc& x) { return node_of<typename Network::Node>(x); }
+  auto& node_of(const NodeDesc x) { return node_of<typename Network::Node>(x); }
 
   template<class T>
-  auto& children_of(const NodeDesc& x) { return node_of<T>(x).children(); }
+  auto& children_of(const NodeDesc x) { return node_of<T>(x).children(); }
   template<class T>
-  auto& parents_of(const NodeDesc& x) { return node_of<T>(x).parents(); }
+  auto& parents_of(const NodeDesc x) { return node_of<T>(x).parents(); }
 
 
 
@@ -274,75 +273,76 @@ namespace PT{
     template<class T>
     using EdgeMap = std::unordered_map<Edge, T>;
     
+    static constexpr bool has_node_labels = Node::has_label;
     static constexpr bool has_node_data = Node::has_data;
     static constexpr bool has_edge_data = Adjacency::has_data;
 
-    static constexpr Node& node_of(const NodeDesc& u) { return PT::node_of<Node>(u); }
-    Node& operator[](const NodeDesc& u) const & { return node_of(u); }
-    Node&& operator[](const NodeDesc& u) && { return node_of(u); }
+    static constexpr Node& node_of(const NodeDesc u) { return PT::node_of<Node>(u); }
+    Node& operator[](const NodeDesc u) const & { return node_of(u); }
+    Node&& operator[](const NodeDesc u) && { return node_of(u); }
     
-    static constexpr uintptr_t name(const NodeDesc& u) { return node_of(u).name(); }
-    static constexpr std::string& label(const NodeDesc& u) { return node_of(u).label(); }
+    static constexpr std::string name(const NodeDesc u) { return node_of(u).name(); }
+    static constexpr std::string& label(const NodeDesc u) { return node_of(u).label(); }
 
-    static constexpr SuccContainer& successors(const NodeDesc& u) { return node_of(u).successors(); }
-    static constexpr SuccContainer& children(const NodeDesc& u) { return node_of(u).successors(); }
+    static constexpr SuccContainer& successors(const NodeDesc u) { return node_of(u).successors(); }
+    static constexpr SuccContainer& children(const NodeDesc u) { return node_of(u).successors(); }
 
-    static constexpr PredContainer& predecessors(const NodeDesc& u) { return node_of(u).predecessors(); }
-    static constexpr PredContainer& parents(const NodeDesc& u) { return node_of(u).predecessors(); }
+    static constexpr PredContainer& predecessors(const NodeDesc u) { return node_of(u).predecessors(); }
+    static constexpr PredContainer& parents(const NodeDesc u) { return node_of(u).predecessors(); }
 
-    static constexpr Adjacency& any_successor(const NodeDesc& u) { return node_of(u).any_successor(); }
-    static constexpr Adjacency& any_child(const NodeDesc& u) { return node_of(u).any_successor(); }
-    static constexpr Adjacency& child(const NodeDesc& u) { return node_of(u).any_successor(); }
-
-    template<class... Args>
-    static constexpr auto add_successor(const NodeDesc& u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
-    template<class... Args>
-    static constexpr auto add_child(const NodeDesc& u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
-
-    static constexpr size_t remove_successor(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_successor(n); }
-    static constexpr size_t remove_child(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_successor(n); }
-
-    static constexpr void remove_any_successor(const NodeDesc& u) { return node_of(u).remove_any_successors(); }
-    static constexpr void remove_any_child(const NodeDesc& u) { return node_of(u).remove_any_successors(); }
-
-    static constexpr Adjacency& any_predecessor(const NodeDesc& u) { return node_of(u).any_predecessor(); }
-    static constexpr Adjacency& any_parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
-    static constexpr Adjacency& parent(const NodeDesc& u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& any_successor(const NodeDesc u) { return node_of(u).any_successor(); }
+    static constexpr Adjacency& any_child(const NodeDesc u) { return node_of(u).any_successor(); }
+    static constexpr Adjacency& child(const NodeDesc u) { return node_of(u).any_successor(); }
 
     template<class... Args>
-    static constexpr auto add_predecessor(const NodeDesc& u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+    static constexpr auto add_successor(const NodeDesc u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
     template<class... Args>
-    static constexpr auto add_parent(const NodeDesc& u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+    static constexpr auto add_child(const NodeDesc u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
 
-    static constexpr size_t remove_predecessor(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_predecessor(n); }
-    static constexpr size_t remove_parent(const NodeDesc& u, const NodeDesc& n) { return node_of(u).remove_predecessor(n); }
+    static constexpr size_t remove_successor(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_successor(n); }
+    static constexpr size_t remove_child(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_successor(n); }
 
-    static constexpr void remove_any_predecessor(const NodeDesc& u) { return node_of(u).remove_any_predecessor(); }
-    static constexpr void remove_any_parent(const NodeDesc& u) { return node_of(u).remove_any_predecessor(); }
+    static constexpr void remove_any_successor(const NodeDesc u) { return node_of(u).remove_any_successors(); }
+    static constexpr void remove_any_child(const NodeDesc u) { return node_of(u).remove_any_successors(); }
 
-    static constexpr size_t in_degree(const NodeDesc& u) { return node_of(u).in_degree(); }
-    static constexpr size_t out_degree(const NodeDesc& u) { return node_of(u).out_degree(); }
-    static constexpr size_t degree(const NodeDesc& u) { return node_of(u).degree(); }
-    static constexpr std::pair<size_t,size_t> degrees(const NodeDesc& u) { return node_of(u).degrees(); }
-    static constexpr bool is_root(const NodeDesc& u) { return node_of(u).is_root(); }
-    static constexpr bool is_tree_node(const NodeDesc& u) { return node_of(u).is_tree_node(); }
-    static constexpr bool is_reti(const NodeDesc& u) { return node_of(u).is_reti(); }
-    static constexpr bool is_leaf(const NodeDesc& u) { return node_of(u).is_leaf(); }
-    static constexpr bool is_suppressible(const NodeDesc& u) { return node_of(u).is_suppressible(); }
-    static constexpr bool is_inner_node(const NodeDesc& u) { return node_of(u).is_inner_node(); }
-    static constexpr bool is_isolated(const NodeDesc& u) { return node_of(u).is_isolated(); }
+    static constexpr Adjacency& any_predecessor(const NodeDesc u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& any_parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
+
+    template<class... Args>
+    static constexpr auto add_predecessor(const NodeDesc u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+    template<class... Args>
+    static constexpr auto add_parent(const NodeDesc u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
+
+    static constexpr size_t remove_predecessor(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_predecessor(n); }
+    static constexpr size_t remove_parent(const NodeDesc u, const NodeDesc n) { return node_of(u).remove_predecessor(n); }
+
+    static constexpr void remove_any_predecessor(const NodeDesc u) { return node_of(u).remove_any_predecessor(); }
+    static constexpr void remove_any_parent(const NodeDesc u) { return node_of(u).remove_any_predecessor(); }
+
+    static constexpr size_t in_degree(const NodeDesc u) { return node_of(u).in_degree(); }
+    static constexpr size_t out_degree(const NodeDesc u) { return node_of(u).out_degree(); }
+    static constexpr size_t degree(const NodeDesc u) { return node_of(u).degree(); }
+    static constexpr std::pair<size_t,size_t> degrees(const NodeDesc u) { return node_of(u).degrees(); }
+    static constexpr bool is_root(const NodeDesc u) { return node_of(u).is_root(); }
+    static constexpr bool is_tree_node(const NodeDesc u) { return node_of(u).is_tree_node(); }
+    static constexpr bool is_reti(const NodeDesc u) { return node_of(u).is_reti(); }
+    static constexpr bool is_leaf(const NodeDesc u) { return node_of(u).is_leaf(); }
+    static constexpr bool is_suppressible(const NodeDesc u) { return node_of(u).is_suppressible(); }
+    static constexpr bool is_inner_node(const NodeDesc u) { return node_of(u).is_inner_node(); }
+    static constexpr bool is_isolated(const NodeDesc u) { return node_of(u).is_isolated(); }
 /*
     template<AdjacencyType Adj>
-    static constexpr void replace_parent(const NodeDesc& u, const NodeDesc& old_parent, Adj&& new_parent)
+    static constexpr void replace_parent(const NodeDesc u, const NodeDesc old_parent, Adj&& new_parent)
     { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
     template<AdjacencyType Adj>
-    static constexpr void replace_child(const NodeDesc& u, const NodeDesc& old_child, Adj&& new_child)
+    static constexpr void replace_child(const NodeDesc u, const NodeDesc old_child, Adj&& new_child)
     { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
 */
     // convenient way of applying some function to all nodes of a subtree
     template<class Func>
-    static constexpr void apply_to_subtree(const NodeDesc& u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
-    static constexpr size_t count_nodes_below(const NodeDesc& u) { return node_of(u).count_nodes_below(); }
+    static constexpr void apply_to_subtree(const NodeDesc u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
+    static constexpr size_t count_nodes_below(const NodeDesc u) { return node_of(u).count_nodes_below(); }
 
     // ================ Edges =======================
     using OutEdgeContainer = typename _Node::OutEdgeContainer;
@@ -350,16 +350,16 @@ namespace PT{
     using InEdgeContainer = typename _Node::InEdgeContainer;
     using ConstInEdgeContainer = typename _Node::ConstInEdgeContainer;
 
-    static constexpr OutEdgeContainer out_edges(const NodeDesc& u) { return node_of(u).out_edges(); }
-    static constexpr InEdgeContainer in_edges(const NodeDesc& u) { return node_of(u).in_edges(); }
+    static constexpr OutEdgeContainer out_edges(const NodeDesc u) { return node_of(u).out_edges(); }
+    static constexpr InEdgeContainer in_edges(const NodeDesc u) { return node_of(u).in_edges(); }
   };
 
   using NoData = uint_fast8_t;
   // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
-  template<PhylogenyType Net, class Else = NoData>
+  template<class Net, class Else = NoData> //requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
   using NodeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_node_data, typename std::remove_cvref_t<Net>::NodeData, Else>;
   // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
-  template<PhylogenyType Net, class Else = NoData>
+  template<class Net, class Else = NoData> //requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
   using EdgeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_edge_data, typename std::remove_cvref_t<Net>::EdgeData, Else>;
 
 

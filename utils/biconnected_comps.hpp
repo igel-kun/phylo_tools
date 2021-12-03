@@ -11,8 +11,8 @@
 namespace PT{
 
   // NOTE: only enumeration of vertical components of a **single-rooted** network is supported for now
-  // NOTE: CreateNodeData::operator() must take a NodeDesc& and return something that is passed to Component::NodeData()
-  //       CreateEdgeData::operator() must take an Adjacency& and a const NodeDesc& and return something that is passed to Component::EdgeData()
+  // NOTE: CreateNodeData::operator() must take a NodeDesc and return something that is passed to Component::NodeData()
+  //       CreateEdgeData::operator() must take an Adjacency& and a const NodeDesc and return something that is passed to Component::EdgeData()
   template<PhylogenyType _Network,
            PhylogenyType Component = _Network,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
@@ -49,34 +49,34 @@ namespace PT{
     OldToNewTranslation old_to_new;
     std::pair<CreateNodeData, CreateEdgeData> make_data;
 
-    const NodeDesc& get_current_cut_node() const { assert(is_valid()); return Parent::operator*(); }
+    NodeDesc get_current_cut_node() const { assert(is_valid()); return Parent::operator*(); }
 
     // construct a vertical biconnected component containing the arc uv and store it in 'output'
     //NOTE: remember to set the root of the output component after calling this!
-    void make_component_along(const NodeDesc& rt, const NodeDesc& v, Emplacer& output_emplacer) {
+    void make_component_along(const NodeDesc rt, const NodeDesc v, Emplacer& output_emplacer) {
       if(append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v <<'\n');
-        Node& v_node = node_of<Node>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
+        Node& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
         for(auto& u: v_node.parents()) output_emplacer.emplace_edge(u, v, make_data.second(u,v));
-        for(const NodeDesc& u: v_node.parents()) 
+        for(const NodeDesc u: v_node.parents()) 
           if(u != rt)
             make_component_along(rt, u, output_emplacer);
         if(Parent::is_cut_node(v)) {
           // if v is a cut-node, then not all children w of v are in the same BCC as rt (only those seeing an outside neighbor wrt. v)
           const auto& v_info = node_infos.at(v);
-          for(const NodeDesc& w: v_node.children())
+          for(const NodeDesc w: v_node.children())
             if(v_info.child_has_outside_neighbor(node_infos.at(w)))
               make_component_along(rt, w, output_emplacer);
         } else
-          for(const NodeDesc& w: v_node.children())
+          for(const NodeDesc w: v_node.children())
             make_component_along(rt, w, output_emplacer);
       }
     }
 
-    void make_component_along(const NodeDesc& v) {
+    void make_component_along(const NodeDesc v) {
       output = std::make_unique<Component>();
       Emplacer output_emplacer{*output, old_to_new, make_data.first};
-      const NodeDesc& u = get_current_cut_node();
+      const NodeDesc u = get_current_cut_node();
       make_component_along(u, v, output_emplacer);
       output_emplacer.mark_root(u);
     }
@@ -90,7 +90,9 @@ namespace PT{
       if(!child_comp_iter) {
         // step 1: advance the cut-node iterator
         Parent::operator++();
-        if(is_valid()) compute_new_child_comps();
+        if(is_valid()) 
+          compute_new_child_comps();
+        else DEBUG3(std::cout << "BCC: that's it, no more BCCs\n");
       }
     }
 
@@ -107,7 +109,7 @@ namespace PT{
     }
 
     void compute_new_child_comps() {
-      const NodeDesc& u = get_current_cut_node();
+      const NodeDesc u = get_current_cut_node();
       DEBUG4(std::cout << "BCC: cut node "<< u <<" with child stack "<<node_infos.at(u).cut_children<<"\n");
       child_comp_iter = node_infos.at(u).cut_children;
       assert(child_comp_iter.is_valid());
@@ -254,7 +256,7 @@ namespace PT{
     {}
 
     template<class... Args>
-    BiconnectedComponents(const NodeDesc& _root, Args&&... args):
+    BiconnectedComponents(const NodeDesc _root, Args&&... args):
       BiconnectedComponents(get_cut_nodes<Network>(_root), std::forward<Args>(args)...)
     {}
 
@@ -286,12 +288,14 @@ namespace PT{
   using BiconnectedComponents = std::IterFactory<BiconnectedComponentIter<_Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>>;
 
   // deduce parameters from arguments
-  template<PhylogenyType Component,
-           PhylogenyType Network = Component,
+  // NOTE: if you pass a PhylogenyType as first argument, be sure that it's the same as Network as, otherwise, a temporary copy will be made :(
+  template<StrictPhylogenyType Network,
+           StrictPhylogenyType Component = Network,
            class CutsInit,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            class CreateNodeData = typename Component::IgnoreNodeDataFunc,
            class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
+             requires (!PhylogenyType<CutsInit> || std::is_same_v<std::remove_cvref_t<CutsInit>,std::remove_cvref_t<Network>>)
   auto get_biconnected_components(CutsInit&& cuts,
                                   OldToNewTranslation&& old_to_new = OldToNewTranslation(),
                                   CreateNodeData&& nd = CreateNodeData(),

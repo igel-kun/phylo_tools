@@ -10,8 +10,8 @@ namespace PT {
 
     operator NodeDesc&() { return nd; }
     operator const NodeDesc&() const { return nd; }
-    bool operator==(const NodeDesc& other) const { return nd == other; }
-    bool operator!=(const NodeDesc& other) const { return nd != other; }
+    bool operator==(const NodeDesc other) const { return nd == other; }
+    bool operator!=(const NodeDesc other) const { return nd != other; }
   };
 
   template<class EdgeData> struct Edge;
@@ -66,7 +66,7 @@ namespace PT {
     Adjacency(const AdjIter& iter): Adjacency(*iter) {}
 
     template<class... Args>
-    Adjacency(const NodeDesc& _nd, Args&&... args): Parent(_nd) {}
+    Adjacency(const NodeDesc _nd, Args&&... args): Parent(_nd) {}
 
     Adjacency& operator=(const Adjacency&) = default;
     Adjacency& operator=(Adjacency&&) = default;

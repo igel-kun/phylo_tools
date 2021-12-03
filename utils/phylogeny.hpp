@@ -25,7 +25,7 @@ namespace PT {
     using Node = typename std::remove_reference_t<Phylo>::Node;
     using Edge = typename std::remove_reference_t<Phylo>::Edge;
 
-    NodeDataReturn operator()(const NodeDesc& u) const { if constexpr (Node::has_data) return node_of<Phylo>(u).data(); else return NodeData(); }
+    NodeDataReturn operator()(const NodeDesc u) const { if constexpr (Node::has_data) return node_of<Phylo>(u).data(); else return NodeData(); }
     EdgeDataReturn operator()(const Edge& uv) const { if constexpr (Edge::has_data) return uv.data(); else return EdgeData(); }
   };
   template<PhylogenyType Phylo>
@@ -231,7 +231,7 @@ namespace PT {
     }
 
     // this marks a node as new root
-    bool mark_root(const NodeDesc& u) {
+    bool mark_root(const NodeDesc u) {
       assert(in_degree(u) == 0);
       const bool result = append(_roots, u).second;
       return result;
@@ -385,7 +385,7 @@ namespace PT {
       // step 3: free storage
       delete_node(&v_node);
     }  
-    void remove_leaf(const NodeDesc& v) { remove_leaf(node_of(v)); }
+    void remove_leaf(const NodeDesc v) { remove_leaf(node_of(v)); }
 
     template<class LastRites = std::IgnoreFunction<void>>
     void remove_leaf(const auto& v, const LastRites& goodbye = LastRites()) {
@@ -439,10 +439,10 @@ namespace PT {
 
     // list all nodes below u in order _o (default: postorder)
     template<TraversalType o = postorder>
-    static auto nodes_below(const NodeDesc& u, const order<o> _o = order<o>()) { return NodeTraversal<o, Phylogeny>(u); }
+    static auto nodes_below(const NodeDesc u, const order<o> _o = order<o>()) { return NodeTraversal<o, Phylogeny>(u); }
     // we can represent nodes that are forbidden to visit by passing either a container of forbidden nodes or a node-predicate
     template<class Forbidden, TraversalType o = postorder>
-    static auto nodes_below(const NodeDesc& u, Forbidden&& forbidden, const order<o> _o = order<o>()) {
+    static auto nodes_below(const NodeDesc u, Forbidden&& forbidden, const order<o> _o = order<o>()) {
       return NodeTraversal<o, Phylogeny, void, DefaultSeen, Forbidden>(u, std::forward<Forbidden>(forbidden));
     }
     // we allow passing an iteratable of nodes to traverse from
@@ -476,11 +476,11 @@ namespace PT {
 
 
     template<TraversalType o = postorder>
-    static auto edges_below(const NodeDesc& u, const order<o> _o = order<o>()) {
+    static auto edges_below(const NodeDesc u, const order<o> _o = order<o>()) {
       return AllEdgesTraversal<o, Phylogeny>(u);
     }
     template<class Forbidden, TraversalType o = postorder>
-    static auto edges_below(const NodeDesc& u, Forbidden&& forbidden, const order<o> _o = order<o>()) {
+    static auto edges_below(const NodeDesc u, Forbidden&& forbidden, const order<o> _o = order<o>()) {
       return AllEdgesTraversal<o, Phylogeny, void, DefaultSeen, Forbidden>(u, std::forward<Forbidden>(forbidden));
     }
     template<NodeIterableType Roots, TraversalType o = postorder>
@@ -514,7 +514,7 @@ namespace PT {
 
     template<class... Args>
     static auto leaves_below(Args&&... args) {
-      return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), [](const NodeDesc& n){return node_of(n).is_leaf();});
+      return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), [](const NodeDesc n){return node_of(n).is_leaf();});
     }
     template<class... Args>
     auto leaves(Args&&... args) const { return leaves_below<const RootContainer&>(_roots, std::forward<Args>(args)...); }
@@ -580,8 +580,8 @@ namespace PT {
     //       however, this power enables certain use cases where we want to "directly" access the edges of a network...
     //       just, promise to be careful with your EdgeEmplacers
   public:
-    template<bool, PhylogenyType> friend struct EdgeEmplacementHelper;
-    template<bool, PhylogenyType, NodeTranslationType, class> friend struct EdgeEmplacer;
+    template<bool, StrictPhylogenyType> friend struct EdgeEmplacementHelper;
+    template<bool, StrictPhylogenyType, NodeTranslationType, class> friend struct EdgeEmplacer;
 
     // emplace a set of new edges into *this
     // NOTE: to extract node/edge data, use the data-extraction functions - they will receive a reference to a node/edge of the source phylogeny
@@ -699,7 +699,7 @@ namespace PT {
                                   std::forward<EdgeDataExtract>(ede));
         }
         // mark the roots
-        for(const NodeDesc& r: in_roots) append(_roots, old_to_new.at(r));
+        for(const NodeDesc r: in_roots) append(_roots, old_to_new.at(r));
       }
     }
     
@@ -709,7 +709,7 @@ namespace PT {
              NodeFunctionType NodeDataExtract = CopyOrMoveNodeDataFunc<_Phylo>,
              class EdgeDataExtract = CopyOrMoveEdgeDataFunc<_Phylo>>
     Phylogeny(_Phylo&& N,
-              const NodeDesc& in_root,
+              const NodeDesc in_root,
               NodeDataExtract&& nde = NodeDataExtract(),
               EdgeDataExtract&& ede = EdgeDataExtract(),
               OldToNewTranslation&& old_to_new = OldToNewTranslation(),
@@ -747,7 +747,7 @@ namespace PT {
 #warning TODO: check if this is still correct
     template<StrictPhylogenyType _Phylo, NodeIterableType RContainer>
     Phylogeny(_Phylo&& in_tree, const RContainer& in_roots, const policy_move_t = policy_move_t()) {
-      for(const NodeDesc& r: in_roots)
+      for(const NodeDesc r: in_roots)
         place_below_by_move(std::move(in_tree), r, NoNode);
     }
     // "move" construction with single root
@@ -777,13 +777,13 @@ namespace PT {
       DEBUG3(os << "tree has "<< num_edges() <<" edges and "<< _num_nodes <<" nodes, leaves: "<<leaves()<<"\n");
       DEBUG3(os << "nodes: "<<nodes()<<'\n');
       DEBUG3(os << "edges: "<<edges()<<'\n');
-      for(const NodeDesc& u: nodes())
+      for(const NodeDesc u: nodes())
         os << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
       return os << "\n";
     }
 
 
-    void print_subtree(std::ostream& os, const NodeDesc& u, std::string prefix, std::unordered_bitset& seen) const {
+    static void print_subtree(std::ostream& os, const NodeDesc u, std::string prefix, auto& seen) {
       const bool u_reti = is_reti(u);
       std::string u_name = std::to_string(name(u));
       if constexpr (Node::has_label){
@@ -793,16 +793,16 @@ namespace PT {
       }
       if(u_name == "") {
         if(u_reti)
-          u_name = std::string("(" + std::to_string(u) + ")R");
+          u_name = std::string("(" + std::to_string(u) + ")");
         else if(!is_leaf(u)) u_name = std::string("+");
       }
       os << '-' << u_name;
       if(u_reti) os << 'R';
       
       bool u_seen = true;
-      if(!u_reti || !(u_seen = test(seen, name(u)))) {
+      if(!u_reti || !(u_seen = test(seen, u))) {
         const auto& u_childs = children(u);
-        if(u_reti) append(seen, name(u));
+        if(u_reti) append(seen, u);
         switch(u_childs.size()){
           case 0:
             os << std::endl;
@@ -815,7 +815,7 @@ namespace PT {
             prefix += std::string(u_name.length(), ' ') + '|';
 
             uint32_t count = u_childs.size();
-            for(const auto c: u_childs){
+            for(const NodeDesc c: u_childs){
               print_subtree(os, c, prefix, seen);
               if(--count > 0) os << prefix;
               if(count == 1) prefix.back() = ' ';
@@ -824,11 +824,12 @@ namespace PT {
       } else os << std::endl;
     }
 
-    void print_subtree(std::ostream& os) const { print_subtree(os, front(_roots)); }
-    void print_subtree(std::ostream& os, const NodeDesc& u) const {
-      std::unordered_bitset seen(_num_nodes);
-      print_subtree(os, u, "", seen);
+    static void print_subtree(std::ostream& os, const NodeDesc u) {
+      NodeSet tmp;
+      print_subtree(os, u, "", tmp);
     }
+    
+    void print_subtree(std::ostream& os) const { print_subtree(os, front(_roots)); }
 
 
     // other phylogenies are our friends

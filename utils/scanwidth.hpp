@@ -41,37 +41,36 @@ namespace PT{
   };
 
 
-
-
-  template<bool low_memory_version, class _Network, class _Extension, bool ignore_deg2 = true>
+  template<bool low_memory_version, PhylogenyType Network, bool ignore_deg2 = true>
   class ScanwidthDP {
   public:
-    using DPEntry = typename std::conditional_t<low_memory_version, _DPEntryLowMem<_Network>, _DPEntry<_Network>>;
+    using DPEntry = typename std::conditional_t<low_memory_version, _DPEntryLowMem<Network>, _DPEntry<Network>>;
  
   protected:
     using DPTable = std::unordered_map<NodeSet, DPEntry, std::set_hash<NodeSet>>;
     
-    const _Network& N;
+    Network& N;
     DPTable dp_table;
 
     // return whether u is a root in N[c], that is, if u has parents in c
     bool is_root_in_set(const NodeDesc u, const NodeSet& c) {
-      for(auto v: N.parents(u)){
+      for(auto v: node_of<Network>(u).parents()){
         // ignore deg-2 nodes
         if(ignore_deg2) while(N.is_suppressible(v)) v = std::front(N.parents(v));
         if(test(c, v)) return false;
       }
       return true;
     }
-
+  
   public:
 
-    ScanwidthDP(const _Network& _N): N(_N) {}
+    ScanwidthDP(Network& _N): N(_N) {}
 
-    void compute_min_sw_extension_no_bridges(_Extension& ex) {
-      // this code asserts that the DPEntry can be move-assigned
-      assert(std::is_move_assignable_v<DPEntry>);
-      DEBUG4(std::cout << "computing scanwidth of block:\n"<<N<<"\n";);
+    // NOTE: you can pass either an extension or a callable to register nodes in order
+    //       if you pass any iterable, then we will append each node's NodeData to it in order
+    template<bool include_root = false, class RegisterNode>
+    void compute_min_sw_extension_no_bridges(RegisterNode&& _register_node) {
+      DEBUG4(std::cout << "computing scanwidth of block:\n"<<N<<" (low mem: "<< low_memory_version <<")\n";);
 
       // this is the main dynamic programming table - it could grow exponentially large...
       // the table maps a set X of nodes to any extension with smallest sw for the graph where all nodes but X are contracted onto the root
@@ -84,7 +83,8 @@ namespace PT{
         DEBUG5(std::cout << "======= checking constraint node subsets ========\n");
         // check all node-subsets constraint by the arcs in N
         STAT(uint64_t num_subsets = 0;)
-        for(auto&& nodes: NetworkConstraintSubsetFactory<_Network, NodeSet>(N)){
+        for(auto& nodes: NetworkConstraintSubsetFactory<Network>(N)){
+          DEBUG4(std::cout << "\tcurrent subset: "<<nodes<<"\n");
           sw_t best_sw = N.num_nodes() + 1;
           last_iter = append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
           DPEntry& best_entry = last_iter->second;
@@ -127,36 +127,41 @@ namespace PT{
         STAT(uint64_t count_unsupp = 0; for(const auto& u: N) { if(!N.is_suppressible(u)) ++count_unsupp;})
         STAT(std::cout << "STAT: " <<N.num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
         // the last extension should be the one we are looking for
-        append(ex, last_iter->second.ex);
-      } else append(ex, N.root());
+        const auto& ex = last_iter->second.ex;
+        size_t num_nodes = ex.size();
+        if constexpr (!include_root) --num_nodes;
+        for(size_t i = 0; i != num_nodes; ++i)
+          std::append(_register_node, ex[i]);
+      } else {
+        if constexpr (include_root)
+          std::append(_register_node, N.root());
+      }
     }
   };
 
-  template<bool low_memory_version, class _Network, class _Extension>
-  void compute_min_sw_extension(const _Network& N, _Extension& ex)
-  {
+  template<bool low_memory_version, PhylogenyType Network, class RegisterNode>
+  void compute_min_sw_extension(const Network& N, RegisterNode&& _register_node) {
     // biconnected components only have node-data (linking to the original node), but no edge data and no labels
-    using Component = CompatibleNetwork<_Network, NodeDesc, void, void>;
+    using Component = CompatibleNetwork<Network, NodeDesc, void, void>;
+    using DPType = ScanwidthDP<low_memory_version, const Component>;
     
-    std::cout << "getting biconnected component factory\n";
-    auto bc_components = get_biconnected_components<Component>(N, NodeTranslation(), [](const NodeDesc& u){ return u; });
-    for(const auto& bcc: std::move(bc_components)){
-      std::cout << "found biconnected component:\n"<< bcc <<"\n";
+    DEBUG4(std::cout << "getting biconnected component factory\n");
+    const auto bc_components = get_biconnected_components<Network, Component>(N, NodeTranslation(), [](const NodeDesc u){ return u; });
+    for(const auto& bcc: bc_components){
+      DEBUG5(std::cout << "found biconnected component:\n"; std::cout << bcc <<"\n";)
       if(bcc.num_edges() != 1){
-        ScanwidthDP<low_memory_version, Component, _Extension> dp(bcc);
-        dp.compute_min_sw_extension_no_bridges(ex);
-        // always remove the root of a component, so the bridge can re-insert it
-        ex.pop_back();
+        DPType dp(bcc);
+        dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ std::append(_register_node, node_of<Component>(u).data()); });
       } else {
-        std::cout << "only 1 edge, so adding its head to ex\n";
+        DEBUG5(std::cout << "only 1 edge, so adding its head to ex\n");
         const auto uv = std::front(bcc.edges());
         //const auto& uv = std::front(bcc.edges());
-        std::cout << "edge is "<<uv<<"\n";
-        append(ex, uv.head());
+        DEBUG5(std::cout << "edge is "<<uv<<"\n");
+        std::append(_register_node, node_of<Component>(uv.head()).data());
       }
-      std::cout << "done working with\n"<<bcc<<"\n";
+      DEBUG5(std::cout << "done working with\n"; std::cout <<bcc<<"\n";)
     }
-    append(ex, N.root());
+    std::append(_register_node, N.root());
   }
 
 

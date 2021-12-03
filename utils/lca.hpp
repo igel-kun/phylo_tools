@@ -8,7 +8,7 @@ namespace PT {
 
 	// the LCA oracle is a class that answers LCA queries
 	// NOTE: when the tree/network changes, the oracle becomes invalid, so don't query it!
-	template<StrictPhylogenyType Phylo>
+	template<class Phylo> //requires PhylogenyType<Phylo> // NOTE: this will cause 'concept depends on itself'
 	class LCAOracle {
 	protected:
 		const Phylo& N;
@@ -16,7 +16,7 @@ namespace PT {
 		LCAOracle(const Phylo& _N): N(_N) {}
 	};
 
-	template<StrictPhylogenyType Net>
+	template<class Net> //requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
 	class NaiveLCAOracle: public LCAOracle<Net> {
 #warning write me
 	public:
@@ -25,7 +25,7 @@ namespace PT {
 		}
 	};
 
-	template<StrictPhylogenyType Tree> requires TreeType<Tree>
+	template<TreeType Tree> //requires TreeType<Tree>
 	class NaiveLCAOracle<Tree>: public LCAOracle<Tree> {
 		using Parent = LCAOracle<Tree>;
 		using Parent::N;

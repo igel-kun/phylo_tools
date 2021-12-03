@@ -8,102 +8,102 @@
 
 namespace PT{
 
-
-  // const _Container& will be the return type of the dereference operator
+  // const Container& will be the return type of the dereference operator
   // for performance reasons, it should support fast std::test() queries, as well as insert() and erase()
-  template<class _Network, class _Container = NodeSet>
-  class NetworkConstraintSubsetIterator
-  {
+  template<class Network, class Container = NodeSet, bool ignore_deg2_nodes = true>
+  class NetworkConstraintSubsetIterator {
   protected:
-    const _Network& N;
-    const bool ignore_deg2_nodes;
+    NodeDesc root;
 
-    _Container current; // current output set
+    Container current; // current output set
     std::map<size_t, NodeDesc> available; // this maps post-order numbers to their nodes for all available nodes, sorted by post-order number
     std::iterable_stack<NodeDesc> branched; // nodes whose value has been branched
 
     std::unordered_map<NodeDesc, size_t> zero_fixed_children; // number of children that are not in the current set
     std::unordered_map<NodeDesc, size_t> po_number; // save the post-order number for each node
   
+    static auto& node_of(const NodeDesc u) { return PT::node_of<Network>(u); }
+
     // mark all leaves available and initialize zero_fixed_children to the out-degrees
-    void init_DFS(const NodeDesc u, size_t& time)
-    {
+    void init_DFS(const NodeDesc u, size_t& time) {
       // use zero_fixed_children as indicator whether we've already seen u
-      auto emp_res = zero_fixed_children.emplace(u, N.out_degree(u));
-      if(emp_res.second){
-        if(N.is_leaf(u))
-          branched.push(u);
-        else
-          for(NodeDesc v: N.children(u)){
-            if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.children(v));
+      const auto& u_node = node_of(u);
+      const bool success = append(zero_fixed_children, u, u_node.out_degree()).second;
+      if(success){
+        if(!u_node.is_leaf()) {
+          for(NodeDesc v: u_node.children()){
+            if constexpr (ignore_deg2_nodes){
+              while(node_of(v).is_suppressible())
+                v = std::front(node_of(v).children());
+            }
             init_DFS(v, time);
           }
+        } else branched.push(u);
         append(po_number, u, ++time);
       }
     }
 
-    inline bool current_state(const NodeDesc u) const { return test(current, u); }
-    inline void first_subset() {
+    bool current_state(const NodeDesc u) const { return test(current, u); }
+
+    void first_subset() {
       size_t time = 0;
-      init_DFS(N.root(), time);
+      init_DFS(root, time);
     }
 
     // set a branched-on node to 0 and mark it available
-    void un_branch(const NodeDesc u)
-    {
+    void un_branch(const NodeDesc u) {
       append(available, po_number.at(u), u);
       current.erase(u);
     }
 
     // propagate a change ?/1 -> 0 of u upwards
-    void propagate_zero_up(const NodeDesc u)
-    {
+    void propagate_zero_up(const auto& u_node) {
       //std::cout << "propagating 0 to "<<u<<"\n";
       // if u was available, it no longer is, since a child of u is now 0-fixed
-      for(NodeDesc v: N.parents(u)){
-        if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
+      for(NodeDesc v: u_node.parents()){
+        if constexpr (ignore_deg2_nodes)
+          while(node_of(v).is_suppressible())
+            v = std::front(node_of(v).parents());
         if(++zero_fixed_children[v] == 1){
           available.erase(po_number.at(v));
-          propagate_zero_up(v);
+          propagate_zero_up(node_of(v));
         }
       }
     }
 
     // propagate a change 0 -> 1/? of u upwards
-    void propagate_nonzero_up(const NodeDesc u)
-    {
+    void propagate_nonzero_up(const auto& u_node) {
       //std::cout << "propagating non-0 to "<<u<<"\n";
-      for(NodeDesc v: N.parents(u)){
-        if(ignore_deg2_nodes) while(N.is_suppressible(v)) v = std::front(N.parents(v));
+      for(NodeDesc v: u_node.parents()){
+        if constexpr (ignore_deg2_nodes)
+          while(node_of(v).is_suppressible())
+            v = std::front(node_of(v).parents());
         if(--zero_fixed_children[v] == 0){
           append(available, po_number.at(v), v);
-          propagate_nonzero_up(v);
+          propagate_nonzero_up(node_of(v));
         }
       }
     }
 
     // set a node to 1 and propagate
     // note: no need to change availability since it's already non-available due to its 0-branch
-    void branch_to_one(const NodeDesc u)
-    {
+    void branch_to_one(const NodeDesc u) {
       DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 1"<<std::endl);
       append(current, u);
-      propagate_nonzero_up(u);
+      propagate_nonzero_up(node_of(u));
       DEBUG5(std::cout << "b1("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
     }
 
     // first branch of a node u: mark u unavailable and propagate
-    void branch_to_zero(const NodeDesc u)
-    {
+    void branch_to_zero(const NodeDesc u) {
       DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 0"<<std::endl);
       available.erase(po_number.at(u));
-      propagate_zero_up(u);
+      propagate_zero_up(node_of(u));
       branched.push(u);
       DEBUG5(std::cout << "b0("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
     }
 
-    void next_subset()
-    {
+    void next_subset() {
       NodeDesc last_branched;
       // eat up all the 1's on the branching-stack and mark them available
       while(is_valid() && current_state(last_branched = branched.top())){
@@ -122,26 +122,30 @@ namespace PT{
 
   public:
 
-    NetworkConstraintSubsetIterator(const _Network& _N, const bool construct_end_iterator = false, const bool _ignore_deg2_nodes = true):
-      N(_N), ignore_deg2_nodes(_ignore_deg2_nodes)
+    NetworkConstraintSubsetIterator(const Network& N):
+      NetworkConstraintSubsetIterator(N.root())
+    {}
+
+    NetworkConstraintSubsetIterator(const NodeDesc rt):
+      root(rt)
     {
-      if(!construct_end_iterator)
+      if(rt != NoNode) {
         first_subset();
-      DEBUG5(std::cout << "init -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
+        DEBUG5(std::cout << "init -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
+      }
     }
 
-    inline bool is_valid() const { return !branched.empty(); }
+    bool is_valid() const { return !branched.empty(); }
     //inline operator bool() { return is_valid(); }
  
-    bool operator==(const NetworkConstraintSubsetIterator& it) const
-    {
+    bool operator==(const NetworkConstraintSubsetIterator& it) const {
       if(!is_valid()) return !it.is_valid();
       if(!it.is_valid()) return false;
       return current == it.current;
     }
-    inline bool operator!=(const NetworkConstraintSubsetIterator& it) const { return !operator==(it); }
+    bool operator!=(const NetworkConstraintSubsetIterator& it) const { return !operator==(it); }
 
-    const _Container& operator*() { return current; }
+    const Container& operator*() { return current; }
 
     //! increment operator
     NetworkConstraintSubsetIterator& operator++() { next_subset(); return *this; }
@@ -150,20 +154,8 @@ namespace PT{
   
   };
 
-
-  template<class _Network, class _Container = std::ordered_bitset>
-  struct NetworkConstraintSubsetFactory
-  {
-    using iterator = NetworkConstraintSubsetIterator<_Network, _Container>;
-    using const_iterator = iterator;
-
-    const _Network& N;
-
-    NetworkConstraintSubsetFactory(const _Network& _N): N(_N) {}
-
-    iterator begin() const { return iterator(N); }
-    iterator end() const { return iterator(N, true); }
-  };
+  template<class Network, class Container = NodeSet>
+  using NetworkConstraintSubsetFactory = std::IterFactory<NetworkConstraintSubsetIterator<Network, Container>>;
  
 }// namespace
 

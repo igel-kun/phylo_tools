@@ -84,10 +84,11 @@ namespace std{
   class auto_iter: public _auto_iter<iterator_of_t<T>, EndIterator> {
     using Parent = _auto_iter<iterator_of_t<T>, EndIterator>;
   public:
+    using typename Parent::iterator;
     using Parent::Parent;
     using Parent::is_valid;
 
-    size_t size() const { return distance(Parent::get_iter(), Parent::end()); }
+    size_t size() const { return distance(static_cast<const iterator&>(*this), Parent::end()); }
     bool empty() const { return !is_valid(); }
     bool is_invalid() const { return !is_valid(); }
     operator bool() const { return is_valid(); }

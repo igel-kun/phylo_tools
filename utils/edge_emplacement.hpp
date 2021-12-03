@@ -7,25 +7,25 @@ namespace PT {
   // ========== EdgeEmplacement ==========
 
   // NOTE: if track_roots is false, the user is resposable to mark the root(s) in the new network
-  template<bool track_roots, PhylogenyType Phylo>
+  template<bool track_roots, StrictPhylogenyType Phylo>
   struct EdgeEmplacementHelper {
     Phylo& N;
 
     template<class... Args>
-    void add_an_edge(const NodeDesc& u, const NodeDesc& v, Args&&... args) const { N.add_edge(u,v, std::forward<Args>(args)...); }
+    void add_an_edge(const NodeDesc u, const NodeDesc v, Args&&... args) const { N.add_edge(u,v, std::forward<Args>(args)...); }
 
     // copy/move a node other_x and place it below x; if x == NoNode, the copy will be a new root
     // return the description of the copy of other_x
     template<class Data, class... Args>
-    NodeDesc create_node_below(const NodeDesc& u, Data&& data, Args&&... args) {
+    NodeDesc create_node_below(const NodeDesc u, Data&& data, Args&&... args) {
       NodeDesc v;
       if(u == NoNode) {
-        if constexpr (std::remove_reference_t<Phylo>::has_node_data)
+        if constexpr (Phylo::has_node_data)
           v = N.create_node(std::forward<Data>(data));
         else v = N.create_node();
         N.count_node();
       } else {
-        if constexpr (std::remove_reference_t<Phylo>::has_node_data)
+        if constexpr (Phylo::has_node_data)
           v = N.create_node(std::forward<Data>(data));
         else v = N.create_node();
         const bool success = N.add_child(u, v, std::forward<Args>(args)...).second;
@@ -34,7 +34,7 @@ namespace PT {
       return v;
     }
 
-    bool mark_root(const NodeDesc& r) {
+    bool mark_root(const NodeDesc r) {
       assert(N.in_degree(r) == 0);
       return append(N._roots, r).second;
     }
@@ -42,14 +42,14 @@ namespace PT {
     static void clear() {}
   };
 
-  template<PhylogenyType Phylo>
+  template<StrictPhylogenyType Phylo>
   struct EdgeEmplacementHelper<true, Phylo> {
     Phylo& N;
     NodeSet root_candidates = {};
     
     // when tracking roots, we want to remove v from the root-candidate set
     template<class... Args>
-    void add_an_edge(const NodeDesc& u, const NodeDesc& v, Args&&... args) {
+    void add_an_edge(const NodeDesc u, const NodeDesc v, Args&&... args) {
       erase(root_candidates, v);
       N.add_edge(u,v,std::forward<Args>(args)...);
     }
@@ -57,16 +57,16 @@ namespace PT {
     // copy/move a node other_x and place it below x; if x == NoNode, the copy will be a new root
     // return the description of the copy of other_x
     template<class Data, class... Args>
-    NodeDesc create_node_below(const NodeDesc& u, Data&& data, Args&&... args) {
+    NodeDesc create_node_below(const NodeDesc u, Data&& data, Args&&... args) {
       NodeDesc v;
       if(u == NoNode) {
-        if constexpr (std::remove_reference_t<Phylo>::has_node_data)
+        if constexpr (Phylo::has_node_data)
           v = N.create_node(std::forward<Data>(data));
         else v = N.create_node();
         N.count_node();
         append(root_candidates, v);
       } else {
-        if constexpr (std::remove_reference_t<Phylo>::has_node_data)
+        if constexpr (Phylo::has_node_data)
           v = N.create_node(std::forward<Data>(data));
         else v = N.create_node();
         const bool success = N.add_child(u, v, std::forward<Args>(args)...).second;
@@ -77,7 +77,7 @@ namespace PT {
     }
     
     void commit_roots() {
-      for(const NodeDesc& r: root_candidates)
+      for(const NodeDesc r: root_candidates)
         if(N.in_degree(r) == 0)
           append(N._roots, r);
     }
@@ -86,7 +86,7 @@ namespace PT {
   };
 
   template<bool track_roots,
-           PhylogenyType Phylo,
+           StrictPhylogenyType Phylo,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            class NodeDataExtract = typename Phylo::IgnoreNodeDataFunc> // takes a Node (possible rvalue-ref) and returns (steals) its data
   struct EdgeEmplacer {
@@ -95,7 +95,7 @@ namespace PT {
     NodeDataExtract nde;
 
     template<class... MoreArgs> // more args to be passed to create_node_below() when dangling v from u
-    void emplace_edge(const NodeDesc& other_u, const NodeDesc& other_v, MoreArgs&&... args) {
+    void emplace_edge(const NodeDesc other_u, const NodeDesc other_v, MoreArgs&&... args) {
       DEBUG5(std::cout << "  treating edge "<<other_u<<" --> "<<other_v<<"\n");
       // check if other_u is known to the translation
       const auto [u_iter, u_success] = old_to_new.try_emplace(other_u);
@@ -117,13 +117,13 @@ namespace PT {
     template<class... MoreArgs>
     void emplace_edge(const NodePair& other_uv, MoreArgs&&... args) { emplace_edge(other_uv.first, other_uv.second, std::forward<MoreArgs>(args)...); }
 
-    bool mark_root(const NodeDesc& r) {
+    bool mark_root(const NodeDesc r) {
       return helper.mark_root(old_to_new.at(r));
     }
     // translate the roots of N to use as our roots
     template<PhylogenyType _Phylo>
     void mark_root(const _Phylo& Net) {
-      for(const NodeDesc& r: Net.roots()) mark_root(r);
+      for(const NodeDesc r: Net.roots()) mark_root(r);
     }
     // commit the root-candidates to N
     void commit_roots() { helper.commit_roots(); }
