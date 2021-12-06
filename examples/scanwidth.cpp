@@ -13,16 +13,13 @@
 
 using namespace PT;
 
-static_assert(std::IterableType<std::unordered_map<PT::NodeDesc, uint32_t>>);
-
-using MyNetwork = DefaultNetwork<>;
+using MyNetwork = DefaultLabeledNetwork<>;
 using MyEdge = typename MyNetwork::Edge;
 using SWIter = std::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
 
 OptionMap options;
 
-void parse_options(const int argc, const char** argv)
-{
+void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
   description["-e"] = {0,0};
@@ -55,8 +52,7 @@ void parse_options(const int argc, const char** argv)
     }
 }
 
-unsigned parse_method()
-{
+unsigned parse_method() {
   try{
     const unsigned method = std::stoi(options["-m"][0]);
     if(method > 4){
@@ -84,8 +80,7 @@ MyNetwork read_network(std::ifstream&& in) {
 
 
 
-void print_extension(const MyNetwork& N, const Extension& ex)
-{
+void print_extension(const MyNetwork& N, const Extension& ex) {
   // for educational purposes, each Node of the extension tree will store the description of the corresponding node in the network
   using GammaType = CompatibleTree<const MyNetwork, const NodeDesc>;
 
@@ -106,21 +101,20 @@ void print_extension(const MyNetwork& N, const Extension& ex)
   std::cout << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
 }
 
-int main(const int argc, const char** argv)
-{
+
+
+int main(const int argc, const char** argv) {
   std::cout << "parsing options...\n";
   parse_options(argc, argv);
 
   std::cout << "reading network...\n";
   MyNetwork N(read_network(std::ifstream(options[""][0])));
-
   if(test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
 //  if(test(options, "-pp") sw_preprocess(N);
 
-  std::cout << "\n ==== computing silly post-order extension ===\n";
-  
+  std::cout << "\n ==== computing silly post-order extension ===\n";  
   Extension ex;
   ex.reserve(N.num_nodes());
   for(const auto& x: N.nodes_postorder()) ex.push_back(x);
@@ -129,13 +123,16 @@ int main(const int argc, const char** argv)
 
   std::cout << "\n ==== computing optimal extension ===\n";
   Extension ex_opt;
+  ex_opt.reserve(N.num_nodes());
   if(test(options, "-lm")){
     std::cout << "using low-memory version...\n";
-    compute_min_sw_extension<true>(N, ex_opt);
+    compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex_opt.push_back(u); });
+    //compute_min_sw_extension<true>(N, ex_opt); // this is equivalent
   } else {
     std::cout << "using faster, more memory hungry version...\n";
     compute_min_sw_extension<false>(N, ex_opt);
   }
+  std::cout << "computed "<<ex_opt << "\n";
   
   std::cout << "\n\nsilly extension:\n";
   print_extension(N, ex);

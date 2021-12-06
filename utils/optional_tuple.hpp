@@ -201,16 +201,30 @@ namespace std {
   template<class... Ts>
   struct optional_tuple: public _optional_tuple<0, Ts...> {
     using _optional_tuple<0, Ts...>::_optional_tuple;
+
     optional_tuple(){}
-    template<size_t i> auto& get() {
-      static_assert(has_value<i>);
-      return _get<i>(*this);
-    }
-    template<size_t i> const auto& get() const {
-      static_assert(has_value<i>);
-      return _get<i>(*this);
-    }
+    
     template<size_t i> static constexpr bool has_value = _has_value<i, optional_tuple>::value;
+
+    template<size_t i> requires (has_value<i>)
+    auto& get() { return _get<i>(*this); }
+
+    template<size_t i> requires (has_value<i>)
+    const auto& get() const { return _get<i>(*this); }
+
+
+    template<size_t i> auto& get(auto& other) {
+      if constexpr (has_value<i>)
+        return _get<i>(*this);
+      else return other;
+    }
+
+    template<size_t i> const auto& get(auto& other) const {
+      if constexpr (has_value<i>)
+        return _get<i>(*this);
+      else return other;
+    }
+
   };
 
 }

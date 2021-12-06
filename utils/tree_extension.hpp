@@ -20,14 +20,16 @@ namespace PT{
     struct ExtToTreeHelper {
       template<PhylogenyType _Network,
                NodeTranslationType NetToTree = NodeTranslation,
-               class CreateNodeData = typename std::remove_reference_t<ExtTree>::IgnoreNodeDataFunc,
+               NodeFunctionType CreateNodeData = ExtractData<_Network, Ex_node_data>,
+               NodeFunctionType CreateNodeLabel= ExtractData<_Network, Ex_node_label>,
                class... Args>
       static void ext_to_tree(const _Network& N, const Extension& ex, ExtTree& T,
                               NetToTree&& net_to_tree = NetToTree(),
                               CreateNodeData&& make_node_data = CreateNodeData(),
+                              CreateNodeLabel&& make_node_label = CreateNodeLabel(),
                               Args&&... args)
       {
-        auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, make_node_data);
+        auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, make_node_data, make_node_label);
         // we can use a disjoint set forest with no-rank union to find the current highest node of the weakly-connected component of a node
         std::DisjointSetForest<NodeDesc> highest;
 
@@ -58,14 +60,9 @@ namespace PT{
       }
 
       // allow calling without a node translation
-      template<PhylogenyType _Network,
-               class CreateNodeData = typename std::remove_reference_t<ExtTree>::IgnoreNodeDataFunc,
-               class... Args> requires (!NodeTranslationType<CreateNodeData>)
-      static void ext_to_tree(const _Network& N, const Extension& ex, ExtTree& T,
-                              CreateNodeData&& make_node_data = CreateNodeData(),
-                              Args&&... args)
-      {
-        ext_to_tree(N, ex, T, NodeTranslation(), std::forward<CreateNodeData>(make_node_data), std::forward<Args>(args)...);
+      template<PhylogenyType _Network, class First, class... Args> requires (!NodeTranslationType<First>)
+      static void ext_to_tree(const _Network& N, const Extension& ex, ExtTree& T, First&& first, Args&&... args) {
+        ext_to_tree(N, ex, T, NodeTranslation(), std::forward<First>(first), std::forward<Args>(args)...);
       }
     };
 
@@ -73,8 +70,7 @@ namespace PT{
 
 
     template<PhylogenyType _Network, class... Args>
-    static ExtTree ext_to_tree(const _Network& N, const Extension& ex, Args&&... args)
-    {
+    static ExtTree ext_to_tree(const _Network& N, const Extension& ex, Args&&... args) {
       ExtTree T; // yay RVO
       if(ex.size() == N.num_nodes()) {
         // if the extension is over the whole network, then construct T without root-tracking, and just translate N's roots

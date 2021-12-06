@@ -142,8 +142,7 @@ namespace std{
   // this is useful as what we're getting from a "const vector<int>" should be "const int", not "int" (the actualy value_type)
 
   template<typename T,typename U>
-  struct copy_cv
-  {
+  struct copy_cv {
     using R =    remove_reference_t<T>;
     using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
     using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
@@ -151,11 +150,8 @@ namespace std{
   template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
 
   template<typename T,typename U>
-  struct copy_ref
-  {
-    using R =    remove_reference_t<T>;
-    using U1 =   conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>;
-    using type = conditional_t<is_rvalue_reference_v<T>, add_rvalue_reference_t<U1>, U1>;
+  struct copy_ref {
+    using type = conditional_t<is_rvalue_reference_v<T>, add_rvalue_reference_t<U>, conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>>;
   };
   template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
   // NOTE: it is important to copy the const before copying the ref!

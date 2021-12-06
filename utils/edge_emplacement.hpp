@@ -2,6 +2,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "extract_data.hpp"
 
 namespace PT {
   // ========== EdgeEmplacement ==========
@@ -88,11 +89,13 @@ namespace PT {
   template<bool track_roots,
            StrictPhylogenyType Phylo,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class NodeDataExtract = typename Phylo::IgnoreNodeDataFunc> // takes a Node (possible rvalue-ref) and returns (steals) its data
+           NodeFunctionType NodeDataExtract = typename Phylo::IgnoreNodeDataFunc, // takes a Node (possible rvalue-ref) and returns (steals) its data
+           NodeFunctionType NodeLabelExtract = typename Phylo::IgnoreNodeLabelFunc>
   struct EdgeEmplacer {
+    static constexpr bool extract_labels = (Phylo::has_node_labels && !std::is_same_v<NodeLabelExtract, typename Phylo::IgnoreNodeLabelFunc>);
     EdgeEmplacementHelper<track_roots, Phylo> helper;
     OldToNewTranslation old_to_new;
-    NodeDataExtract nde;
+    Extracter<Phylo, NodeDataExtract, typename Phylo::IgnoreEdgeDataFunc, NodeLabelExtract> data_extracter;
 
     template<class... MoreArgs> // more args to be passed to create_node_below() when dangling v from u
     void emplace_edge(const NodeDesc other_u, const NodeDesc other_v, MoreArgs&&... args) {
@@ -101,7 +104,10 @@ namespace PT {
       const auto [u_iter, u_success] = old_to_new.try_emplace(other_u);
       NodeDesc& u_copy = u_iter->second;
       // if other_u has not been seen before, insert it as new root
-      if(u_success) u_copy = helper.create_node_below(NoNode, nde(other_u), std::forward<MoreArgs>(args)...);
+      if(u_success) {
+        u_copy = helper.create_node_below(NoNode, data_extracter.nde(other_u), std::forward<MoreArgs>(args)...);
+        if constexpr (extract_labels) node_of<Phylo>(u_copy).label() = data_extracter.nle(other_u);
+      }
       // ckeck if we've already seen other_v before
       const auto [v_iter, success] = old_to_new.try_emplace(other_v);
       NodeDesc& v_copy = v_iter->second;
@@ -110,7 +116,8 @@ namespace PT {
         helper.add_an_edge(u_copy, v_copy, std::forward<MoreArgs>(args)...);
       } else { // if other_v is not in the translate map yet, then add it
         DEBUG5(std::cout << "adding new child to "<<u_copy<<"\n");
-        v_copy = helper.create_node_below(u_copy, nde(other_v), std::forward<MoreArgs>(args)...);
+        v_copy = helper.create_node_below(u_copy, data_extracter.nde(other_v), std::forward<MoreArgs>(args)...);
+        if constexpr (extract_labels) node_of<Phylo>(v_copy).label() = data_extracter.nle(other_v);
       }
     }
 
@@ -144,13 +151,15 @@ namespace PT {
   // this allows you to just write "auto emp = EdgeEmplacers<track_roots>::make_emplacer(...)" without specifying template parameters
   template<bool track_roots>
   struct EdgeEmplacers {
-    template<PhylogenyType Phylo, NodeTranslationType OldToNewTranslation, class NodeDataExtract>
-    static auto make_emplacer(Phylo& N, OldToNewTranslation& old_to_new, NodeDataExtract&& make_node_data) {
-      return EdgeEmplacer<track_roots, Phylo, OldToNewTranslation&, NodeDataExtract>{{N}, old_to_new, std::forward<NodeDataExtract>(make_node_data)};
+    template<PhylogenyType Phylo, NodeTranslationType OldToNewTranslation, NodeFunctionType NodeDataExtract, NodeFunctionType NodeLabelExtract>
+    static auto make_emplacer(Phylo& N, OldToNewTranslation& old_to_new, NodeDataExtract&& nde, NodeLabelExtract&& nle) {
+      return EdgeEmplacer<track_roots, Phylo, OldToNewTranslation&, NodeDataExtract, NodeLabelExtract>
+              {{N}, old_to_new, {std::forward<NodeDataExtract>(nde), std::forward<NodeLabelExtract>(nle)}};
     }
-    template<PhylogenyType Phylo, class NodeDataExtract>
-    static auto make_emplacer(Phylo& N, NodeDataExtract&& make_node_data) {
-      return EdgeEmplacer<track_roots, Phylo, NodeTranslation, NodeDataExtract>{{N}, NodeTranslation(), std::forward<NodeDataExtract>(make_node_data)};
+    template<PhylogenyType Phylo, NodeFunctionType NodeDataExtract, NodeFunctionType NodeLabelExtract>
+    static auto make_emplacer(Phylo& N, NodeDataExtract&& nde, NodeLabelExtract&& nle) {
+      return EdgeEmplacer<track_roots, Phylo, NodeTranslation, NodeDataExtract, NodeLabelExtract>
+              {{N}, NodeTranslation(), {std::forward<NodeDataExtract>(nde), std::forward<NodeLabelExtract>(nle)}};
     }
 
   };

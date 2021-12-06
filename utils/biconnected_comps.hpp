@@ -11,13 +11,14 @@
 namespace PT{
 
   // NOTE: only enumeration of vertical components of a **single-rooted** network is supported for now
-  // NOTE: CreateNodeData::operator() must take a NodeDesc and return something that is passed to Component::NodeData()
-  //       CreateEdgeData::operator() must take an Adjacency& and a const NodeDesc and return something that is passed to Component::EdgeData()
-  template<PhylogenyType _Network,
-           PhylogenyType Component = _Network,
+  // NOTE: ExtractNodeData::operator() must take a NodeDesc and return something that is passed to Component::NodeData()
+  //       ExtractEdgeData::operator() must take an Adjacency& and a const NodeDesc and return something that is passed to Component::EdgeData()
+  template<StrictPhylogenyType _Network,
+           StrictPhylogenyType Component = _Network,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
+           NodeFunctionType ExtractNodeData  = ExtractData<_Network, Ex_node_data>,
+           class ExtractEdgeData             = ExtractData<_Network, Ex_edge_data>,
+           NodeFunctionType ExtractNodeLabel = ExtractData<_Network, Ex_node_label>>
   class BiconnectedComponentIter: public CutIter<_Network, CO_BCC, std::iter_traits_from_reference<NodeDesc>> {
     using Parent = CutIter<_Network, CO_BCC, std::iter_traits_from_reference<NodeDesc>>;
     using Traits = std::iter_traits_from_reference<Component&>;
@@ -30,10 +31,8 @@ namespace PT{
     using const_reference = typename Traits::const_reference;
     using pointer = typename Traits::pointer;
     using const_pointer = typename Traits::const_pointer;
-    using Emplacer = EdgeEmplacer<false, Component, OldToNewTranslation&, CreateNodeData&>;
+    using Emplacer = EdgeEmplacer<false, Component, OldToNewTranslation&, ExtractNodeData&, ExtractNodeLabel&>;
 
-    static constexpr bool custom_node_data_maker = !std::is_same_v<CreateNodeData, typename Component::IgnoreNodeDataFunc>;
-    static constexpr bool custom_edge_data_maker = !std::is_same_v<CreateEdgeData, typename Component::IgnoreEdgeDataFunc>;
 
     using Parent::is_valid;
   protected:
@@ -47,7 +46,7 @@ namespace PT{
     // storing a pointer to the output allows us to not compute the actual component up until the point where operator*() is called
     std::unique_ptr<Component> output = nullptr; // the current component to be output on operator*
     OldToNewTranslation old_to_new;
-    std::pair<CreateNodeData, CreateEdgeData> make_data;
+    Extracter<Component, ExtractNodeData, ExtractEdgeData, ExtractNodeLabel> data_extracter;
 
     NodeDesc get_current_cut_node() const { assert(is_valid()); return Parent::operator*(); }
 
@@ -57,7 +56,7 @@ namespace PT{
       if(append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v <<'\n');
         Node& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
-        for(auto& u: v_node.parents()) output_emplacer.emplace_edge(u, v, make_data.second(u,v));
+        for(auto uv: v_node.in_edges()) output_emplacer.emplace_edge(uv, data_extracter.ede(uv));
         for(const NodeDesc u: v_node.parents()) 
           if(u != rt)
             make_component_along(rt, u, output_emplacer);
@@ -75,7 +74,7 @@ namespace PT{
 
     void make_component_along(const NodeDesc v) {
       output = std::make_unique<Component>();
-      Emplacer output_emplacer{*output, old_to_new, make_data.first};
+      Emplacer output_emplacer{*output, old_to_new, {data_extracter.nde, data_extracter.nle}};
       const NodeDesc u = get_current_cut_node();
       make_component_along(u, v, output_emplacer);
       output_emplacer.mark_root(u);
@@ -117,54 +116,23 @@ namespace PT{
 
   public:
     // NOTE: cut-nodes MUST be bottom-up (that is, no cut-node x can preceed any descendant of x)!
-    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class... Args> requires (sizeof...(Args) != 1)
+    template<class ParentInit, NodeTranslationType _OldToNewTranslation = NodeTranslation, class... Args>
     BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, Args&&... args):
       Parent(std::forward<ParentInit>(_parent)),
       old_to_new(std::forward<_OldToNewTranslation>(_old_to_new)),
-      make_data(std::forward<Args>(args)...)
-    {
-      if(Parent::is_valid())
-        compute_new_child_comps();
-    }
-
-    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class First> requires (custom_node_data_maker && custom_edge_data_maker)
-    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, First&& first):
-      Parent(std::forward<ParentInit>(_parent)),
-      old_to_new(std::forward<_OldToNewTranslation>(_old_to_new)),
-      make_data(std::forward<First>(first))
+      data_extracter(std::forward<Args>(args)...)
     {
       if(Parent::is_valid())
         compute_new_child_comps();
     }
 
 
-    // if only 1 argument is passed to initialize the data makers, it's passed to the one that is not ignorant
-    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class First> requires (custom_node_data_maker && !custom_edge_data_maker)
-    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, First&& first):
-      BiconnectedComponentIter(
-          std::forward<ParentInit>(_parent),
-          std::forward<_OldToNewTranslation>(_old_to_new),
-          std::piecewise_construct,
-          std::forward_as_tuple(std::forward<First>(first)),
-          std::forward_as_tuple())
-    {}
-
-    // if only 1 argument is passed to initialize the data makers, it's passed to the one that is not ignorant
-    template<class ParentInit, NodeTranslationType _OldToNewTranslation, class First> requires (!custom_node_data_maker && custom_edge_data_maker)
-    BiconnectedComponentIter(ParentInit&& _parent, _OldToNewTranslation&& _old_to_new, First&& first):
-      BiconnectedComponentIter(
-          std::forward<ParentInit>(_parent),
-          std::forward<_OldToNewTranslation>(_old_to_new),
-          std::piecewise_construct,
-          std::forward_as_tuple(),
-          std::forward_as_tuple(std::forward<First>(first)))
-    {}
-
+    // NOTE: the copy constructor does NOT copy the output Component
     BiconnectedComponentIter(const BiconnectedComponentIter& other):
       Parent(other),
       child_comp_iter(other.child_comp_iter),
       seen(other.seen),
-      make_data(other.make_data)
+      data_extracter(other.data_extracter)
     {}
     BiconnectedComponentIter(BiconnectedComponentIter&& other) = default;
 
@@ -209,8 +177,8 @@ namespace PT{
   template<PhylogenyType _Network,
            PhylogenyType Component = _Network,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
+           class ExtractNodeData = typename Component::IgnoreNodeDataFunc,
+           class ExtractEdgeData = typename Component::IgnoreEdgeDataFunc>
   class BiconnectedComponents {
   public:
     using Network = _Network;
@@ -219,16 +187,16 @@ namespace PT{
     using VcnIter = std::iterator_of_t<VcnContainer>;
     using reference = Component;
     using const_reference = Component;
-    using iterator = BiconnectedComponentIter<_Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>;
+    using iterator = BiconnectedComponentIter<_Network, Component, OldToNewTranslation, ExtractNodeData, ExtractEdgeData>;
     using const_iterator = iterator;
 
   protected:
-    static constexpr bool custom_node_data_maker = !std::is_same_v<CreateNodeData, typename Component::IgnoreNodeDataFunc>;
-    static constexpr bool custom_edge_data_maker = !std::is_same_v<CreateEdgeData, typename Component::IgnoreEdgeDataFunc>;
+    static constexpr bool custom_node_data_maker = !std::is_same_v<ExtractNodeData, typename Component::IgnoreNodeDataFunc>;
+    static constexpr bool custom_edge_data_maker = !std::is_same_v<ExtractEdgeData, typename Component::IgnoreEdgeDataFunc>;
 
     VcnContainer vertical_cut_nodes;
     OldToNewTranslation old_to_new;
-    std::pair<CreateNodeData, CreateEdgeData> make_data;
+    std::pair<ExtractNodeData, ExtractEdgeData> make_data;
 
   public:
 
@@ -283,9 +251,12 @@ namespace PT{
   template<PhylogenyType _Network,
            PhylogenyType Component = _Network,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
-  using BiconnectedComponents = std::IterFactory<BiconnectedComponentIter<_Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>>;
+           NodeFunctionType ExtractNodeData = ExtractData<Component, Ex_node_data>,
+           class ExtractEdgeData = ExtractData<Component, Ex_edge_data>,
+           NodeFunctionType ExtractNodeLabel = ExtractData<Component, Ex_node_label>>
+  using BiconnectedComponents = std::IterFactory<
+          BiconnectedComponentIter<_Network, Component, OldToNewTranslation, ExtractNodeData, ExtractEdgeData, ExtractNodeLabel>
+        >;
 
   // deduce parameters from arguments
   // NOTE: if you pass a PhylogenyType as first argument, be sure that it's the same as Network as, otherwise, a temporary copy will be made :(
@@ -293,19 +264,22 @@ namespace PT{
            StrictPhylogenyType Component = Network,
            class CutsInit,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
-           class CreateNodeData = typename Component::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Component::IgnoreEdgeDataFunc>
+           NodeFunctionType ExtractNodeData = ExtractData<Component, Ex_node_data>,
+           class ExtractEdgeData = ExtractData<Component, Ex_edge_data>,
+           NodeFunctionType ExtractNodeLabel = ExtractData<Component, Ex_node_label>>
              requires (!PhylogenyType<CutsInit> || std::is_same_v<std::remove_cvref_t<CutsInit>,std::remove_cvref_t<Network>>)
   auto get_biconnected_components(CutsInit&& cuts,
                                   OldToNewTranslation&& old_to_new = OldToNewTranslation(),
-                                  CreateNodeData&& nd = CreateNodeData(),
-                                  CreateEdgeData&& ed = CreateEdgeData())
+                                  ExtractNodeData&& nd = ExtractNodeData(),
+                                  ExtractEdgeData&& ed = ExtractEdgeData(),
+                                  ExtractNodeLabel&& nl = ExtractNodeLabel())
   {
-    return BiconnectedComponents<Network, Component, OldToNewTranslation, CreateNodeData, CreateEdgeData>(
+    return BiconnectedComponents<Network, Component, OldToNewTranslation, ExtractNodeData, ExtractEdgeData, ExtractNodeLabel>(
         std::forward<CutsInit>(cuts),
         std::forward<OldToNewTranslation>(old_to_new),
-        std::forward<CreateNodeData>(nd),
-        std::forward<CreateEdgeData>(ed));
+        std::forward<ExtractNodeData>(nd),
+        std::forward<ExtractEdgeData>(ed),
+        std::forward<ExtractNodeLabel>(nl));
   }
 
 }// namespace

@@ -194,8 +194,9 @@ namespace PT{
     using LabelType = _LabelType;
     static constexpr bool has_label = true;
 
-    LabelType& label() { return _label; }
-    const LabelType& label() const { return _label; }
+    LabelType& label() & { return _label; }
+    LabelType&& label() && { return _label; }
+    const LabelType& label() const & { return _label; }
   };
 
   template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
@@ -357,10 +358,16 @@ namespace PT{
   using NoData = uint_fast8_t;
   // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
   template<class Net, class Else = NoData> //requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
-  using NodeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_node_data, typename std::remove_cvref_t<Net>::NodeData, Else>;
+  using NodeLabelOr = std::conditional_t<std::remove_reference_t<Net>::has_node_labels,
+        std::copy_cvref_t<Net, typename std::remove_reference_t<Net>::LabelType>, Else>;
+  // return the NodeData type of the network, unless it's 'void', in which case return 'Else'
+  template<class Net, class Else = NoData> //requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
+  using NodeDataOr = std::conditional_t<std::remove_reference_t<Net>::has_node_data,
+        std::copy_cvref_t<Net, typename std::remove_reference_t<Net>::NodeData>, Else>;
   // return the EdgeData type of the network, unless it's 'void', in which case return 'Else'
   template<class Net, class Else = NoData> //requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
-  using EdgeDataOr = std::conditional_t<std::remove_cvref_t<Net>::has_edge_data, typename std::remove_cvref_t<Net>::EdgeData, Else>;
+  using EdgeDataOr = std::conditional_t<std::remove_reference_t<Net>::has_edge_data,
+        std::copy_cvref_t<Net, typename std::remove_cvref_t<Net>::EdgeData>, Else>;
 
 
 }
