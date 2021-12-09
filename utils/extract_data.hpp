@@ -111,7 +111,7 @@ namespace PT {
     Extracter(const Extracter&) = default;
     Extracter(Extracter&&) = default;
 
-    template<class... Args> requires (!custom_node_label_maker && !custom_edge_data_maker)
+    template<class... Args> requires (custom_node_data_maker && !custom_node_label_maker && !custom_edge_data_maker)
     Extracter(Args&&... args):
       Parent(),
       nde(std::forward<Args>(args)...)
@@ -129,7 +129,7 @@ namespace PT {
       nde(std::forward<First>(first))
     {}
 
-    template<NodeFunctionType First, class... Args> requires (custom_node_data_maker && (sizeof...(Args) >= 2))
+    template<NodeFunctionType First, class... Args> requires (sizeof...(Args) >= 2)
     Extracter(First&& first, Args&&... args):
       Parent(std::forward<Args>(args)...),
       nde(std::forward<First>(first))

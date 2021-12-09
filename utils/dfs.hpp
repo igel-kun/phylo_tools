@@ -176,12 +176,12 @@ namespace PT{
 
     pointer operator->() const {
       const auto& result = node_on_top();
-      DEBUG4(std::cout << "DFS: emitting ptr to node " << result << "\n");
+      DEBUG5(std::cout << "DFS: emitting ptr to node " << result << "\n");
       return &result;
     }
     NodeDesc operator*() const {
       const NodeDesc result = node_on_top();
-      DEBUG4(std::cout << "DFS: emitting node "<< result<<"\n");
+      DEBUG5(std::cout << "DFS: emitting node "<< result<<"\n");
       return result;
     }
   };
@@ -205,7 +205,7 @@ namespace PT{
     pointer operator->() = delete;
     reference operator*() const {
       assert(child_history.size() > 1);
-      DEBUG4(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n";)
+      DEBUG5(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n";)
       return *(child_history[child_history.size() - 2]);
     }
 

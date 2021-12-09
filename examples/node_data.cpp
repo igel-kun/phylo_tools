@@ -8,8 +8,7 @@
 using namespace PT;
 
 // a toy struct to demonstrate attaching more complex data (that cannot even be default constructed) to nodes using pointers
-struct InformedSequence
-{
+struct InformedSequence {
   std::string seq;
   uint32_t num_Ns;
  
@@ -29,8 +28,7 @@ using ConstISeqNetwork = DefaultNetwork<const InformedSequence>;
 
 const char* bases = "NACGT";
 
-std::string random_seq(const size_t len)
-{
+std::string random_seq(const size_t len) {
     std::string result;
     for(uint32_t j = len; j > 0; --j)
       result += bases[throw_die(5)];
@@ -38,11 +36,11 @@ std::string random_seq(const size_t len)
 }
 
 
-void assign_DFS_numbers(NumberNetwork& N, const NodeDesc root, uint32_t& current_num)
-{
-  N[root].data() = current_num++;
-  for(const NodeDesc w: N.children(root))
-    assign_DFS_numbers(N, w, current_num);
+void assign_DFS_numbers(const NodeDesc root, uint32_t& current_num) {
+  auto& r_node = node_of<NumberNetwork>(root);
+  r_node.data() = current_num++;
+  for(const NodeDesc w: r_node.children())
+    assign_DFS_numbers(w, current_num);
 }
 
 
@@ -68,14 +66,15 @@ int main(const int argc, const char** argv)
   // play with numbered nodes: this gives each node the number in which it occurs in a DFS search (starting at 0)
   std::cout << "\n\n assigning DFS numbers\n\n";
   uint32_t DFS_counter = 0;
-  assign_DFS_numbers(N, N.root(), DFS_counter);
+  assign_DFS_numbers(N.root(), DFS_counter);
   std::cout << N;
 
   // play with nodes that have a string attached: each node is initialized with a random string
   // to this end, we use the node-data translation function (that takes the node-data of N (aka uint32_t)
   // and returns something from which N2's node-data can be initialized (aka a string))
   std::cout << "\n\n copy & change node-data\n\n";
-  ISeqNetwork N2(N, [](const NodeDesc&){ return ""; } );
+  ISeqNetwork N2(N, [](const NodeDesc u){ std::cout << "assigning new empty sequences to node "<<u<<"\n"; return ""; } );
+  std::cout << N2 <<"\n\n";
   for(const NodeDesc& u: N2.leaves()){
     const std::string s = random_seq(10 + throw_die(10));
     auto& data = N2[u].data();
@@ -98,7 +97,6 @@ int main(const int argc, const char** argv)
   std::cout << "\n\n initialize non-assignable node-data\n\n";
   ConstISeqNetwork N3(N, [](const auto&){ return random_seq(10 + throw_die(10)); });
   for(const NodeDesc& i: N3.nodes()){
-    std::cout << "found data at "<<N3[i]<<" for "<<i<<'\n';
     if(!N3[i].data().seq.empty())
       std::cout << "node "<<i<<" has sequence: "<<N3[i].data().seq<<" with "<<N3[i].data().num_Ns<<" N's"<<std::endl;
     else

@@ -10,6 +10,7 @@
 #include<type_traits> // deal with STL's missing type checks
 #include<algorithm> // deal with STL's sort problems
 #include<functional>
+#include<charconv>
 
 #include "hash_utils.hpp"
 #include "stl_concepts.hpp"
@@ -408,6 +409,11 @@ namespace std{
   concept CompatibleValueTypes = is_same_v<value_type_of_t<T>, value_type_of_t<Q>>;
   template<class T, class Q>
   concept ConvertibleValueTypes = convertible_to<value_type_of_t<Q>, value_type_of_t<T>>;
+
+  // string_view conversion
+  float stoi(const string_view sv) { int result = 0; from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
+  float stof(const string_view sv) { float result = 0.0f; from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
+  float stod(const string_view sv) { double result = 0.0; from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
 
   // cheapo linear interval class - can merge and intersect
   template<class T = uint32_t>

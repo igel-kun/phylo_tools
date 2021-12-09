@@ -18,7 +18,7 @@ using namespace PT;
 
 static_assert(std::IterableType<std::unordered_map<PT::NodeDesc, uint32_t>>);
 
-using MyNetwork = DefaultNetwork<>;
+using MyNetwork = DefaultLabeledNetwork<>;
 using MyBCC = MyNetwork;
 //CompatibleNetwork<MyNetwork, void, void, void>;
 

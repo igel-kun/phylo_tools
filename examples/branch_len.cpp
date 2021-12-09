@@ -29,7 +29,7 @@ void parse_options(const int argc, const char** argv)
     }
 }
 
-const auto parse_branch_len = [](const NodeDesc& d, const std::string& s){ return typename MyNetwork::Adjacency(d, std::stof(s)); };
+const auto parse_branch_len = [](const NodeDesc d, const std::string_view s){ return typename MyNetwork::Adjacency(d, std::stof(s)); };
 
 MyNetwork read_network(std::ifstream& in) {
   std::cout << "reading network..."<<std::endl;

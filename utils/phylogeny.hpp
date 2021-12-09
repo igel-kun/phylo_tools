@@ -591,14 +591,16 @@ namespace PT {
       // step 1: copy other_x
       // step 2: copy everything below other_x
       if constexpr (track_roots) {
+        DEBUG5(std::cout << "tracking roots...\n");
         NodeSet root_candidates;
         for(auto other_uv: std::forward<Edges>(edges))
           emp.emplace_edge(other_uv.as_pair(), root_candidates, ede(static_cast<MyEdge>(other_uv)));
         emp.commit_roots();
-      } else
+      } else {
+        DEBUG5(std::cout << "not tracking roots...\n");
         for(auto other_uv: std::forward<Edges>(edges))
           emp.emplace_edge(other_uv.as_pair(), ede(static_cast<MyEdge>(other_uv)));
-      DEBUG2(tree_summary(std::cout));
+      }
     }
 
     // move the subtree below other_x into us by changing the parents of other_x to {x}
@@ -649,6 +651,7 @@ namespace PT {
     template<std::IterableType Edges, class... Args> requires (!PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges, Args&&... args) {
       build_from_edges<true, void>(std::forward<Edges>(edges), std::forward<Args>(args)...);
+      DEBUG2(tree_summary(std::cout));
     }
 
     // NOTE: construction from another (sub-)phylogeny largely depends on the data policy:
@@ -668,8 +671,10 @@ namespace PT {
         } else {
           build_from_edges<false, std::remove_reference_t<Phylo>>(N.edges_below_preorder(in_roots), old_to_new, std::forward<Args>(args)...);
         }
+        DEBUG4(std::cout << "marking roots: "<<in_roots<<"\n");
         // mark the roots
         for(const NodeDesc r: in_roots) append(_roots, old_to_new.at(r));
+        DEBUG2(tree_summary(std::cout));
       }
     }
     
@@ -678,13 +683,15 @@ namespace PT {
     explicit Phylogeny(const policy_copy_t, Phylo&& N, const NodeDesc in_root, OldToNew&& old_to_new, Args&&... args) {
       build_from_edges<false, std::remove_reference_t<Phylo>>(N.edges_below_preorder(in_root), std::forward<Args>(args)...);
       // mark the root
+      DEBUG4(std::cout << "marking root: "<<in_root<<"\n");
       append(_roots, old_to_new.at(in_root));
+      DEBUG2(tree_summary(std::cout));
     }
 
     // "copy" construction without root (using all roots of in_tree)
-    template<PhylogenyType Phylo, class... Args>
-    explicit Phylogeny(const policy_copy_t pol, Phylo&& N, Args&&... args):
-      Phylogeny(pol, std::forward<Phylo>(N), N.roots(), std::forward<Args>(args)...)
+    template<PhylogenyType Phylo, class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, std::remove_cvref_t<RootContainer>>)
+    explicit Phylogeny(const policy_copy_t pol, Phylo&& N, First&& first, Args&&... args):
+      Phylogeny(pol, std::forward<Phylo>(N), N.roots(), std::forward<First>(first), std::forward<Args>(args)...)
     {}
 
 
@@ -708,14 +715,23 @@ namespace PT {
     {}
 
 
-    // if we just want to copy a phylogeny, use the "copy" version
+    // if we just want to copy a phylogeny, use the "copy" version (with or without node-translation)
+    template<StrictPhylogenyType Phylo, NodeTranslationType OldToNew, class... Args>
+    Phylogeny(const Phylo& in_tree, OldToNew&& old_to_new, Args&&... args):
+      Phylogeny(policy_copy_t(), in_tree, in_tree.roots(), std::forward<OldToNew>(old_to_new), std::forward<Args>(args)...)
+    {}
+    template<StrictPhylogenyType Phylo, class First, class... Args> requires (!NodeTranslationType<First>)
+    Phylogeny(const Phylo& in_tree, First&& first, Args&&... args):
+      Phylogeny(policy_copy_t(), in_tree, in_tree.roots(), NodeTranslation(), std::forward<First>(first), std::forward<Args>(args)...)
+    {}
     template<StrictPhylogenyType Phylo>
     Phylogeny(const Phylo& in_tree):
-      Phylogeny(policy_copy_t(), in_tree, in_tree.roots())
+      Phylogeny(policy_copy_t(), in_tree, in_tree.roots(), NodeTranslation())
     {}
-    template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(Phylo&& in_tree):
-      Phylogeny(policy_move_t(), std::move(in_tree), in_tree.roots())
+
+    template<StrictPhylogenyType Phylo, class... Args> requires std::is_same_v<Node, typename Phylo::Node>
+    Phylogeny(Phylo&& in_tree, Args&&... args):
+      Phylogeny(policy_move_t(), std::move(in_tree), in_tree.roots(), std::forward<Args>(args)...)
     {}
     // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
     Phylogeny(Phylogeny&& in_tree): Parent(static_cast<Parent&&>(in_tree)) {}
@@ -727,7 +743,8 @@ namespace PT {
     // =================== i/o ======================
 
     std::ostream& tree_summary(std::ostream& os) const {
-      DEBUG3(os << "tree has "<< num_edges() <<" edges and "<< _num_nodes <<" nodes, leaves: "<<leaves()<<"\n");
+      DEBUG3(os << "tree has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<_roots.size()<<" roots\n");
+      DEBUG3(os << "leaves: "<<leaves()<<"\n");
       DEBUG3(os << "nodes: "<<nodes()<<'\n');
       DEBUG3(os << "edges: "<<edges()<<'\n');
       for(const NodeDesc u: nodes())

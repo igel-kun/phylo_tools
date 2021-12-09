@@ -96,8 +96,8 @@ int main(const int argc, const char** argv) {
         std::to_string(num_nodes)+" nodes in total");
   std::cout << "constructing network with "<<num_nodes<<" vertices: "<<num_tree_nodes<<" tree nodes, "<<num_retis<<" reticulations and "<<num_leaves<<" leaves"<<std::endl;
 
-  DefaultNetwork N;
-  generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0);
+  DefaultLabeledNetwork N;
+  generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0);
 
   if(test(options, "-v")) std::cout << N << std::endl;
 

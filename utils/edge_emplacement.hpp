@@ -78,6 +78,7 @@ namespace PT {
     }
     
     void commit_roots() {
+      DEBUG3(std::cout << "committing roots: "<<root_candidates<<"\n");
       for(const NodeDesc r: root_candidates)
         if(N.in_degree(r) == 0)
           append(N._roots, r);

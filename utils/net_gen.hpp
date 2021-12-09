@@ -28,13 +28,13 @@ namespace PT{
   }
 
 
-  struct sequential_taxon_name
-  {
+  struct sequential_taxon_name {
     uint32_t count = 0;
 
-    operator std::string() { return operator()(count++); }
+    operator std::string() { return operator()(); }
 
-    std::string operator()(const uint32_t x) const { return to_string(x); }
+    template<class... Args>
+    std::string operator()(Args&&... args) { return to_string(count++); }
     
     static std::string to_string(const uint32_t x) {
       if(x >= 26)
@@ -48,13 +48,17 @@ namespace PT{
   //! generate random (not necessarily binary) tree
   // NOTE: the function welcome_node is called for each newly created node (can be used to set node properties)
   // NOTE: the function welcome_edge is called for each newly created edge
-  template<TreeType Tree>
+  template<StrictTreeType Tree,
+           NodeFunctionType CreateNodeLabel = sequential_taxon_name,
+           NodeFunctionType CreateNodeData = typename Tree::IgnoreNodeDataFunc,
+           class CreateEdgeData = typename Tree::IgnoreEdgeDataFunc>
   void generate_random_tree(Tree& T,
                             const uint32_t num_internal,
                             const uint32_t num_leaves,
                             const float multilabel_density = 0.0f,
-                            auto&& make_node_data = std::IgnoreFunction<NodeDataOr<Tree>>(),
-                            auto&& make_edge_data = std::IgnoreFunction<EdgeDataOr<Tree>>())
+                            CreateNodeLabel&& make_node_label = CreateNodeLabel(),
+                            CreateNodeData&& make_node_data = CreateNodeData(),
+                            CreateEdgeData&& make_edge_data = CreateEdgeData())
   {
 #warning TODO: implement multi-labels
     assert(multilabel_density >= 0.0f   && multilabel_density < 1.0f);
@@ -71,6 +75,7 @@ namespace PT{
             (total in-degree == " + std::to_string(num_in_edges) + " vs total out-degree >= " + std::to_string(min_out_edges) + ")");
 
     NodeDesc rt = T.add_root(make_node_data(NoNode));
+    if constexpr (Tree::has_node_labels) T[rt].label() = make_node_label(rt);
     
     NodeSet current_leaves; // nodes that can accept in-degree (should contain at least 2 nodes at all times)
     append(current_leaves, rt);
@@ -86,6 +91,7 @@ namespace PT{
       erase(current_leaves, it);
       for(size_t j = 0; j != degree; ++j) {
         const NodeDesc v = T.create_node(make_node_data(u));
+        if constexpr (Tree::has_node_labels) T[v].label() = make_node_label(v);
         T.add_child(u, v, make_edge_data(u, v));
       }
     }
@@ -174,14 +180,19 @@ namespace PT{
 
 
   //! generate a random network from number of: tree nodes, retis, and leaves
-  template<PhylogenyType Net>
+  template<StrictPhylogenyType Net,
+           NodeFunctionType CreateNodeLabel = sequential_taxon_name,
+           NodeFunctionType CreateNodeData = typename Net::IgnoreNodeDataFunc,
+           class CreateEdgeData = typename Net::IgnoreEdgeDataFunc>
   void generate_random_binary_network_trl(Net& N,
                             const uint32_t num_tree_nodes,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
-                            auto&& make_node_data,
-                            auto&& make_edge_data,
-                            const float multilabel_density){
+                            const float multilabel_density,
+                            CreateNodeLabel&& make_node_label = CreateNodeLabel(),
+                            CreateNodeData&& make_node_data = CreateNodeData(),
+                            CreateEdgeData&& make_edge_data = CreateEdgeData())
+  {
 #warning implement multi-labels
     assert(multilabel_density >= 0   && multilabel_density < 1);
 
@@ -206,6 +217,7 @@ namespace PT{
     uint32_t tree_count = 0;
     // initialize with a root node
     const NodeDesc new_root = N.add_root(make_node_data(NoNode));
+    if constexpr (Net::has_node_labels) N[new_root].label() = make_node_label(new_root);
     std::cout << "mark2\n";
     std::cout << "created node "<<new_root<<" at "<<new_root.data<<"\n";
     dangling.try_emplace(new_root, 2);
@@ -216,6 +228,7 @@ namespace PT{
       const auto parent_it = get_random_iterator(dangling);
       const NodeDesc u = parent_it->first;
       const NodeDesc v = N.create_node(make_node_data(u));
+      if constexpr (Net::has_node_labels) N[v].label() = make_node_label(v);
       N.add_child(u, v, make_edge_data(u, v));
 
       const bool removed = !decrease_or_remove(dangling, parent_it);
@@ -248,6 +261,7 @@ namespace PT{
       const auto iter = dangling.begin();
       const NodeDesc u = iter->first;
       const NodeDesc v = N.create_node(make_node_data(u));
+      if constexpr (Net::has_node_labels) N[v].label() = make_node_label(v);
       N.add_child(u, v, make_edge_data(u, v));
       decrease_or_remove(dangling, iter);
       
@@ -256,65 +270,86 @@ namespace PT{
     if(!dangling.empty()) throw std::logic_error("not enough leaves to satisfy all internal nodes");
   }
 
-  template<PhylogenyType Net>
+  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
   void generate_random_binary_network_trl(Net& N,
                             const uint32_t num_tree_nodes,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
-                            auto&& make_node_data,
-                            const float multilabel_density) {
-    generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, make_node_data, std::IgnoreFunction<EdgeDataOr<Net>>(), multilabel_density);
+                            First&& first = First(),
+                            Args&&... args)
+  {
+    generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
   }
-
-  template<PhylogenyType Net>
-  void generate_random_binary_network_trl(Net& N,
-                            const uint32_t num_tree_nodes,
-                            const uint32_t num_retis,
-                            const uint32_t num_leaves,
-                            const float multilabel_density = 0.0f) {
-    generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, std::IgnoreFunction<NodeDataOr<Net>>(), std::IgnoreFunction<EdgeDataOr<Net>>(), multilabel_density);
-  }
-
 
 
   //! generate a random network from number of: nodes, and retis
-  template<PhylogenyType Net,
-           class MakeNodeData = std::IgnoreFunction<NodeDataOr<Net>>,
-           class MakeEdgeData = std::IgnoreFunction<EdgeDataOr<Net>>>
+  template<PhylogenyType Net, class... Args>
   void generate_random_binary_network_nr(Net& N,
                             const uint32_t num_nodes,
                             const uint32_t num_retis,
-                            const float multilabel_density = 0.0f,
-                            MakeNodeData&& make_node_data = MakeNodeData(),
-                            MakeEdgeData&& make_edge_data = MakeEdgeData()) {
+                            const float multilabel_density,
+                            Args&&... args)
+  {
     const uint32_t num_leaves = l_from_nr(num_nodes, num_retis);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, std::forward<MakeNodeData>(make_node_data), std::forward<MakeEdgeData>(make_edge_data), multilabel_density);
+    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<Args>(args)...);
   }
 
+  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  void generate_random_binary_network_nr(Net& N,
+                            const uint32_t num_nodes,
+                            const uint32_t num_retis,
+                            First&& first = First(),
+                            Args&&... args)
+  {
+    generate_random_binary_network_nr(N, num_nodes, num_retis, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
+  }
+
+
   //! generate a random network from number of: nodes, and leaves - 
-  template<PhylogenyType Net, class MakeNodeData = std::IgnoreFunction<NodeDataOr<Net>>, class MakeEdgeData = std::IgnoreFunction<EdgeDataOr<Net>>>
+  template<PhylogenyType Net, class... Args>
   void generate_random_binary_network_nl(Net& N,
                             const uint32_t num_nodes,
                             const uint32_t num_leaves,
-                            const float multilabel_density = 0.0f,
-                            MakeNodeData&& make_node_data = MakeNodeData(),
-                            MakeEdgeData&& make_edge_data = MakeEdgeData()) {
+                            const float multilabel_density,
+                            Args&&... args)
+  {
     const uint32_t num_retis = r_from_nl(num_nodes, num_leaves);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, std::forward<MakeNodeData>(make_node_data), std::forward<MakeEdgeData>(make_edge_data), multilabel_density);
+    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<Args>(args)...);
   }
 
-  template<PhylogenyType Net, class MakeNodeData = std::IgnoreFunction<NodeDataOr<Net>>, class MakeEdgeData = std::IgnoreFunction<EdgeDataOr<Net>>>
+  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  void generate_random_binary_network_nl(Net& N,
+                            const uint32_t num_nodes,
+                            const uint32_t num_leaves,
+                            First&& first = First(),
+                            Args&&... args)
+  {
+    generate_random_binary_network_nl(N, num_nodes, num_leaves, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
+  }
+
+
+  template<PhylogenyType Net, class... Args>
   void generate_random_binary_network_rl(Net& N,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
-                            const float multilabel_density = 0.0f,
-                            MakeNodeData&& make_node_data = MakeNodeData(),
-                            MakeEdgeData&& make_edge_data = MakeEdgeData()) {
+                            const float multilabel_density,
+                            Args&&... args)
+  {
     const uint32_t num_nodes = n_from_rl(num_retis, num_leaves);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, std::forward<MakeNodeData>(make_node_data), std::forward<MakeEdgeData>(make_edge_data), multilabel_density);
+    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<Args>(args)...);
+  }
+
+  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  void generate_random_binary_network_rl(Net& N,
+                            const uint32_t num_retis,
+                            const uint32_t num_leaves,
+                            First&& first = First(),
+                            Args&&... args)
+  {
+    generate_random_binary_network_nl(N, num_retis, num_leaves, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
   }
 
 

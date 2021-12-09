@@ -193,10 +193,9 @@ namespace PT {
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
 
   template<class P>
-  concept StrictTreeType = (StrictPhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
+  concept StrictTreeType = (StrictPhylogenyType<P> && P::is_declared_tree);
   template<class P>
-  concept TreeType = std::remove_reference_t<P>::is_declared_tree;
-  //concept TreeType = (PhylogenyType<P> && std::remove_reference_t<P>::is_declared_tree);
+  concept TreeType = StrictTreeType<std::remove_reference_t<P>>;
 
   using NodeTranslation = NodeMap<NodeDesc>;
   template<PhylogenyType Network>
