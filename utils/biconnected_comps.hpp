@@ -56,7 +56,7 @@ namespace PT{
       if(append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v <<'\n');
         Node& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
-        for(auto uv: v_node.in_edges()) output_emplacer.emplace_edge(uv, data_extracter.ede(uv));
+        for(auto uv: v_node.in_edges()) output_emplacer.emplace_edge(uv, data_extracter.get_edge_data(uv));
         for(const NodeDesc u: v_node.parents()) 
           if(u != rt)
             make_component_along(rt, u, output_emplacer);
@@ -74,7 +74,7 @@ namespace PT{
 
     void make_component_along(const NodeDesc v) {
       output = std::make_unique<Component>();
-      Emplacer output_emplacer{*output, old_to_new, {data_extracter.nde, data_extracter.nle}};
+      Emplacer output_emplacer{*output, old_to_new, {data_extracter.get_node_data, data_extracter.get_node_label}};
       const NodeDesc u = get_current_cut_node();
       make_component_along(u, v, output_emplacer);
       output_emplacer.mark_root(u);

@@ -8,7 +8,10 @@ namespace PT {
   struct ProtoAdjacency {
     NodeDesc nd;
 
-    operator NodeDesc&() { return nd; }
+    ProtoAdjacency(const NodeDesc& n): nd{n} {}
+
+    NodeDesc get_desc() const { return nd; }
+    //operator NodeDesc&() { return nd; }  // one should never change the node of an adjacency
     operator const NodeDesc&() const { return nd; }
     bool operator==(const NodeDesc other) const { return nd == other; }
     bool operator!=(const NodeDesc other) const { return nd != other; }
@@ -25,23 +28,21 @@ namespace PT {
     using Edge = PT::Edge<_EdgeData>;
     static constexpr bool has_data = true;
 
-    // edge data is stored in memory and both u-->v and v-->u point to the same edge data. This pointer cannot change during the lifetime of the adjacency!
-    // IMPORTANT: this also means that we cannot be responsable for destroying the EdgeData! This responsability falls to whoever removes the edge
-    EdgeData* data_ptr = nullptr;
+#warning "TODO: check if shared_ptr performs"
+    std::shared_ptr<EdgeData> data_ptr = nullptr;
     
-    void free_edge_data() { delete data_ptr; }
-
     Adjacency(const Adjacency&) = default;
-    Adjacency(Adjacency&&) = default;
+    Adjacency(Adjacency&& other) = default;
 
-    template<class __EdgeData> requires (!std::is_void_v<__EdgeData> && !std::is_same_v<EdgeData,__EdgeData>)
-    Adjacency(const Adjacency<__EdgeData>& adj): Parent(adj), data_ptr(new EdgeData(*(adj.data_ptr))) {}
+    template<class EData> requires (!std::is_void_v<EData> && !std::is_same_v<EdgeData, EData>)
+    Adjacency(const Adjacency<EData>& adj): Parent(adj), data_ptr(std::make_shared<EdgeData>(*(adj.data_ptr))) {}
     // make from an iterator to an adjacency
     template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
     Adjacency(const AdjIter& iter): Adjacency(*iter) {}
 
     template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, Adjacency>)
-    Adjacency(const NodeDesc _nd, First&& first, Args&&... args): Parent(_nd), data_ptr(new EdgeData(first, std::forward<Args>(args)...)) {}
+    Adjacency(const NodeDesc _nd, First&& first, Args&&... args):
+      Parent(_nd), data_ptr(std::make_shared<EdgeData>(std::forward<First>(first), std::forward<Args>(args)...)) {}
     Adjacency(const NodeDesc _nd, const Adjacency& adj): Parent(_nd), data_ptr(adj.data_ptr) {}
     Adjacency(const NodeDesc _nd): Parent(_nd) {}
 
@@ -70,10 +71,13 @@ namespace PT {
 
     Adjacency& operator=(const Adjacency&) = default;
     Adjacency& operator=(Adjacency&&) = default;
-
-    void free_edge_data() const {}
   };
 
+  // NOTE: an AdjAdapter can be used to merge edge-data when contracting edges
+  //       for example, if we contract an edge uv, and v has a child w,
+  //       then the data of uv is "merged with" the data of vw via an AdjAdapter
+  template<class T, class Adj, class Phylo>
+  concept AdjAdapterType = std::invocable<T, const Adj&, typename Phylo::Adjacency&>;
 
 
   template<std::Printable T>
@@ -84,7 +88,7 @@ namespace PT {
   std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
     if constexpr(Adjacency<T>::has_data) {
       return os << a.nd << '[' << '@' << a.data_ptr << ']';
-    } else return os << a.nd;
+    } else return os << static_cast<NodeDesc>(a);
   }
 
 }

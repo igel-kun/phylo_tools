@@ -47,17 +47,59 @@ namespace std{
   struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
 
 
+  // ---------------- copy CV or & qualifiers from a type to the next -------------------
+  // this is useful as what we're getting from a "const vector<int>" should be "const int", not "int" (the actualy value_type)
+
+  template<typename T,typename U>
+  struct copy_cv {
+    using R =    remove_reference_t<T>;
+    using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
+    using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
+  };
+  template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
+
+  template<typename T,typename U>
+  struct copy_ref {
+    using URR = add_rvalue_reference_t<U>;
+    using ULL = conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>;
+    using type = conditional_t<is_rvalue_reference_v<T>, URR, ULL>;
+  };
+  template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
+  // NOTE: it is important to copy the const before copying the ref!
+  template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
+
+
+  // ---------------- reference_of and value_type_of -----------------
+
+  template<class T> struct reference_of {};
+  template<class T> requires requires { typename remove_reference_t<T>::reference; }
+  struct reference_of<T> {
+    using Ref = typename remove_reference_t<T>::reference;
+    using value_type = copy_cv_t<T, remove_reference_t<Ref>>;
+    static constexpr bool returning_rvalue = !is_reference_v<Ref>;
+    using type = conditional_t<returning_rvalue, value_type, add_lvalue_reference_t<value_type>>;
+  };
+  template<class T> struct reference_of<T*> { using type = T&; };
+  template<class T> struct reference_of<T[]> { using type = T&; };
+  template<class T> using reference_of_t  = typename reference_of<T>::type;
+  template<class T> using value_type_of_t = remove_reference_t<reference_of_t<T>>;
+
 
   // ----------------- const_pointer and const_reference ---------------------
   // if a container has a const_pointer type, then return this type, otherwise return a pointer to const value_type
-  template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
+  template<class N, class T = void> struct get_const_ptr { using type = add_pointer_t<my_add_const_t<value_type_of_t<N>>>; };
   template<class N> struct get_const_ptr<N, void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
-  template<class N> using get_const_ptr_t = typename get_const_ptr<remove_cvref_t<N>>::type;
+  template<class N> using const_pointer_of_t = typename get_const_ptr<remove_reference_t<N>>::type;
+
+  // if a container has a pointer type, then return this type, otherwise return a pointer to value_type
+  template<class N, class T = void> struct get_ptr { using type = add_pointer_t<value_type_of_t<N>>; };
+  template<class N> struct get_ptr<N, void_t<typename N::pointer>> { using type = typename N::pointer; };
+  template<class N> using pointer_of_t = typename get_ptr<remove_reference_t<N>>::type;
 
   // if a container has a const_reference type, then return this type, otherwise return an lvalue reference to const value_type
   template<class N, class T = void> struct get_const_ref { using type = add_lvalue_reference_t<my_add_const_t<typename iterator_traits<N>::value_type>>; };
   template<class N> struct get_const_ref<N, void_t<typename N::const_reference>> { using type = typename N::const_reference; };
-  template<class N> using get_const_ref_t = typename get_const_ref<remove_cvref_t<N>>::type;
+  template<class N> using const_reference_of_t = typename get_const_ref<remove_reference_t<N>>::type;
 
 
   // ------------------ ITERATORS -----------------------------------
@@ -109,17 +151,12 @@ namespace std{
   struct my_iterator_traits: public iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just remove_reference_t from it
     using value_type = conditional_t<!is_pointer_v<T>, typename iterator_traits<T>::value_type, remove_reference_t<typename iterator_traits<T>::reference>>;
-    using const_reference = get_const_ref_t<T>;
-    using const_pointer   = get_const_ptr_t<T>;
+    using const_reference = const_reference_of_t<T>;
+    using const_pointer   = const_pointer_of_t<T>;
   };
-  template<class T> using value_type_of_t = typename my_iterator_traits<iterator_of_t<T>>::value_type;
-  template<class T> using reference_of_t  = typename my_iterator_traits<iterator_of_t<T>>::reference;
-  template<class T> using const_reference_of_t  = typename my_iterator_traits<iterator_of_t<T>>::const_reference;
-  template<class T> using pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::pointer;
-  template<class T> using const_pointer_of_t    = typename my_iterator_traits<iterator_of_t<T>>::const_pointer;
-  // oh my... in the STL, 'iterator_traits<map<...>::iterator>' does not contain 'mapped_type'....
-  template<class M> using key_type_of_t = typename remove_reference_t<M>::key_type;
-  template<class M> using mapped_type_of_t = typename remove_reference_t<M>::mapped_type;
+
+  template<MapType M> using key_type_of_t = typename remove_reference_t<M>::key_type;
+  template<MapType M> using mapped_type_of_t = typename remove_reference_t<M>::mapped_type;
 
   template<class _Iterator>
   constexpr bool is_forward_iterator = is_same_v<typename my_iterator_traits<_Iterator>::iterator_category, forward_iterator_tag>;
@@ -139,38 +176,29 @@ namespace std{
   template<typename T>
   bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
   
-  // ---------------- copy CV or & qualifiers from a type to the next -------------------
-  // this is useful as what we're getting from a "const vector<int>" should be "const int", not "int" (the actualy value_type)
-
-  template<typename T,typename U>
-  struct copy_cv {
-    using R =    remove_reference_t<T>;
-    using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
-    using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
-  };
-  template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
-
-  template<typename T,typename U>
-  struct copy_ref {
-    using type = conditional_t<is_rvalue_reference_v<T>, add_rvalue_reference_t<U>, conditional_t<is_lvalue_reference_v<T>, add_lvalue_reference_t<U>, U>>;
-  };
-  template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
-  // NOTE: it is important to copy the const before copying the ref!
-  template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
-
 
 
   // ----------------------- lookup ----------------------------------
 
+  template<class T> struct _findable_type { using type = value_type_of_t<T>; };
+  template<MapType M> struct _findable_type<M> { using type = key_type_of_t<M>; };
+  template<class T> using findable_type = typename _findable_type<remove_cvref_t<T>>::type;
+  template<class T, class C> concept FindableType = requires(T t, findable_type<C> other) {
+    { t == other } -> convertible_to<bool>;
+    { t != other } -> convertible_to<bool>;
+  };
+
   // a map lookup with default
-  template <typename _Map, typename _Key, typename _Ref = mapped_type_of_t<_Map>>
-  _Ref map_lookup(_Map&& m, const _Key& key, _Ref&& default_val = _Ref()) {
+  template<MapType Map, typename Key, typename Ref = mapped_type_of_t<Map>>
+  Ref map_lookup(Map&& m, const Key& key, Ref&& default_val = Ref()) {
     const auto iter = m.find(key);
     return (iter == m.end()) ? default_val : iter->second;
   }
 
   template<size_t get_num>
-  struct selector { template<class Tuple> auto operator()(Tuple&& p) { return std::get<get_num>(forward<Tuple>(p)); } };
+  struct selector {
+    template<class Tuple> auto& operator()(Tuple&& p) { return std::get<get_num>(forward<Tuple>(p)); }
+  };
 
 
   // --------------------------- sort and merge -------------------------------------
@@ -209,7 +237,7 @@ namespace std{
     FwdIt middle = first;
     const size_t prefix = sorted_prefix(middle, N / 2);
     
-    if(prefix < (size_t)(N/2)) merge_sort_fwd(first, middle, N/2, cmp);
+    if(prefix < static_cast<size_t>(N/2)) merge_sort_fwd(first, middle, N/2, cmp);
     assert(std::is_sorted(first, middle, cmp));
     
     merge_sort_fwd(middle, last, N - N/2, cmp);
@@ -243,9 +271,9 @@ namespace std{
     }
   };
   template<typename T>
-  struct hash<reference_wrapper<T>>{
-    size_t operator()(const reference_wrapper<T>& p) const{
-      return (std::hash<T>())(p);
+  struct hash<reference_wrapper<T>>: public std::hash<T> {
+    size_t operator()(const reference_wrapper<T>& p) const {
+      return this->operator()(static_cast<const T&>(p));
     }
   };
 
@@ -255,8 +283,7 @@ namespace std{
   // emplace(f(x)) = construct + move (assuming f does copy elision)
   // emplace(deferred_call(f(x))) = (in-place) construct (assuming f does copy elision)
   template<class F>
-  struct deferred_call_t
-  {
+  struct deferred_call_t {
     using T = invoke_result_t<F>;
     const F f;
 
@@ -312,7 +339,7 @@ namespace std{
 
 
   //! decrease a value in a map, pointed to by an iterator; return true if the value was decreased and false if the item was removed
-  template<class Map, long threshold = 1>
+  template<MapType Map, long threshold = 1>
   inline bool decrease_or_remove(Map& m, const iterator_of_t<Map>& it) {
     if(it->second == threshold) {
       m.erase(it);
@@ -322,9 +349,6 @@ namespace std{
       return true;
     }
   }
-
-
-  // TODO: write optional_by_invalid class that implements std::optional without requiring 1 additional byte (by using some "invalid" value
 
 
   // ----------------------- OUTPUT ---------------------------------------
@@ -409,6 +433,10 @@ namespace std{
   concept CompatibleValueTypes = is_same_v<value_type_of_t<T>, value_type_of_t<Q>>;
   template<class T, class Q>
   concept ConvertibleValueTypes = convertible_to<value_type_of_t<Q>, value_type_of_t<T>>;
+
+  // functions returning void are treated differently from functions returning anything, even if that anything is then ignored; we unify the two here
+  template<class T, class Else = uint_fast8_t>
+  using ReturnableType = std::conditional_t<std::is_void_v<T>, Else, T>;
 
   // string_view conversion
   float stoi(const string_view sv) { int result = 0; from_chars(sv.data(), sv.data() + sv.size(), result); return result; }

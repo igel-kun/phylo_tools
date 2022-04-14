@@ -45,14 +45,11 @@ void parse_options(const int argc, const char** argv)
   }
 }
 
-// if we declare the network to be compatible without ROTree, then we get a vector_map label-map in both
-// if we declare the network first, as RWNetwork<> and the tree to be CompatibleROTree<...>, then the label maps will both be unordered_map
-using MyTree = ROTree<>;
-using MyNet = CompatibleRWNetwork<MyTree>;
-// in any case, both label maps have the same type
-using LabelMap = typename MyTree::LabelMap;
-static_assert(std::is_same_v<LabelMap, typename MyNet::LabelMap>);
+using MyTree = DefaultLabeledTree<>;
+using MyNet = CompatibleNetwork<MyTree>;
 
+using NetPair = std::array<MyNet, 2>;
+using NetAndTree = std::pair<MyNet, MyTree>;
 
 /*
 // check containment for a Network or MUL-Tree
@@ -72,50 +69,54 @@ bool check_display(MyNet& N, MyTree& T)
 }
 */
 
-using NetAndTree = std::pair<MyNet, MyTree>;
 
-NetAndTree create_net_and_tree()
-{
-  EdgeVec el;
-  std::shared_ptr<LabelMap> node_labels = std::make_shared<LabelMap>();
+NetAndTree create_net_and_tree() {
+  NetAndTree result;
 
   const uint32_t num_internals = std::stoi(options["-r"][0]);
   const uint32_t num_leaves = std::stoi(options["-r"][1]);
   const uint32_t num_new_edges = std::stoi(options["-r"][2]);
 
-  generate_random_tree(el, *node_labels, num_internals, num_leaves);
-  
-  MyNet N(el, node_labels);
+  std::cout << "generating network with "<<num_leaves<<" leaves, "<<num_internals<<" internal nodes and "<< (num_leaves + num_internals - 1) + num_new_edges<<" edges\n";
+  generate_random_tree(result.second, num_internals, num_leaves);
 
-  std::cout << "rolled tree:\n"<<N<<"\n";
+  std::cout << "rolled tree:\n"<<result.second<<"\n";
   std::cout << "adding "<<num_new_edges<<" new edges...\n";
 
-  add_random_edges(N, num_new_edges, num_new_edges, num_new_edges);
+  result.first = result.second;
+  add_random_edges(result.first, num_new_edges, num_new_edges, num_new_edges);
 
-  return { std::piecewise_construct, std::forward_as_tuple(std::move(N)), std::forward_as_tuple(std::move(el), node_labels, consecutive_tag())};
+  return result;
 }
 
-NetAndTree read_net_and_tree()
-{
-  std::vector<EdgesAndNodeLabels<MyTree, LabelMap>> el;
-  read_edgelists(options[""][0], el);
-
-  if(el.size() < 2){
-    std::cerr << "could not read 2 networks from files "<<options[""]<<std::endl;
+template<class Input>
+MyNet read_network(Input&& in_file){
+  try{
+    return parse_newick<MyNet>(std::forward<Input>(in_file));
+  } catch(const std::exception& err){
+    std::cerr << "could not read network: "<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
   }
-
-  // choose which index corresponds to the host and which to the guest (we try to embed guest into host)
-  // if we've been given 2 trees, the first is considered the host, otherwise, the network is considered the host :)
-  const bool host_net_index = (el[0].is_tree() && !el[1].is_tree());
-  const bool guest_net_index = 1 - host_net_index;
-  return { std::piecewise_construct,
-           std::forward_as_tuple(std::move(el[host_net_index].edges), std::move(el[host_net_index].labels), consecutive_tag()),
-           std::forward_as_tuple(std::move(el[guest_net_index].edges), std::move(el[guest_net_index].labels), consecutive_tag()) };
 }
 
-int main(const int argc, const char** argv)
-{
+NetPair read_networks() {
+  const auto& input_files = options[""];
+  if(!input_files.empty()) {
+    std::ifstream in0(input_files[0]);
+    return (input_files.size() == 1) ? NetPair{read_network(in0), read_network(in0)} : NetPair{read_network(in0), read_network(input_files[1])};
+  } else throw std::invalid_argument("no input files");
+}
+
+NetAndTree read_net_and_tree() {
+  NetPair nets = read_networks();
+  // choose which index corresponds to the host and which to the guest (we try to embed guest into host)
+  // if we've been given 2 trees, the first is considered the host, otherwise, the network is considered the host :)
+  const bool host_net_index = (nets[0].is_tree() && !nets[1].is_tree());
+  const bool guest_net_index = 1 - host_net_index;
+  return { std::move(nets[host_net_index]), std::move(nets[guest_net_index]) };
+}
+
+int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
   auto NT_tuple = test(options, "-r") ?
@@ -131,7 +132,7 @@ int main(const int argc, const char** argv)
   std::cout << "\n\n starting the containment engine...\n\n";
   if(T.is_tree()) {
     if(N.is_tree()){
-      TreeInTreeContainment tc(std::move(N.as_tree()), std::move(T));
+      TreeInTreeContainment tc(std::move(N), std::move(T));
       if(tc.displayed())
         std::cout << "displayed\n"; // by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
       else std::cout << "not displayed\n";

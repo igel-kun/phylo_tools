@@ -30,14 +30,14 @@
 // shift backward y keys to index x by z indices
 #define __VECTOR_HASH_SHIFT_BWD(x,y,z) std::memmove(static_cast<void*>(data() + (x)), static_cast<void*>(data() + (x) + (z)), (y) * sizeof(Key))    
 // return whether the index x with value y is vacant
-#define __VECTOR_HASH_IS_VACANT(x, y) ((uintptr_t)(y) == (uintptr_t(x)) + 1u)
+#define __VECTOR_HASH_IS_VACANT(x, y) (static_cast<uintptr_t>(y) == static_cast<uintptr_t>(x) + 1u)
 // advance the given index
 #define __VECTOR_HASH_ADVANCE_IDX(x) {x = (x + 1u) & mask; STAT(++count);}
 #define __VECTOR_HASH_REVERT_IDX(x) {x = (x + vector_size() - 1u) & mask; STAT(++count);}
 // return the mask for the given number of elements
-#define __VECTOR_HASH_MASK(x) (~( (uintptr_t)0u ) >> (sizeof(uintptr_t)*8u - 1u - integer_log( (x) - 1u )) )
+#define __VECTOR_HASH_MASK(x) (~( static_cast<uintptr_t>(0u) ) >> (sizeof(uintptr_t)*8u - 1u - integer_log( (x) - 1u )) )
 // hashing
-#define __VECTOR_HASH_DO_HASH(x) ((uintptr_t)(x) & mask)
+#define __VECTOR_HASH_DO_HASH(x) (static_cast<uintptr_t>(x) & mask)
 // default load factor, right below 7/8
 #define __VECTOR_HASH_DEFAULT_LOAD_FACTOR 0.8749f
 
@@ -128,7 +128,7 @@ namespace std{
     inline uintptr_t do_hash(const Key& x) const noexcept {  return __VECTOR_HASH_DO_HASH(x); } 
     // advance the given index by one (circular)
     inline void advance_index(uintptr_t& index) const noexcept { __VECTOR_HASH_ADVANCE_IDX(index); }
-    inline Key empty_key(const uintptr_t index) const { return (Key)(index + 1); }
+    inline Key empty_key(const uintptr_t index) const { return static_cast<Key>(index + 1); }
     inline void set_vacant(const uintptr_t index) { *(data() + index) = empty_key(index); }
 
   public:

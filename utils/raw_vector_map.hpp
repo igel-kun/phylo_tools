@@ -189,7 +189,7 @@ namespace std {
     template<class ...Args>
 	  insert_result try_emplace(const key_type x, Args&&... args)
     {
-      const size_t x_idx = (size_t)x;
+      const size_t x_idx = static_cast<size_t>(x);
       if(x_idx >= size()) {
         Parent::reserve(x_idx + 1);
         Parent::resize(x_idx);
@@ -205,10 +205,10 @@ namespace std {
 	  
     insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
-    mapped_type& operator[](const key_type& key) { assert(key < size()); return Parent::operator[]((size_t)key); }
-    const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Parent::operator[]((size_t)key); }
-    mapped_type& at(const key_type& key) { return Parent::at((size_t)key); }
-    const mapped_type& at(const key_type& key) const { return Parent::at((size_t)key); }
+    mapped_type& operator[](const key_type& key) { assert(key < size()); return Parent::operator[](static_cast<size_t>(key)); }
+    const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Parent::operator[](static_cast<size_t>(key)); }
+    mapped_type& at(const key_type& key) { return Parent::at(static_cast<size_t>(key)); }
+    const mapped_type& at(const key_type& key) const { return Parent::at(static_cast<size_t>(key)); }
 
     iterator begin() { return {data()}; }
     iterator end() { return {data(), size()}; }
@@ -224,7 +224,7 @@ namespace std {
     iterator find(const key_type x) { if(contains(x)) return {data(), x}; else return end(); }
     const_iterator find(const key_type x) const { if(contains(x)) return {data(), x}; else return end(); }
     
-    bool contains(const key_type x) const { return (size_t)x < size(); }
+    bool contains(const key_type x) const { return static_cast<size_t>(x) < size(); }
     bool count(const key_type x) const { return contains(x); }
   };
 

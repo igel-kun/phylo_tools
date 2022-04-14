@@ -38,35 +38,28 @@ namespace PT{
     
     static std::string to_string(const uint32_t x) {
       if(x >= 26)
-        return to_string(x/26) + (char)('a' + (x % 26));
+        return to_string(x/26) + ('a' + (x % 26));
       else
-        return std::string("") + (char)('a' + x);
+        return std::string("") + ('a' + x);
     }
   };
 
 
   //! generate random (not necessarily binary) tree
-  // NOTE: the function welcome_node is called for each newly created node (can be used to set node properties)
-  // NOTE: the function welcome_edge is called for each newly created edge
-  template<StrictTreeType Tree,
-           NodeFunctionType CreateNodeLabel = sequential_taxon_name,
-           NodeFunctionType CreateNodeData = typename Tree::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Tree::IgnoreEdgeDataFunc>
+  template<StrictTreeType Tree, DataExtracterType MakeData = DataExtracter<Tree>>
   void generate_random_tree(Tree& T,
                             const uint32_t num_internal,
                             const uint32_t num_leaves,
                             const float multilabel_density = 0.0f,
-                            CreateNodeLabel&& make_node_label = CreateNodeLabel(),
-                            CreateNodeData&& make_node_data = CreateNodeData(),
-                            CreateEdgeData&& make_edge_data = CreateEdgeData())
+                            MakeData make_data = MakeData())
   {
-#warning TODO: implement multi-labels
+#warning "TODO: implement multi-labels"
     assert(multilabel_density >= 0.0f   && multilabel_density < 1.0f);
     
     if(num_leaves == 0) throw std::logic_error("cannot construct tree without leaves");
     if(num_internal == 0) throw std::logic_error("cannot construct tree without internal nodes");
 
-    const uint32_t num_nodes = num_leaves + num_internal;
+    //const uint32_t num_nodes = num_leaves + num_internal;
     const uint32_t num_in_edges = num_leaves + num_internal - 1;
     const uint32_t min_out_edges = 2 * num_internal;
     if(num_in_edges < min_out_edges)
@@ -74,36 +67,41 @@ namespace PT{
             std::to_string(num_leaves) + " leaves \
             (total in-degree == " + std::to_string(num_in_edges) + " vs total out-degree >= " + std::to_string(min_out_edges) + ")");
 
-    NodeDesc rt = T.add_root(make_node_data(NoNode));
-    if constexpr (Tree::has_node_labels) T[rt].label() = make_node_label(rt);
+    NodeDesc rt;
+    if constexpr (Tree::has_node_data)
+      rt = T.add_root(make_data.get_node_data(NoNode));
+    else rt = T.add_root();
+    if constexpr (Tree::has_node_labels) T[rt].label() = make_data.get_node_label(rt);
     
     NodeSet current_leaves; // nodes that can accept in-degree (should contain at least 2 nodes at all times)
     append(current_leaves, rt);
     for(size_t i = 0; i != num_internal; ++i){
       // each time we turn a leaf into an internal node, we have to create 2 leaves, so we need to reserve 1 leaf for each internal_to_go
-      const size_t internals_to_go = num_internal - i;
+      const size_t internals_to_go = num_internal - i - 1;
       const size_t leaves_to_go = num_leaves - current_leaves.size();
       const size_t max_degree = leaves_to_go - internals_to_go;
-      const size_t min_degree = (i == num_internal - 1) ? leaves_to_go : 2;
+      const size_t min_degree = (internals_to_go == 0) ? leaves_to_go : 2;
       const size_t degree = min_degree + throw_die(max_degree - min_degree + 1);
       const auto it = get_random_iterator(current_leaves);
       const NodeDesc u = *it;
-      erase(current_leaves, it);
+      current_leaves.erase(it);
       for(size_t j = 0; j != degree; ++j) {
-        const NodeDesc v = T.create_node(make_node_data(u));
-        if constexpr (Tree::has_node_labels) T[v].label() = make_node_label(v);
-        T.add_child(u, v, make_edge_data(u, v));
+        const NodeDesc v = T.create_node(make_data.get_node_data(u));
+        if constexpr (Tree::has_node_labels && MakeData::custom_node_label_maker) T[v].label() = make_data.get_node_label(v);
+        T.add_child(u, v, make_data.get_edge_data(u, v));
+        append(current_leaves, v);
       }
     }
   }
+
+
 
   //! add a number of random edges to a given network, introducing new_tree_nodes new tree nodes and new_reticulations new reticulations
   //NOTE: this may result in a non-binary network
   //NOTE: if N is a tree, new_reticulations may not be zero, but new_tree_nodes may be zero (in this case, we're re-using existing tree nodes)
   //NOTE: if new_tree_nodes == new_reticulations == num_edges, then no old node will be incident with a new edge (old nodes maintain their degrees)
-  template<class Network>
-  void add_random_edges(Network& N, uint32_t new_tree_nodes, uint32_t new_reticulations, uint32_t num_edges)
-  {
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
+  void add_random_edges(Net& N, uint32_t new_tree_nodes, uint32_t new_reticulations, uint32_t num_edges, ExtractData&& extracter = ExtractData()) {
     if(num_edges > 0){
       if(N.num_edges() < 2)
         throw std::logic_error("cannot add edges to a tree/network with less than 2 edges");
@@ -113,7 +111,7 @@ namespace PT{
         throw std::logic_error("cannot add " + std::to_string(new_reticulations) + " new reticulations with only " + std::to_string(num_edges) + " new edges");
 
       NodeSet tree_nodes, retis;
-      for(const NodeDesc u: N)
+      for(const NodeDesc u: N.nodes())
         if(N.is_reti(u))
           append(retis, u);
         else if(!N.is_leaf(u))
@@ -125,30 +123,47 @@ namespace PT{
       while(num_edges){
         if(new_reticulations){
           const auto edges = N.edges();
-          const auto uv_iter = get_random_iterator(edges);
-          const auto [u, v] = uv_iter->as_pair();
+          const auto uv_iter = get_random_iterator(edges, N.num_edges());
+          const NodeDesc u = uv_iter->tail();
+          auto& v = uv_iter->head();
           //const NodeDesc u = uv_iter->first;
           //const NodeDesc v = uv_iter->second;
           if(new_tree_nodes){
-            const auto [x, y] = get_random_iterator_except(edges, uv_iter)->as_pair();
-            DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<"\t "<<y<<"-"<<u<<"-path? "<<N.has_path(y,u)<<'\n');
-            NodeDesc s = N.subdivide(u, v);
-            NodeDesc t = N.subdivide(x, y);
-            if(N.has_path(y, u)) {
-              std::cout << "swapping "<<s<<" & "<<t<<"\n";
-              std::swap(s, t);
+            const auto xy_iter = get_random_iterator_except(edges, uv_iter, N.num_edges());
+            const NodeDesc x = xy_iter->tail();
+            auto& y = xy_iter->head();
+            const bool reverse_st = N.has_path(y,u);
+            DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<"\t "<<y<<"-"<<u<<"-path? "<<reverse_st<<'\n');
+            NodeDesc s,t;
+            s = Net::create_node(extracter.get_node_data);
+            t = Net::create_node(extracter.get_node_data);
+            if constexpr (extracter.custom_node_label_maker) {
+              node_of<Net>(s).label() = extracter.get_node_label(s);
+              node_of<Net>(t).label() = extracter.get_node_label(t);
             }
+            if constexpr (extracter.custom_edge_data_maker) {
+              N.subdivide_edge(*uv_iter, s, [&](auto&&, auto& data){ data = extracter.get_edge_data(s, v);});
+              N.subdivide_edge(*xy_iter, t, [&](auto&&, auto& data){ data = extracter.get_edge_data(t, y);});
+            } else {
+              N.subdivide_edge(*uv_iter, s);
+              N.subdivide_edge(*xy_iter, t);
+            }
+            if(reverse_st) std::swap(s,t);
             DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
-            N.add_edge(s, t);       --num_edges;
+            N.add_edge(s, t, extracter.get_edge_data(s, t));       --num_edges;
             append(tree_nodes, s);  --new_tree_nodes;
             append(retis, t);       --new_reticulations;
           } else {
             if(u != N.root()){
-              const NodeDesc t = N.subdivide(u, v);
-              NodeDesc s;
+              NodeDesc s,t;
+              t = Net::create_node(extracter.get_node_data);
+              if constexpr (extracter.custom_node_label_maker) node_of<Net>(t).label() = extracter.get_node_label(t);
+              if constexpr (extracter.custom_edge_data_maker)
+                N.subdivide_edge(*uv_iter, t, [&](auto&&, auto& data){ data = extracter.get_edge_data(s, v);});
+              else N.subdivide_edge(*uv_iter, t);
               do s = *(get_random_iterator(tree_nodes)); while((s != u) && !N.has_path(v, s));
               DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
-              N.add_edge(s, t);       --num_edges;
+              N.add_edge(s, t, extracter.get_edge_data(s, t));       --num_edges;
               append(retis, t);       --new_reticulations;
             }
           }
@@ -157,20 +172,26 @@ namespace PT{
           if(new_tree_nodes){
             NodeDesc s;
             while(1){
-              const auto [x, y] = get_random_iterator(N.edges())->as_pair();
+              const auto xy_iter = get_random_iterator(N.edges(), N.num_edges());
+              const NodeDesc x = xy_iter->tail();
+              auto& y = xy_iter->head();
               if((t != y) && !N.has_path(t, x)) {
-                s = N.subdivide(x, y);
+                s = Net::create_node(extracter.get_node_data);
+                if constexpr (extracter.custom_node_label_maker) node_of<Net>(s).label() = extracter.get_node_label(s);
+                if constexpr (extracter.custom_edge_data_maker)
+                  N.subdivide_edge(*xy_iter, s, [&](auto&&, auto& data){ data = extracter.get_edge_data(s, y);});
+                else N.subdivide_edge(*xy_iter, s);
                 break;
               }
             }
             DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
-            N.add_edge(s, t);       --num_edges;
+            N.add_edge(s, t, extracter.get_edge_data(s, t));       --num_edges;
             append(tree_nodes, s);  --new_tree_nodes;
           } else {
             const NodeDesc s = *(get_random_iterator(tree_nodes));
             if(!N.has_path(t,s)){
               DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
-              N.add_edge(s, t);       --num_edges;
+              N.add_edge(s, t, extracter.get_edge_data(s, t));       --num_edges;
             }
           }
         }
@@ -180,18 +201,13 @@ namespace PT{
 
 
   //! generate a random network from number of: tree nodes, retis, and leaves
-  template<StrictPhylogenyType Net,
-           NodeFunctionType CreateNodeLabel = sequential_taxon_name,
-           NodeFunctionType CreateNodeData = typename Net::IgnoreNodeDataFunc,
-           class CreateEdgeData = typename Net::IgnoreEdgeDataFunc>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_trl(Net& N,
                             const uint32_t num_tree_nodes,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
                             const float multilabel_density,
-                            CreateNodeLabel&& make_node_label = CreateNodeLabel(),
-                            CreateNodeData&& make_node_data = CreateNodeData(),
-                            CreateEdgeData&& make_edge_data = CreateEdgeData())
+                            ExtractData&& extracter = ExtractData())
   {
 #warning implement multi-labels
     assert(multilabel_density >= 0   && multilabel_density < 1);
@@ -216,20 +232,18 @@ namespace PT{
     uint32_t reti_count = 0;
     uint32_t tree_count = 0;
     // initialize with a root node
-    const NodeDesc new_root = N.add_root(make_node_data(NoNode));
-    if constexpr (Net::has_node_labels) N[new_root].label() = make_node_label(new_root);
-    std::cout << "mark2\n";
+    const NodeDesc new_root = N.add_root(extracter.get_node_data);
+    if constexpr (ExtractData::custom_node_label_maker) node_of<Net>(new_root).label() = extracter.get_node_label(new_root);
     std::cout << "created node "<<new_root<<" at "<<new_root.data<<"\n";
     dangling.try_emplace(new_root, 2);
-    std::cout << "mark3\n";
     for(uint32_t i = 1; i < num_internal; ++i){
       std::cout << "remaining dangling: "<<dangling.size() << '\n';
       const uint32_t num_unsatisfied = dangling.size();
       const auto parent_it = get_random_iterator(dangling);
       const NodeDesc u = parent_it->first;
-      const NodeDesc v = N.create_node(make_node_data(u));
-      if constexpr (Net::has_node_labels) N[v].label() = make_node_label(v);
-      N.add_child(u, v, make_edge_data(u, v));
+      const NodeDesc v = Net::create_node(extracter.get_node_data);
+      if constexpr (ExtractData::custom_node_label_maker) node_of<Net>(v).label() = extracter.get_node_label(v);
+      N.add_child(u, v, extracter.get_edge_data(u, v));
 
       const bool removed = !decrease_or_remove(dangling, parent_it);
       DEBUG5(std::cout << " node #"<<i<<"\t- "<<reti_count <<" retis & "<<tree_count<<" tree nodes - ");
@@ -244,7 +258,7 @@ namespace PT{
         const auto dang_it = removed ? get_random_iterator(dangling) : get_random_iterator_except(dangling, parent_it);
         std::cout << "got "<<*dang_it<<std::endl;
         const NodeDesc w = dang_it->first;
-        N.add_child(w, v, make_edge_data(w, v));
+        N.add_child(w, v, extracter.get_edge_data(w, v));
         decrease_or_remove(dangling, dang_it);
         dangling[v] = 1;
         ++reti_count;
@@ -260,9 +274,9 @@ namespace PT{
       if(dangling.empty()) throw std::logic_error("not enough internal nodes to fit all leaves");
       const auto iter = dangling.begin();
       const NodeDesc u = iter->first;
-      const NodeDesc v = N.create_node(make_node_data(u));
-      if constexpr (Net::has_node_labels) N[v].label() = make_node_label(v);
-      N.add_child(u, v, make_edge_data(u, v));
+      const NodeDesc v = N.create_node(extracter.get_node_data(u));
+      if constexpr (ExtractData::custom_node_label_maker) node_of<Net>(v).label() = extracter.get_node_label(v);
+      N.add_child(u, v, extracter.get_edge_data(u, v));
       decrease_or_remove(dangling, iter);
       
       DEBUG5(std::cout << " node #"<<i<<" is a leaf"<<std::endl);
@@ -270,98 +284,93 @@ namespace PT{
     if(!dangling.empty()) throw std::logic_error("not enough leaves to satisfy all internal nodes");
   }
 
-  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_trl(Net& N,
                             const uint32_t num_tree_nodes,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
-                            First&& first = First(),
-                            Args&&... args)
+                            ExtractData&& extracter = ExtractData())
   {
-    generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
+    generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0f, std::forward<ExtractData>(extracter));
   }
 
 
   //! generate a random network from number of: nodes, and retis
-  template<PhylogenyType Net, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_nr(Net& N,
                             const uint32_t num_nodes,
                             const uint32_t num_retis,
                             const float multilabel_density,
-                            Args&&... args)
+                            ExtractData&& extracter = ExtractData())
   {
     const uint32_t num_leaves = l_from_nr(num_nodes, num_retis);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<Args>(args)...);
+    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<ExtractData>(extracter));
   }
 
-  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_nr(Net& N,
                             const uint32_t num_nodes,
                             const uint32_t num_retis,
-                            First&& first = First(),
-                            Args&&... args)
+                            ExtractData&& extracter)
   {
-    generate_random_binary_network_nr(N, num_nodes, num_retis, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
+    generate_random_binary_network_nr(N, num_nodes, num_retis, 0.0f, std::forward<ExtractData>(extracter));
   }
 
 
   //! generate a random network from number of: nodes, and leaves - 
-  template<PhylogenyType Net, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_nl(Net& N,
                             const uint32_t num_nodes,
                             const uint32_t num_leaves,
                             const float multilabel_density,
-                            Args&&... args)
+                            ExtractData&& extracter = ExtractData())
   {
     const uint32_t num_retis = r_from_nl(num_nodes, num_leaves);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<Args>(args)...);
+    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<ExtractData>(extracter));
   }
 
-  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_nl(Net& N,
                             const uint32_t num_nodes,
                             const uint32_t num_leaves,
-                            First&& first = First(),
-                            Args&&... args)
+                            ExtractData&& extracter = ExtractData())
   {
-    generate_random_binary_network_nl(N, num_nodes, num_leaves, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
+    generate_random_binary_network_nl(N, num_nodes, num_leaves, 0.0f, std::forward<ExtractData>(extracter));
   }
 
-
-  template<PhylogenyType Net, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_rl(Net& N,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
                             const float multilabel_density,
-                            Args&&... args)
+                            ExtractData&& extracter = ExtractData())
   {
     const uint32_t num_nodes = n_from_rl(num_retis, num_leaves);
     const uint32_t num_tree_nodes = num_nodes - num_retis - num_leaves;
-    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<Args>(args)...);
+    return generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, multilabel_density, std::forward<ExtractData>(extracter));
   }
 
-  template<StrictPhylogenyType Net, NodeFunctionType First = sequential_taxon_name, class... Args>
+  template<StrictPhylogenyType Net, class ExtractData = DataExtracter<Net>>
   void generate_random_binary_network_rl(Net& N,
                             const uint32_t num_retis,
                             const uint32_t num_leaves,
-                            First&& first = First(),
-                            Args&&... args)
+                            ExtractData&& extracter = ExtractData())
   {
-    generate_random_binary_network_nl(N, num_retis, num_leaves, 0.0f, std::forward<First>(first), std::forward<Args>(args)...);
+    generate_random_binary_network_nl(N, num_retis, num_leaves, 0.0f, std::forward<ExtractData>(extracter));
   }
 
 
   //! simulate reticulate species evolution
-  template<PhylogenyType _Network, EdgeContainerType Edges, std::ContainerType Names>
+  template<PhylogenyType Net, EdgeContainerType Edges, std::ContainerType Names>
   void simulate_species_evolution(Edges& edges, Names& names, const uint32_t number_taxa, const float recombination_rate)
   {
 #warning writeme
   }
 
   //! simulate reticulate gene evolution
-  template<PhylogenyType _Network, EdgeContainerType Edges, std::ContainerType Names>
+  template<PhylogenyType Net, EdgeContainerType Edges, std::ContainerType Names>
   void simulate_gene_evolution(Edges& edges, Names& names, const uint32_t number_taxa, const float recombination_rate)
   {
 #warning writeme

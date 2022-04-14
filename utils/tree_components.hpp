@@ -1,19 +1,20 @@
 
 #pragma once
 
+#include "optional_tuple.hpp"
 #include "types.hpp"
 #include "network.hpp"
+#include "edge_emplacement.hpp"
 
 namespace PT{
 
   //! get a list of component roots in preorder
   template<class Network, class NodeContainer = typename Network::NodeVec>
-  NodeContainer get_tree_non_trivial_roots(const Network& N)
-  {
+  NodeContainer get_tree_non_trivial_roots(const Network& N) {
     NodeContainer comp_roots;
-    for(const Node u: N.nodes()){
+    for(const NodeDesc u: N.nodes()){
       if(N.is_inner_tree_node(u)){
-        const Node v = N.parent(u);
+        const NodeDesc v = N.parent(u);
         if(N.is_reti(v)) append(comp_roots, v);
       }
     }
@@ -21,112 +22,127 @@ namespace PT{
   }
 
 
-  struct ComponentData
-  {
-    Node comp_root = NoNode;
-    Node visible_leaf = NoNode;
+#warning "TODO: check: I think nodes cannot have a component-root and a visible-leaf at the same time --> save some memory!"
+  struct TreeComponentData {
+    NodeDesc comp_root = NoNode;
+    NodeDesc visible_leaf = NoNode;
 
-    void force_both(const Node x) { comp_root = visible_leaf = x; }
+    void force_both(const NodeDesc x) { comp_root = visible_leaf = x; }
     void clear() { force_both(NoNode); }
-    friend std::ostream& operator<<(std::ostream& os, const ComponentData& cd)
+    friend std::ostream& operator<<(std::ostream& os, const TreeComponentData& cd)
     { return os<<"{rt: "<< (cd.comp_root == NoNode ? std::string(".") : std::to_string(cd.comp_root))
                 <<" vl: "<<(cd.visible_leaf == NoNode ? std::string(".") : std::to_string(cd.visible_leaf))<<"}"; }
   };
 
+  template<class T>
+  concept StrictHasTreeComponentData = (StrictPhylogenyType<T> && std::is_base_of_v<TreeComponentData, typename T::NodeData>);
+  template<class T>
+  concept HasTreeComponentData = StrictHasTreeComponentData<std::remove_reference_t<T>>;
 
+  // each node in the component DAG will know its corresponding node in the Network
+  using ComponentDAG = DefaultNetwork<NodeDesc>;
 
-  // use this with networks with node-data that derives from ComponentData
-  template<class Network,
-    class = std::enable_if_t<std::is_convertible_v<typename Network::NodeData, ComponentData>>>
-  class TreeComponentInfos
-  {
+  // map nodes to their TreeComponentData
+  //NOTE: if the nodes of Network have node data that derives from TreeComponentData, then we use this node data by default, otherwise we use a map
+  template<StrictPhylogenyType Network, bool use_internal_node_data = HasTreeComponentData<Network>>
+  class TreeComponentInfos: public std::optional_tuple<std::conditional_t<use_internal_node_data, void, NodeMap<TreeComponentData>>> {
+    using Parent = std::optional_tuple<std::conditional_t<use_internal_node_data, void, NodeMap<TreeComponentData>>>;
+    // TODO: deal with the case the Network has multiple roots! For now, we just disallow it
+    static_assert(Network::has_unique_root);
+
     Network& N;
   public:
-    RWNetwork<> comp_DAG;
+    ComponentDAG comp_DAG;
+    // N_to_compDAG translates nodes of N into nodes of the component DAG
+    NodeTranslation N_to_compDAG;
+   
+
+    TreeComponentData& component_data_of(const NodeDesc u) {
+      if constexpr (use_internal_node_data) return node_of<Network>(u).data(); else return Parent::template get<0>()[u];
+    }
+
+    const TreeComponentData& component_data_of(const NodeDesc u) const {
+      if constexpr (use_internal_node_data) return node_of<Network>(u).data(); else return Parent::template get<0>()[u];
+    }
 
   protected:
+    ComponentDAG compute_comp_DAG() {
+      std::cout << "constructing component-DAG...\n";
+      ComponentDAG result;
 
-    EdgeVec compute_comp_DAG()
-    {
-      std::cout << "constructing component-infos...\n";
+      // create an edge-emplacer for th result DAG; we won't have to track roots since they will be the same as the roots of N
+      // NOTE: the lambda tells the emplacer that the node data of the node corresponding to u will be u itself
+      auto emplacer = EdgeEmplacers<false>::make_emplacer(result, N_to_compDAG, [](const NodeDesc u){ return u;});
       
-      EdgeVec result;
       NodeVec non_trivial_roots;
       NodeVec trivial_roots;
 
-      N[N.root()].comp_root = N.root();
+      component_data_of(N.root()).comp_root = N.root();
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
-      compute_edges(non_trivial_roots, &result);
+      compute_edges<true>(non_trivial_roots, emplacer);
       // construct visibility also from the trivial roots (the leaves), but don't add their edges to the component DAG
-      compute_edges(trivial_roots);
+      compute_edges<false>(trivial_roots, emplacer);
       // the root has not yet stored in the list of non-trivial roots, so add it here
       //non_trivial_roots.emplace_back(N.root());
       return result;
     }
 
     // compute component roots and return list of leaves encountered
-    void compute_component_roots(NodeVec& trivial_roots, NodeVec& non_trivial_roots)
-    {
-      auto dfs = N.nodes_preorder();
-      auto u_it = dfs.begin();
-      while(++u_it != dfs.end()){
-        const Node u = *u_it;
-        switch(N.type_of(u)){
-          case NODE_TYPE_LEAF:
-            trivial_roots.push_back(u);
-            break;
-          case NODE_TYPE_INTERNAL_TREE: {
-              // note that u is not the root, so parent(u) is safe
-              const Node pu = N.parent(u);
-              if(N.is_reti(pu)){ // if the parent is a reticulation, register new component root
-                N[u].comp_root = u;
-                non_trivial_roots.push_back(u);
-              } else N[u].comp_root = N[pu].comp_root; // if the parent is not a reticulation, copy their component root
-              break;
-            }
-          default: break;
-        }
+    void compute_component_roots(NodeVec& trivial_roots, NodeVec& non_trivial_roots) {
+      for(const NodeDesc u: N.nodes_preorder()) {
+        auto& u_node = node_of<Network>(u);
+        if(!u_node.is_leaf()) {
+          if(u_node.is_tree_node()) {
+            auto& u_data = component_data_of(u);
+            const NodeDesc pu = u_node.parent();
+            if(node_of<Network>(pu).is_reti()){ // if the parent is a reticulation, register new component root
+              u_data.comp_root = u;
+              non_trivial_roots.push_back(u);
+            } else u_data.comp_root = component_data_of(pu).comp_root; // if the parent is not a reticulation, copy their component root
+          }
+        } else trivial_roots.push_back(u); // NOTE: leaves don't get a component-root
       }
     }
 
 
     // update visibility of reticulation chains and return a list of components seen above
-    //NOTE: also returns thee tree component root that sees r, or NoNode if there is no such root
-    Node update_reticulations(const Node r, typename Network::NodeSet* components_above = nullptr)
-    {
+    //NOTE: also returns the tree component root that sees r, or NoNode if there is no such root
+    template<bool save_components>
+    NodeDesc update_reticulations(const NodeDesc r, NodeSet& components_above) {
       // we use "r" to denote "uninitialized" and "NoNode" to denote "more than one component sees r"
       //NOTE: we cannot simply use "components_above.size() == 1" since previous branches might have already filled that
-      Node rt = r;
+      NodeDesc rt = r;
       std::cout << "updating 'reticulation' "<<r<<" with parents "<<N.parents(r)<<'\n';
-      for(const Node pr: N.parents(r)){
-        Node next_rt;
+      for(const NodeDesc pr: N.parents(r)){
+        NodeDesc next_rt;
         if(!N.is_reti(pr)){
-          next_rt = N[pr].comp_root;
-          if(components_above && (next_rt != NoNode)) append(*components_above, next_rt);
-        } else next_rt = update_reticulations(pr, components_above);
+          next_rt = component_data_of(pr).comp_root;
+          if constexpr (save_components)
+            if(next_rt != NoNode) append(components_above, next_rt);
+        } else next_rt = update_reticulations<save_components>(pr, components_above);
         if(rt == r) rt = next_rt;
         if(rt != next_rt) rt = NoNode;
       }
       assert(rt != r); // rt == r only if r has no parents which should never be the case
-      if(N.out_degree(r) <= 1) N[r].comp_root = rt;
+      if(N.out_degree(r) <= 1) component_data_of(r).comp_root = rt;
       return rt;
     }
 
     // build the network of component roots by following the reticulations above each root
-    void compute_edges(const NodeVec& roots, EdgeVec* edges = nullptr)
-    {
-      for(const Node u: roots){
+    template<bool make_edges>
+    void compute_edges(const NodeVec& roots, auto& edge_emplacer) {
+      for(const NodeDesc u: roots){
         assert(!N.is_reti(u));
-        typename Network::NodeSet components_above;
-        const Node rt = update_reticulations(u, &components_above);
+        NodeSet components_above;
+        const NodeDesc rt = update_reticulations<make_edges>(u, components_above);
         if((N.out_degree(u) == 0) && (rt != NoNode)) {
           std::cout << "setting visible leaf of "<<rt<<" to the leaf "<<u<<"\n";
-          N[rt].visible_leaf = u;
+          component_data_of(rt).visible_leaf = u;
         }
-        if(edges)
-          for(const Node v: components_above)
-            edges->emplace_back(v, u);
+        if constexpr (make_edges)
+          for(const NodeDesc v: components_above)
+            edge_emplacer.emplace_edge(v, u);
       }
     }
 
@@ -149,20 +165,19 @@ namespace PT{
 
 
     // get the highest component-root that is visible on u
-    Node get_highest_visible_comp_root(const Node u){
+    NodeDesc get_highest_visible_comp_root(const NodeDesc u) {
       // get highest initial component root reachable without reticulation
-      std::cout << "getting highest visible from "<<u<<" ("<<N[u]<<")\n";
-      Node rt = N[u].comp_root;
+      std::cout << "getting highest visible from "<<u<<" ("<<component_data_of(u)<<")\n";
+      NodeDesc rt = component_data_of(u).comp_root;
       while(rt != NoNode) {
-        std::cout << "rt = "<<rt<<" ("<<N[rt]<<")\n";
-        assert(N.has_node(rt));
+        std::cout << "rt = "<<rt<<" ("<<component_data_of(rt)<<")\n";
         if(N.in_degree(rt) == 1){
-          const Node p_rt = N.parent(rt);
+          const NodeDesc p_rt = N.parent(rt);
           switch(N.in_degree(p_rt)){
             case 0:
               return p_rt;
             case 1:
-              rt = N[p_rt].comp_root;
+              rt = component_data_of(p_rt).comp_root;
               assert(rt != NoNode); // the parent is a tree-node, so it should have a component-root
               return rt;
             default:
@@ -180,22 +195,21 @@ namespace PT{
 
     // recomputes the component root of a node y from the component roots of its parents
     // return whether the root of y changed
-    bool inherit_root(const Node y, const bool spread_info = false)
-    {
-      Node& y_root = N[y].comp_root;
+    bool inherit_root(const NodeDesc y, const bool spread_info = false) {
+      NodeDesc& y_root = component_data_of(y).comp_root;
       if((y_root != y) || (N.in_degree(y) > 1)){ // update only for non-component roots!
         std::cout << "computing new component root of "<<y<<" (spread = "<<spread_info<<")\n";
-        Node rt;
+        NodeDesc rt;
         switch(N.in_degree(y)){
           case 0: 
             rt = y;
             break;
           case 1:
             {
-              const Node x = N.parent(y);
-              std::cout << "inheriting comp-root from "<<x<<": "<<N[x]<<"\n";
+              const NodeDesc x = N.parent(y);
+              std::cout << "inheriting comp-root from "<<x<<": "<<component_data_of(x)<<"\n";
               // if we have in-degree 1, then we take the component-root of our parent x if x is a tree node or we are a leaf
-              rt = ((N.in_degree(x) > 1) && (N.out_degree(y) > 1)) ? y : N[x].comp_root;
+              rt = ((N.in_degree(x) > 1) && (N.out_degree(y) > 1)) ? y : component_data_of(x).comp_root;
             }
             break;
           default:
@@ -208,28 +222,28 @@ namespace PT{
             comp_DAG.suppress_node(y);
           }
           y_root = rt;
-          std::cout << "updated comp-info of "<<y<<" to "<< N[y]<<"\n";
+          std::cout << "updated comp-info of "<<y<<" to "<< component_data_of(y)<<"\n";
           if(N.out_degree(y) > 0) {
-            if(spread_info) for(const Node z: N.children(y)) inherit_root(z);
+            if(spread_info) for(const NodeDesc z: N.children(y)) inherit_root(z);
           } else if(rt != NoNode) {
             std::cout << "setting visible leaf of "<<rt<<" to "<<y<<"\n";
-            N[rt].visible_leaf = y; // further, if we are a leaf, then mark the component root(s) visible from us
+            component_data_of(rt).visible_leaf = y; // further, if we are a leaf, then mark the component root(s) visible from us
           }
           return true;
         } else return false;
       } else return false;
     }
 
-    // return the intersection of component roots of nodes in the container c (or NoNode if the intersection is empty)
-    template<class Container>
-    Node comp_root_consensus(const Container& c)
-    {
-      if(c.empty()) return NoNode;
-      auto c_iter = c.begin();
-      const Node result = get_highest_visible_comp_root(*c_iter);
-      while(++c_iter != c.end())
-        if(get_highest_visible_comp_root(*c_iter) != result) return NoNode;
-      return result;
+    // if all nodes in the container c have the same component root r then return r, otherwise return NoNode
+    template<NodeIterableType Container>
+    NodeDesc comp_root_consensus(const Container& c) {
+      if(!c.empty()) {
+        auto c_iter = c.begin();
+        const NodeDesc result = get_highest_visible_comp_root(*c_iter);
+        while(++c_iter != c.end())
+          if(get_highest_visible_comp_root(*c_iter) != result) return NoNode;
+        return result;
+      } else return NoNode;
     }
   };
     

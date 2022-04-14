@@ -42,8 +42,6 @@ namespace PT{
   using DefaultNetwork = Network<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
   template<class _NodeData = void, class _EdgeData = void, class _LabelType = void>
   using DefaultDAG = DAG<vecS, vecS, vecS, _NodeData, _EdgeData, _LabelType>;
-
-  // for convenience, provide defaults for predecessor and successor containers
   template<class _NodeData = void, class _EdgeData = void, class _LabelType = std::string>
   using DefaultLabeledNetwork = Network<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
   template<class _NodeData = void, class _EdgeData = void, class _LabelType = std::string>

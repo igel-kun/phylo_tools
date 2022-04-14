@@ -33,13 +33,13 @@ namespace std { // since it was the job of STL to provide for it and they failed
   void intersect(Set& target, const Other& source) {
     if(target.size() > source.size()) {
       for(const auto& x: source)
-        target.erase(x);
+        my_erase(target, x);
     } else erase_if(target, [&source](const auto& x) { return !test(source, x); });
   }
   // intersect a set with a list/vector/etc
   template<SetType Set, ContainerType Other>
   void intersect(Set& target, const Other& source) {
-    for(const auto& x: source) target.erase(x);
+    for(const auto& x: source) my_erase(target, x);
   }
   template<SetType S, class T>
   void intersect(singleton_set<T>& target, const S& source) {
@@ -49,7 +49,6 @@ namespace std { // since it was the job of STL to provide for it and they failed
   // intersect 2 bitsets
   template<class T>
   void intersect(iterable_bitset<T>& target, const iterable_bitset<T>& source) { target &= source; }
-
 
   template<SetType S1, SetType S2 = S1>
   bool are_disjoint(const S1& x, const S2& y) {
@@ -68,18 +67,19 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<SetType S1, SetType S2 = S1> requires is_convertible_v<typename S2::const_iterator, typename S1::const_iterator>
   auto_iter<typename S1::const_iterator> common_element(const S1& x, const S2& y)
   {
-    typename S1::const_iterator result;
+    auto_iter<typename S1::const_iterator> result;
+    auto& iter = result.first;
+
     if(x.size() < y.size()){
-      for(const auto& element: x)
-        if((result = find(y, element)) != y.end())
-          return {result, y.end()};
+      for(iter = begin(x); iter != end(x); ++iter)
+        if(test(y, *iter)) break;
     } else {
       for(const auto& element: y)
-        if((result = find(x, element)) != x.end())
-          return {result, x.end()};
+        if((result = find(x, element)) != x.end()) break;
     }
-    return {x.end(), x.end()};
+    return result;
   }
+
   template<class T, SetType S>
   auto_iter<typename singleton_set<T>::const_iterator> common_element(const singleton_set<T>& x, const S& y) {
     if(!x.empty() && test(y,front(x)))
@@ -87,6 +87,7 @@ namespace std { // since it was the job of STL to provide for it and they failed
     else
       return {end(x), end(x)};
   }
+
   template<class T, SetType S> requires (!is_convertible_v<S,singleton_set<value_type_of_t<S>>>)
   auto_iter<typename S::const_iterator> common_element(const S& y, const singleton_set<T>& x) {
     if(!x.empty())
@@ -115,6 +116,16 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<class Key, class Hash, class KE, class A>
   auto rbend(unordered_set<Key, Hash, KE, A>& s) { return s.end(); }
 
+  template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> convertible_to<bool>; };
+  template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
+
+  // if we're not interested in the return value, we can set values more efficiently
+  template<class S> requires (ContainerType<S> && !SettableType<S>)
+  bool set_val(S& s, const auto& val) { return append(s, val).second; }
+  template<class S> requires (ContainerType<S> && SettableType<S>)
+  bool set_val(S& s, const auto& val) { return s.set(val); }
+
+
   // on callables, append will call the function and return the result
   template<class T, invocable<T&&> F>
   auto append(F&& f, T&& t) { return forward<F>(f)(forward<T>(t)); }
@@ -136,7 +147,9 @@ namespace std { // since it was the job of STL to provide for it and they failed
   auto append(V&& _vec) { return emplace_result<V>{_vec.begin(), true}; }
  
   // on maps to primitives, append = try_emplace
-  template<MapType M, class Key, class... Args> requires (is_convertible_v<Key, key_type_of_t<M>> && !ContainerType<mapped_type_of_t<M>>)
+  //NOTE: this can be used also if mapped_type is NOT a primitive, but no initialization arguments have been given
+  template<MapType M, class Key, class... Args>
+    requires (is_convertible_v<Key, key_type_of_t<M>> && !(ContainerType<mapped_type_of_t<M>> && (sizeof...(Args) > 0)))
   auto append(M& _map, Key&& _key, Args&&... args)
   { return _map.try_emplace(forward<Key>(_key), forward<Args>(args)...); }
 
@@ -144,7 +157,8 @@ namespace std { // since it was the job of STL to provide for it and they failed
   //NOTE: return an iterator to the pair in the map whose second now contains the newly constructed item
   //      also return a bool indicating whether insertion took place
   //NOTE: this also works for emplacing a string into a map that maps to strings, the "inserting" appends below are called in this case
-  template<MapType M, class Key, class ...Args> requires (is_convertible_v<Key, key_type_of_t<M>> && ContainerType<mapped_type_of_t<M>>)
+  template<MapType M, class Key, class ...Args>
+    requires (is_convertible_v<Key, key_type_of_t<M>> && ContainerType<mapped_type_of_t<M>> && (sizeof...(Args) > 0))
   auto append(M& _map, Key&& _key, Args&&... args) {
     const auto iter = _map.try_emplace(forward<Key>(_key)).first;
     const bool success = append(iter->second, forward<Args>(args)...).second;
@@ -172,52 +186,6 @@ namespace std { // since it was the job of STL to provide for it and they failed
     y.clear();
     std::copy(x.begin(), x.end(), std::insert_iterator<C2>(y, y.begin()));
     return y;
-  }
-
-  // value-copying pop operations
-  template<QueueType Q>
-  value_type_of_t<Q> value_pop(Q& q) {
-    value_type_of_t<Q> result = move(q.top());
-    q.pop();
-    return result;
-  }
-  template<VectorType Q>
-  value_type_of_t<Q> value_pop(Q& q) {
-    value_type_of_t<Q> result = move(q.back());
-    q.pop_back();
-    return result;
-  }
-
-  template<ContainerType C>
-  value_type_of_t<C> value_pop(C& q, const iterator_of_t<const C>& iter) {
-    if(iter != end(q)) {
-      value_type_of_t<C> result = move(*iter);
-      erase(q, iter);
-      return result;
-    } else throw std::out_of_range();
-  }
-
-  template<IterableType C>
-  value_type_of_t<C> value_pop(C& q, const auto& key) {
-    return value_pop(q, find(q, key));
-  }
-
-  template<ContainerType Q> requires requires(Q q) { { front(q) } -> convertible_to<value_type_of_t<Q>>; }
-  value_type_of_t<Q> value_pop_front(Q& q)
-  {
-    assert(!q.empty());
-    const auto it = std::begin(q);
-    value_type_of_t<Q> v = move(*it);
-    q.erase(it);
-    return v;
-  }
-  template<IterableType Q> requires requires(Q q) { { back(q) } -> convertible_to<value_type_of_t<Q>>; }
-  value_type_of_t<Q> value_pop_back(Q& q) {
-    assert(!q.empty());
-    const auto it = std::end(q);
-    value_type_of_t<Q> v = move(*it);
-    q.erase(it);
-    return v;
   }
 
   template<class T, ContainerType C = unordered_set<T>>
@@ -248,32 +216,94 @@ namespace std { // since it was the job of STL to provide for it and they failed
   };
 
 
-  template<VectorType V> auto find(V&& v, const auto& x) { return std::find(begin(v), end(v), x); }
-  template<SetType S>    auto find(S&& s, const auto& key) { return s.find(key); }
-  template<MapType M>    auto find(M&& m, const auto& key) { return m.find(key); }
+  template<ContainerType C, FindableType<C> Key>
+  auto find(C&& c, const Key& key) {
+    if constexpr (VectorType<C>)
+      return std::find(begin(c), end(c), key);
+    else return c.find(key);
+  }
 
-  template<VectorType V> auto erase(V& v, const const_iterator_of_t<V>& _iter) { return v.erase(_iter); }
-  template<VectorType V> auto erase(V& v, const value_type_of_t<V>& x) { return v.erase(find(v,x)); }
-  template<SetType S>    auto erase(S& s, const const_iterator_of_t<S>& _iter) { return s.erase(_iter); }
-  template<SetType S>    auto erase(S& s, const value_type_of_t<S>& key) { return s.erase(key); }
-  template<MapType M>    auto erase(M& m, const const_iterator_of_t<M>& _iter) { return m.erase(_iter); }
-  template<MapType M>    auto erase(M& m, const key_type_of_t<M>& key) { return m.erase(key); }
-
+  template<ContainerType C, class Key>
+  auto my_erase(C& c, const Key& key) {
+    if constexpr (is_same_v<remove_cvref_t<Key>, iterator_of_t<C>>)
+      return c.erase(key);
+    else if constexpr (is_same_v<remove_cvref_t<Key>, const_iterator_of_t<C>>)
+      return c.erase(key);
+    else if constexpr (VectorType<C>)
+      return c.erase(find(c, key));
+    else return c.erase(key);
+  }
+  
   template<ContainerType C>
   void pop(C& c) {
     assert(!c.empty());
-    erase(c, rbegin(c));
+    c.erase(rbegin(c));
   }
 
-  template<SetType S, class Val = value_type_of_t<S>>
-  void replace(S& s, const typename S::iterator& _old_it, Val&& _new) {
+  // value-moving pop operations
+  template<QueueType Q>
+  auto value_pop(Q& q) {
+    using value_type = Q::value_type;
+    value_type result = move(q.top());
+    q.pop();
+    return result;
+  }
+  template<VectorType Q>
+  value_type_of_t<Q> value_pop(Q& q) {
+    value_type_of_t<Q> result = move(q.back());
+    q.pop_back();
+    return result;
+  }
+
+  template<ContainerType C>
+  value_type_of_t<C> value_pop(C& q, const iterator_of_t<const C>& iter) {
+    if(iter != end(q)) {
+      value_type_of_t<C> result = move(*iter);
+      q.erase(iter);
+      return result;
+    } else throw std::out_of_range("trying to pop values beyond the end");
+  }
+
+  template<IterableType C, class Key> requires requires(C c, Key k) { { std::find(c, k) } -> std::convertible_to<iterator_of_t<const C>>; }
+  value_type_of_t<C> value_pop(C& q, const Key& key) {
+    return value_pop(q, find(q, key));
+  }
+
+  template<ContainerType Q> requires requires(Q q) { { front(q) } -> convertible_to<value_type_of_t<Q>>; }
+  value_type_of_t<Q> value_pop_front(Q& q) {
+    assert(!q.empty());
+    const auto it = std::begin(q);
+    value_type_of_t<Q> v = move(*it);
+    q.erase(it);
+    return v;
+  }
+  template<IterableType Q> requires requires(Q q) { { back(q) } -> convertible_to<value_type_of_t<Q>>; }
+  value_type_of_t<Q> value_pop_back(Q& q) {
+    assert(!q.empty());
+    const auto it = std::end(q);
+    value_type_of_t<Q> v = move(*it);
+    q.erase(it);
+    return v;
+  }
+
+
+
+  template<SetType S, class Val = value_type_of_t<S>> requires (!MapType<S> && !SingletonSetType<S>)
+  void replace(S& s, const auto& _old_it, Val&& _new) {
     auto node = s.extract(_old_it);
     node.value() = forward<Val>(_new);
     s.insert(move(node));
   }
 
+  template<SingletonSetType S, class Val = value_type_of_t<S>>
+  void replace(S& s, const auto& _old_it, Val&& _new) {
+    assert(_old_it == s.begin());
+    s.clear();
+    s.emplace_back(forward<Val>(_new));
+  }
+
   template<MapType M, class Key = key_type_of_t<M>>
-  void replace(M& m, const typename M::iterator& _old_it, Key&& _new) {
+  void replace(M& m, const auto& _old_it, Key&& _new) {
     auto node = m.extract(_old_it);
     node.key() = forward<Key>(_new);
     m.insert(move(node));

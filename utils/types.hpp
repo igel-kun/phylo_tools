@@ -37,6 +37,8 @@ namespace PT{
   template<class Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional<Element>>; };
   template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
 
+  template<StorageEnum storage>
+  constexpr bool is_inplace_modifyable = ((storage == vecS) || (storage == singleS));
 
 
   template<class Key,
@@ -52,7 +54,7 @@ namespace PT{
   // node descriptors
 #ifndef NDEBUG
   struct NodeDesc {
-    uintptr_t data = (uintptr_t)nullptr;
+    uintptr_t data = reinterpret_cast<uintptr_t>(nullptr);
     NodeDesc() {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
     NodeDesc(const NodeDesc& other): data(other.data) {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
     NodeDesc(NodeDesc&& other): data(std::move(other.data)) {} //std::cout << "creating new ND pointing to "<<data<<"\n"; }
@@ -68,12 +70,13 @@ namespace PT{
       return *this;
     }
     template<class T>
-    NodeDesc(const T* t): data((uintptr_t)t) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
+    NodeDesc(const T* t): data(reinterpret_cast<uintptr_t>(t)) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
+    NodeDesc(const nullptr_t n): data(reinterpret_cast<uintptr_t>(static_cast<void*>(n))) {}
 
     operator uintptr_t() const { return data; }
     
     // we have to forward-declare the output here to avoid having operator<< pick up the implicit conversion to uintptr_t and output the address
-    friend std::ostream& operator<<(std::ostream& os, const NodeDesc& nd);
+    friend std::ostream& operator<<(std::ostream& os, const NodeDesc nd);
   };
 }
 
@@ -90,10 +93,10 @@ namespace PT {
   using NodeDesc = uintptr_t;
 #endif
 
-  inline const NodeDesc NoNode = NodeDesc((void*)nullptr);
+  inline const NodeDesc NoNode = NodeDesc(nullptr);
   inline const std::string NoName = "";
 
-  template<class = void> class Edge;
+  template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
   // this tag allows creating an edge u-->v from an existing adjacency v-->u
   struct reverse_edge_t {};
@@ -103,7 +106,6 @@ namespace PT {
   concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<std::iterator_of_t<C>>::value_type, NodeDesc>;
   template<class C>
   concept HasNodeKey = std::is_convertible_v<typename std::remove_cvref_t<C>::key_type, NodeDesc>;
-
   template<class C>
   concept NodeIterableType = (std::IterableType<C> && HasNodeValue<C>);
   template<class C>
@@ -121,10 +123,9 @@ namespace PT {
   template<class C>
   concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<std::mapped_type_of_t<C>, NodeDesc>);
 
-  template<class F>
-  concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
-  template<class F>
-  concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
+  template<class F> concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
+  template<class F> concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
+  template<class F> concept OptionalNodeFunctionType = NodeFunctionType<F> || std::is_void_v<F>;
 
   // degrees
   using Degree = uint_fast32_t;
@@ -150,9 +151,7 @@ namespace PT {
 
   // an adjacency is something with a NodeDesc field called nd
   template<class A>
-  concept _AdjacencyType = requires(A a) {
-    { a.nd } -> std::convertible_to<NodeDesc>;
-  };
+  concept _AdjacencyType = std::is_convertible_v<const A, const NodeDesc&>;
   template<class A>
   concept AdjacencyType = std::is_same_v<NodeDesc, std::remove_cvref_t<A>> || _AdjacencyType<A>;
 
@@ -191,11 +190,15 @@ namespace PT {
   };
   template<class P>
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
+  template<class P>
+  concept OptionalPhylogenyType = (std::is_void_v<std::remove_reference_t<P>> || PhylogenyType<P>);
 
   template<class P>
   concept StrictTreeType = (StrictPhylogenyType<P> && P::is_declared_tree);
   template<class P>
   concept TreeType = StrictTreeType<std::remove_reference_t<P>>;
+  template<class P>
+  concept OptionalTreeType = (std::is_void_v<std::remove_reference_t<P>> || TreeType<P>);
 
   using NodeTranslation = NodeMap<NodeDesc>;
   template<PhylogenyType Network>

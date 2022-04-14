@@ -40,6 +40,10 @@ namespace PT{
   using DefaultTree = Tree<vecS, _NodeData, _EdgeData, _LabelType>;
   template<class _NodeData = void, class _EdgeData = void, class _LabelType = void>
   using DefaultForest = Forest<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelType = std::string>
+  using DefaultLabeledTree = Tree<vecS, _NodeData, _EdgeData, _LabelType>;
+  template<class _NodeData = void, class _EdgeData = void, class _LabelType = std::string>
+  using DefaultLabeledForest = Forest<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
 
 
 }

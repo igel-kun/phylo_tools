@@ -14,11 +14,12 @@ namespace PT{
     static constexpr bool has_data = Adjacency::has_data;
 
     ProtoEdge(const reverse_edge_t, const NodeDesc u, const Adjacency& v):
-      Parent(v.nd, {u, v})
+      Parent(v.get_desc(), {v, u})
     {}
 
-    const Adjacency& head() const { return this->second; }
-    Adjacency& head() { return this->second; }
+    const Adjacency& head() const & { return this->second; }
+    Adjacency& head() & { return this->second; }
+    Adjacency&& head() && { return std::move(this->second); }
     NodeDesc tail() const { return this->first; }
     std::pair<NodeDesc, NodeDesc> as_pair() const { return { this->first, this->second }; }
   };
@@ -27,7 +28,8 @@ namespace PT{
   struct Edge: public ProtoEdge<EdgeData> {
     using Parent = ProtoEdge<EdgeData>;
     using Parent::Parent;
-    EdgeData& data() const { return this->second.data(); }
+    EdgeData& data() const & { return this->second.data(); }
+    EdgeData&& data() && { return std::move(this->second.data()); }
   };
   template<>
   struct Edge<void>: public ProtoEdge<void>

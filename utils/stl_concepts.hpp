@@ -26,8 +26,10 @@ namespace std {
 
   template<class T>
   concept VectorType = is_convertible_v<remove_cvref_t<T>, vector<typename remove_reference_t<T>::value_type, typename remove_reference_t<T>::allocator_type>>;
+  template<class T>
+  concept StrictVectorType = (VectorType<T> && !is_reference_v<T>);
 
-  template <class T> 
+  template<class T> 
   concept IterableType = requires(T a) {
     typename _iterator_of_t<T>;
     typename _iterator_of_t<const T>;
@@ -37,6 +39,17 @@ namespace std {
     begin(a);
     end(a);
 	};
+  template<class T>
+  concept StrictIterableType = (IterableType<T> && !is_reference_v<T>);
+
+
+  // if we need T to support reporting its size via T::size() 
+  template <class T> 
+  concept IterableTypeWithSize = IterableType<T> && requires(T a) {
+    { a.size() }    -> same_as<typename remove_cvref_t<T>::size_type>;
+    { a.empty() }   -> same_as<bool>;
+	};
+
 
   template<class T> struct iterator_of { using type = T; };
   template<IterableType T> struct iterator_of<T>: public _iterator_of<T> {};
@@ -49,24 +62,18 @@ namespace std {
   template<class T>
   concept OptionalIterableType = is_void_v<T> || IterableType<T>;
 
-
   template<class T>
   concept HasIterTraits = requires { typename iterator_traits<T>::value_type; };
 
   // concept checking for STL-style container (thanks to https://stackoverflow.com/questions/60449592 )
   template <class T> 
-  concept ContainerType = requires(T a) {
-    requires regular<remove_cvref_t<T>>;
-    requires swappable<remove_cvref_t<T>>;
-		requires IterableType<remove_cvref_t<T>>;
+  concept ContainerType = IterableTypeWithSize<T> && requires(T a) {
     requires destructible<typename remove_cvref_t<T>::value_type>;
     //requires same_as<typename remove_cvref_t<T>::reference, typename remove_cvref_t<T>::value_type &>;
     //requires same_as<typename remove_cvref_t<T>::const_reference, const typename remove_cvref_t<T>::value_type &>;
     requires signed_integral<typename remove_cvref_t<T>::difference_type>;
     requires same_as<typename remove_cvref_t<T>::difference_type, typename iterator_traits<typename remove_cvref_t<T>::iterator>::difference_type>;
     requires same_as<typename remove_cvref_t<T>::difference_type, typename iterator_traits<typename remove_cvref_t<T>::const_iterator>::difference_type>;
-    { a.size() }    -> same_as<typename remove_cvref_t<T>::size_type>;
-    { a.empty() }   -> same_as<bool>;
   };
   // for some reason, the idea to have a StrictContainerType + a ContainerType like this doesn't work (GCC wrongly claims "concept depends on itself")
   //template<class T>
@@ -120,4 +127,5 @@ namespace std {
     typename tuple_size<T>::type;
     requires derived_from<tuple_size<T>, integral_constant<size_t, tuple_size_v<T>>>;
   };
+
 }

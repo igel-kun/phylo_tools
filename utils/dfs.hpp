@@ -141,15 +141,15 @@ namespace PT{
     DFSIterator operator++(int) { DFSIterator tmp(*this); ++(*this); return tmp; }
 
     // NOTE: we roughly estimate that two DFSIterators are equal if they are both the end iterator or they have the same root, stack size and top node
-    template<TraversalType __o, TraversalTraitsType __Traits>
-    bool operator==(const DFSIterator<__o, __Traits>& other) const {
+    template<TraversalType OtherO, TraversalTraitsType OtherTraits>
+    bool operator==(const DFSIterator<OtherO, OtherTraits>& other) const {
       if(other.is_valid()){
         return is_valid() && (root == other.root) && (child_history.size() == other.child_history.size()) && (node_on_top() == other.node_on_top());
       } else return !is_valid();
     }
 
-    template<TraversalType __o, TraversalTraitsType __Traits>
-    bool operator!=(const DFSIterator<__o, __Traits>& other) const { return !operator==(other); }
+    template<TraversalType OtherO, TraversalTraitsType OtherTraits>
+    bool operator!=(const DFSIterator<OtherO, OtherTraits>& other) const { return !operator==(other); }
 
     bool is_valid() const { return child_history.size() >= min_stacksize; }
     static constexpr auto get_end() { return std::GenericEndIterator(); }
@@ -202,7 +202,9 @@ namespace PT{
     using typename Parent::pointer;
     using Parent::child_history;
     
-    pointer operator->() = delete;
+    pointer operator->() { return operator*(); }
+    pointer operator->() const { return operator*(); }
+
     reference operator*() const {
       assert(child_history.size() > 1);
       DEBUG5(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n";)

@@ -1,49 +1,47 @@
 
 #pragma once
 
+#include "stl_utils.hpp"
+
 // an implementation of bipartite matching by Hopcroft-Karp (with some tweaks by me ;] )
 
 namespace PT {
 
-  template<class Node,
-           class Adjacencies = std::unordered_map<Node, std::unordered_set<Node>>,
-           class Matching = std::unordered_map<Node, Node>>
-  class bipartite_matching
-  {
+  template<class Adjacencies = NodeMap<NodeSet>,
+           class Matching = NodeMap<NodeDesc>>
+  class bipartite_matching {
     // unmatched nodes are only interesting on the left
-    std::unordered_bitset left_unmatched;
-    std::unordered_bitset left_seen;
+    NodeSet left_unmatched;
+    NodeSet left_seen;
     //NOTE: we need different matchings for left & right because the domains of the sides may overlap
     Matching left_match, right_match;
     
     const Adjacencies& adj;
 
-    using NodeList = typename Adjacencies::mapped_type;
-    using adj_pair = decltype(*adj.begin());
+    using NodeList = std::mapped_type_of_t<Adjacencies>;
+    using adj_pair = std::value_type_of_t<Adjacencies>;
 
     // match a node u greedily in V (it's neighbors)
-    void initial_greedy_one_node(const adj_pair& uV)
-    {
-      const Node u = uV.first;
-      for(const Node v: uV.second){
+    void initial_greedy_one_node(const adj_pair& uV) {
+      const NodeDesc u = uV.first;
+      for(const NodeDesc v: uV.second){
         if(right_match.emplace(v, u).second) {
           left_match.emplace(u, v);
           return;
         }
       }
-      left_unmatched.set(u);
+      set_val(left_unmatched, u);
     }
 
     void initial_greedy() { for(const auto& uV: adj) initial_greedy_one_node(uV); }
 
     // return whether the matching has been augmented, use 'seen' to indicate the visited nodes
     //NOTE: u is a node on the left
-    bool augment_matching(const Node u)
-    {
-      if(!left_seen.set(u)) return false;
+    bool augment_matching(const NodeDesc u) {
+      if(!set_val(left_seen, u)) return false;
       // if u is matched, ignore u's matching partner when looking for augmenting paths
-      const Node skip = map_lookup(left_match, u, NoNode);
-      for(const Node v: adj.at(u)) if(v != skip) {
+      const NodeDesc skip = map_lookup(left_match, u, NoNode);
+      for(const NodeDesc v: adj.at(u)) if(v != skip) {
         // if v is not matched either, we can augment the matching with uv
         const auto [v_match_it, success] = right_match.emplace(v, u);
         if(success) {
@@ -64,9 +62,9 @@ namespace PT {
     {
 _start_here:
       left_seen.clear();
-      for(const Node u: left_unmatched)
+      for(const NodeDesc u: left_unmatched)
         if(augment_matching(u)){
-          left_unmatched.unset(u);
+          my_erase(left_unmatched, u);
           goto _start_here;
         }
     }

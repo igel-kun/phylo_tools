@@ -63,13 +63,13 @@ namespace std{
     }
 
     template<class... Args>
-    pair<iterator, bool> emplace_back(Args&&... args) { emplace(forward<Args>(args)...); }
+    pair<iterator, bool> emplace_back(Args&&... args) { return emplace(forward<Args>(args)...); }
  
     template<class Iter>
     void insert(const Iter& src_begin, const Iter& src_end)
     { 
       if(src_begin != src_end) emplace(*src_begin);
-      assert(("trying to add second element to singleton set", next(src_begin) == src_end));
+      assert((next(src_begin) == src_end) && "trying to add second element to singleton set");
     }
 
     template<class Iter>

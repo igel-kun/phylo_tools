@@ -63,7 +63,9 @@ constexpr x(Tuple&& t): x(std::forward<Tuple>(t), std::make_index_sequence<std::
 //! testing whether a file exists by trying to open it
 #define file_exists(x) (std::ifstream(x).good())
 // a map lookup that returns a value z on unsuccessful lookups
-#define return_map_lookup(x,y,z) {const auto __iter = (x).find(y); return (__iter == (x).end()) ? (z) : __iter->second; }
+#define return_map_lookup(x,y,z) {const auto __iter = std::find((x), (y)); return (__iter == std::end((x))) ? (z) : __iter->second; }
+// a pointer-lookup that returns nullptr on unsuccessful lookups
+#define return_pointer_lookup(x,y) {const auto __iter = std::find((x), (y)); return (__iter == std::end((x))) ? nullptr : &(*__iter); }
 
 // data transfer policies
 struct data_policy_t {};
@@ -117,7 +119,7 @@ uint32_t integer_log(uint32_t v)
   v |= v >> 4;
   v |= v >> 8;
   v |= v >> 16;
-  return MultiplyDeBruijnBitPosition[(uint32_t)(v * 0x07C4ACDDU) >> 27];
+  return MultiplyDeBruijnBitPosition[(v * 0x07C4ACDDU) >> 27];
 }
 
 // move items from overlapping ranges
