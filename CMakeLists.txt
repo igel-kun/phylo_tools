@@ -13,6 +13,7 @@ option (DEBUG "debug mode (0=none, 9=max)" OFF)
 option (STATISTICS "collect statistics" OFF)
 option (STATIC "enable static build" OFF)
 option (FATAL "enable fatal errors" OFF)
+option (ASAN "enable address sanitizer" ON)
 
 IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(DEBUG 5 CACHE STRING "enable DEBUG mode" FORCE)
@@ -39,13 +40,6 @@ if(${GRAPHITE})
   set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -funroll-loops -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
 endif()
 
-set(PROTOTYPE_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -fmax-errors=4 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200")
-
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -fcoroutines -Wno-range-loop-construct -ftemplate-depth=100")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} ${PROTOTYPE_WARNINGS}")
-
-
 # static linking
 if(${STATIC})
   SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
@@ -67,6 +61,19 @@ if(${STATISTICS})
   MESSAGE("adding support for collecting statistics...")
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
 endif()
+
+if(${ASAN})
+  MESSAGE("enabling address sanitizer...")
+  set(PROTOTYPE_SANITIZER "-fsanitize=address -fsanitize-address-use-after-scope")
+endif()
+
+set(PROTOTYPE_FLAGS "-fmax-errors=3 -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200 -fno-omit-frame-pointer")
+set(PROTOTYPE_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -Wno-unused-function -Wshadow")
+
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -fcoroutines -Wno-range-loop-construct -ftemplate-depth=100")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} ${PROTOTYPE_WARNINGS} ${PROTOTYPE_SANITIZER} ${PROTOTYPE_FLAGS}")
+
 
 if(${DEBUG})
   MESSAGE("building DEBUG version...")
