@@ -120,6 +120,7 @@ namespace PT{
       if(retis.empty() && !new_reticulations)
         throw std::logic_error("cannot add " + std::to_string(num_edges) + " edges without introducing a reticulation");
 
+      std::cout << "adding "<<num_edges<<" new edges to\n"<<N<<"\n";
       while(num_edges){
         if(new_reticulations){
           const auto edges = N.edges();
@@ -209,7 +210,7 @@ namespace PT{
                             const float multilabel_density,
                             ExtractData&& extracter = ExtractData())
   {
-#warning implement multi-labels
+#warning "implement multi-labels"
     assert(multilabel_density >= 0   && multilabel_density < 1);
 
     if(num_leaves == 0) throw std::logic_error("cannot construct network without leaves");
@@ -234,7 +235,7 @@ namespace PT{
     // initialize with a root node
     const NodeDesc new_root = N.add_root(extracter.get_node_data);
     if constexpr (ExtractData::custom_node_label_maker) node_of<Net>(new_root).label() = extracter.get_node_label(new_root);
-    std::cout << "created node "<<new_root<<" at "<<new_root.data<<"\n";
+    std::cout << "created node "<<new_root<<" at "<<N[new_root].data<<"\n";
     dangling.try_emplace(new_root, 2);
     for(uint32_t i = 1; i < num_internal; ++i){
       std::cout << "remaining dangling: "<<dangling.size() << '\n';

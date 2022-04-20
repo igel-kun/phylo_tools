@@ -55,6 +55,19 @@
 #define STAT(x) 
 #endif
 
+// these functions "turn off" the optimizer
+// thanks to Chandler Carruth (https://www.youtube.com/watch?v=nXaxk27zwlk)
+static void escape(void* p) { 
+  // the first one "observes an object in memory" without instructions
+  // this will bar the optimizer from optimizing out *p
+  asm volatile("" : : "g"(p) : "memory");
+}
+static void clobber() { 
+  // the second one "reads & writes all memory" without instructions
+  asm volatile("" : : : "memory");
+}
+
+
 
 #ifndef NDEBUG
 #include <string>

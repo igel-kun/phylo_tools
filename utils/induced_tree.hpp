@@ -60,6 +60,7 @@ namespace PT{
     get_induced_subtree_infos<Tree, NodeInfoMap>(t.root(), node_infos);
   }
  
+  //NOTE: the input MUST be a tree, but not necessarily declared as tree (a network without reticulations is fine)
   //NOTE: we'll need to know for each node u its distance to the root, and we'd also like the leaflist L to be in some order (any of pre-/in-/post- will do)
   //      so if the caller doesn't provide them, we'll compute them from the given supertree
   //NOTE: if the infos are provided, then this runs in O(|L| * LCA-query in supertree), otherwise, an O(|supertree|) DFS is prepended
@@ -67,6 +68,7 @@ namespace PT{
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap>
   class _induced_subtree_edges {
   protected:
+    using LCAOracle = typename Tree::TreeLCAOracle;
     using EdgeVec = PT::EdgeVec<>;
     using NodeWithDepth = NodeWith<uint_fast32_t>;
 
@@ -129,7 +131,7 @@ namespace PT{
 
     void compute_inner_nodes() {
       inner_nodes.reserve(leaves_sorted.size() - 1);
-      const auto LCA = supertree.LCA();
+      const LCAOracle LCA = supertree.LCA();
       for(auto iter = leaves_sorted.begin(); iter != leaves_sorted.end();){
         const NodeDesc u = *iter;
         if(++iter == leaves_sorted.end()) break;
@@ -177,13 +179,22 @@ namespace PT{
 
 
   // the following functions manage the, frankly, complicated construction variants for the induced-suptree computation class
-  // NOTE: in all variants, the caller can give us an empty shared_ptr to node_infos and we'll fill it
+  // NOTE: in all variants, the caller can give us an empty map of nodes to node_infos and we'll fill it
 
   // policy_noop - assume the leaves are already sorted
   //NOTE: most efficient, but the caller has to make sure that they really are sorted (this is not verified by the algorithm)
   //NOTE: this also permits the user to instanciate the whole class with a sparse NodeInfoMap (does not store order_numbers)
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = SparseInducedSubtreeInfoMap>
   auto get_induced_edges(const policy_noop_t, const Tree& supertree, const LeafList& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
+#ifndef NDEBUG
+    { // check if leaves are sorted only in debug mode
+      NodeInfoMap tmp;
+      get_induced_subtree_infos(supertree, tmp);
+      for(size_t i = 0; i < leaves.size() - 1; ++i) {
+        assert(node_infos.at(leaves[i]).order_number > node_infos.at(leaves[i+1]).order_number);
+      }
+    }
+#endif
     return _induced_subtree_edges<Tree, LeafList, NodeInfoMap>(supertree, leaves, std::forward<NodeInfoMap>(node_infos)).get_edges();
   }
 

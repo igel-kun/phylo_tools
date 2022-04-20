@@ -50,7 +50,7 @@ namespace std {
     proto_transforming_iterator& operator=(Iter&& other) { it = other; }
 
     bool operator==(const proto_transforming_iterator& other) const { return it == other.it; }
-    bool operator==(const Iter& other) const { return it == other.it; }
+    bool operator==(const Iter& other) const { return it == other; }
   
     template<class T>
     bool operator!=(const T& other) const { return !operator==(other); }
@@ -68,6 +68,8 @@ namespace std {
     reference operator*() const { return trans(*it); }
     pointer operator->() { if constexpr (reference_is_rvalue) return operator*(); else return &(trans(*it)); }
     pointer operator->() const { if constexpr (reference_is_rvalue) return operator*(); else return &(trans(*it)); }
+
+    operator Iter() const { return it; }
   };
   
   // the second argument is either a transformation function or, if the second template argument ("T") is not invocable,

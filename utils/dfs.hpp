@@ -40,7 +40,7 @@ namespace PT{
     void dive(const NodeDesc u) {
       ChildContainerRef u_children = get_children(u);
       child_history.emplace_back(u_children);
-      DEBUG5(std::cout << "DFS: placing ref to children of "<<u<<" on child_history stack\n");
+      DEBUG6(std::cout << "DFS: placing ref to children of "<<u<<" on child_history stack\n");
 
       // make sure we start with an unseen child
       if constexpr(track_nodes) {
@@ -118,7 +118,7 @@ namespace PT{
     DFSIterator(const NodeDesc _root, Args&&... args):
       Traits(std::forward<Args>(args)...), root(_root)
     { 
-      DEBUG5(std::cout << "DFS: making new non-end DFS iterator (type "<< o <<") starting at "<<_root<<" (tracking? "<<track_nodes<<")\n");
+      DEBUG6(std::cout << "DFS: making new non-end DFS iterator (type "<< o <<") starting at "<<_root<<" (tracking? "<<track_nodes<<")\n");
       if constexpr (track_nodes) {
         if(!is_seen(root)) dive(root);
       } else dive(root);
@@ -176,12 +176,12 @@ namespace PT{
 
     pointer operator->() const {
       const auto& result = node_on_top();
-      DEBUG5(std::cout << "DFS: emitting ptr to node " << result << "\n");
+      DEBUG6(std::cout << "DFS: emitting ptr to node " << result << "\n");
       return &result;
     }
     NodeDesc operator*() const {
       const NodeDesc result = node_on_top();
-      DEBUG5(std::cout << "DFS: emitting node "<< result<<"\n");
+      DEBUG6(std::cout << "DFS: emitting node "<< result<<"\n");
       return result;
     }
   };
@@ -207,7 +207,7 @@ namespace PT{
 
     reference operator*() const {
       assert(child_history.size() > 1);
-      DEBUG5(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n";)
+      DEBUG6(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n";)
       return *(child_history[child_history.size() - 2]);
     }
 
@@ -322,7 +322,9 @@ namespace PT{
            class Roots,
            OptionalNodeSetType SeenSet,
            class Forbidden>
-  struct TraversalHelper: public std::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet> {
+  struct TraversalHelper:
+    public std::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
+  {
     using ForbiddenPred = pred::AsContainmentPred<Forbidden>;
     using Parent = std::optional_tuple<ForbiddenPred, SeenSet>;
     // we can pass both an iterator or a container as Roots
@@ -397,7 +399,9 @@ namespace PT{
            PhylogenyType Network,
            OptionalNodeSetType SeenSet,
            class Forbidden>
-  struct TraversalHelper<o, Network, void, SeenSet, Forbidden>: public std::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet> {
+  struct TraversalHelper<o, Network, void, SeenSet, Forbidden>:
+    public std::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
+  {
     using ForbiddenPred = pred::AsContainmentPred<Forbidden>;
     using Parent = std::optional_tuple<ForbiddenPred, SeenSet>;
 

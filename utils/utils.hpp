@@ -40,6 +40,10 @@
 #define NUM_ONES_IN_LOWEST_K_BITL(k,x) (NUM_ONES_INL( (x) << (NUM_BITS_IN_LONG - (k)) ))
 #define NUM_ZEROS_IN_LOWEST_K_BITL(k,x) ((k) - NUM_ONES_IN_LOWEST_K_BITL(k, x))
 
+// thanks to Chandler Carruth
+#define UNLIKELY(x) __builtin_expect((x), 0)
+#define LIKELY(x) __builtin_expect((x), 1)
+
 #define PWC std::piecewise_construct
 #define SIZE_T_BITS ((unsigned)(CHAR_BIT*sizeof(size_t)))
 

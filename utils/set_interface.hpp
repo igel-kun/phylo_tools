@@ -119,13 +119,6 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> convertible_to<bool>; };
   template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
 
-  // if we're not interested in the return value, we can set values more efficiently
-  template<class S> requires (ContainerType<S> && !SettableType<S>)
-  bool set_val(S& s, const auto& val) { return append(s, val).second; }
-  template<class S> requires (ContainerType<S> && SettableType<S>)
-  bool set_val(S& s, const auto& val) { return s.set(val); }
-
-
   // on callables, append will call the function and return the result
   template<class T, invocable<T&&> F>
   auto append(F&& f, T&& t) { return forward<F>(f)(forward<T>(t)); }
@@ -177,8 +170,19 @@ namespace std { // since it was the job of STL to provide for it and they failed
     return emplace_result<V>{x.begin(), true};
   }
 
-  template<class T>
-  bool test(const T& _set, const auto& key) { return _set.count(key); }
+  // if we're not interested in the return value, we can set values more efficiently
+  template<class S> requires (ContainerType<S> && !SettableType<S>)
+  bool set_val(S& s, const auto& val) { return append(s, val).second; }
+  template<class S> requires (ContainerType<S> && SettableType<S>)
+  bool set_val(S& s, const auto& val) { return s.set(val); }
+
+  // test if something is in the set
+  template<SetType S>
+  bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
+  template<MapType M>
+  bool test(const M& _map, const key_type_of_t<M>& key) { return _map.count(key); }
+  template<VectorType V>
+  bool test(const V& vec, const auto& key) { return find(vec, key) != end(vec); }
 
   // I would write an operator= to assign unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
   template<SetType C1, SetType C2> requires is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
@@ -223,7 +227,7 @@ namespace std { // since it was the job of STL to provide for it and they failed
     else return c.find(key);
   }
 
-  template<ContainerType C, class Key>
+  template<ContainerType C, class Key> requires (!IterableType<Key>)
   auto my_erase(C& c, const Key& key) {
     if constexpr (is_same_v<remove_cvref_t<Key>, iterator_of_t<C>>)
       return c.erase(key);
@@ -233,7 +237,40 @@ namespace std { // since it was the job of STL to provide for it and they failed
       return c.erase(find(c, key));
     else return c.erase(key);
   }
-  
+  template<ContainerType C, IterableType Keys>
+  void erase_by_iterating_keys(C& c, const Keys& keys) {
+    for(const auto& key: keys) my_erase(c, key);
+  }
+  template<ContainerType C, IterableType Keys>
+  void erase_by_iterating_container(C& c, const Keys& keys) {
+    for(auto iter = begin(c); iter != end(c);)
+      if(test(keys, *iter))
+        iter = my_erase(c, iter);
+      else ++iter;
+  }
+  template<ContainerType C, IterableType Keys>
+  void erase_by_moving(C& c, const Keys& keys) {
+    C output;
+    const size_t c_size = c.size();
+    const size_t k_size = keys.size();
+    if(k_size < c_size) output.reserve(c_size - k_size);
+    for(auto& x: c)
+      if(!test(keys, x))
+        output.emplace_back(std::move(x));
+    c = std::move(output);
+  }
+
+  template<ContainerType C, IterableType Keys>
+  void my_erase(C& c, const Keys& keys) {
+    if constexpr (SetType<Keys>) {
+      if constexpr (!VectorType<C>) {
+        if(c.size() > keys.size()) {
+          erase_by_iterating_keys(c, keys);
+        } else erase_by_iterating_container(c, keys);
+      } else erase_by_moving(c, keys);
+    } else erase_by_iterating_keys(c, keys);
+  }
+
   template<ContainerType C>
   void pop(C& c) {
     assert(!c.empty());

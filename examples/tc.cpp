@@ -81,9 +81,13 @@ NetAndTree create_net_and_tree() {
   generate_random_tree(result.second, num_internals, num_leaves);
 
   std::cout << "rolled tree:\n"<<result.second<<"\n";
-  std::cout << "adding "<<num_new_edges<<" new edges...\n";
 
+  std::cout << "network type is "<<std::type_name<MyNet>()<<"\n";
+
+  std::cout << "copying tree...\n";
   result.first = result.second;
+  
+  std::cout << "adding "<<num_new_edges<<" new edges...\n";
   add_random_edges(result.first, num_new_edges, num_new_edges, num_new_edges);
 
   return result;
@@ -113,7 +117,7 @@ NetAndTree read_net_and_tree() {
   // if we've been given 2 trees, the first is considered the host, otherwise, the network is considered the host :)
   const bool host_net_index = (nets[0].is_tree() && !nets[1].is_tree());
   const bool guest_net_index = 1 - host_net_index;
-  return { std::move(nets[host_net_index]), std::move(nets[guest_net_index]) };
+  return NetAndTree(std::move(nets[host_net_index]), std::move(nets[guest_net_index]));
 }
 
 int main(const int argc, const char** argv) {

@@ -14,7 +14,7 @@ namespace PT{
     static constexpr bool has_data = Adjacency::has_data;
 
     ProtoEdge(const reverse_edge_t, const NodeDesc u, const Adjacency& v):
-      Parent(v.get_desc(), {v, u})
+      Parent(v.get_desc(), Adjacency{u, v})
     {}
 
     const Adjacency& head() const & { return this->second; }

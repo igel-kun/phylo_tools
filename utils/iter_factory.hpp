@@ -4,9 +4,9 @@
 #include "auto_iter.hpp"
 
 namespace std {
-  template<class Iterator, class BeginEndTransformation> requires (!is_void_v<BeginEndTransformation>)
-  class IterFactoryWithBeginEnd: public auto_iter<Iterator> {
-    using Parent = auto_iter<Iterator>;
+  template<class Iterator, class BeginEndTransformation, class EndIter = CorrespondingEndIter<Iterator>> requires (!is_void_v<BeginEndTransformation>)
+  class IterFactoryWithBeginEnd: public auto_iter<Iterator, EndIter> {
+    using Parent = auto_iter<Iterator, EndIter>;
     BeginEndTransformation trans;    
   public:
     IterFactoryWithBeginEnd() {}
@@ -30,11 +30,11 @@ namespace std {
     auto end() && { return trans(static_cast<Parent&&>(*this).end()); }
   };
 
-  template<class Iterator, class BeginEndTransformation = void>
-  struct _IterFactory { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation>; };
-  template<class Iterator>
-  struct _IterFactory<Iterator, void> { using type = auto_iter<Iterator>; };
+  template<class Iterator, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<Iterator>>
+  struct _IterFactory { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation, EndIter>; };
+  template<class Iterator, class EndIter>
+  struct _IterFactory<Iterator, void, EndIter> { using type = auto_iter<Iterator, EndIter>; };
 
-  template<class T, class BeginEndTransformation = void>
-  using IterFactory = typename _IterFactory<iterator_of_t<T>, BeginEndTransformation>::type;
+  template<class Iter, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<std::iterator_of_t<Iter>>>
+  using IterFactory = typename _IterFactory<iterator_of_t<Iter>, BeginEndTransformation, EndIter>::type;
 }

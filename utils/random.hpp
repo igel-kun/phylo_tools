@@ -37,22 +37,19 @@ namespace PT{
 
   //! get an iterator to a (uniformly) random item in the container
   template<std::IterableType Container>
-  std::iterator_of_t<Container> get_random_iterator(Container&& c, const size_t container_size)
-  {
+  auto get_random_iterator(Container&& c, const size_t container_size) {
     assert(!c.empty());
     return std::next(c.begin(), throw_die(container_size));
   }
 
   template<std::IterableTypeWithSize Container>
-  std::iterator_of_t<Container> get_random_iterator(Container&& c) { return get_random_iterator(std::forward<Container>(c), c.size()); }
+  auto get_random_iterator(Container&& c) { return get_random_iterator(std::forward<Container>(c), c.size()); }
 
   //! get an iterator to a (uniformly) random item in the container, except a given iterator
   template<std::IterableType Container>
-  std::iterator_of_t<Container> do_get_random_iterator_except(Container&& c, const std::iterator_of_t<Container>& _except, const size_t container_size,
-      std::forward_iterator_tag)
-  {
+  auto do_get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size, std::forward_iterator_tag) {
     assert((container_size >= 2) || (_except == std::end(c)));
-    std::iterator_of_t<Container> result = std::begin(c);
+    auto result = std::begin(std::forward<Container>(c));
     size_t k = throw_die(container_size - 1);
     while(k--){
       ++result;
@@ -62,34 +59,32 @@ namespace PT{
   }
 
   template<std::IterableType Container>
-  std::iterator_of_t<Container> do_get_random_iterator_except(Container&& c, const std::iterator_of_t<Container>& _except, const size_t container_size,
-      std::bidirectional_iterator_tag)
-  {
+  auto do_get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size, std::bidirectional_iterator_tag) {
     return do_get_rangom_iterator_except(std::forward<Container>(c), _except, container_size, std::forward_iterator_tag());
   }
 
   template<std::IterableType Container>
-  std::iterator_of_t<Container> do_get_random_iterator_except(Container&& c, const std::iterator_of_t<Container>& _except, const size_t container_size,
+  auto do_get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size,
       std::random_access_iterator_tag)
   {
     assert((container_size >= 2) || (_except == std::end(c)));
     size_t k = throw_die(container_size - 1);
-    if(k == std::distance(std::begin(c), _except)) {
+    if(k == std::distance(std::begin(std::forward<Container>(c)), _except)) {
       ++k;
       if(k == container_size) k -= 2;
     } 
-    return std::next(std::begin(c), k);
+    return std::next(std::begin(std::forward<Container>(c)), k);
   }
 
   template<std::IterableType Container>
-  std::iterator_of_t<Container> get_random_iterator_except(Container&& c, const std::iterator_of_t<Container>& _except, const size_t container_size)
+  auto get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size)
   {
     return do_get_random_iterator_except(std::forward<Container>(c), _except, container_size,
         typename std::my_iterator_traits<std::iterator_of_t<Container>>::iterator_category());
   }
 
   template<std::IterableTypeWithSize Container>
-  std::iterator_of_t<Container> get_random_iterator_except(Container&& c, const std::iterator_of_t<Container>& _except)
+  auto get_random_iterator_except(Container&& c, const auto& _except)
   {
     return get_random_iterator_except(std::forward<Container>(c), _except, c.size());
   }

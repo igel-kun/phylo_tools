@@ -32,11 +32,16 @@ namespace std{
     { i.is_valid() } -> convertible_to<bool>;
   };
 
+  template<class Iterator>
+  using CorrespondingEndIter = conditional_t<iter_verifyable<Iterator>, void, Iterator>;
+
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
-  template<class Iterator, class EndIterator = conditional_t<iter_verifyable<Iterator>, void, Iterator>>
+  template<class Iterator, class EndIterator = CorrespondingEndIter<Iterator>>
   class _auto_iter: public InheritableIter<Iterator> {
     static_assert(!iter_verifyable<Iterator>);
+    static_assert(!is_void_v<EndIterator>);
+
     EndIterator end_it;
    public:
     using Parent = InheritableIter<Iterator>;
@@ -44,7 +49,7 @@ namespace std{
     using const_iterator = Iterator;
 
     // when default-constructed, end_it == *this, so is_valid() will be false
-    _auto_iter(): Parent(), end_it(begin()) {}
+    _auto_iter(): Parent(), end_it(static_cast<EndIterator>(begin())) {}
 
     // construct from two iterators (begin and end)
     template<class _Iterator, class _EndIterator>

@@ -75,9 +75,6 @@ namespace std {
     requires same_as<typename remove_cvref_t<T>::difference_type, typename iterator_traits<typename remove_cvref_t<T>::iterator>::difference_type>;
     requires same_as<typename remove_cvref_t<T>::difference_type, typename iterator_traits<typename remove_cvref_t<T>::const_iterator>::difference_type>;
   };
-  // for some reason, the idea to have a StrictContainerType + a ContainerType like this doesn't work (GCC wrongly claims "concept depends on itself")
-  //template<class T>
-  //concept ContainerType = StrictContainerType<remove_cvref_t<T>>; 
   
   template<class T>
   concept OptionalContainerType = is_void_v<T> || ContainerType<T>;
@@ -86,7 +83,7 @@ namespace std {
 	template<class T>
 	concept SetType = requires(T a, typename remove_cvref_t<T>::value_type v) {
 		requires ContainerType<T>;
-		{ a.count(v) } -> same_as<size_t>;
+		{ a.count(v) } -> convertible_to<size_t>;
 	};
   //template<class T>
   //concept SetType = StrictSetType<remove_cvref_t<T>>;
