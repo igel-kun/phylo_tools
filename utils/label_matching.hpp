@@ -9,10 +9,9 @@
 #include "utils.hpp"
 #include "types.hpp"
 #include "node.hpp"
+#include "tags.hpp"
 
 namespace PT {
-
-  struct leaf_labels_only_tag {};
 
   template<class T>
   using LabelTypeOf = std::remove_cvref_t<T>::LabelType;

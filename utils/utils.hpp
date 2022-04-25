@@ -71,16 +71,6 @@ constexpr x(Tuple&& t): x(std::forward<Tuple>(t), std::make_index_sequence<std::
 // a pointer-lookup that returns nullptr on unsuccessful lookups
 #define return_pointer_lookup(x,y) {const auto __iter = std::find((x), (y)); return (__iter == std::end((x))) ? nullptr : &(*__iter); }
 
-// data transfer policies
-struct data_policy_t {};
-struct policy_move_t: public data_policy_t {};
-struct policy_copy_t: public data_policy_t {};
-struct policy_inplace_t: public data_policy_t {};
-struct policy_noop_t: public data_policy_t {};
-
-template<class T>
-concept DataPolicyTag = std::derived_from<T, data_policy_t>;
-
 // rotation
 uint32_t rotl32(uint32_t x, uint32_t n){
   assert (n<32);

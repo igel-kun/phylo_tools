@@ -12,6 +12,7 @@
 #include "vector_hash.hpp"
 #include "vector_map.hpp"
 #include "stl_utils.hpp"
+#include "set_interface.hpp"
 #include "singleton.hpp"
 
 namespace PT{
@@ -32,9 +33,15 @@ namespace PT{
   template<class Element> struct _StorageClass<setS, Element>     { using type = std::set<Element>; };
   template<class Element> struct _StorageClass<hashsetS, Element> { using type = std::unordered_set<Element>; };
   template<class Element> struct _StorageClass<vecsetS, Element>  { using type = std::vector_hash<Element>; };
-  template<std::PointerType Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, nullptr>>; };
-  template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional_by_invalid<Element, Element(-1)>>; };
-  template<class Element> struct _StorageClass<singleS, Element>  { using type = std::singleton_set<std::optional<Element>>; };
+  template<std::PointerType Element> struct _StorageClass<singleS, Element>  {
+    using type = std::singleton_set<std::optional_by_invalid<Element, nullptr>>;
+  };
+  template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  {
+    using type = std::singleton_set<std::optional_by_invalid<Element, Element(-1)>>;
+  };
+  template<class Element> struct _StorageClass<singleS, Element>  {
+    using type = std::singleton_set<std::optional<Element>>;
+  };
   template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
 
   template<StorageEnum storage>
@@ -126,6 +133,14 @@ namespace PT {
   template<class F> concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
   template<class F> concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
   template<class F> concept OptionalNodeFunctionType = NodeFunctionType<F> || std::is_void_v<F>;
+
+  template<class T>
+  concept DataExtracterType = requires {
+    { T::ignoring_node_labels } -> std::convertible_to<const bool>;
+    { T::ignoring_edge_data } -> std::convertible_to<const bool>;
+    { T::ignoring_node_data } -> std::convertible_to<const bool>;
+  };
+
 
   // degrees
   using Degree = uint_fast32_t;

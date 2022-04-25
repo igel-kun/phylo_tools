@@ -6,6 +6,7 @@
 #include <vector>
 #include "utils.hpp"
 #include "types.hpp"
+#include "tags.hpp"
 
 namespace PT{
 

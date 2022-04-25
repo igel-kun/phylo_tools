@@ -52,9 +52,9 @@ namespace PT{
 
     Network& N;
   public:
-    ComponentDAG comp_DAG;
     // N_to_compDAG translates nodes of N into nodes of the component DAG
     NodeTranslation N_to_compDAG;
+    ComponentDAG comp_DAG;
    
 
     TreeComponentData& component_data_of(const NodeDesc u) {
@@ -66,26 +66,33 @@ namespace PT{
     }
 
   protected:
-    ComponentDAG compute_comp_DAG() {
-      std::cout << "constructing component-DAG...\n";
-      ComponentDAG result;
+    void compute_comp_DAG() {
+      DEBUG3(std::cout << "constructing component-DAG...\n");
 
-      // create an edge-emplacer for th result DAG; we won't have to track roots since they will be the same as the roots of N
+      // create an edge-emplacer for the result DAG; we won't have to track roots since they will be the same as the roots of N
       // NOTE: the lambda tells the emplacer that the node data of the node corresponding to u will be u itself
-      auto emplacer = EdgeEmplacers<false>::make_emplacer(result, N_to_compDAG, [](const NodeDesc u){ return u;});
+      //       (thus, each new node has, as its data, the NodeDesc of its corresponding original node)
+      std::cout << "making emplacer...\n";
+      auto emplacer = EdgeEmplacers<false>::make_emplacer(comp_DAG, N_to_compDAG, [](const NodeDesc u){ return u;});
       
       NodeVec non_trivial_roots;
       NodeVec trivial_roots;
 
+      emplacer.create_copy_of(N.root());
+      emplacer.mark_root(N.root());
+      std::cout << "setting comp data of "<<N.root()<<"\n";
       component_data_of(N.root()).comp_root = N.root();
+      std::cout << "computing component roots\n";
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
+      std::cout << "1st pass over component roots\n";
+      std::cout << "emplacer translation @"<< &(emplacer.helper.old_to_new)<<" our translation @"<<&N_to_compDAG<<"\n";
       compute_edges<true>(non_trivial_roots, emplacer);
       // construct visibility also from the trivial roots (the leaves), but don't add their edges to the component DAG
+      std::cout << "2nd pass over component roots\n";
       compute_edges<false>(trivial_roots, emplacer);
       // the root has not yet stored in the list of non-trivial roots, so add it here
       //non_trivial_roots.emplace_back(N.root());
-      return result;
     }
 
     // compute component roots and return list of leaves encountered
@@ -95,11 +102,11 @@ namespace PT{
         if(!u_node.is_leaf()) {
           if(u_node.is_tree_node()) {
             auto& u_data = component_data_of(u);
-            const NodeDesc pu = u_node.parent();
-            if(node_of<Network>(pu).is_reti()){ // if the parent is a reticulation, register new component root
+            const auto& pu = u_node.parents();
+            if(pu.empty() || Network::is_reti(front(pu))){ // if the parent is a reticulation, register new component root
               u_data.comp_root = u;
               non_trivial_roots.push_back(u);
-            } else u_data.comp_root = component_data_of(pu).comp_root; // if the parent is not a reticulation, copy their component root
+            } else u_data.comp_root = component_data_of(front(pu)).comp_root; // if the parent is not a reticulation, copy their component root
           }
         } else trivial_roots.push_back(u); // NOTE: leaves don't get a component-root
       }
@@ -124,7 +131,7 @@ namespace PT{
         if(rt == r) rt = next_rt;
         if(rt != next_rt) rt = NoNode;
       }
-      assert(rt != r); // rt == r only if r has no parents which should never be the case
+      if(rt == r) return NoNode; // rt == r only if r has no parents, in which case, there is no component root above
       if(N.out_degree(r) <= 1) component_data_of(r).comp_root = rt;
       return rt;
     }
@@ -152,15 +159,18 @@ namespace PT{
 
     // construction
     TreeComponentInfos(Network& _N):
-      N(_N), comp_DAG(compute_comp_DAG())
-    {}
+      N(_N)
+    {
+      if(!N.empty())
+        compute_comp_DAG();
+    }
 
     // we want to be able to give a new Network-reference when copy-constructing
     TreeComponentInfos(const TreeComponentInfos& tc, Network& _N):
-      N(_N), comp_DAG(tc.comp_DAG)
+      N(_N), N_to_compDAG(), comp_DAG(tc.comp_DAG)
     {}
     TreeComponentInfos(TreeComponentInfos&& tc, Network& _N):
-      N(_N), comp_DAG(std::move(tc.comp_DAG))
+      N(_N), N_to_compDAG(std::move(tc.N_to_compDAG)), comp_DAG(std::move(tc.comp_DAG))
     {}
 
 

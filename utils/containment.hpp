@@ -34,7 +34,7 @@ namespace PT {
     ComponentInfos comp_info;
     ReductionManager<TreeInNetContainment> reduction_man;
 
-    bool failed;
+    bool failed = false;
 
 
     // ***************************************
@@ -79,9 +79,9 @@ namespace PT {
     // initialization and early reductions
     void init() {
       if(!clean_up_labels()){
-        std::cout << "initial comp-root DAG:\n"<<comp_info.comp_DAG<<"\n";
+        std::cout << "initial comp-root DAG ("<<comp_info.comp_DAG.num_nodes()<<" nodes, "<<comp_info.comp_DAG.roots().size()<<" roots):\n";
+        std::cout <<comp_info.comp_DAG<<"\n";
         // if host has only 1 tree component, then its root is visible by all leaves, so visible-component rule solves the instance
-        //NOTE: in this case, make sure the root of the component DAG has the same index as the host
         if(comp_info.comp_DAG.edgeless() && !host.edgeless()) {
   #warning "TODO: this is legacy code, please remove it"
           // NOTE: if comp_info.comp_DAG is edgeless, then its root may not correspond to the root of host
@@ -99,7 +99,7 @@ namespace PT {
       std::cout << "done initializing Tree-in-Net containment checker; failed? "<<failed<<"\n";
     }
 
-    // remove labels present in only one of N and T, remove whether we already failed
+    // remove labels present in only one of N and T, return whether we already failed
     bool clean_up_labels() {
       std::cout << "cleaning-up labels...\n";
       for(auto label_iter = HG_label_match.begin(); label_iter != HG_label_match.end();){
@@ -122,8 +122,10 @@ namespace PT {
     //               branching
     // ***************************************
 
-    // in our data structure, we map each target reticulation to 3 numbers: (1) #parents not seeing a comp root,
-    // (2) #parents seeing a non-leaf comp-root, (3) #parents seeing a leaf-comp-root
+    // in our data structure, we map each target reticulation to 3 numbers:
+    // (1) #parents not seeing a comp root,
+    // (2) #parents seeing a non-leaf comp-root,
+    // (3) #parents seeing a leaf-comp-root
     struct BranchInfo {
       NodeDesc node;
       size_t parents_seeing_noone = 0;

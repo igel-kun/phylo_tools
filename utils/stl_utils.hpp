@@ -30,8 +30,9 @@ namespace std{
   template<class T>
   using make_rvalue_reference = add_rvalue_reference_t<std::remove_reference_t<T>>;
 
-  // don't add const to void...
+  // don't add const/volatile to void...
   template<class T> using my_add_const_t = conditional_t<is_void_v<T>, void, add_const_t<T>>;
+  template<class T> using my_add_volatile_t = conditional_t<is_void_v<T>, void, add_volatile_t<T>>;
   template<class T> constexpr bool is_const_ref = is_const_v<remove_reference_t<T>>;
 
   // turn a reference into const reference or rvalue into const rvalue
@@ -54,7 +55,7 @@ namespace std{
   struct copy_cv {
     using R =    remove_reference_t<T>;
     using U1 =   conditional_t<is_const_v<R>, my_add_const_t<U>, U>;
-    using type = conditional_t<is_volatile_v<R>, add_volatile_t<U1>, U1>;
+    using type = conditional_t<is_volatile_v<R>, my_add_volatile_t<U1>, U1>;
   };
   template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
 

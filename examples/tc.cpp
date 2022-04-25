@@ -79,11 +79,15 @@ NetAndTree create_net_and_tree() {
 
   std::cout << "generating network with "<<num_leaves<<" leaves, "<<num_internals<<" internal nodes and "<< (num_leaves + num_internals - 1) + num_new_edges<<" edges\n";
   generate_random_tree(result.second, num_internals, num_leaves);
+  generate_leaf_labels(result.second);
 
   std::cout << "rolled tree:\n"<<result.second<<"\n";
 
   std::cout << "network type is "<<std::type_name<MyNet>()<<"\n";
-
+  std::cout << "tree has label ? "<<PT::HasDataType<Ex_node_label, MyTree><<"\n";
+  std::cout << "net has label ? "<<PT::HasDataType<Ex_node_label, MyNet><<"\n";
+  std::cout << "tree label type is "<<std::type_name<PT::DataTypeOf<Ex_node_label, MyTree>>()<<"\n";
+  
   std::cout << "copying tree...\n";
   result.first = result.second;
   

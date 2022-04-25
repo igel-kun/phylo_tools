@@ -29,6 +29,9 @@ namespace std {
   template<class T>
   concept StrictVectorType = (VectorType<T> && !is_reference_v<T>);
 
+  template<class T>
+  concept HasIterTraits = requires { typename iterator_traits<T>::value_type; };
+
   template<class T> 
   concept IterableType = requires(T a) {
     typename _iterator_of_t<T>;
@@ -41,7 +44,8 @@ namespace std {
 	};
   template<class T>
   concept StrictIterableType = (IterableType<T> && !is_reference_v<T>);
-
+  template<class T>
+  concept OptionalIterableType = is_void_v<T> || IterableType<T>;
 
   // if we need T to support reporting its size via T::size() 
   template <class T> 
@@ -57,13 +61,13 @@ namespace std {
   template<class T> using reverse_iterator_of_t = reverse_iterator<iterator_of_t<T>>;
   template<class T> using const_iterator_of_t = typename iterator_of<const remove_reference_t<T>>::type;
 
-  //template<class T>
-  //concept IterableType = StrictIterableType<remove_cvref_t<T>>;
+  template<IterableType T> using BeginType = decltype(begin(declval<T>()));
+  template<IterableType T> using EndType = decltype(end(declval<T>()));
+  // a concept for iterable types in which begin() and end() have the same type (this is apparently needed for some STL stuff like vector::insert)
   template<class T>
-  concept OptionalIterableType = is_void_v<T> || IterableType<T>;
+  concept IterableTypeWithSameIterators = IterableType<T> && std::is_same_v<BeginType<T>, EndType<T>>;
 
-  template<class T>
-  concept HasIterTraits = requires { typename iterator_traits<T>::value_type; };
+
 
   // concept checking for STL-style container (thanks to https://stackoverflow.com/questions/60449592 )
   template <class T> 

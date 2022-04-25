@@ -159,12 +159,20 @@ namespace std { // since it was the job of STL to provide for it and they failed
   }
 
   // append with 2 containers means to add the second to the end of the first
-  template<ContainerType C1, ContainerType C2> requires (ConvertibleValueTypes<C1,C2> && !VectorType<C1>)
-  auto append(C1& x, const C2& y) {
+  template<ContainerType C1, IterableType C2> requires (ConvertibleValueTypes<C1,C2> && !IterableTypeWithSameIterators<C2>)
+  auto append(C1& x, C2&& y) {
+    using ItemRef = copy_cvref_t<C2&&, value_type_of_t<C2>>;
+    for(ItemRef i: std::forward<C2>(y))
+      append(x, static_cast<ItemRef>(i)); // so, right, I know i should already have that type, but not if ItemRef is an rvalue-reference because... reasons
+    return emplace_result<C1>{x.begin(), true};
+  }
+
+  template<ContainerType C1, IterableTypeWithSameIterators C2> requires (ConvertibleValueTypes<C1,C2> && !VectorType<C1>)
+  auto append(C1& x, C2&& y) {
     x.insert(y.begin(), y.end());
     return emplace_result<C1>{x.begin(), true};
   }
-  template<VectorType V, ContainerType C2> requires ConvertibleValueTypes<V,C2>
+  template<VectorType V, IterableTypeWithSameIterators C2> requires ConvertibleValueTypes<V,C2>
   auto append(V& x, const C2& y) {
     x.insert(x.end(), y.begin(), y.end());
     return emplace_result<V>{x.begin(), true};
@@ -365,6 +373,26 @@ namespace std { // since it was the job of STL to provide for it and they failed
 
   template<IterableType C>
   iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
+
+
+  // a modification of a set that automatically clears the other set on move-construction or move-assignment
+  template<SetType S>
+  struct auto_clearing: public S {
+    using S::S;
+
+    auto_clearing() = default;
+    auto_clearing(const auto_clearing&) = default;
+    auto_clearing(auto_clearing&& other):
+      S(move(other))
+    { other.clear(); }
+
+    auto_clearing& operator=(const auto_clearing& other) = default;
+    auto_clearing& operator=(auto_clearing&& other) {
+      S::operator=(move(other));
+      other.clear();
+    }
+
+  };
 
 
 }

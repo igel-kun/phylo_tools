@@ -31,9 +31,11 @@ namespace PT {
     using Parent::Parent;
 
     NodeSet node_queue;
-    void add(const NodeDesc x) { append(node_queue, x); std::cout << "adding node "<<x<<" to queue of "<<reduction_name<<", now: "<<node_queue<<"\n"; }
+    void add(const NodeDesc x) {
+      append(node_queue, x);
+      std::cout << "adding node "<<x<<" to queue, now: "<<node_queue<<"\n";
+    }
     
-    static constexpr auto reduction_name = "reduction with queue";
   };
 
   // a class to merge adjacent reticulations 
@@ -70,6 +72,7 @@ namespace PT {
       bool result = false;
       while(!node_queue.empty()){
         const NodeDesc x = value_pop_back(node_queue);
+        std::cout << "trying to contract reticulation "<<x<<'\n';
         // NOTE: please be sure that the nodes in the node_queue really exist in the host (have not been removed by other reductions)!
         if((manager.contain.host.out_degree(x) == 1) && contract_reti(x))
           result = true;
@@ -84,7 +87,6 @@ namespace PT {
           Parent::add(x);
     }
 
-    static constexpr auto reduction_name = "reticulation merger";
   };
 
   // a class to apply triangle reduction
@@ -139,7 +141,6 @@ namespace PT {
       return result;
     }
 
-    static constexpr auto reduction_name = "triangle rule";
   };
 
   // a class for containment cherry reduction
@@ -243,7 +244,6 @@ namespace PT {
 
 #warning "TODO: apply general cherry reduction before branching: 1. uv is cherry in guest and 2. lca(uv) is unique in host OR, slightly cheaper: 2. exists lowest ancestor x of u & v s.t. x visible on v (tree-path f.ex.) and the x-->u path is unqiue"
 
-    static constexpr auto reduction_name = "cherry reduction";
   };
 
   // a class to match visible components of the host with subtrees of the guest
@@ -359,7 +359,6 @@ namespace PT {
       } else return false;
     } 
 
-    static constexpr auto reduction_name = "visible component rule";
   };
 
   // whenever a node in the host is identified that optimally displays a node in the guest, this class updates host and guest accordingly

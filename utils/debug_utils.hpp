@@ -68,6 +68,16 @@ static void clobber() {
 }
 
 
+struct verbose_construct {
+  int i;
+  verbose_construct(const int j = -1): i(j) {
+    std::cout << "==========================================\nconstructed debug sentinel #"<<i<<"\n=========================================\n";
+  }
+  ~verbose_construct() {
+    std::cout << "==========================================\ndestructed debug sentinel #"<<i<<"\n=========================================\n";
+  }
+};
+
 
 #ifndef NDEBUG
 #include <string>

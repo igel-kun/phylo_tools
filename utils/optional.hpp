@@ -33,6 +33,11 @@ namespace std {
       new(addr) T(std::forward<Args>(args)...);
       return *addr;
     }
+    template<class Q> requires (is_trivially_assignable_v<T&, Q&&>)
+    constexpr T& emplace(Q&& other) {
+      element = std::forward<Q>(other);
+    }
+
     
     T& operator*() { return element; }
     const T& operator*() const { return element; }

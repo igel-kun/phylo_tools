@@ -221,6 +221,12 @@ namespace PT{
     using LabelType = _LabelType;
     static constexpr bool has_label = true;
 
+    template<class LabelInit, class... Args>
+    Node(const std::piecewise_construct_t, LabelInit&& label_init, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      _label(label_init)
+    {}
+
     LabelType& label() & { return _label; }
     LabelType&& label() && { return _label; }
     const LabelType& label() const & { return _label; }
@@ -244,31 +250,6 @@ namespace PT{
 
   template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData, class _LabelType>
   using DefaultNode = Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType>;
-
-
-  // create a new node and return its description
-  template<StrictNodeType _Node, class... Args>
-  NodeDesc make_node(Args&&... args) { return new _Node(std::forward<Args>(args)...); }
-
-  template<StrictNodeType _Node>
-  void delete_node(const NodeDesc u) { delete reinterpret_cast<_Node*>(static_cast<uintptr_t>(u)); }
-
-  // create a new node from the data of some other node
-  template<StrictNodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
-  NodeDesc make_node(const Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>& other) {
-    if constexpr (std::is_void_v<_NodeData> || std::is_void_v<typename _Node::NodeData>)
-      return new _Node();
-    else
-      return new _Node(other.data());
-  }
-
-  template<StrictNodeType _Node, StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
-  NodeDesc make_node(Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>&& other) {
-    if constexpr (std::is_void_v<_NodeData> || std::is_void_v<typename _Node::NodeData>)
-      return new _Node();
-    else
-      return new _Node(std::move(other.data()));
-  }
 
   template<StrictNodeType Node>
   Node& node_of(const NodeDesc x) { return *(reinterpret_cast<Node*>(static_cast<uintptr_t>(x))); }
@@ -316,6 +297,9 @@ namespace PT{
     static constexpr bool has_edge_data = Adjacency::has_data;
 
     static constexpr Node& node_of(const NodeDesc u) { return PT::node_of<Node>(u); }
+
+    void delete_node(const NodeDesc u) { delete reinterpret_cast<Node*>(static_cast<uintptr_t>(u)); }
+
     Node& operator[](const NodeDesc u) const & { return node_of(u); }
     Node&& operator[](const NodeDesc u) && { return node_of(u); }
     

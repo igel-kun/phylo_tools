@@ -1,12 +1,13 @@
 
 #pragma once
 
-#include <ranges>
+//#include <ranges>
 #include "tuple_iter.hpp"
 #include "set_interface.hpp"
 
 #include "utils.hpp"
 #include "types.hpp"
+#include "tags.hpp"
 #include "lca.hpp"
 #include "dfs.hpp"
 #include "except.hpp"
@@ -59,6 +60,12 @@ namespace PT {
       _num_edges = std::move(other._num_edges);
       other._roots.clear();
       return *this;
+    }
+
+    void clear() {
+      _num_nodes = 0;
+      _num_edges = 0;
+      _roots.clear();
     }
 
 		void count_node(const int nr = 1) { _num_nodes += nr; } 
@@ -123,6 +130,11 @@ namespace PT {
       _roots = std::move(other._roots);
       _num_nodes = std::move(other._num_nodes);
       other._roots.clear();
+    }
+
+    void clear() {
+      _num_nodes = 0;
+      _roots.clear();
     }
 
 		void count_node(const int nr = 1) { _num_nodes += nr; }
@@ -191,26 +203,58 @@ namespace PT {
 
     // ================ modification ======================
     // create a node in the void
-    // NOTE: this is static and, as such, does not change the network,
-    //       indeed this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent())
+    // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
     template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
       return new Node(std::forward<Args>(args)...);
     }
     // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
-    template<NodeFunctionType NodeDataExtract = DefaultExtractData<Ex_node_data, Phylogeny>>
-    static constexpr NodeDesc create_node(NodeDataExtract&& node_data_extract) {
-      if constexpr (!std::is_same_v<std::remove_cvref_t<NodeDataExtract>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
+    template<NodeFunctionType DataMaker>
+    static constexpr NodeDesc create_node(DataMaker&& data_maker) {
+      if constexpr (!std::is_same_v<std::remove_cvref_t<DataMaker>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
         const NodeDesc result = space;
-        new(space) Node(node_data_extract(result));
+        new(space) Node(data_maker(result));
         return result;
       } else return create_node();
     }
 
+    template<NodeFunctionType LabelMaker>
+    static constexpr NodeDesc create_node(Ex_node_label, LabelMaker&& label_maker) {
+      if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
+        Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
+        const NodeDesc result = space;
+        new(space) Node(label_maker(result));
+        return result;
+      } else return create_node();
+    }
+
+    template<NodeFunctionType DataMaker, NodeFunctionType LabelMaker>
+    static constexpr NodeDesc create_node(LabelMaker&& label_maker, DataMaker&& data_maker) {
+      if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
+        Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
+        const NodeDesc result = space;
+        new(space) Node(std::piecewise_construct, label_maker(result), data_maker(result));
+        return result;
+      } else return create_node(std::forward<DataMaker>(data_maker));
+    }
+    template<DataExtracterType DataMaker>
+    static constexpr NodeDesc create_node(DataMaker&& data_maker) {
+      if constexpr (!DataMaker::ignoring_node_data) {
+        if constexpr (!DataMaker::ignoring_node_labels) {
+          return create_node(data_maker.get_node_label, data_maker.get_node_data);
+        } else return create_node(data_maker.get_node_data);
+      } else {
+        if constexpr (!DataMaker::ignoring_node_labels) {
+          create_node(data_maker.get_node_label);
+        } else return create_node();
+      }
+    }
+
+
 #warning "TODO: clean up when the phylogeny is destroyed! In particular delete nodes!"
     void delete_node(const NodeDesc x) {
 			count_node(-1);
-      PT::delete_node<Node>(x);
+      Parent::delete_node(x);
     }
 
     // add an edge between two nodes of the tree/network
@@ -227,6 +271,13 @@ namespace PT {
       }
       return result;
     }
+    template<AdjacencyType Adj, DataExtracterType DataMaker>
+    std::pair<Adjacency, bool> add_edge(const NodeDesc u, Adj&& v, DataMaker&& data_maker) {
+      if constexpr (!DataMaker::ignoring_edge_data)
+        return add_edge(u, std::forward<Adj>(v), data_maker.get_edge_data(u, v));
+      else add_edge(u, std::forward<Adj>(v));
+    }
+
 
     bool remove_edge(const NodeDesc u, const NodeDesc v) {
       const bool result = Parent::remove_edge(u,v);
@@ -294,14 +345,19 @@ namespace PT {
       return result;
     };
 
-    template<class... Args>
-    NodeDesc add_root(Args&&... args) {
-      const NodeDesc new_root = create_node(std::forward<Args>(args)...);
+    NodeDesc add_root(const NodeDesc new_root) {
       DEBUG5(std::cout << "adding "<<new_root<<" to roots\n");
       const bool result = mark_root(new_root);
       assert(result);
       count_node();
       return new_root;
+    }
+    template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, NodeDesc>)
+    NodeDesc add_root(First&& first, Args&&... args) {
+      return add_root(create_node(std::forward<First>(first), std::forward<Args>(args)...));
+    }
+    NodeDesc add_root() {
+      return add_root(create_node());
     }
 
 
@@ -795,7 +851,7 @@ namespace PT {
     // NOTE: the edge x --> other_x will be initialized using "args"
     // NOTE: _Phylo needs to have the same NodeType as we do!
     // NOTE: we are not removing other_x from ther other phylogeny; the caller should care for that!
-    template<StrictPhylogenyType Phylo, class... Args> requires std::is_same_v<Node, typename Phylo::Node>
+    template<bool count = true, StrictPhylogenyType Phylo, class... Args> requires std::is_same_v<Node, typename Phylo::Node>
     void place_below_by_move(Phylo&& other, const NodeDesc other_x, const NodeDesc x, Args&&... args) {
       assert(other_x != NoNode);
       std::cout << "moving subtree below "<<other_x<<"...\n";
@@ -813,20 +869,37 @@ namespace PT {
         const bool success = add_child(x, other_x, std::forward<Args>(args)...).second;
         assert(success);
       } else append(_roots, other_x);
-      // step 2: update node and edge numbers
-      std::pair<size_t,size_t> node_and_edge_count;
 
-      // if other_x was the only root of other, then we'll use other's node- and edge- numbers, otherwise we'll have to count them :/
-      if(other_x_is_root && other._roots.empty()) {
-        node_and_edge_count = {other.num_nodes(), other.num_edges()};
-      } else {
-        node_and_edge_count = other.count_nodes_and_edges_below(other_x);
+      if constexpr (count) {
+        // step 2: update node and edge numbers
+        std::pair<size_t,size_t> node_and_edge_count;
+
+        // if other_x was the only root of other, then we'll use other's node- and edge- numbers, otherwise we'll have to count them :/
+        if(other_x_is_root && other._roots.empty()) {
+          node_and_edge_count = {other.num_nodes(), other.num_edges()};
+        } else {
+          node_and_edge_count = other.count_nodes_and_edges_below(other_x);
+        }
+        count_node(node_and_edge_count.first);
+        count_edge(node_and_edge_count.second);
+        other.count_node(-node_and_edge_count.first);
+        other.count_edge(-node_and_edge_count.second);
       }
-      count_node(node_and_edge_count.first);
-      count_edge(node_and_edge_count.second);
-      other.count_node(-node_and_edge_count.first);
-      other.count_edge(-node_and_edge_count.second);
     }
+
+    // move a number of nodes below a node x (or as new roots if x is NoNode)
+    // NOTE: to not erase the roots from the other phylogeny, pass false as second template parameter
+    template<bool count = true, bool remove_foreign_roots = true, StrictPhylogenyType Phylo, NodeIterableType RContainer, class... Args>
+      requires std::is_same_v<Node, typename Phylo::Node>
+    void place_below_by_move(Phylo&& other, const RContainer& in_roots, const NodeDesc x, Args&&... args) {
+      assert(&in_roots != &(other._roots) && "pleaase avoid passing the root-set manually when move-constructing a phylogeny");
+      for(const NodeDesc r: in_roots)
+        place_below_by_move(std::move(other), r, NoNode);
+      if constexpr (remove_foreign_roots) {
+        my_erase(other._roots, in_roots);     
+      }
+    }
+
 
   public:
     // =============================== construction ======================================
@@ -859,7 +932,7 @@ namespace PT {
         }
         DEBUG4(std::cout << "marking roots: "<<in_roots<<"\n");
         // mark the roots
-        for(const NodeDesc r: in_roots) append(_roots, emplacer[r]);
+        emplacer.mark_roots(in_roots);
         DEBUG2(tree_summary(std::cout));
       }
     }
@@ -868,11 +941,13 @@ namespace PT {
     template<PhylogenyType Phylo, class... EmplacerArgs>
     Phylogeny(const policy_copy_t, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args) {
       std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using root "<<in_root<<"\n";
+      //auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
       auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
+      std::cout << "extracter is "<<std::type_name<decltype(emplacer.data_extracter)>()<<"\n";
       build_from_edges(N.edges_below_preorder(in_root), emplacer);
       // mark the root
       DEBUG4(std::cout << "marking root: "<<emplacer[in_root]<<"\n");
-      append(_roots, emplacer[in_root]);
+      emplacer.mark_root(in_root);
       DEBUG2(tree_summary(std::cout));
     }
 
@@ -887,6 +962,14 @@ namespace PT {
     Phylogeny(const policy_copy_t, Phylo&& N, First&& first, Args&&... args):
       Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), front(N.roots()), std::forward<First>(first), std::forward<Args>(args)...)
     {}
+    template<PhylogenyType Phylo> requires (!std::remove_reference_t<Phylo>::has_unique_root)
+    Phylogeny(const policy_copy_t, Phylo&& N):
+      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), N.roots())
+    {}
+    template<PhylogenyType Phylo> requires (std::remove_reference_t<Phylo>::has_unique_root)
+    Phylogeny(const policy_copy_t, Phylo&& N):
+      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), front(N.roots()))
+    {}
 
 
     // "move" construction with root(s) by unlinking the in_roots from their in_tree and using them as our new _roots
@@ -895,12 +978,7 @@ namespace PT {
     //       It is the user's responsibility to make sure this is not the case.
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
     Phylogeny(const policy_move_t, Phylo&& in_tree, const RContainer& in_roots) {
-      for(const NodeDesc r: in_roots)
-        place_below_by_move(std::move(in_tree), r, NoNode);
-      // remember to remove the in_roots from the root storage of the in_tree
-      if(&in_roots == &in_tree._roots)
-        in_tree._roots.clear();
-      else my_erase(in_tree._roots, in_roots);     
+      place_below_by_move<true, true>(std::move(in_tree), in_roots, NoNode);
     }
     // "move" construction with single root
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
@@ -909,12 +987,6 @@ namespace PT {
       // remember to manually remove the in_root from in_tree's root storage
       my_erase(in_tree._roots, in_root);
     }
-    // "move" construction without root
-    template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_t, Phylo&& in_tree):
-      Phylogeny(policy_move_t{}, std::move(in_tree), in_tree.roots())
-    {}
-
 
     // if we just want to copy a phylogeny, use the "copy" version (with or without node-translation)
     template<StrictPhylogenyType Phylo, NodeTranslationType OldToNew, class... Args>
@@ -927,11 +999,11 @@ namespace PT {
     {}
     template<StrictPhylogenyType Phylo>
     explicit Phylogeny(const Phylo& in_tree):
-      Phylogeny(policy_copy_t(), in_tree, NodeTranslation())
+      Phylogeny(policy_copy_t(), in_tree)
     {}
     // copy-constructing for the same type is not explicit
     Phylogeny(const Phylogeny& in_tree):
-      Phylogeny(policy_copy_t(), in_tree, NodeTranslation())
+      Phylogeny(policy_copy_t(), in_tree)
     {}
 
     template<StrictPhylogenyType Phylo, class... Args>
@@ -944,24 +1016,64 @@ namespace PT {
     Phylogeny(Phylogeny&& in_tree) = default;
 
 
-    // swapping with an rvalue reference is just stealing their stuff - the ProtoPhylogeny knows how to do this
-    void swap(Phylogeny&& other) {
+
+    // assigning from a Phylogeny-rval-ref is just stealing their stuff - the ProtoPhylogeny knows how to do this
+    void assign_from(Phylogeny&& other) {
+      if(!_roots.empty())
+        delete_all_nodes();
       Parent::operator=(std::move(other));
+      assert(other.roots().empty()); // make sure other has no more roots now cause they would be free'd
     }
-    // to swap with an lvalue reference, we let tmp steal our stuff, then steal other's stuff and finally let them steal tmp's stuff
-    void swap(Phylogeny& other) {
-      Phylogeny tmp(std::move(*this));
-      Parent::operator=(std::move(other));
-      other = std::move(tmp);
+
+    // an assignment operator to which you can pass more arguments
+    // NOTE: this is useful for providing your own DataExtractor or NodeTranslation
+    template<PhylogenyType Phylo, class... Args>
+    void assign_from(Phylo&& target, Args&&... args) const {
+      Phylogeny tmp(std::forward<Phylo>(*this), std::forward<Args>(args)...);
+      assign_from(std::move(tmp));
+    }
+
+    // to swap with another (possibly different) phylogeny, we let tmp steal their stuff, then let them steal our stuff and finally steal tmp's stuff
+    // NOTE: you can pass data extractor related stuff as arguments - they will be forwarded to the constructor of tmp from other
+    template<PhylogenyType Phylo, class... Args>
+    void swap(Phylo&& other, Args&&... args) {
+      Phylogeny tmp(std::move(other), std::forward<Args>(args)...);
+      // NOTE: if other is an rvalue reference, there is really no need to restore anything useful to it
+      if constexpr (!std::is_rvalue_reference_v<Phylo&&>) {
+        other = std::move(*this);
+        assert(_roots.empty()); // be sure all roots have been stolen!
+      }
+      assign_from(std::move(tmp));
     }
 
     // assignment by copy-and-swap
     template<PhylogenyType Phylo>
     Phylogeny& operator=(Phylo&& other) {
       Phylogeny tmp(std::forward<Phylo>(other));
-      swap(std::move(tmp));
+      assign_from(std::move(tmp));
       return *this;
     }
+
+
+    // =============== destruction ==================
+  protected:
+    // free all memory occupied by our nodes
+    // NOTE: BE AWARE: this does not touch _roots, _num_nodes or _num_edges; you'll have to do that manually
+    void delete_all_nodes() {
+      NodeVec all_nodes;
+      all_nodes.reserve(_num_nodes);
+      append(all_nodes, nodes());
+      for(const NodeDesc u: all_nodes)
+        Parent::delete_node(u);
+    }
+
+  public:
+    // clear the phylogeny
+    void clear() {
+      delete_all_nodes();
+      Parent::clear();
+    }
+
 
     // =================== i/o ======================
 
@@ -1001,11 +1113,11 @@ namespace PT {
             os << std::endl;
             break;
           case 1:
-            prefix += std::string(u_name.length() + 1, ' ');
+            prefix += std::string(u_name.length() + 1 + u_reti, ' ');
             print_subtree(os, front(children(u)), prefix, seen);
             break;
           default:
-            prefix += std::string(u_name.length(), ' ') + '|';
+            prefix += std::string(u_name.length(), ' ' + u_reti) + '|';
 
             uint32_t count = u_childs.size();
             for(const NodeDesc c: u_childs){

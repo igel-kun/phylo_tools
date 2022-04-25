@@ -22,7 +22,7 @@ namespace std{
     singleton_set() = default;
     singleton_set(const value_type& el): storage(std::in_place_t(), el) {}
     singleton_set(value_type&& el): storage(std::in_place_t(), std::move(el)) {}
-
+    
     bool non_empty() const { return storage.has_value(); }
     bool empty() const { return !non_empty(); }
     void clear() { storage.reset(); }
