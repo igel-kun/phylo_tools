@@ -4,8 +4,8 @@
 namespace pred {
   // Predicates
 #warning "TODO: automatically detect static and dynamic predicates"
-  struct StaticPredicate { inline static constexpr bool is_static = true; };
-  struct DynamicPredicate { inline static constexpr bool is_static = false; };
+  struct StaticPredicate { static constexpr bool is_static = true; };
+  struct DynamicPredicate { static constexpr bool is_static = false; };
   
   // note: for an iterator it, use pred.value(it) to get the value of the predicate for the item at position it
   template<class Predicate>

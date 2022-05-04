@@ -161,15 +161,10 @@ namespace PT {
     };
 
 
-    const NodeDesc& comp_root_of(const NodeDesc u) const { return comp_info.component_data_of(u).comp_root; }
-    NodeDesc& comp_root_of(const NodeDesc u) { return comp_info.component_data_of(u).comp_root; }
-
-    const NodeDesc& visible_leaf_of(const NodeDesc u) const { return comp_info.component_data_of(u).visible_leaf; }
-    NodeDesc& visible_leaf_of(const NodeDesc u) { return comp_info.component_data_of(u).visible_leaf; }
 
 
   public:
-
+    
     // initialization allows moving Host and Guest
     //NOTE: to allow deriving Host and Guest template parameters, we're not using forwarding references here, but 4 different constructors
     TreeInNetContainment(const Host& _host, const Guest& _guest): TreeInNetContainment(_host, _guest, false) {}
@@ -185,12 +180,8 @@ namespace PT {
       while(u_parents.size() > 1) {
         NodeDesc pu = front(u_parents);
         if(pu == v) pu = *(std::next(u_parents.begin()));
-        host.remove_edge(pu, u);
-        comp_info.inherit_root(u); // update the component info of y
-        reduction_man.clean_up_later(pu);
+        reduction_man.remove_edge_in_host(pu, u);
       }
-      // step 2: copy visibility and suppress u
-      reduction_man.clean_up_later(u);
     }
 
     bool displayed() {
@@ -212,13 +203,13 @@ namespace PT {
         // step 1: for each leaf z that does not see a non-leaf-component root, get the reticulation above z (if z does not have
         // a reticulation parent, then cherry reduction must be applicable to it)
         std::cout << "visibility: ";
-        for(const NodeDesc x: host.nodes()) std::cout << comp_info.component_data_of(x) <<"\n";
+        for(const NodeDesc x: host.nodes()) std::cout << comp_info.visible_leaf_of(x) <<"\n";
         std::cout << "label-matching: "<<HG_label_match<<"\n";
 
         std::priority_queue<BranchInfo, std::vector<BranchInfo>, std::greater<BranchInfo>> branching_candidates;
         for(const auto& HG_leaf_pair: seconds(HG_label_match)){
           const NodeDesc u = HG_leaf_pair.first;
-          const NodeDesc rt_u = comp_root_of(u);
+          const NodeDesc rt_u = comp_info.comp_root_of(u);
           if(rt_u == NoNode) {
             std::cout << u << " sees noone\n" << u <<"'s parents are "<<parents_of<Host>(u)<<"\n";
             // if u does not see any component-root, then its parent is necessarily a reticulation (since cherry-reduction is applied continuously)
@@ -227,12 +218,12 @@ namespace PT {
             assert(host.out_degree(pu) == 1);
             assert(host.in_degree(pu) > 1);
             // the parent reticulation cannot see a tree-component since u would see it too
-            assert(comp_root_of(pu) == NoNode);
+            assert(comp_info.comp_root_of(pu) == NoNode);
             
             BranchInfo pu_info(pu);
             for(const NodeDesc x: host.parents(pu)) {
-              const NodeDesc rt_x = comp_root_of(x);
-              std::cout << "considering comp-root "<<rt_x <<" ("<< comp_info.component_data_of(x) <<") of "<<pu<<"\n";
+              const NodeDesc rt_x = comp_info.comp_root_of(x);
+              std::cout << "considering comp-root "<<rt_x <<" ("<< comp_info.comp_root_of(x) <<") of "<<pu<<"\n";
               if(rt_x != NoNode){
                 if(comp_info.comp_DAG.is_leaf(rt_x))
                   pu_info.parents_seeing_leaf_comp++;

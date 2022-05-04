@@ -15,12 +15,13 @@ namespace std{
   private:
     const T* representative;    // the representative element of our set
     size_t _size;
+    
+    void grow(const int x) { _size += x; }
   public:
-    inline const T& get_representative() const {return *representative;}
-    inline size_t size() const { return _size; }
-    inline void grow(const int x) { _size += x; }
+    const T& get_representative() const { return *representative; }
+    size_t size() const { return _size; }
 
-    DSet(const T* _representative):
+    DSet(T* _representative):
       representative(_representative), _size(1)
     {}
     DSet():
@@ -111,19 +112,28 @@ namespace std{
     // merge two sets into one
     // the one with the lower size is merged into the one with the higher
     // in case of ties, x is merged into y's set
-    DSet<T>& merge_sets_of(const T& x, const T& y, const bool respect_sizes = true) {
+    // return the set that the other has been merged into
+    template<bool respect_sizes = true>
+    DSet<T>& merge_sets_of(const T& x, const T& y) {
       assert(test(*this, x) && test(*this, y));
 
       DSet<T>& x_set = set_of(x);
       DSet<T>& y_set = set_of(y);
       if(x_set != y_set){
         --_set_count;
-        if(respect_sizes && (x_set.size() < y_set.size())){
-          x_set.merge_onto(y_set);
-          return y_set;
-        } else y_set.merge_onto(x_set);
+        if constexpr (respect_sizes) {
+          if(x_set.size() < y_set.size()){
+            x_set.merge_onto(y_set);
+            return y_set;
+          }
+        }
+        y_set.merge_onto(x_set);
       }
       return x_set;
+    }
+    // merge y onto x (y's representative will be lost (set to x's representative))
+    DSet<T>& merge_sets_keep_order(const T& x, const T& y) {
+      return merge_sets_of<false>(x, y);
     }
 
     // return the size of the set containing x

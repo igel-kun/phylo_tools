@@ -142,7 +142,7 @@ namespace PT {
 
     static constexpr bool is_forest() { return true; }
 		size_t num_nodes() const { return _num_nodes; }
-		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - 1; }
+		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - _roots.size(); }
     NodeDesc root() const { return front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
@@ -278,10 +278,40 @@ namespace PT {
       else add_edge(u, std::forward<Adj>(v));
     }
 
+  protected:
+
+    bool remove_edge_no_cleanup(const NodeDesc u, const NodeDesc v) {
+      const int result = Parent::remove_edge(u,v);
+      count_edge(-result);
+      return result;
+    }
+    bool remove_edge_and_child(const NodeDesc u, const NodeDesc v) {
+      const int result = Parent::remove_edge(u,v);
+      count_edge(-result);
+      if(result) {
+        assert(in_degree(v) == 0);
+        assert(out_degree(v) == 0);
+        delete_node(v);
+        return true;
+      } else return false;
+    }
+    bool remove_edge_and_parent(const NodeDesc u, const NodeDesc v) {
+      const int result = Parent::remove_edge(u,v);
+      count_edge(-result);
+      if(result) {
+        assert(in_degree(u) == 0);
+        assert(out_degree(u) == 0);
+        delete_node(u);
+        return true;
+      } else return false;
+    }
+
+  public:
 
     bool remove_edge(const NodeDesc u, const NodeDesc v) {
-      const bool result = Parent::remove_edge(u,v);
-      count_edge(result);
+      const int result = Parent::remove_edge(u,v);
+      count_edge(-result);
+      if(in_degree(v) == 0) append(_roots, v);
       return result;
     }
 
@@ -297,17 +327,18 @@ namespace PT {
           auto& v_parents = v_node.parents();
           while(!v_parents.empty()) {
             const NodeDesc u = front(v_parents);
-            remove_edge(u,v);
+            remove_edge_no_cleanup(u,v);
             remove_upwards(u, args...);
           }
+          delete_node(v);
           return;
         }
         case 1: {
           if constexpr (suppress_deg2) {
             if(v_indeg == 1) {
-              const NodeDesc v_parent = v_node.any_parent();
+              const NodeDesc u = v_node.any_parent();
               contract_up(v, args...);
-              remove_upwards(v_parent, args...);
+              remove_upwards(u, args...);
             }
           }
           return;
@@ -495,6 +526,31 @@ namespace PT {
       if(tmp != NoNode) append(s_parents, std::move(tmp));
     }
 
+    // re-hang a node v below a node target
+    // NOTE: this removes all incoming edges of u except target->u
+    template<AdjacencyType Adj, class... Args>
+    void replace_parents(Adj v, const NodeDesc target, Args&&... args) {
+      auto& v_parents = parents(v);
+      // step 1: remove v from all children-sets of its parents
+      // NOTE: if target is already a parent of v, then v will not be removed from the child-set of target
+      auto iter = v_parents.end();
+      for(auto i = v_parents.begin(); i != v_parents.end(); ++i) {
+        if(*i != target) {
+          my_erase(children(*i), v);
+        } else iter = i;
+      }
+      // step 2: clear v_parents and count edges
+      count_edge(-v_parents.size());
+      if(iter != v_parents.end()) {
+        clear_except(v_parents, iter);
+        count_edge();
+      } else {
+        v_parents.clear();
+        add_child(target, std::move(v), std::forward<Args>(args)...); 
+      }
+    }
+
+
     // subdivide an edge uv with a new Adjacency w
     // NOTE: first, the edge wv gets its data from adapting the EdgeData passed with w and the EdgeData of u->v
     //        (if no adapter is passed, then wv gets the EdgeData of u->v)
@@ -515,7 +571,8 @@ namespace PT {
     }
 
 
-    // contract a node onto its unique parent
+    // contract a node v onto its unique parent u
+    // NOTE: v will be deleted!
     template<AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
     void contract_up(const NodeDesc v, Adj&& u_adj, AdjAdapter&& adapt = AdjAdapter()) {
       assert(in_degree(v) == 1);
@@ -523,8 +580,7 @@ namespace PT {
       const NodeDesc u = u_adj;
       transfer_children(v, std::move(u_adj), std::forward<AdjAdapter>(adapt));
       // finally, remove the edge uv and free v's storage
-      remove_edge(u, v);
-      remove_node(v);
+      remove_edge_and_child(u, v);
     }
 
     template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
@@ -539,7 +595,8 @@ namespace PT {
       contract_up(uv.head(), uv.tail(), std::forward<AdjAdapter>(adapt));
     }
 
-    // contract a node onto its unique child
+    // contract a node u onto its unique child v
+    // NOTE: u will be deleted!
     template<AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
     void contract_down(const NodeDesc u, Adj&& v_adj, AdjAdapter&& adapt = AdjAdapter()) {
       assert(out_degree(u) == 1);
@@ -551,8 +608,7 @@ namespace PT {
         std::replace(_roots, iter, v);
       } else transfer_parents(u, std::move(v_adj), std::forward<AdjAdapter>(adapt));
       // finally, remove the edge uv and free u's storage
-      remove_edge(u, v);
-      remove_node(u);
+      remove_edge_and_parent(u, v);
     }
 
     template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
@@ -567,7 +623,8 @@ namespace PT {
       contract_down(uv.tail(), uv.head(), std::forward<AdjAdapter>(adapt));
     }
 
-
+    // suppress a node v with indeg=outdeg=1
+    // NOTE: v will be deleted!
     template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
     void suppress_node(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) { contract_up(v, std::forward<AdjAdapter>(adapt)); }
     
@@ -576,35 +633,21 @@ namespace PT {
       // step 1: remove outgoing arcs of v
       const auto& v_children = v_node.children();
       while(!v_children.empty())
-        remove_edge(v, front(v_children));
+        remove_edge_no_cleanup(v, front(v_children));
       // step 2: remove incoming arcs of v
       const auto& v_parents = v_node.parents();
       if(!v_parents.empty()){
         while(!v_parents.empty())
-          remove_edge(front(v_parents), v);
+          remove_edge_no_cleanup(front(v_parents), v);
       } else _roots.erase(v);
       // step 3: free storage
       delete_node(v);
     }
 
-    // if we know that v is a leaf, we can remove v a bit faster
-    void remove_leaf(const NodeDesc v) {
-      Node& v_node = node_of(v);
-      assert(v_node.is_leaf());
-      // step 2: remove incoming arcs of v
-      const auto& v_parents = v_node.parents();
-      if(!v_parents.empty()){
-        while(!v_parents.empty())
-          remove_edge(front(v_parents), v);
-      } else _roots.erase(v);
-      // step 3: free storage
-      delete_node(v);
-    }  
-
-    template<class LastRites = std::IgnoreFunction<void>>
-    void remove_leaf(const auto& v, const LastRites& goodbye = LastRites()) {
+    template<class LastRites>
+    void remove_node(const auto& v, const LastRites& goodbye) {
       goodbye(v);
-      remove_leaf(v);
+      remove_node(v);
     }
 
     // remove the subtree rooted at u
@@ -613,7 +656,7 @@ namespace PT {
     void remove_subtree(const NodeDesc u, Args&&... args) {
       const auto& C = children(u);
       while(!C.empty()) remove_subtree(back(C), std::forward<Args>(args)...);
-      remove_leaf(u, std::forward<Args>(args)...);
+      remove_node(u, std::forward<Args>(args)...);
     }
     
     template<class... Args>
@@ -633,7 +676,7 @@ namespace PT {
           C_iter = std::move(next_iter);
         }
         if(C.empty())
-          remove_leaf(u, std::forward<Args>(args)...);
+          remove_node(u, std::forward<Args>(args)...);
       } else remove_subtree_except_root(u, std::forward<Args>(args)...);
     }
 
@@ -738,13 +781,23 @@ namespace PT {
     template<class... Args> auto edges_tail_postorder(Args&&... args) const { return edges<tail_postorder>(std::forward<Args>(args)...); }
 
 
-    template<class... Args>
-    static auto leaves_below(Args&&... args) {
-      return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), [](const NodeDesc n){return node_of(n).is_leaf();});
+    template<class Predicate, class... Args> requires std::invocable<Predicate, const NodeDesc>
+    static auto nodes_with_below(Predicate&& predicate, Args&&... args) {
+      return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
     }
+    template<class... Args>
+    auto nodes_with(Args&&... args) const { return nodes_with_below(_roots, std::forward<Args>(args)...); }
+
+
+    template<class... Args>
+    static auto leaves_below(Args&&... args) { return nodes_with_below(is_leaf, std::forward<Args>(args)...); }
     template<class... Args>
     auto leaves(Args&&... args) const { return leaves_below<const RootContainer&>(_roots, std::forward<Args>(args)...); }
 
+    template<class... Args>
+    static auto retis_below(Args&&... args) { return nodes_with_below(is_reti, std::forward<Args>(args)...); }
+    template<class... Args>
+    auto retis(Args&&... args) const { return retis_below(_roots, std::forward<Args>(args)...); }
 
 
 
@@ -862,7 +915,7 @@ namespace PT {
       
       if(!other_x_parents.empty()){
         while(!other_x_parents.empty())
-          other.remove_edge(front(other_x_parents), other_x_node);
+          other.remove_edge_no_cleanup(front(other_x_parents), other_x_node);
       }
 
       if(x != NoNode) {
@@ -1087,14 +1140,25 @@ namespace PT {
       return os << "\n";
     }
 
-
-    static void print_subtree(std::ostream& os, const NodeDesc u, std::string prefix, auto& seen) {
-      const bool u_reti = is_reti(u);
+    template<class NodeDataToString = std::IgnoreFunction<std::string>>
+    static void print_subtree(std::ostream& os,
+                              const NodeDesc u,
+                              std::string prefix,
+                              auto& seen,
+                              NodeDataToString&& node_data_to_string = NodeDataToString()) 
+    {
+      const Node& u_node = node_of(u);
+      const bool u_reti = u_node.is_reti();
       std::string u_name = std::to_string(name(u));
       if constexpr (Node::has_label){
-        const std::string u_label = std::to_string(label(u));
+        const std::string u_label = std::to_string(u_node.label());
         if(!u_label.empty())
           u_name += "[" + u_label + "]";
+      }
+      if constexpr (Node::has_data){
+        const std::string u_data = node_data_to_string(u_node.data());
+        if(!u_data.empty())
+          u_name += "(" + u_data + ")";
       }
       if(u_name == "") {
         if(u_reti)
@@ -1114,14 +1178,14 @@ namespace PT {
             break;
           case 1:
             prefix += std::string(u_name.length() + 1 + u_reti, ' ');
-            print_subtree(os, front(children(u)), prefix, seen);
+            print_subtree(os, front(children(u)), prefix, seen, node_data_to_string);
             break;
           default:
             prefix += std::string(u_name.length(), ' ' + u_reti) + '|';
 
             uint32_t count = u_childs.size();
             for(const NodeDesc c: u_childs){
-              print_subtree(os, c, prefix, seen);
+              print_subtree(os, c, prefix, seen, node_data_to_string);
               if(--count > 0) os << prefix;
               if(count == 1) prefix.back() = ' ';
             }
@@ -1129,12 +1193,16 @@ namespace PT {
       } else os << std::endl;
     }
 
-    static void print_subtree(std::ostream& os, const NodeDesc u) {
+    template<class NodeDataToString = std::IgnoreFunction<std::string>>
+    static void print_subtree(std::ostream& os, const NodeDesc u, NodeDataToString&& node_data_to_string = NodeDataToString()) {
       NodeSet tmp;
-      print_subtree(os, u, "", tmp);
+      print_subtree(os, u, "", tmp, std::forward<NodeDataToString>(node_data_to_string));
     }
     
-    void print_subtree(std::ostream& os) const { print_subtree(os, front(_roots)); }
+    template<class NodeDataToString = std::IgnoreFunction<std::string>>
+    void print_subtree(std::ostream& os, NodeDataToString&& node_data_to_string = NodeDataToString()) const {
+      print_subtree(os, front(_roots), std::forward<NodeDataToString>(node_data_to_string));
+    }
 
 
     // other phylogenies are our friends

@@ -75,9 +75,16 @@ namespace std{
   template<class T> struct reference_of {};
   template<class T> requires requires { typename remove_reference_t<T>::reference; }
   struct reference_of<T> {
-    using Ref = typename remove_reference_t<T>::reference;
-    using value_type = copy_cv_t<T, remove_reference_t<Ref>>;
+    using BareT = remove_reference_t<T>;
+    // some containers do not allow modifying their contents via iterators (such as std::unordered_set)
+    // Thus, we copy constness of the iterator's reference onto the container to copy it onto the reference later on
+    using Traits = iterator_traits<iterator_of_t<BareT>>;
+    using TraitsConstness = remove_reference_t<typename Traits::reference>;
+    using correctT = copy_cv_t<TraitsConstness, BareT>;
+    // copy constness of the container onto the reference
+    using Ref = typename BareT::reference;
     static constexpr bool returning_rvalue = !is_reference_v<Ref>;
+    using value_type = copy_cv_t<correctT, remove_reference_t<Ref>>;
     using type = conditional_t<returning_rvalue, value_type, add_lvalue_reference_t<value_type>>;
   };
   template<class T> struct reference_of<T*> { using type = T&; };

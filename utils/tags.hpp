@@ -2,8 +2,15 @@
 #pragma once
 
 namespace PT {
+  // this tag allows creating an edge u-->v from an existing adjacency v-->u
+  struct reverse_edge_t {};
+
   // indicate that only leaves will have labels, instead of every node having a label
   struct leaf_labels_only_tag {};
+
+  // general no-cleanup tag, indicating that we will do a cleanup later
+  struct no_cleanup_t {};
+
 
   // data transfer policies
   struct data_policy_t {};

@@ -4,6 +4,7 @@
 #include "trans_iter.hpp"
 #include "iter_factory.hpp"
 #include "types.hpp"
+#include "tags.hpp"
 
 namespace PT{
 

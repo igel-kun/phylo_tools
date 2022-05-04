@@ -299,6 +299,13 @@ namespace std { // since it was the job of STL to provide for it and they failed
     q.pop_back();
     return result;
   }
+  template<ContainerType Q> requires (!VectorType<Q>)
+  value_type_of_t<Q> value_pop(Q& q) {
+    const auto iter = q.begin();
+    value_type_of_t<Q> result = move(*iter);
+    my_erase(q, iter);
+    return result;
+  }
 
   template<ContainerType C>
   value_type_of_t<C> value_pop(C& q, const iterator_of_t<const C>& iter) {
@@ -325,7 +332,7 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<IterableType Q> requires requires(Q q) { { back(q) } -> convertible_to<value_type_of_t<Q>>; }
   value_type_of_t<Q> value_pop_back(Q& q) {
     assert(!q.empty());
-    const auto it = std::end(q);
+    const auto it = std::prev(std::end(q));
     value_type_of_t<Q> v = move(*it);
     q.erase(it);
     return v;
@@ -374,6 +381,20 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<IterableType C>
   iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
 
+
+  // clear a container except for 1 item
+  template<ContainerType C, class Iter>
+  void clear_except(C& c, const Iter& except_iter) {
+    if(except_iter != end(c)) {
+      if(c.size() > 1) {
+        auto tmp = std::move(*except_iter);
+        c.clear();
+        append(c, std::move(tmp));
+      } else {
+        assert(except_iter == begin(c));
+      }
+    } else c.clear();
+  }
 
   // a modification of a set that automatically clears the other set on move-construction or move-assignment
   template<SetType S>

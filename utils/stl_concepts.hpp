@@ -11,7 +11,6 @@ namespace std {
   // anything that can be converted from and to int is considered "basically arithmetic"
   template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
 
-
   // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
   template<class T> requires requires { typename T::iterator; typename T::const_iterator; } struct _iterator_of {
     using type = conditional_t<is_const_v<T>, typename T::const_iterator, typename T::iterator>;
@@ -20,6 +19,7 @@ namespace std {
   template<class T, std::size_t N> struct _iterator_of<T (&)[N]> { using type = T*; };
   template<class T>
   using _iterator_of_t = typename _iterator_of<remove_reference_t<T>>::type;
+
 
   template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
   template<class T> concept PointerType = is_pointer_v<remove_cvref_t<T>>;
@@ -54,7 +54,6 @@ namespace std {
     { a.empty() }   -> same_as<bool>;
 	};
 
-
   template<class T> struct iterator_of { using type = T; };
   template<IterableType T> struct iterator_of<T>: public _iterator_of<T> {};
   template<class T> using iterator_of_t = typename iterator_of<remove_reference_t<T>>::type;
@@ -82,6 +81,13 @@ namespace std {
   
   template<class T>
   concept OptionalContainerType = is_void_v<T> || ContainerType<T>;
+
+  template<class Iter, class C>
+  concept StrictIteratorTypeOf = ContainerType<C> && !ContainerType<Iter> &&
+                                  is_same_v<typename iterator_traits<Iter>::value_type, C::value_type>;
+  template<class Iter, class C>
+  concept IteratorTypeOf = StrictIteratorTypeOf<remove_reference_t<Iter>, remove_reference_t<C>>;
+
 
 	// a set is a container that supports count()
 	template<class T>
