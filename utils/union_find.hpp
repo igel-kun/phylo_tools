@@ -13,20 +13,19 @@ namespace std{
   template<class T>
   class DSet {
   private:
-    const T* representative;    // the representative element of our set
-    size_t _size;
+    T representative;    // the representative element of our set
+    size_t _size = 0;
     
     void grow(const int x) { _size += x; }
   public:
-    const T& get_representative() const { return *representative; }
+    const T& get_representative() const { return representative; }
     size_t size() const { return _size; }
 
-    DSet(T* _representative):
-      representative(_representative), _size(1)
+    template<class Q>
+    DSet(Q&& _representative):
+      representative(std::forward<Q>(_representative)), _size(1)
     {}
-    DSet():
-      representative(nullptr), _size(0)
-    {}
+    DSet() = default;
 
     bool operator==(const DSet<T>& y) const { return representative == y.representative; }
     bool operator!=(const DSet<T>& y) const { return representative != y.representative; }
@@ -52,59 +51,35 @@ namespace std{
   protected:
     using Parent::try_emplace;
     using Parent::emplace;
+    using Parent::erase;
 
     size_t _set_count = 0;
-
-    // redo the representatives with pointer into our own structure after copy(-construct)
-    void fix_pointers() {
-      for(auto& key_val: *this){
-        DSet<T>& dset = key_val.second;
-        dset.representative = &(this->find(*(dset.representative))->first);
-      }
-    }
 
   public:
     using Parent::at;
 
     // add a new set to the forest
-    template<IterableType _Container = initializer_list<T>>
-    DSet<T>& add_new_set(const _Container& x) {
-      const T* r = nullptr;
-      DSet<T>* result = nullptr;
-      for(const auto& i: x){
-        const auto [iter, success] = try_emplace(i, r);
-        if(success){
-          if(r == nullptr) {
-            r = &(iter->first);
-            result = &(iter->second);
-            result->representative = r;
-            ++_set_count;
-          }
-        } else throw logic_error("item already in the set-forest");
-      }
-      result->_size = x.size();
-      return *result;
-    }
     DSet<T>& add_new_set(const T& x) {
-      const auto [iter, success] = try_emplace(x, nullptr);
+      const auto [iter, success] = try_emplace(x, x);
       if(success) {
-        iter->second.representative = &(iter->first);
         ++_set_count;
-      }
+      } else throw logic_error("trying to add existing item to set-forest");
       return iter->second;
     }
+    template<IterableType _Container>
+    DSet<T>& add_new_set(const _Container& x) { for(const auto& i: x) add_new_set(i); }
+
 
     // add a new item to the set x_set (that should exist in the set forest)
     DSet<T>& add_item_to_set(const T& x, DSet<T>& y_set) {
       // assert that y exists
-      assert(test(*this, *y_set.representative));
+      assert(test(*this, y_set.get_representative()));
       // insert the item
       const auto [iter, success] = try_emplace(x, y_set.representative);
       if(success){
-        DSet<T>& x_set = iter->second;
         y_set.grow(1);
-        return x_set;
-      } else throw logic_error("item already in the set-forest");
+        return iter->second;
+      } else throw logic_error("trying to add existing item to set-forest");
     }
     // add a new item x to the set of another item y
     DSet<T>& add_item_to_set_of(const T& x, const T& y) { return add_item_to_set(x, set_of(y)); }
@@ -142,17 +117,44 @@ namespace std{
     // return the set containing x, use path compression
     DSet<T>& set_of(const T& x, DSet<T>* x_set = nullptr, const unsigned decrease_size = 0) {
       if(!x_set) x_set = &at(x);
-      const T& x_set_rep = *(x_set->representative);
+      const T& x_set_rep = x_set->get_representative();
       if(x_set_rep != x){
         x_set->grow(-decrease_size);
-        DSet<T>* x_parent = &at(x_set_rep);
-        const T& x_parent_rep = *(x_parent->representative);
+        DSet<T>& x_parent = at(x_set_rep);
+        const T& x_parent_rep = x_parent.get_representative();
         if(x_parent_rep != x){
-          DSet<T>& root_set = set_of(x_set_rep, x_parent, decrease_size + x_set->size());
+          DSet<T>& root_set = set_of(x_set_rep, &x_parent, decrease_size + x_set->size());
           x_set->representative = root_set.representative;
           return root_set;
         } else return at(x_parent_rep);
       } else return *x_set;
+    }
+
+    // erase a DSet<T> s from the union-find structure
+    // NOTE: this is only possible if s is a leaf-set
+    void erase_element(const T& x) {
+      DSet<T>& x_set = set_of(x);
+      const T& x_rep = x_set.get_representative();
+      
+      // if x has a representative that is not x, then we need to shrink the representative's set
+      assert((x_set.size() == 1) && "trying to erase a non-leaf set from a disjoint-set forest");
+      if(x_rep != x) 
+        set_of(x_rep).grow(-1);
+
+      Parent::erase(x);
+    }
+
+    // replace the representative of a set of elements by re-hanging the representative from the given element
+    void make_representative(const T& x) {
+      DSet<T>& x_set = at(x);
+      const T& x_rep = x_set.get_representative();
+
+      if(x_rep != x) {
+        DSet<T>& x_rep_set = at(x_rep);
+        x_rep_set.grow(-x_set.size());
+        x_set.grow(x_rep_set.size());
+        x_rep_set.representative = x_set.representative = x;
+      }
     }
 
     // if one wants to keep a single item of each set, one can use is_root, which returns true if all elements in its set have x as their root
@@ -176,9 +178,7 @@ namespace std{
     DisjointSetForest(): Parent() {}
     DisjointSetForest(const DisjointSetForest& _dsf):
       Parent(_dsf)
-    {
-      fix_pointers();
-    }
+    {}
     // for moving, the unordered_map move-constructor should be fine
     DisjointSetForest(DisjointSetForest&& _dsf):
       Parent(_dsf), _set_count(move(_dsf._set_count))
@@ -186,13 +186,11 @@ namespace std{
 
     DisjointSetForest& operator=(const DisjointSetForest& _dsf) {
       Parent::operator=(_dsf);
-      fix_pointers();
       return *this;
     }
     // for moving, the unordered_map move-constructor should be fine
     DisjointSetForest& operator=(DisjointSetForest&& _dsf) {
       Parent::operator=(_dsf);
-      fix_pointers();
       return *this;
     }
   };

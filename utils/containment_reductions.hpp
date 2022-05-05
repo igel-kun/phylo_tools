@@ -555,8 +555,9 @@ namespace PT {
             assert((host.in_degree(u) == 0) || host.is_reti(host.parent(u)));
             // if u is a component-root, then it should be a leaf in the comp_DAG, which we can remove now
             const NodeDesc u_in_cDAG = info.N_to_comp_DAG.at(u);
-//              assert(contain.comp_DAG.is_leaf(u_in_cDAG));
+            assert(info.comp_DAG.is_leaf(u_in_cDAG));
             info.comp_DAG.remove_node(u_in_cDAG);
+            info.replace_comp_root(u, u_child);
           }
         }
         // then, we can safely contract-up u's child

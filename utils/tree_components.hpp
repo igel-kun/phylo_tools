@@ -99,13 +99,22 @@ namespace PT{
       else return comp_root_equality.set_of(rt).get_representative();
     }
 
-  protected:
+    // replace a component root by a leaf
+    // NOTE: this is useful when a reticulation between a non-trivial comp root 'old_rt' and a trivial comp root 'new_rt' is destroyed
+    //       since we cannot rename the trivial comp root, we have to replace the old comp root with the new comp root in the data structures
+    void replace_comp_root(const NodeDesc old_rt, const NodeDesc new_rt) {
+      assert(N.is_leaf(new_rt));
+      assert(comp_root_of(old_rt) == old_rt);
+      assert(comp_root_of(new_rt) == old_rt);
+      comp_root_equality.make_representative(new_rt);
+    }
 
     // register the fact that the component of x is now rooted at rt
     void set_comp_root(const NodeDesc x, const NodeDesc rt) {
-      std::cout << "updating comp root of "<<x<<" to "<<rt<<'\n';
+      std::cout << "updating comp root of "<<x<<" to "<<rt<<"\n";
       NodeDesc& old_rt = component_data_of(x).comp_root;
       if(old_rt != NoNode) {
+        std::cout << "previous comp-root "<<old_rt<<" points to "<<comp_root_equality.set_of(old_rt).get_representative()<<"\n";
         if(old_rt != rt) {
           comp_root_equality.merge_sets_keep_order(rt, old_rt);
           // if rt didn't have a visible leaf before, inherit it from old_rt
@@ -115,6 +124,8 @@ namespace PT{
         }
       } else old_rt = rt;
     }
+  
+  protected:
 
     // if all v's parents have the same component root, then set that root for v and return it, otherwise, return NoNode
     // NOTE: the callable argument is applied to the component roots of all node we encounter
@@ -168,7 +179,7 @@ namespace PT{
       emplacer.mark_root(N.root());
       std::cout << "setting comp data of "<<N.root()<<"\n";
       component_data_of(N.root()).comp_root = N.root();
-      comp_root_equality.add_new_set(N.root());
+      //comp_root_equality.add_new_set(N.root());
       std::cout << "computing component roots\n";
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
@@ -180,8 +191,7 @@ namespace PT{
       std::cout << "2nd pass over component roots\n";
       for(const NodeDesc rt: trivial_roots)
         compute_edges<false>(rt, emplacer);
-      // the root has not yet stored in the list of non-trivial roots, so add it here
-      //non_trivial_roots.emplace_back(N.root());
+
     }
 
     // compute component roots (trivial (that is, leaves) and non-trivial)
@@ -190,13 +200,13 @@ namespace PT{
       for(const NodeDesc u: N.nodes_preorder()) {
         auto& u_node = node_of<Network>(u);
         if(!u_node.is_reti()) {
+          comp_root_equality.add_new_set(u);
           auto& u_data = component_data_of(u);
           if(u_node.is_leaf()) u_data.visible_leaf = u;
           const auto& pu = u_node.parents();
           // if the parent is a reticulation, register new component root
           if(pu.empty() || Network::is_reti(front(pu))){
             u_data.comp_root = u;
-            comp_root_equality.add_new_set(u);
             if(u_node.is_leaf()) {
               trivial_roots.push_back(u);
             } else {
