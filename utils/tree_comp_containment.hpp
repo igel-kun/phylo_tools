@@ -41,15 +41,18 @@ namespace PT {
       // to construct the multi-labeled tree, we use a special edge-traversal of the host without a SeenSet, so reticulations are visited multiple times
       EdgeTraversal<preorder, Host, void, void, void> my_dfs(u);
      
-      emplacer.create_copy_of(u);
+      const NodeDesc MULroot = emplacer.create_copy_of(u);
+      emplacer.mark_root_directly(MULroot);
+
       for(const auto xy: my_dfs){
-        const NodeDesc x = xy.tail();
-        NodeDesc y = xy.head();
+        auto [x, y] = xy.as_pair();
         if(host.out_degree(x) != 1){
           std::cout << "got edge "<<x<<"->"<<y<<"\n";
           // skip reticulation chains
           while(host.out_degree(y) == 1) y = host.any_child(y);
           // add the edge to the subtree
+          // NOTE: we'll make the emplacer forget whether y already has a copy in the MUL-tree, so that a new copy is added
+          host_to_subtree.erase(y);
           const NodeDesc y_copy = emplacer.emplace_edge(x, y);
           // register the label if y has one
           const auto& ylabel = host.label(y);
@@ -63,7 +66,7 @@ namespace PT {
           }
         }
       }
-      std::cout << "got MUL-tree: "<<T<<"\n";
+      std::cout << "got MUL-tree:\n"<<T<<"\n";
       return T;
     }
 

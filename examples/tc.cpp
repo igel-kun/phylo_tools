@@ -37,6 +37,10 @@ void parse_options(const int argc, const char** argv)
       exit(EXIT_FAILURE);
     }
   } else {
+    if(options[""].empty()) {
+      std::cerr << help_message << std::endl;
+      exit(EXIT_FAILURE);
+    }
     for(const std::string& filename: options[""])
       if(!file_exists(filename)) {
         std::cerr << filename << " cannot be opened for reading" << std::endl;

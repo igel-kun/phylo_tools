@@ -51,6 +51,7 @@ namespace PT {
     NodeDesc create_node_below_with_data(const NodeDesc u, Data&& data, Args&&... args) {
       if(u != NoNode) {
         NodeDesc v;
+        std::cout << "creating node with data "<<data<<"\n";
         if constexpr (_TargetPhylo::has_node_data)
           v = N.create_node(std::forward<Data>(data));
         else v = N.create_node();
@@ -84,6 +85,9 @@ namespace PT {
       assert(N.in_degree(r) == 0);
       return append(N._roots, old_to_new.at(r)).second;
     }
+    bool mark_root_directly(const NodeDesc r) {
+      return append(N._roots, r).second;
+    }
 
     void clear() {
       if constexpr (track_roots) root_candidates().clear();
@@ -94,12 +98,13 @@ namespace PT {
     //       However, be aware that roots will also be committed upon destruction!
     // NOTE: only call this if you're tracking roots
     void commit_roots() {
-      static_assert(track_roots);
-      DEBUG3(std::cout << "committing roots: "<<root_candidates()<<"\n");
-      for(const NodeDesc r: root_candidates())
-        if(N.in_degree(r) == 0)
-          append(N._roots, r);
-      clear();
+      if constexpr (track_roots) {
+        DEBUG3(std::cout << "committing roots: "<<root_candidates()<<"\n");
+        for(const NodeDesc r: root_candidates())
+          if(N.in_degree(r) == 0)
+            append(N._roots, r);
+        root_candidates().clear();
+      }
     }
 
     ~EdgeEmplacementHelper() {
@@ -139,10 +144,11 @@ namespace PT {
       // if other_u has not been seen before, insert it as new root
       if(u_success) {
         std::cout << "created copy " << u_copy << " of "<< other_u<<'\n';
-        if constexpr (extract_node_data)
+        std::cout << "extracting node data? "<<extract_node_data<<'\n';
+        if constexpr (extract_node_data) {
           u_copy = helper.create_root(data_extracter.get_node_data(other_u));
-        else
-          u_copy = helper.create_root();
+          std::cout << "data of "<<u_copy<<" is now "<<helper.N[u_copy].data() << "\n";
+        } else u_copy = helper.create_root();
         if constexpr (extract_labels) {
           std::cout << "copying extracted label "<<data_extracter.get_node_label(other_u)<<" to "<<u_copy<<"\n";
           node_of<TargetPhylo>(u_copy).label() = data_extracter.get_node_label(other_u);
@@ -185,9 +191,9 @@ namespace PT {
         return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)...);
     }
 
-    bool mark_root(const NodeDesc r) {
-      return helper.mark_root(r);
-    }
+    bool mark_root(const NodeDesc r) { return helper.mark_root(r); }
+    bool mark_root_directly(const NodeDesc r) { return helper.mark_root_directly(r); }
+
     // translate the roots of N to use as our roots
     void mark_roots(const auto& source) {
       for(const NodeDesc r: source.roots()) mark_root(r);

@@ -69,8 +69,10 @@ namespace PT {
       host(_host),
       node_infos(std::forward<NodeInfoInit>(_node_infos))
     {
+      std::cout << "constructing Tree-in-Tree checker...\n";
       // step 1: setup node_infos
       if(!guest.empty()) {
+        std::cout << "using node-infos " << node_infos << '\n';
         if(node_infos.empty()) get_induced_subtree_infos(_host, node_infos);
         std::cout << node_infos.size() << " node infos: " << node_infos<<"\n";
         std::cout << "label matching: " << host_guest_label_match << "\n";
@@ -107,13 +109,18 @@ namespace PT {
     using MatchingPossibilities = NodeMap<NodeSet>;
 
     struct matching_infos {
+      NodeDesc node_in_host;
       MatchingPossibilities nodes_for_poss;
+
+      matching_infos() = default;
+      matching_infos(const NodeDesc x): node_in_host(x) {}
+
       // try to register a new poss type; if the node has not already seen a poss of this type,
       //    then return the new # children of u for whom we have a possible child
       size_t register_child_poss(const NodeDesc child, const NodeDesc u_child) {
         const auto [it, success] = nodes_for_poss.try_emplace(u_child);
         append(it->second, child);
-        std::cout << "marking that "<<child<<" displays "<<u_child<<" poss' of "<<u_child<<" currently: "<<it->second<<"\n";
+        std::cout << "marking that v's child "<<child<<" displays u's child "<<u_child<<" whose current possibilities are: "<<it->second<<"\n";
         return success ? nodes_for_poss.size() : 0;
       }
       // mark the node uninteresting (by clearing node_for_poss), return whether it was already cleared before
@@ -122,6 +129,9 @@ namespace PT {
         nodes_for_poss.clear();
         return false;
       }
+      friend std::ostream& operator<<(std::ostream& os, const matching_infos& i) {
+        return os << "{"<<i.node_in_host<<", "<<i.nodes_for_poss<<"}";
+      }
     };
 
     std::function<bool(const NodeDesc, const NodeDesc)> sort_by_order = [&](const NodeDesc a, const NodeDesc b) {
@@ -129,37 +139,43 @@ namespace PT {
     };
     
     void compute_possibilities(const NodeDesc u, NodeList& poss) {
+      using Subhost = CompatibleTree<Host, matching_infos>;
       // step 1: get the subtree of host induced by the nodes that the children map to
       const auto child_poss = merge_child_poss(u);
       if(!child_poss.empty()) {
         if(guest.out_degree(u) > 1) {
-          std::cout << "building tree induced by "<<child_poss<<"\n";
-          CompatibleTree<Host, matching_infos> induced_subhost(get_induced_edges(host, child_poss, node_infos));
+          NodeTranslation host_to_subhost;
+          std::cout << "building tree induced by "<<child_poss<<" (translation @"<<&host_to_subhost<<")\n";
+          Subhost induced_subhost(get_induced_edges(host, child_poss, node_infos), host_to_subhost, [](const NodeDesc x){return x;});
           std::cout << "induced tree:\n"<<induced_subhost<<"\n";
+          std::cout << "host to subhost translation: "<<host_to_subhost<<"\n";
           if(!induced_subhost.edgeless()) {
             // step 2: find all nodes v such that each child of u has a possibility that is seen by a distinct leaf of v
             // register the possibilities for all but one child of u
             for(const NodeDesc u_child: guest.children(u)) {
-              for(NodeDesc v_child: who_displays(u_child)) {
+              for(const NodeDesc v_child: who_displays(u_child)) {
                 // move upwards from v_child until we reach a node that's already seen a possibility for u_child
-                while(v_child != induced_subhost.root()) {
-                  const NodeDesc v_parent = induced_subhost.parent(v_child);
-                  if(!induced_subhost[v_parent].data().register_child_poss(v_child, u_child)) break;
-                  v_child = v_parent;
+                NodeDesc v_child_sh = host_to_subhost.at(v_child);
+                while(v_child_sh != induced_subhost.root()) {
+                  const NodeDesc v_parent_sh = induced_subhost.parent(v_child_sh);
+                  std::cout << "for node "<<v_parent_sh<<": ";
+                  if(!node_of<Subhost>(v_parent_sh).data().register_child_poss(v_child, u_child)) break;
+                  v_child_sh = v_parent_sh;
                 }
               }
             }
           
             // step 3: go through the induced_subhost in postorder(!) and check containment for eligible nodes
             for(NodeDesc v: induced_subhost.nodes_postorder()){
-              const auto& v_infos = induced_subhost[v].data();
+              const auto& v_infos = node_of<Subhost>(v).data();
               if(v_infos.nodes_for_poss.size() == guest.out_degree(u)){ // if all children of u have a child of u that can display them
                 std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n";
                 if(perfect_child_matching(v_infos.nodes_for_poss)){ // if each child of v can be displayed by a different child of u
                   // H_v displays G_u \o/ - register and mark all ancestors uninteresting, so we don't run matching on them in the future
-                  poss.push_back(v);
-                  // if someone else already marked v unintersting, all ancestors are already marked as well
-                  while((v != induced_subhost.root()) && !induced_subhost[v = induced_subhost.parent(v)].data().mark_uninteresting());
+                  poss.push_back(v_infos.node_in_host);
+                  std::cout << "display possibilities for "<<u<<" are now "<<poss<<"\n";
+                  // if someone else already marked v uninteresting, then all ancestors are already marked as well
+                  while((v != induced_subhost.root()) && !node_of<Subhost>(v = induced_subhost.parent(v)).data().mark_uninteresting());
                 }
               }
             }

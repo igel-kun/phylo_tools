@@ -49,11 +49,14 @@ namespace PT{
   void get_induced_subtree_infos(const NodeDesc root, NodeInfoMap& node_infos) {
     size_t counter = 0;
     // get a preorder because we need to access the distance to the root of the parent
-    const auto preorder_dfs = Tree::nodes_below(root); // const since our preorder doesn't need to track seen nodes (we're in a tree)
+    const auto preorder_dfs = Tree::nodes_below_preorder(root); // const since our preorder doesn't need to track seen nodes (we're in a tree)
     auto iter = preorder_dfs.begin(); // this is the root now
     append(node_infos, *iter, 0, 0); // order number 0, distance to root 0
-    for(++iter;iter.is_valid(); ++iter)
-      append(node_infos, *iter, node_infos.at(Tree::any_parent(*iter)).dist_to_root + 1, ++counter);
+    for(++iter;iter.is_valid(); ++iter) {
+      const NodeDesc parent = Tree::any_parent(*iter);
+      std::cout << "computing infos of "<<*iter <<" from infos of parent "<<parent<<": "<<node_infos.at(parent)<<"\n";
+      append(node_infos, *iter, node_infos.at(parent).dist_to_root + 1, ++counter);
+    }
   }
 
   template<StrictPhylogenyType Tree, StrictSubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap>

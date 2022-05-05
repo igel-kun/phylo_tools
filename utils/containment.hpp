@@ -79,17 +79,9 @@ namespace PT {
     // initialization and early reductions
     void init() {
       if(!clean_up_labels()){
-        std::cout << "initial comp-root DAG ("<<comp_info.comp_DAG.num_nodes()<<" nodes, "<<comp_info.comp_DAG.roots().size()<<" roots):\n";
-        std::cout <<comp_info.comp_DAG<<"\n";
-        // if host has only 1 tree component, then its root is visible by all leaves, so visible-component rule solves the instance
-        if(comp_info.comp_DAG.edgeless() && !host.edgeless()) {
-  #warning "TODO: this is legacy code, please remove it"
-          // NOTE: if comp_info.comp_DAG is edgeless, then its root may not correspond to the root of host
-          const NodeDesc tc_root = comp_info.comp_DAG.root();
-          comp_info.comp_DAG.add_child(tc_root, host.root());
-          comp_info.comp_DAG.remove_node(tc_root);
-        }
-
+        const auto& cDAG = comp_info.comp_DAG;
+        std::cout << "initial comp-root DAG ("<<cDAG.num_nodes()<<" nodes, "<<cDAG.roots().size()<<" roots):\n";
+        cDAG.print_subtree_with_data(std::cout);
         // apply all reduction rules
         reduction_man.apply();
 

@@ -205,11 +205,13 @@ namespace PT {
     // create a node in the void
     // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
     template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
+      std::cout << "creating node with " << sizeof...(Args) << " arguments\n";
       return new Node(std::forward<Args>(args)...);
     }
     // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
     template<NodeFunctionType DataMaker>
     static constexpr NodeDesc create_node(DataMaker&& data_maker) {
+      std::cout << "creating node with data-maker\n";
       if constexpr (!std::is_same_v<std::remove_cvref_t<DataMaker>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
         const NodeDesc result = space;
@@ -458,6 +460,7 @@ namespace PT {
       Node& source_node = node_of(source);
       auto& s_children = source_node.children();
 #warning "TODO: improve repeated-erase performance if children are stored as vecS"
+#warning "TODO: in particular, remove children from the BACK of the container EVERYWHERE!"
       Adjacency tmp(NoNode);
       while(!s_children.empty()) {
         auto w_iter = std::prev(std::end(s_children));
@@ -467,6 +470,8 @@ namespace PT {
             s_children.erase(w_iter);
           } else break;
         } else transfer_child(source, target, w_iter, adapt);
+        // restore target in the children of the source
+        if(tmp != NoNode) append(s_children, std::move(tmp));
       }
     }
 
@@ -626,7 +631,13 @@ namespace PT {
     // suppress a node v with indeg=outdeg=1
     // NOTE: v will be deleted!
     template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void suppress_node(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) { contract_up(v, std::forward<AdjAdapter>(adapt)); }
+    void suppress_node(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) {
+      if(in_degree(v) > 0) {
+        contract_up(v, std::forward<AdjAdapter>(adapt));
+      } else {
+        contract_down(v, std::forward<AdjAdapter>(adapt));
+      }
+    }
     
     void remove_node(const NodeDesc v) {
       Node& v_node = node_of(v);
@@ -1041,18 +1052,9 @@ namespace PT {
       my_erase(in_tree._roots, in_root);
     }
 
-    // if we just want to copy a phylogeny, use the "copy" version (with or without node-translation)
-    template<StrictPhylogenyType Phylo, NodeTranslationType OldToNew, class... Args>
-    explicit Phylogeny(const Phylo& in_tree, OldToNew&& old_to_new, Args&&... args):
-      Phylogeny(policy_copy_t(), in_tree, std::forward<OldToNew>(old_to_new), std::forward<Args>(args)...)
-    {}
-    template<StrictPhylogenyType Phylo, class First, class... Args> requires (!NodeTranslationType<First>)
-    explicit Phylogeny(const Phylo& in_tree, First&& first, Args&&... args):
-      Phylogeny(policy_copy_t(), in_tree, NodeTranslation(), std::forward<First>(first), std::forward<Args>(args)...)
-    {}
-    template<StrictPhylogenyType Phylo>
-    explicit Phylogeny(const Phylo& in_tree):
-      Phylogeny(policy_copy_t(), in_tree)
+    template<StrictPhylogenyType Phylo, class... Args>
+    explicit Phylogeny(const Phylo& in_tree, Args&&... args):
+      Phylogeny(policy_copy_t(), in_tree, std::forward<Args>(args)...)
     {}
     // copy-constructing for the same type is not explicit
     Phylogeny(const Phylogeny& in_tree):
@@ -1062,7 +1064,7 @@ namespace PT {
     template<StrictPhylogenyType Phylo, class... Args>
       requires (!std::is_same_v<Phylo, Phylogeny> && std::is_same_v<Node, typename Phylo::Node>)
     explicit Phylogeny(Phylo&& in_tree, Args&&... args):
-      Phylogeny(policy_move_t(), std::move(in_tree), in_tree.roots(), std::forward<Args>(args)...)
+      Phylogeny(policy_move_t(), std::move(in_tree), in_tree._roots, std::forward<Args>(args)...)
     {}
     // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
     // NOTE: we have to make sure to remove the other phylogeny's roots, otherwise its destructor will destruct the roots as well
@@ -1201,7 +1203,17 @@ namespace PT {
     
     template<class NodeDataToString = std::IgnoreFunction<std::string>>
     void print_subtree(std::ostream& os, NodeDataToString&& node_data_to_string = NodeDataToString()) const {
-      print_subtree(os, front(_roots), std::forward<NodeDataToString>(node_data_to_string));
+      if(!_roots.empty()) {
+        print_subtree(os, front(_roots), std::forward<NodeDataToString>(node_data_to_string));
+      } else os << "(empty)\n";
+    }
+
+    void print_subtree_with_data(std::ostream& os = std::cout) const {
+      if(!_roots.empty()) {
+        if constexpr (Parent::has_node_data) {
+          print_subtree(os, front(_roots), [](const auto& x){ return std::to_string(x); });
+        } else print_subtree(os, front(_roots));
+      } else os << "(empty)\n";
     }
 
 
