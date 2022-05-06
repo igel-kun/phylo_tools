@@ -91,14 +91,26 @@ namespace std {
 
 	// a set is a container that supports count()
 	template<class T>
-	concept SetType = requires(T a, typename remove_cvref_t<T>::value_type v) {
+	concept StrictSetType = requires(T a, typename T::value_type v) {
 		requires ContainerType<T>;
 		{ a.count(v) } -> convertible_to<size_t>;
+		{ a.emplace(v).second } -> convertible_to<bool>;
 	};
-  //template<class T>
-  //concept SetType = StrictSetType<remove_cvref_t<T>>;
+  template<class T>
+  concept SetType = StrictSetType<remove_cvref_t<T>>;
   template<class T>
   concept OptionalSetType = is_void_v<T> || SetType<T>;
+
+  template<class T>
+	concept StrictMultiSetType = requires(T a, typename T::value_type v) {
+		requires ContainerType<T>;
+		{ a.count(v) } -> convertible_to<size_t>;
+		{ *(a.emplace(v)) } -> convertible_to<typename T::value_type>;
+	};
+  template<class T>
+  concept MultiSetType = StrictMultiSetType<remove_cvref_t<T>>;
+  template<class T>
+  concept OptionalMultiSetType = is_void_v<T> || MultiSetType<T>;
 
 
   // a map is something mapping key_type to value_type with operator[]

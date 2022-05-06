@@ -4,6 +4,9 @@
 #include <vector>
 #include <functional>
 #include <unordered_map>
+#include <set>
+#include <map>
+#include <unordered_set>
 #include <list>
 
 #include "utils.hpp"
@@ -20,9 +23,10 @@ namespace PT{
   // adjacency storages
   enum StorageEnum {
     vecS,     // store items in a std::vector
-    sortvecS, // store items in a sorted std::vector -- ATTENTION: this is inefficient if your network changes frequently
+    sortvecS, // store items in a sorted std::vector
     setS,     // store items in a std::set
     hashsetS, // store items in a std::unordered_set
+    multisetS,// store items in a std::unordered_multiset
     vecsetS,  // store items in a std::vector_hash
     singleS  // store a single item (like the parent for a tree node)
   };
@@ -32,6 +36,7 @@ namespace PT{
   template<class Element> struct _StorageClass<sortvecS, Element> { using type = std::sorted_vector<Element>; };
   template<class Element> struct _StorageClass<setS, Element>     { using type = std::set<Element>; };
   template<class Element> struct _StorageClass<hashsetS, Element> { using type = std::unordered_set<Element>; };
+  template<class Element> struct _StorageClass<multisetS, Element>{ using type = std::unordered_multiset<Element>; };
   template<class Element> struct _StorageClass<vecsetS, Element>  { using type = std::vector_hash<Element>; };
   template<std::PointerType Element> struct _StorageClass<singleS, Element>  {
     using type = std::singleton_set<std::optional_by_invalid<Element, nullptr>>;
@@ -46,6 +51,8 @@ namespace PT{
 
   template<StorageEnum storage>
   constexpr bool is_inplace_modifyable = ((storage == vecS) || (storage == singleS));
+  template<StorageEnum storage>
+  constexpr bool unique_elements = !((storage == vecS) || (storage == sortvecS) || (storage == multisetS));
 
 
   template<class Key,

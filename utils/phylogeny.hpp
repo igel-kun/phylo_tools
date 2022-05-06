@@ -397,13 +397,13 @@ namespace PT {
 
     // transfer a child w of source to target
     // NOTE: this will not create loops
-    // NOTE: no check is performed whether child is already a child of target (apart from duplication checks done by the SuccStorage)
-    //       if the SuccStorage cannot exclude duplicates, then this can lead to double edges!
-    //       if the SuccStorage does exclude duplicates, then the existing edge from target to w survives while the other is deleted
+    // NOTE: to check whether child is already a child of target, set 'check_uniqueness' or use a SetType as SuccStorage
+    //       if check_uniquenesss == false and the SuccStorage cannot exclude duplicates, then this can lead to double edges!
+    //       if duplicates are excluded, then the existing edge from target to w survives while the other is deleted
     // NOTE: the AdjAdapter can be used to merge the EdgeData passed with target and the source->w EdgeData into the target->... EdgeData
     //       for example like so: [](const auto& uv, auto& vw) { vw.data() += uv.data(); }
     //       By default the target->... EdgeData is ignored.
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter>
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter>
     bool transfer_child(const NodeDesc source,
                         const Adj& target,
                         const std::iterator_of_t<typename Node::SuccContainer>& w_iter,
@@ -418,45 +418,61 @@ namespace PT {
 
       const auto sw_iter = find(w_parents, source);
       assert(sw_iter != w_parents.end()); // since w_iter exists, sw_iter should exist!
-
+      
+      if constexpr (check_uniqueness) {
+        if(test(w_parents, target)) {
+          w_parents.erase(sw_iter);
+          count_edge(-1);
+          return false;
+        }
+      }
       // if the PredStorage can be modified in place, we'll just change the node of the parent-adjacency of w to target
       if constexpr (is_inplace_modifyable<_PredStorage>) {
         adapt(target, *sw_iter);
         sw_iter->nd = target;
         const bool success = append(children(target), w, *sw_iter).second;
         // if we could not append w as child of target (that is, the edge target->w already existed) then the edge source->w should be deleted
-        if(!success) w_parents.erase(sw_iter);
-        return success;
+        if(!success){
+          w_parents.erase(sw_iter);
+          count_edge(-1);
+          return false;
+        } else return true;
       } else { // if the PredStorage cannot be modified in place, we'll have to remove the source_to_w adjacency, change it, and reinsert it
         // step 1: move EdgeData out of the parents-storage
         Adjacency source_to_w = std::value_pop(w_parents, sw_iter);
         // step 2: merge EdgeData with that passed with target
         adapt(target, source_to_w);
         // step 3: put back the Adjacency with changed node
-        const auto [wpar_iter, success] = append(w_parents, static_cast<const NodeDesc>(target));
+        const auto [wpar_iter, success] = append(w_parents, static_cast<const NodeDesc>(target), source_to_w);
 
         if(success) {
-          if constexpr (has_edge_data)
-            wpar_iter->data_ptr = source_to_w.data_ptr;
           const bool target_success = append(children(target), w, *wpar_iter).second;
           assert(target_success);
+          return true;
+        } else {
+          count_edge(-1);
+          return false;
         }
-        return success;
       }
     }
-
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void transfer_child(const NodeDesc source,
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    bool transfer_child(const NodeDesc source,
                         const Adj& target,
                         const NodeDesc w,
                         AdjAdapter&& adapt = AdjAdapter())
     {
-      transfer_child(source, target, find(children(source), w), std::forward<AdjAdapter>(adapt));
+      return transfer_child<check_uniqueness>(source, target, find(children(source), w), std::forward<AdjAdapter>(adapt));
+    }
+    template<class... Args>
+    bool transfer_child_unique(Args&&... args) {
+      return transfer_child<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
     // transfer all children of source_node to target, see comments of functions above
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void transfer_children(const NodeDesc source, const Adj& target, AdjAdapter&& adapt = AdjAdapter()) {
+    // NOTE: return the number of children of v that were already children of target
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t transfer_children(const NodeDesc source, const Adj& target, AdjAdapter&& adapt = AdjAdapter()) {
+      size_t result = 0;
       Node& source_node = node_of(source);
       auto& s_children = source_node.children();
 #warning "TODO: improve repeated-erase performance if children are stored as vecS"
@@ -469,39 +485,60 @@ namespace PT {
             tmp = std::move(*w_iter);
             s_children.erase(w_iter);
           } else break;
-        } else transfer_child(source, target, w_iter, adapt);
+        } else result += !transfer_child<check_uniqueness>(source, target, w_iter, adapt);
         // restore target in the children of the source
         if(tmp != NoNode) append(s_children, std::move(tmp));
       }
+      return result;
+    }
+    template<class... Args>
+    size_t transfer_children_unique(Args&&... args) {
+      return transfer_children<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void transfer_parent(const NodeDesc source,
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    bool transfer_parent(const NodeDesc source,
                          const Adj& target,
                          const std::iterator_of_t<typename Node::PredContainer>& w_iter,
                          AdjAdapter&& adapt = AdjAdapter())
     {
-      Node& source_node = node_of(source);
-      
-      assert(w_iter != source_node.parents().end());
+#warning "TODO: use inplace_modifyable to improve performance"
+      auto& s_parents = parents(source);
+      assert(w_iter != s_parents.end());
       assert(*w_iter != target);
 
       const NodeDesc w = *w_iter;
+      s_parents.erase(w_iter);
+      
       auto& w_children = children(w);
+
+      auto& t_parents = parents(target);
+      if constexpr (check_uniqueness) {
+        if(test(t_parents, w)) {
+          count_edge(-1);
+          my_erase(w_children, source);
+          return false;
+        }
+      }
       // step 1: move EdgeData of w-->source out of the children-storage of w
-      Adjacency ws = std::value_pop(w_children, source_node.get_desc());
+      Adjacency ws = std::value_pop(w_children, source);
       // step 2: merge EdgeData with that of uv
       adapt(target, ws);
       // step 3: put back the Adjacency with changed node
       const auto [wc_iter, success] = append(w_children, static_cast<NodeDesc>(target), std::move(ws));
       // step 4: add w as a new parent of the target
-      if(success) append(parents(target), w, *wc_iter);
-      // step 5: remove the old adjacency from s's parents
-      source_node.parents().erase(w_iter);
+      if(success) {
+        const bool t_success = append(t_parents, w, *wc_iter).second;
+        assert(t_success);
+        return true;
+      } else {
+        count_edge(-1);
+        return false;
+      }
     }
   
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void transfer_parent(const NodeDesc source,
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    bool transfer_parent(const NodeDesc source,
                          const Adj& target,
                          const NodeDesc w,
                          AdjAdapter&& adapt = AdjAdapter())
@@ -509,11 +546,19 @@ namespace PT {
       Node& source_node = node_of(source);
       auto w_iter = find(source_node.parents(), w);
       assert(w_iter != source_node.parents().end());
-      transfer_parent(source, target, w_iter, std::forward<AdjAdapter>(adapt));
+      return transfer_parent<check_uniqueness>(source, target, w_iter, std::forward<AdjAdapter>(adapt));
+    }
+    template<class... Args>
+    bool transfer_parent_unique(Args&&... args) {
+      return transfer_parent<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void transfer_parents(const NodeDesc source, const Adj& target, AdjAdapter&& adapt = AdjAdapter()) {
+
+    // transfer the parents of the given source to the given parent
+    // NOTE: return the number of parents of source that were already parents of target
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t transfer_parents(const NodeDesc source, const Adj& target, AdjAdapter&& adapt = AdjAdapter()) {
+      size_t result = 0;
       Node& source_node = node_of(source);
       auto& s_parents = source_node.parents();
 
@@ -526,9 +571,14 @@ namespace PT {
             tmp = std::move(*w_iter);
             s_parents.erase(w_iter);
           } else break;
-        } else transfer_parent(source, target, w_iter, adapt);
+        } else result += !transfer_parent<check_uniqueness>(source, target, w_iter, adapt);
       }
       if(tmp != NoNode) append(s_parents, std::move(tmp));
+      return result;
+    }
+    template<class... Args>
+    size_t transfer_parents_unique(Args&&... args) {
+      return transfer_parents<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
     // re-hang a node v below a node target
@@ -577,68 +627,88 @@ namespace PT {
 
 
     // contract a node v onto its unique parent u
+    // NOTE: return the number of children of v that were already children of the parent of v
     // NOTE: v will be deleted!
-    template<AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void contract_up(const NodeDesc v, Adj&& u_adj, AdjAdapter&& adapt = AdjAdapter()) {
+    // NOTE: set check_uniqueness in order to prevent double-edges
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t contract_up(const NodeDesc v, Adj&& u_adj, AdjAdapter&& adapt = AdjAdapter()) {
       assert(in_degree(v) == 1);
       assert(u_adj == front(parents(v)));
       const NodeDesc u = u_adj;
-      transfer_children(v, std::move(u_adj), std::forward<AdjAdapter>(adapt));
+      const size_t result = transfer_children<check_uniqueness>(v, std::move(u_adj), std::forward<AdjAdapter>(adapt));
       // finally, remove the edge uv and free v's storage
       remove_edge_and_child(u, v);
+      return result;
     }
 
-    template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void contract_up(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t contract_up(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) {
       assert(in_degree(v) == 1);
-      contract_up(v, front(parents(v)), std::forward<AdjAdapter>(adapt));
+      return contract_up<check_uniqueness>(v, front(parents(v)), std::forward<AdjAdapter>(adapt));
     }
 
-    template<EdgeType _Edge, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void contract_up(const _Edge& uv, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, EdgeType _Edge, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t contract_up(const _Edge& uv, AdjAdapter&& adapt = AdjAdapter()) {
       assert(in_degree(uv.head()) == 1);
-      contract_up(uv.head(), uv.tail(), std::forward<AdjAdapter>(adapt));
+      return contract_up<check_uniqueness>(uv.head(), uv.tail(), std::forward<AdjAdapter>(adapt));
     }
+    template<class... Args>
+    size_t contract_up_unique(Args&&... args) {
+      return contract_up<!Parent::unique_edges>(std::forward<Args>(args)...);
+    }
+
 
     // contract a node u onto its unique child v
+    // NOTE: return the number of parents of u that were already parents of v
     // NOTE: u will be deleted!
-    template<AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void contract_down(const NodeDesc u, Adj&& v_adj, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t contract_down(const NodeDesc u, Adj&& v_adj, AdjAdapter&& adapt = AdjAdapter()) {
       assert(out_degree(u) == 1);
       assert(v_adj == front(children(u)));
       const NodeDesc v = v_adj;
+      size_t result = 0;
       if(is_root(u)) {
         const auto iter = find(_roots, u);
         assert(iter != _roots.end());
         std::replace(_roots, iter, v);
-      } else transfer_parents(u, std::move(v_adj), std::forward<AdjAdapter>(adapt));
+      } else result = transfer_parents<check_uniqueness>(u, std::move(v_adj), std::forward<AdjAdapter>(adapt));
       // finally, remove the edge uv and free u's storage
       remove_edge_and_parent(u, v);
+      return result;
     }
 
-    template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void contract_down(const NodeDesc u, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t contract_down(const NodeDesc u, AdjAdapter&& adapt = AdjAdapter()) {
       assert(out_degree(u) == 1);
-      contract_down(u, front(children(u)), std::forward<AdjAdapter>(adapt));
+      return contract_down<check_uniqueness>(u, front(children(u)), std::forward<AdjAdapter>(adapt));
     }
 
-    template<EdgeType _Edge, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void contract_down(const _Edge& uv, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, EdgeType _Edge, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    size_t contract_down(const _Edge& uv, AdjAdapter&& adapt = AdjAdapter()) {
       assert(out_degree(uv.tail()) == 1);
-      contract_down(uv.tail(), uv.head(), std::forward<AdjAdapter>(adapt));
+      return contract_down<check_uniqueness>(uv.tail(), uv.head(), std::forward<AdjAdapter>(adapt));
+    }
+    template<class... Args>
+    size_t contract_down_unique(Args&&... args) {
+      return contract_down<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
     // suppress a node v with indeg=outdeg=1
     // NOTE: v will be deleted!
-    template<AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    template<bool check_uniqueness = false, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
     void suppress_node(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) {
       if(in_degree(v) > 0) {
-        contract_up(v, std::forward<AdjAdapter>(adapt));
+        contract_up<check_uniqueness>(v, std::forward<AdjAdapter>(adapt));
       } else {
-        contract_down(v, std::forward<AdjAdapter>(adapt));
+        contract_down<check_uniqueness>(v, std::forward<AdjAdapter>(adapt));
       }
     }
-    
+    template<class... Args>
+    void suppress_node_unique(Args&&... args) {
+      suppress_node<!Parent::unique_edges>(std::forward<Args>(args)...);
+    }
+
+
     void remove_node(const NodeDesc v) {
       Node& v_node = node_of(v);
       // step 1: remove outgoing arcs of v

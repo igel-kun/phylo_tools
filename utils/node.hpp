@@ -41,13 +41,17 @@ namespace PT{
     using Adjacency = PT::Adjacency<_EdgeData>;
     using EdgeData = _EdgeData;
     using Edge = PT::Edge<EdgeData>;
+    
     static constexpr StorageEnum SuccStorage = _SuccStorage;
     static constexpr StorageEnum PredStorage = _PredStorage;
     static constexpr bool _is_tree_node = (PredStorage == singleS);
     static constexpr bool has_edge_data = has_data<Adjacency>;
+    static constexpr bool unique_edges = unique_elements<PredStorage> && unique_elements<SuccStorage>;
+
     using SuccContainer = StorageClass<SuccStorage, Adjacency>;
     using PredContainer = StorageClass<PredStorage, Adjacency>;
     using LabelType = void;
+
   protected:
     SuccContainer _successors;
     PredContainer _predecessors;
@@ -295,6 +299,7 @@ namespace PT{
     static constexpr bool has_node_labels = Node::has_label;
     static constexpr bool has_node_data = Node::has_data;
     static constexpr bool has_edge_data = Adjacency::has_data;
+    static constexpr bool unique_edges = Node::unique_edges;
 
     static constexpr Node& node_of(const NodeDesc u) { return PT::node_of<Node>(u); }
 

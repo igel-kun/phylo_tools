@@ -52,14 +52,14 @@ namespace PT{
           // step 1: merge all in-edges to the same weak component
           const auto& uv = std::front(u_node.out_edges());
           for(const auto& wu: u_node.in_edges())
-            weak_components.add_item_to_set_of(wu, uv);
+            weak_components.add_item_to_set_of(uv, wu);
           // step 2: merge all weak components of out-edges of u & remove all out-edges from the component
           for(const auto& uw: u_node.out_edges()) {
             weak_components.merge_sets_of(uv, uw);
-            weak_components.remove_item(uw);
+            weak_components.shrink(uw);
           }
           // step 3: record the size of the remaining component
-          result = weak_components.size_of_set_of(uv);
+          result = weak_components.set_of(uv).size();
         } else result = weak_components.add_new_set(u_node.in_edges()).size();
       } catch(std::out_of_range& e){
         throw(std::logic_error("trying to compute scanwidth of a non-extension"));

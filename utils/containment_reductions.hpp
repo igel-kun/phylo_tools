@@ -22,8 +22,6 @@ namespace PT {
     ContainmentReduction(Manager& c): manager(c) {}
 
     NodeDesc comp_root_of(const NodeDesc u) const { return manager.contain.comp_info.comp_root_of(u); }
-    NodeDesc& visible_leaf_of(const NodeDesc u) { return manager.contain.comp_info.visible_leaf_of(u); }
-    const NodeDesc& visible_leaf_of(const NodeDesc u) const { return manager.contain.comp_info.visible_leaf_of(u); }
   };
 
   template<class Manager>
@@ -65,7 +63,7 @@ namespace PT {
             manager.remove_from_queues(v);
             host.remove_node(v);
           } else {
-            std::cout << "supressing node "<<v<<"\n";
+            std::cout << "suppressing node "<<v<<"\n";
             manager.suppress_node_in_host(v);
           }
           result = true;
@@ -191,7 +189,6 @@ namespace PT {
     using Parent::manager;
     using Parent::node_queue;
     using Parent::comp_root_of;
-    using Parent::visible_leaf_of;
     using Parent::add;
 
     bool apply() { return simple_cherry_reduction(); }
@@ -274,10 +271,11 @@ namespace PT {
         if(seen.empty()) {
           std::cout << "\tCHERRY: found (reticulated) cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
           // step 1: fix visibility labeling to u, because the leaf that pu's root is visible from may not survive the cherry reduction (but u will)
-          visible_leaf_of(comp_root_of(pu)) = u;
+          manager.contain.comp_info.set_visible_leaf(comp_root_of(pu), u);
           // step 2: prune host and guest
           manager.HG_match_rule.match_nodes(pu, pv, uv_label_iter);
           std::cout << "\tCHERRY: after reduction:\nhost:\n"<<host<<"guest:\n"<<manager.contain.guest<<"\n";
+          std::cout << "comp-roots:\n"; for(const NodeDesc z: manager.contain.host.nodes()) std::cout << z <<": " << manager.contain.comp_info.comp_root_of(z) <<'\n';
         } else return result;
       } else manager.HG_match_rule.match_nodes(pu, v, uv_label_iter); // if puC is smaller than seen, then pu cannot display pv, so pu has to display v
       return true;
@@ -295,6 +293,7 @@ namespace PT {
   template<class Manager, bool leaf_labels_only = true>
   struct VisibleComponentRule: public ContainmentReduction<Manager> {
     using Parent = ContainmentReduction<Manager>;
+    using ComponentDAG = typename Manager::ComponentDAG;
     using typename Parent::Host;
     using typename Parent::Guest;
     using typename Parent::LabelMatching;
@@ -302,17 +301,16 @@ namespace PT {
     using Parent::Parent;
     using Parent::manager;
     using Parent::comp_root_of;
-    using Parent::visible_leaf_of;
 
     using MulSubtree = DefaultLabeledTree<>;
 
-    void treat_comp_root(const NodeDesc u, const NodeDesc visible_leaf) {
+    void treat_comp_root(const NodeDesc u, const NodeDesc vis_leaf) {
       TreeInComponent<MulSubtree, Guest, leaf_labels_only> tree_comp_display(manager.contain.host, u, manager.contain.guest, manager.contain.HG_label_match);
       
-      assert(visible_leaf != NoNode);
-      const auto& vlabel = manager.contain.host.label(visible_leaf);
+      assert(vis_leaf != NoNode);
+      const auto& vlabel = manager.contain.host.label(vis_leaf);
 
-      std::cout << "using visible leaf "<<visible_leaf<<" with label "<<vlabel<<"\n";
+      std::cout << "using visible leaf "<<vis_leaf<<" with label "<<vlabel<<"\n";
       std::cout << "label matching: "<<manager.contain.HG_label_match<<"\n";
 
       const auto uv_label_iter = manager.find_label(vlabel);
@@ -381,7 +379,7 @@ namespace PT {
         for(const NodeDesc cDAG_u: manager.contain.comp_info.comp_DAG.nodes_postorder()) {
           const NodeDesc u = node_of<ComponentDAG>(cDAG_u).data(); 
           if(is_half_eligible(u, num_paths, half_eligible)) {
-            if(visible_leaf_of(u) != NoNode) return u;
+            if(manager.contain.comp_info.visible_leaf_of(u) != NoNode) return u;
             half_eligible.emplace(u);
           } else std::cout << u<< " not eligible\n";
         }
@@ -397,7 +395,7 @@ namespace PT {
         std::cout << "tree-component rule with eligible node "<< rt <<" ("<< manager.contain.comp_info.comp_root_of(rt)<<")\n";
         std::cout << "on tree-component DAG:\n";
         manager.contain.comp_info.comp_DAG.print_subtree_with_data();
-        const NodeDesc vis_leaf = visible_leaf_of(rt);
+        const NodeDesc vis_leaf = manager.contain.comp_info.visible_leaf_of(rt);
 
         std::cout << "host:\n"<<manager.contain.host<<"\n";
         std::cout << "guest:\n"<<manager.contain.guest<<"\n";
@@ -501,6 +499,10 @@ namespace PT {
       //NOTE: keep track of nodes in the host who have one of their incoming edges removed as component roots may now see them
       std::cout << "\tMATCH: pruning host at "<<host_u<<" (except "<<host_x<<"):\n"<<host<<" with comp-DAG\n";
       manager.contain.comp_info.comp_DAG.print_subtree_with_data();
+
+      std::cout << "component roots:\n";
+      for(const NodeDesc u: manager.contain.host.nodes()) std::cout << u << ": "<<manager.contain.comp_info.comp_root_of(u) << "\n";
+      
       prune_host_except(host_u, host_x);
       
       std::cout << "\tMATCH: done pruning host; orphan-queue "<<manager.remove_orphans.node_queue<<"\n";
@@ -514,6 +516,7 @@ namespace PT {
   template<class _Containment>
   struct ReductionManager {
     using Containment = _Containment;
+    using ComponentDAG = typename Containment::ComponentInfos::ComponentDAG;
 
     Containment& contain;
     NodeSet orphan_queueu;
@@ -558,19 +561,26 @@ namespace PT {
             assert(info.comp_DAG.is_leaf(u_in_cDAG));
             info.comp_DAG.remove_node(u_in_cDAG);
             info.replace_comp_root(u, u_child);
+            std::cout << "changed comp-root of "<<u_child<<" to "<<info.comp_root_of(u_child)<<"\n";
           }
+          // then, we can safely contract-up u's child
+          remove_from_queues(u);
+          host.contract_down(u, u_child);
+        } else {
+          assert(info.comp_root_of(u_child) != u_child);
+          remove_from_queues(u_child);
+          host.contract_up(u_child, u);
+          // if u_child was also suppressible, we have to re-run for u now
+          if(host.out_degree(u) == 1) suppress_node_in_host(u);
         }
-        // then, we can safely contract-up u's child
-        remove_from_queues(u);
-        host.contract_down(u, u_child);
       } else {
         remove_from_queues(u);
         // if u's child is a reticulation then contract u upwards
         assert(host.is_reti(u_child));
         // NOTE: if everything is consistent then u's parent is a reti if and only if u is a comp root
         const NodeDesc u_parent = host.parent(u);
-        if(info.comp_root_of(u) == u) {
-          assert(host.is_reti(u_parent));
+        if(host.is_reti(u_parent)) {
+          assert(info.comp_root_of(u) == u);
           // if u is a component-root, then it should have out-deg 1 in the comp_DAG, so we can contract down
           const NodeDesc u_in_cDAG = info.N_to_comp_DAG.at(u);
           assert(info.comp_DAG.out_degree(u_in_cDAG) == 1);
@@ -580,7 +590,9 @@ namespace PT {
           contract_reti_onto_reti_child(u_parent);
         } else {
           assert(!host.is_reti(u_parent));
-          host.contract_up(u);
+          // NOTE: it might be that u_child is already a child of u_parent, in which case we'll simply delete u instead of contracting it
+          if(host.contract_up_unique(u))
+            clean_orphan_later(u_parent);
         }
       }
     }

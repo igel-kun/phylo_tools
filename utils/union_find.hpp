@@ -7,48 +7,69 @@
 #include<unordered_map>
 
 namespace std{
-  template<class T>
-  class DisjointSetForest;
-
-  template<class T>
-  class DSet {
-  private:
-    T representative;    // the representative element of our set
+  template<class Key>
+  class _DSet {
+    Key representative;    // the representative element of our set
     size_t _size = 0;
     
     void grow(const int x) { _size += x; }
   public:
-    const T& get_representative() const { return representative; }
+    const Key& get_representative() const { return representative; }
     size_t size() const { return _size; }
 
     template<class Q>
-    DSet(Q&& _representative):
+    _DSet(Q&& _representative):
       representative(std::forward<Q>(_representative)), _size(1)
     {}
-    DSet() = default;
+    _DSet() = default;
 
-    bool operator==(const DSet<T>& y) const { return representative == y.representative; }
-    bool operator!=(const DSet<T>& y) const { return representative != y.representative; }
+    bool operator==(const _DSet& y) const { return representative == y.representative; }
+    bool operator!=(const _DSet& y) const { return representative != y.representative; }
 
-    void merge_onto(DSet<T>& x) {
+    void merge_onto(_DSet& x) {
       representative = x.representative;
       x._size += _size;
     }
 
-    friend class DisjointSetForest<T>;
+    template<class, class>
+    friend class DisjointSetForest;
+  };
+
+  template<class Key, class Payload = void>
+  struct DSet: public _DSet<Key> {
+    using Parent = _DSet<Key>;
+    using Parent::Parent;
+    Payload payload;
+
+    template<class Q, class... Args>
+    DSet(Q&& _representative, Args&&... args):
+      Parent(std::forward<Q>(_representative)),
+      payload(std::forward<Args>(args)...)
+    {}
+    DSet() = default;
+  };
+  template<class Key>
+  struct DSet<Key, void>: public _DSet<Key> {
+    using _DSet<Key>::_DSet;
   };
 
 
-  template<class T>
-  ostream& operator<<(ostream& os, const DSet<T>& ds) { 
-    return os << "->" << ds.get_representative() << " ["<<ds.size()<<"]";
+  template<class K, class P>
+  ostream& operator<<(ostream& os, const DSet<K,P>& ds) { 
+    os << "->" << ds.get_representative() << " [size "<<ds.size();
+    if constexpr (std::is_void_v<P>) 
+      return os<<"]";
+    else
+      return os << " payload "<<ds.payload<<"]";
   }
 
 
-  template<class T>
-  class DisjointSetForest: public unordered_map<T, DSet<T>> {
-    using Parent = unordered_map<T, DSet<T>>;
+  // a union-find datastructure on keys, allowing an additional payload to be stored for each key
+  template<class Key, class Payload = void>
+  class DisjointSetForest: public unordered_map<Key, DSet<Key, Payload>> {
+    using Parent = unordered_map<Key, DSet<Key, Payload>>;
   protected:
+    using Set = DSet<Key, Payload>;
     using Parent::try_emplace;
     using Parent::emplace;
     using Parent::erase;
@@ -58,42 +79,54 @@ namespace std{
   public:
     using Parent::at;
 
+
+    template<class... Args>
+    auto emplace_set(const Key& x, Args&&... args) {
+      const auto result = try_emplace(x, x, std::forward<Args>(args)...);
+      _set_count += result.second;
+      return result;
+    }
+
     // add a new set to the forest
-    DSet<T>& add_new_set(const T& x) {
-      const auto [iter, success] = try_emplace(x, x);
+    template<class... Args>
+    Set& add_new_set(const Key& x, Args&&... args) {
+      const auto [iter, success] = try_emplace(x, x, std::forward<Args>(args)...);
       if(success) {
         ++_set_count;
       } else throw logic_error("trying to add existing item to set-forest");
       return iter->second;
     }
-    template<IterableType _Container>
-    DSet<T>& add_new_set(const _Container& x) { for(const auto& i: x) add_new_set(i); }
 
+    template<class... Args>
+    auto emplace_item_to_set(Set& y_set, const Key& x, Args&&... args) {
+      const auto result = try_emplace(x, y_set.representative, std::forward<Args>(args)...);
+      y_set.grow(result.second);
+      return result;
+    }
 
     // add a new item to the set x_set (that should exist in the set forest)
-    DSet<T>& add_item_to_set(const T& x, DSet<T>& y_set) {
+    template<class... Args>
+    Set& add_item_to_set(Set& y_set, const Key& x, Args&&... args) {
       // assert that y exists
       assert(test(*this, y_set.get_representative()));
       // insert the item
-      const auto [iter, success] = try_emplace(x, y_set.representative);
+      const auto [iter, success] = try_emplace(x, y_set.representative, std::forward<Args>(args)...);
       if(success){
         y_set.grow(1);
         return iter->second;
       } else throw logic_error("trying to add existing item to set-forest");
     }
     // add a new item x to the set of another item y
-    DSet<T>& add_item_to_set_of(const T& x, const T& y) { return add_item_to_set(x, set_of(y)); }
+    Set& add_item_to_set_of(const Key& y, const Key& x) { return add_item_to_set(set_of(y), x); }
 
     // merge two sets into one
     // the one with the lower size is merged into the one with the higher
     // in case of ties, x is merged into y's set
     // return the set that the other has been merged into
     template<bool respect_sizes = true>
-    DSet<T>& merge_sets_of(const T& x, const T& y) {
-      assert(test(*this, x) && test(*this, y));
-
-      DSet<T>& x_set = set_of(x);
-      DSet<T>& y_set = set_of(y);
+    Set& merge_sets(auto& x, auto& y) {
+      Set& x_set = set_of(x);
+      Set& y_set = set_of(y);
       if(x_set != y_set){
         --_set_count;
         if constexpr (respect_sizes) {
@@ -107,34 +140,40 @@ namespace std{
       return x_set;
     }
     // merge y onto x (y's representative will be lost (set to x's representative))
-    DSet<T>& merge_sets_keep_order(const T& x, const T& y) {
-      return merge_sets_of<false>(x, y);
+    Set& merge_sets_keep_order(auto& x, auto& y) {
+      return merge_sets<false>(x, y);
     }
 
-    // return the size of the set containing x
-    size_t size_of_set_of(const T& x) {  return set_of(x).size(); }
-    
     // return the set containing x, use path compression
-    DSet<T>& set_of(const T& x, DSet<T>* x_set = nullptr, const unsigned decrease_size = 0) {
+    Set& set_of(const Key& x, Set* x_set = nullptr, const unsigned decrease_size = 0) {
       if(!x_set) x_set = &at(x);
-      const T& x_set_rep = x_set->get_representative();
+      const Key& x_set_rep = x_set->get_representative();
       if(x_set_rep != x){
         x_set->grow(-decrease_size);
-        DSet<T>& x_parent = at(x_set_rep);
-        const T& x_parent_rep = x_parent.get_representative();
+        Set& x_parent = at(x_set_rep);
+        const Key& x_parent_rep = x_parent.get_representative();
+        assert(x_parent_rep != x); // this is bizarre, we already know that x's representative is x_parent so why would their representative be x???
         if(x_parent_rep != x){
-          DSet<T>& root_set = set_of(x_set_rep, &x_parent, decrease_size + x_set->size());
+          Set& root_set = set_of(x_set_rep, &x_parent, decrease_size + x_set->size());
           x_set->representative = root_set.representative;
           return root_set;
         } else return at(x_parent_rep);
       } else return *x_set;
     }
 
-    // erase a DSet<T> s from the union-find structure
+    // NOTE: while declared "const", this function may modify the data structure (but DOES NOT modify the "conceptual state")
+    // NOTE: I would declare the function 'mutable' but C++ does not allow this
+    const Set& set_of(const Key& x) const {
+      return const_cast<DisjointSetForest*>(this)->set_of(x);
+    }
+    const Set& set_of(const Set& x_set) const { return x_set; }
+    Set& set_of(Set& x_set) const { return x_set; }
+
+    // erase a Set s from the union-find structure
     // NOTE: this is only possible if s is a leaf-set
-    void erase_element(const T& x) {
-      DSet<T>& x_set = set_of(x);
-      const T& x_rep = x_set.get_representative();
+    void erase_element(const auto& x) {
+      Set& x_set = set_of(x);
+      const Key& x_rep = x_set.get_representative();
       
       // if x has a representative that is not x, then we need to shrink the representative's set
       assert((x_set.size() == 1) && "trying to erase a non-leaf set from a disjoint-set forest");
@@ -145,12 +184,12 @@ namespace std{
     }
 
     // replace the representative of a set of elements by re-hanging the representative from the given element
-    void make_representative(const T& x) {
-      DSet<T>& x_set = at(x);
-      const T& x_rep = x_set.get_representative();
+    void make_representative(const Key& x) {
+      Set& x_set = at(x);
+      const Key& x_rep = x_set.get_representative();
 
       if(x_rep != x) {
-        DSet<T>& x_rep_set = at(x_rep);
+        Set& x_rep_set = at(x_rep);
         x_rep_set.grow(-x_set.size());
         x_set.grow(x_rep_set.size());
         x_rep_set.representative = x_set.representative = x;
@@ -158,20 +197,20 @@ namespace std{
     }
 
     // if one wants to keep a single item of each set, one can use is_root, which returns true if all elements in its set have x as their root
-    bool is_root(const T& x) const { return *(at(x).representative) == x; }
+    bool is_root(const Key& x) const { return *(at(x).representative) == x; }
 
     // return true iff the given items are in the same set
-    bool in_same_set(const T& x, const T& y) {
-      return set_of(x).representative == set_of(y).representative;
+    bool in_same_set(const Key& x, const Key& y) {
+      return set_of(x) == set_of(y);
     }
 
     // return true iff the given items are in different sets
-    bool in_different_sets(const T& x, const T& y) { return !in_same_set(x, y); }
+    bool in_different_sets(const Key& x, const Key& y) { return !in_same_set(x, y); }
 
     // return the number of sets in the forest
     size_t set_count() const { return _set_count; }
 
-    void remove_item(const T& x) { set_of(x).grow(-1); }
+    void shrink(const Key& x) { set_of(x).grow(-1); }
 
     // we'll need a custom copy and move constructor :/
 
