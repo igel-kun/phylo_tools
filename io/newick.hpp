@@ -29,12 +29,12 @@ namespace PT{
   std::string get_extended_newick(const _Network& N, const NodeDesc sub_root, Container&& retis_seen = Container()) {
     std::string accu = "";
     if((N.in_degree(sub_root) <= 1) || !test(retis_seen, sub_root)){
-      accu += "(";
+      accu += '(';
       for(const auto& w: N.children(sub_root))
-        accu += get_extended_newick(N, w, retis_seen) + ",";
+        accu += get_extended_newick(N, w, retis_seen) + ',';
       // remove last "," (or the "(" for leaves)
       accu.pop_back();
-      if(!N.is_leaf(sub_root)) accu += ")";
+      if(!N.is_leaf(sub_root)) accu += ')';
     }
     if constexpr (_Network::Node::has_label) accu += N.label(sub_root);
     if(N.in_degree(sub_root) > 1) {

@@ -21,7 +21,7 @@ namespace PT{
     Adjacency& head() & { return this->second; }
     Adjacency&& head() && { return std::move(this->second); }
     NodeDesc tail() const { return this->first; }
-    std::pair<NodeDesc, NodeDesc> as_pair() const { return { this->first, this->second }; }
+    NodePair as_pair() const { return { this->first, this->second }; }
   };
 
   template<class EdgeData>
@@ -44,9 +44,6 @@ namespace PT{
   using EdgeVec = std::vector<Edge<EdgeData>>;
   template<class EdgeData = void>
   using EdgeSet = std::unordered_set<Edge<EdgeData>>;
-
-  template<class F, class Edge>
-  concept EdgeFunctionType = std::invocable<F, Edge>;
 
 }
 

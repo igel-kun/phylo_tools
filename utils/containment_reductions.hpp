@@ -62,10 +62,7 @@ namespace PT {
             std::cout << "removing node "<<v<<"\n";
             manager.remove_from_queues(v);
             host.remove_node(v);
-          } else {
-            std::cout << "suppressing node "<<v<<"\n";
-            manager.suppress_node_in_host(v);
-          }
+          } else manager.suppress_node_in_host(v);
           result = true;
         }
       }
@@ -550,6 +547,7 @@ namespace PT {
       assert(host.out_degree(u) == 1);
 
       const NodeDesc u_child = host.any_child(u);
+      std::cout << "suppressing node "<<u<<" with child "<<u_child<<"\n";
       if(host.in_degree(u_child) == 1) {
         if(host.is_leaf(u_child)) {
           std::cout << "suppressing node "<<u<<" with leaf-child "<<u_child<<" and comp-root "<<info.comp_root_of(u)<<"\n";
@@ -563,10 +561,12 @@ namespace PT {
             info.replace_comp_root(u, u_child);
             std::cout << "changed comp-root of "<<u_child<<" to "<<info.comp_root_of(u_child)<<"\n";
           }
+          std::cout << "contracting-down "<<u<<" into "<<u_child<<"\n";
           // then, we can safely contract-up u's child
           remove_from_queues(u);
           host.contract_down(u, u_child);
         } else {
+          std::cout << "contracting-up "<<u_child<<" into "<<u<<"\n";
           assert(info.comp_root_of(u_child) != u_child);
           remove_from_queues(u_child);
           host.contract_up(u_child, u);
@@ -579,19 +579,22 @@ namespace PT {
         assert(host.is_reti(u_child));
         // NOTE: if everything is consistent then u's parent is a reti if and only if u is a comp root
         const NodeDesc u_parent = host.parent(u);
-        if(host.is_reti(u_parent)) {
-          assert(info.comp_root_of(u) == u);
+        std::cout << u << " has parent "<<u_parent<<" and reticulation child "<<u_child << "\n";
+        std::cout << "contracting-up "<<u<<" into "<<u_parent<<"\n";
+        if(info.comp_root_of(u) == u) {
+          assert(host.is_reti(u_parent));
+          assert(info.N_to_comp_DAG.contains(u));
           // if u is a component-root, then it should have out-deg 1 in the comp_DAG, so we can contract down
           const NodeDesc u_in_cDAG = info.N_to_comp_DAG.at(u);
-          assert(info.comp_DAG.out_degree(u_in_cDAG) == 1);
-          info.comp_DAG.contract_down(u_in_cDAG);
+          if(info.comp_DAG.out_degree(u_in_cDAG) == 1)
+            info.comp_DAG.contract_down_unique(u_in_cDAG);
+          else info.comp_DAG.remove_node(u_in_cDAG);
           // NOTE: since both u's child and parent are reticulations, we also want to contract u's parent down onto u's child
-          host.contract_up(u);
+          host.contract_up(u, u_parent);
           contract_reti_onto_reti_child(u_parent);
         } else {
-          assert(!host.is_reti(u_parent));
           // NOTE: it might be that u_child is already a child of u_parent, in which case we'll simply delete u instead of contracting it
-          if(host.contract_up_unique(u))
+          if(host.contract_up_unique(u, u_parent))
             clean_orphan_later(u_parent);
         }
       }
@@ -623,7 +626,7 @@ namespace PT {
       assert(host.out_degree(u) == 1);
       assert(host.is_reti(host.child(u)));
       remove_from_queues(u);
-      host.contract_down(u);
+      host.contract_down_unique(u);
     }
 
 

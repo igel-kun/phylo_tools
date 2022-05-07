@@ -34,8 +34,11 @@ namespace PT {
     Adjacency(const Adjacency&) = default;
     Adjacency(Adjacency&& other) = default;
 
+    // make an Adjacency from a different Adjacency by (possibly move-) constructing our data from theirs
     template<class EData> requires (!std::is_void_v<EData> && !std::is_same_v<EdgeData, EData>)
     Adjacency(const Adjacency<EData>& adj): Parent(adj), data_ptr(std::make_shared<EdgeData>(*(adj.data_ptr))) {}
+    template<class EData> requires (!std::is_void_v<EData> && !std::is_same_v<EdgeData, EData>)
+    Adjacency(Adjacency<EData>&& adj): Parent(adj), data_ptr(std::make_shared<EdgeData>(std::move(*(adj.data_ptr)))) {}
     // make from an iterator to an adjacency
     template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
     Adjacency(const AdjIter& iter): Adjacency(*iter) {}

@@ -135,30 +135,33 @@ namespace PT{
       if(retis.empty() && !new_reticulations)
         throw std::logic_error("cannot add " + std::to_string(num_edges) + " edges without introducing a reticulation");
 
-      std::cout << "adding "<<num_edges<<" new edges to\n"<<N<<"\n";
       while(num_edges){
+        std::cout << "adding "<<num_edges<<" new edges to\n"<<N<<"\n";
         if(new_reticulations){
           const auto edges = N.edges();
           const auto uv_iter = get_random_iterator(edges, N.num_edges());
-          const NodeDesc u = uv_iter->tail();
-          auto& v = uv_iter->head();
+          const auto uv = *uv_iter;
+          const NodeDesc u = uv.tail();
+          const auto& v = uv.head();
           //const NodeDesc u = uv_iter->first;
           //const NodeDesc v = uv_iter->second;
           if(new_tree_nodes){
-            const auto xy_iter = get_random_iterator_except(edges, uv_iter, N.num_edges());
-            const NodeDesc x = xy_iter->tail();
-            auto& y = xy_iter->head();
+            const auto xy = *get_random_iterator_except(edges, uv_iter, N.num_edges());
+            const NodeDesc x = xy.tail();
+            const auto& y = xy.head();
             const bool reverse_st = N.has_path(y,u);
             DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<"\t "<<y<<"-"<<u<<"-path? "<<reverse_st<<'\n');
             NodeDesc s = Net::create_node(extracter);
             NodeDesc t = Net::create_node(extracter);
 
+            DEBUG3(std::cout << "adding node "<<s<<" between "<< u << " & "<< v <<'\n');
+            DEBUG3(std::cout << "adding node "<<t<<" between "<< x << " & "<< y <<'\n');
             if constexpr (!ExtractData::ignoring_edge_data) {
-              N.subdivide_edge(*uv_iter, s, [&](auto&&, auto& data){ data = extracter.get_edge_data(s, v);});
-              N.subdivide_edge(*xy_iter, t, [&](auto&&, auto& data){ data = extracter.get_edge_data(t, y);});
+              N.subdivide_edge(uv, s, [&](auto&&, auto& data){ data = extracter.get_edge_data(s, v);});
+              N.subdivide_edge(xy, t, [&](auto&&, auto& data){ data = extracter.get_edge_data(t, y);});
             } else {
-              N.subdivide_edge(*uv_iter, s);
-              N.subdivide_edge(*xy_iter, t);
+              N.subdivide_edge(uv, s);
+              N.subdivide_edge(xy, t);
             }
             if(reverse_st) std::swap(s,t);
             DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");

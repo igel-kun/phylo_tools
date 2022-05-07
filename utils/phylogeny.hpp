@@ -209,7 +209,7 @@ namespace PT {
       return new Node(std::forward<Args>(args)...);
     }
     // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
-    template<NodeFunctionType DataMaker>
+    template<NodeFunctionType DataMaker> requires (!DataExtracterType<DataMaker>)
     static constexpr NodeDesc create_node(DataMaker&& data_maker) {
       std::cout << "creating node with data-maker\n";
       if constexpr (!std::is_same_v<std::remove_cvref_t<DataMaker>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
@@ -220,7 +220,7 @@ namespace PT {
       } else return create_node();
     }
 
-    template<NodeFunctionType LabelMaker>
+    template<NodeFunctionType LabelMaker> requires (!DataExtracterType<LabelMaker>)
     static constexpr NodeDesc create_node(Ex_node_label, LabelMaker&& label_maker) {
       if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
@@ -319,8 +319,8 @@ namespace PT {
 
     // remove the given node u, as well as all ancestors who, after all removals, have no children left
     // if suppress_deg2 is true, then also suppress deg2-nodes encountered on the way
-    template<bool suppress_deg2 = true, class... AdapterArgs>
-    void remove_upwards(const NodeDesc v, AdapterArgs&&... args) {
+    template<bool suppress_deg2 = true>
+    void remove_upwards(const NodeDesc v) {
       auto& v_node = node_of(v);
       const size_t v_indeg = v_node.in_degree();
       const size_t v_outdeg = v_node.out_degree();
@@ -330,7 +330,7 @@ namespace PT {
           while(!v_parents.empty()) {
             const NodeDesc u = front(v_parents);
             remove_edge_no_cleanup(u,v);
-            remove_upwards(u, args...);
+            remove_upwards(u);
           }
           delete_node(v);
           return;
@@ -339,8 +339,8 @@ namespace PT {
           if constexpr (suppress_deg2) {
             if(v_indeg == 1) {
               const NodeDesc u = v_node.any_parent();
-              contract_up(v, args...);
-              remove_upwards(u, args...);
+              contract_up(v);
+              remove_upwards(u);
             }
           }
           return;
@@ -400,14 +400,14 @@ namespace PT {
     // NOTE: to check whether child is already a child of target, set 'check_uniqueness' or use a SetType as SuccStorage
     //       if check_uniquenesss == false and the SuccStorage cannot exclude duplicates, then this can lead to double edges!
     //       if duplicates are excluded, then the existing edge from target to w survives while the other is deleted
-    // NOTE: the AdjAdapter can be used to merge the EdgeData passed with target and the source->w EdgeData into the target->... EdgeData
+    // NOTE: use the DataExtracter to modify the EdgeData of the newly formed edge
     //       for example like so: [](const auto& uv, auto& vw) { vw.data() += uv.data(); }
     //       By default the target->... EdgeData is ignored.
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter>
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_child(const NodeDesc source,
                         const Adj& target,
                         const std::iterator_of_t<typename Node::SuccContainer>& w_iter,
-                        AdjAdapter&& adapt = AdjAdapter())
+                        DataMaker&& make_data = DataMaker())
     {
       assert(w_iter != children(source).end());
       const NodeDesc w = *w_iter;
@@ -428,9 +428,10 @@ namespace PT {
       }
       // if the PredStorage can be modified in place, we'll just change the node of the parent-adjacency of w to target
       if constexpr (is_inplace_modifyable<_PredStorage>) {
-        adapt(target, *sw_iter);
+        // set the target in-place
         sw_iter->nd = target;
-        const bool success = append(children(target), w, *sw_iter).second;
+        // insert a new adjacency into target's children
+        const bool success = append(children(target), w, std::apply_or_pass2(make_data, target, *sw_iter)).second;
         // if we could not append w as child of target (that is, the edge target->w already existed) then the edge source->w should be deleted
         if(!success){
           w_parents.erase(sw_iter);
@@ -439,11 +440,10 @@ namespace PT {
         } else return true;
       } else { // if the PredStorage cannot be modified in place, we'll have to remove the source_to_w adjacency, change it, and reinsert it
         // step 1: move EdgeData out of the parents-storage
-        Adjacency source_to_w = std::value_pop(w_parents, sw_iter);
         // step 2: merge EdgeData with that passed with target
-        adapt(target, source_to_w);
+        Adjacency source_to_w = apply_or_pass2(make_data, target, std::value_pop(w_parents, sw_iter));
         // step 3: put back the Adjacency with changed node
-        const auto [wpar_iter, success] = append(w_parents, static_cast<const NodeDesc>(target), source_to_w);
+        const auto [wpar_iter, success] = append(w_parents, static_cast<const NodeDesc>(target), std::move(source_to_w));
 
         if(success) {
           const bool target_success = append(children(target), w, *wpar_iter).second;
@@ -455,13 +455,13 @@ namespace PT {
         }
       }
     }
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_child(const NodeDesc source,
                         const Adj& target,
                         const NodeDesc w,
-                        AdjAdapter&& adapt = AdjAdapter())
+                        DataMaker&& make_data = DataMaker())
     {
-      return transfer_child<check_uniqueness>(source, target, find(children(source), w), std::forward<AdjAdapter>(adapt));
+      return transfer_child<check_uniqueness>(source, target, find(children(source), w), make_data);
     }
     template<class... Args>
     bool transfer_child_unique(Args&&... args) {
@@ -470,8 +470,8 @@ namespace PT {
 
     // transfer all children of source_node to target, see comments of functions above
     // NOTE: return the number of children of v that were already children of target
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t transfer_children(const NodeDesc source, const Adj& target, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
+    size_t transfer_children(const NodeDesc source, const Adj& target, DataMaker&& make_data = DataMaker()) {
       size_t result = 0;
       Node& source_node = node_of(source);
       auto& s_children = source_node.children();
@@ -485,7 +485,7 @@ namespace PT {
             tmp = std::move(*w_iter);
             s_children.erase(w_iter);
           } else break;
-        } else result += !transfer_child<check_uniqueness>(source, target, w_iter, adapt);
+        } else result += !transfer_child<check_uniqueness>(source, target, w_iter, make_data);
         // restore target in the children of the source
         if(tmp != NoNode) append(s_children, std::move(tmp));
       }
@@ -496,11 +496,11 @@ namespace PT {
       return transfer_children<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_parent(const NodeDesc source,
                          const Adj& target,
                          const std::iterator_of_t<typename Node::PredContainer>& w_iter,
-                         AdjAdapter&& adapt = AdjAdapter())
+                         DataMaker&& make_data = DataMaker())
     {
 #warning "TODO: use inplace_modifyable to improve performance"
       auto& s_parents = parents(source);
@@ -520,10 +520,8 @@ namespace PT {
           return false;
         }
       }
-      // step 1: move EdgeData of w-->source out of the children-storage of w
-      Adjacency ws = std::value_pop(w_children, source);
-      // step 2: merge EdgeData with that of uv
-      adapt(target, ws);
+      // step 1: move Adjacency of w-->source out of the children-storage of w
+      Adjacency ws = std::apply_or_pass2(make_data, target, std::value_pop(w_children, source));
       // step 3: put back the Adjacency with changed node
       const auto [wc_iter, success] = append(w_children, static_cast<NodeDesc>(target), std::move(ws));
       // step 4: add w as a new parent of the target
@@ -537,16 +535,16 @@ namespace PT {
       }
     }
   
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_parent(const NodeDesc source,
                          const Adj& target,
                          const NodeDesc w,
-                         AdjAdapter&& adapt = AdjAdapter())
+                         DataMaker&& make_data = DataMaker())
     {
       Node& source_node = node_of(source);
       auto w_iter = find(source_node.parents(), w);
       assert(w_iter != source_node.parents().end());
-      return transfer_parent<check_uniqueness>(source, target, w_iter, std::forward<AdjAdapter>(adapt));
+      return transfer_parent<check_uniqueness>(source, target, w_iter, make_data);
     }
     template<class... Args>
     bool transfer_parent_unique(Args&&... args) {
@@ -556,8 +554,8 @@ namespace PT {
 
     // transfer the parents of the given source to the given parent
     // NOTE: return the number of parents of source that were already parents of target
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t transfer_parents(const NodeDesc source, const Adj& target, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
+    size_t transfer_parents(const NodeDesc source, const Adj& target, DataMaker&& make_data = DataMaker()) {
       size_t result = 0;
       Node& source_node = node_of(source);
       auto& s_parents = source_node.parents();
@@ -571,7 +569,7 @@ namespace PT {
             tmp = std::move(*w_iter);
             s_parents.erase(w_iter);
           } else break;
-        } else result += !transfer_parent<check_uniqueness>(source, target, w_iter, adapt);
+        } else result += !transfer_parent<check_uniqueness>(source, target, w_iter, make_data);
       }
       if(tmp != NoNode) append(s_parents, std::move(tmp));
       return result;
@@ -610,19 +608,31 @@ namespace PT {
     // NOTE: first, the edge wv gets its data from adapting the EdgeData passed with w and the EdgeData of u->v
     //        (if no adapter is passed, then wv gets the EdgeData of u->v)
     //       then, the edge uw gets its data from the Adjacency w
-    template<AdjacencyType Adj, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void subdivide_edge(const NodeDesc u, const auto& v, Adj&& w, AdjAdapter&& adapt = AdjAdapter()) {
+    template<AdjacencyType Adj, class DataMaker = bool>
+    void subdivide_edge(const NodeDesc u, const auto& v, Adj&& w, DataMaker&& make_data = DataMaker()) {
       assert(is_edge(u,v));
       assert(node_of(w).is_isolated());
-      transfer_child(u, w, v, std::forward<AdjAdapter>(adapt));
-      add_edge(u, std::forward<Adj>(w));
+      transfer_child(u, w, v, make_data);
+      if constexpr (DataExtracterType<DataMaker>)
+        add_edge(u, std::forward<Adj>(w), make_data);
+      else add_edge(u, std::forward<Adj>(w));
 			count_node();
     }
 
-    template<AdjacencyType Adj, EdgeType _Edge, AdjAdapterType<Adj, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-      requires std::is_same_v<std::remove_cvref_t<_Edge>, Edge>
-    void subdivide_edge(_Edge&& uv, Adj&& w, AdjAdapter&& adapt = AdjAdapter()) {
-      subdivide_edge(uv.tail(), std::forward<_Edge>(uv).head(), std::forward<Adj>(w), std::forward<AdjAdapter>(adapt));
+    template<AdjacencyType Adj, EdgeType _Edge, class DataMaker = bool>
+    void subdivide_edge(_Edge&& uv, Adj&& w, DataMaker&& make_data = DataMaker()) {
+      subdivide_edge(uv.tail(), std::forward<_Edge>(uv).head(), std::forward<Adj>(w), make_data);
+    }
+
+    // subdivide and edge, creating a new node
+    // NOTE: if a NodeFunctionType or a DataExtracterType is passed, then we try to initialize the node data with it
+    //       if DataMaker is invocable with 2 Adjacencies, then we use it to set the edge data
+    template<EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    void subdivide_edge(_Edge&& uv, DataMaker&& data_maker = DataMaker()) {
+      if constexpr (DataExtracterType<DataMaker> || NodeFunctionType<DataMaker>)
+        subdivide_edge(std::forward<_Edge>(uv), create_node(data_maker), data_maker);
+      else
+        subdivide_edge(std::forward<_Edge>(uv), create_node(), data_maker);
     }
 
 
@@ -630,27 +640,27 @@ namespace PT {
     // NOTE: return the number of children of v that were already children of the parent of v
     // NOTE: v will be deleted!
     // NOTE: set check_uniqueness in order to prevent double-edges
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t contract_up(const NodeDesc v, Adj&& u_adj, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
+    size_t contract_up(const NodeDesc v, Adj&& u_adj, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(v) == 1);
       assert(u_adj == front(parents(v)));
       const NodeDesc u = u_adj;
-      const size_t result = transfer_children<check_uniqueness>(v, std::move(u_adj), std::forward<AdjAdapter>(adapt));
+      const size_t result = transfer_children<check_uniqueness>(v, std::move(u_adj), make_data);
       // finally, remove the edge uv and free v's storage
       remove_edge_and_child(u, v);
       return result;
     }
 
-    template<bool check_uniqueness = false, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t contract_up(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    size_t contract_up(const NodeDesc v, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(v) == 1);
-      return contract_up<check_uniqueness>(v, front(parents(v)), std::forward<AdjAdapter>(adapt));
+      return contract_up<check_uniqueness>(v, front(parents(v)), make_data);
     }
 
-    template<bool check_uniqueness = false, EdgeType _Edge, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t contract_up(const _Edge& uv, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    size_t contract_up(const _Edge& uv, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(uv.head()) == 1);
-      return contract_up<check_uniqueness>(uv.head(), uv.tail(), std::forward<AdjAdapter>(adapt));
+      return contract_up<check_uniqueness>(uv.head(), uv.tail(), make_data);
     }
     template<class... Args>
     size_t contract_up_unique(Args&&... args) {
@@ -661,8 +671,8 @@ namespace PT {
     // contract a node u onto its unique child v
     // NOTE: return the number of parents of u that were already parents of v
     // NOTE: u will be deleted!
-    template<bool check_uniqueness = false, AdjacencyType Adj, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t contract_down(const NodeDesc u, Adj&& v_adj, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
+    size_t contract_down(const NodeDesc u, Adj&& v_adj, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(u) == 1);
       assert(v_adj == front(children(u)));
       const NodeDesc v = v_adj;
@@ -671,36 +681,36 @@ namespace PT {
         const auto iter = find(_roots, u);
         assert(iter != _roots.end());
         std::replace(_roots, iter, v);
-      } else result = transfer_parents<check_uniqueness>(u, std::move(v_adj), std::forward<AdjAdapter>(adapt));
+      } else result = transfer_parents<check_uniqueness>(u, std::move(v_adj), make_data);
       // finally, remove the edge uv and free u's storage
       remove_edge_and_parent(u, v);
       return result;
     }
 
-    template<bool check_uniqueness = false, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t contract_down(const NodeDesc u, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    size_t contract_down(const NodeDesc u, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(u) == 1);
-      return contract_down<check_uniqueness>(u, front(children(u)), std::forward<AdjAdapter>(adapt));
+      return contract_down<check_uniqueness>(u, front(children(u)), make_data);
     }
 
-    template<bool check_uniqueness = false, EdgeType _Edge, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    size_t contract_down(const _Edge& uv, AdjAdapter&& adapt = AdjAdapter()) {
+    template<bool check_uniqueness = false, EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    size_t contract_down(const _Edge& uv, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(uv.tail()) == 1);
-      return contract_down<check_uniqueness>(uv.tail(), uv.head(), std::forward<AdjAdapter>(adapt));
+      return contract_down<check_uniqueness>(uv.tail(), uv.head(), make_data);
     }
     template<class... Args>
     size_t contract_down_unique(Args&&... args) {
       return contract_down<!Parent::unique_edges>(std::forward<Args>(args)...);
     }
 
-    // suppress a node v with indeg=outdeg=1
+    // if v's in-degree is 1, then contract-up v, otherwise, contract-down v
     // NOTE: v will be deleted!
-    template<bool check_uniqueness = false, AdjAdapterType<Adjacency, Phylogeny> AdjAdapter = std::IgnoreFunction<void>>
-    void suppress_node(const NodeDesc v, AdjAdapter&& adapt = AdjAdapter()) {
-      if(in_degree(v) > 0) {
-        contract_up<check_uniqueness>(v, std::forward<AdjAdapter>(adapt));
+    template<bool check_uniqueness = false>
+    void suppress_node(const NodeDesc v) {
+      if(in_degree(v) == 1) {
+        contract_up<check_uniqueness>(v);
       } else {
-        contract_down<check_uniqueness>(v, std::forward<AdjAdapter>(adapt));
+        contract_down<check_uniqueness>(v);
       }
     }
     template<class... Args>

@@ -139,6 +139,8 @@ namespace PT {
   template<class F> concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
   template<class F> concept OptionalNodeFunctionType = NodeFunctionType<F> || std::is_void_v<F>;
 
+
+
   template<class T>
   concept DataExtracterType = requires {
     { T::ignoring_node_labels } -> std::convertible_to<const bool>;
@@ -169,11 +171,9 @@ namespace PT {
   using NodeMap = std::unordered_map<NodeDesc, T>;
   using NameVec = std::vector<std::string>;
 
-  // an adjacency is something with a NodeDesc field called nd
+  // an adjacency is something that can be converted to a NodeDesc
   template<class A>
-  concept _AdjacencyType = std::is_convertible_v<const A, const NodeDesc&>;
-  template<class A>
-  concept AdjacencyType = std::is_same_v<NodeDesc, std::remove_cvref_t<A>> || _AdjacencyType<A>;
+  concept AdjacencyType = std::is_convertible_v<const A, const NodeDesc&>;
 
   template<class A>
   concept AdjacencyContainerType = (std::ContainerType<A> && AdjacencyType<typename std::value_type_of_t<A>>);
@@ -198,6 +198,17 @@ namespace PT {
     { e.head() } -> std::convertible_to<NodeDesc>;
     { e.tail() } -> std::convertible_to<NodeDesc>;
   };
+  template<class T>
+  concept AdjPairType = AdjacencyType<typename std::remove_reference_t<T>::first_type> && AdjacencyType<typename std::remove_reference_t<T>::second_type>;
+  // a 'loose' edge type is either an edge or a pair of AdjacencyTypes
+  template<class T>
+  concept LooseEdgeType = EdgeType<T> || AdjPairType<T>;
+
+  template<class F, class Edge>
+  concept EdgeFunctionType = LooseEdgeType<Edge> && std::invocable<F, Edge>;
+  template<class F, class Edge>
+  concept OptionalEdgeFunctionType = EdgeFunctionType<F, Edge> || std::is_void_v<F>;
+
 
   template<class P> 
   concept StrictPhylogenyType = requires(NodeDesc u) {

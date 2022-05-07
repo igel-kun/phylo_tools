@@ -146,12 +146,12 @@ namespace PT {
         std::cout << "created copy " << u_copy << " of "<< other_u<<'\n';
         std::cout << "extracting node data? "<<extract_node_data<<'\n';
         if constexpr (extract_node_data) {
-          u_copy = helper.create_root(data_extracter.get_node_data(other_u));
+          u_copy = helper.create_root(data_extracter(Ex_node_data{}, other_u));
           std::cout << "data of "<<u_copy<<" is now "<<helper.N[u_copy].data() << "\n";
         } else u_copy = helper.create_root();
         if constexpr (extract_labels) {
-          std::cout << "copying extracted label "<<data_extracter.get_node_label(other_u)<<" to "<<u_copy<<"\n";
-          node_of<TargetPhylo>(u_copy).label() = data_extracter.get_node_label(other_u);
+          std::cout << "copying extracted label "<<data_extracter(Ex_node_label{}, other_u)<<" to "<<u_copy<<"\n";
+          node_of<TargetPhylo>(u_copy).label() = data_extracter(Ex_node_label{}, other_u);
         }
       }
       return u_copy;
@@ -170,10 +170,10 @@ namespace PT {
       } else { // if other_v is not in the translate map yet, then add it
         DEBUG5(std::cout << "adding new child to "<<u_copy<<"\n");
         if constexpr (extract_node_data)
-          v_copy = helper.create_node_below_with_data(u_copy, data_extracter.get_node_data(other_v), std::forward<MoreArgs>(args)...);
+          v_copy = helper.create_node_below_with_data(u_copy, data_extracter(Ex_node_data{}, other_v), std::forward<MoreArgs>(args)...);
         else
           v_copy = helper.create_node_below_no_data(u_copy, std::forward<MoreArgs>(args)...);
-        if constexpr (extract_labels) node_of<TargetPhylo>(v_copy).label() = data_extracter.get_node_label(other_v);
+        if constexpr (extract_labels) node_of<TargetPhylo>(v_copy).label() = data_extracter(Ex_node_label{}, other_v);
       }
       return v_copy;
     }
@@ -183,10 +183,10 @@ namespace PT {
       return emplace_edge(other_uv.first, other_uv.second, std::forward<MoreArgs>(args)...);
     }
 
-    template<class Edge, class... MoreArgs> requires (!std::is_same_v<std::remove_cvref_t<Edge>, NodePair>)
+    template<EdgeType Edge, class... MoreArgs>
     NodeDesc emplace_edge(Edge&& uv, MoreArgs&&... args) {
       if constexpr (extract_edge_data)
-        return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)..., data_extracter.get_edge_data(std::forward<Edge>(uv)));
+        return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)..., data_extracter(std::forward<Edge>(uv)));
       else
         return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)...);
     }

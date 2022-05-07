@@ -47,6 +47,40 @@ namespace std{
   template<template<class> class X, template<class> class Y>
   struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
 
+  // get the first type in a parameter pack, or void if pack size is 0
+  template<class... Args>
+  struct _FirstTypeOf { using type = void; };
+  template<class First, class... Args>
+  struct _FirstTypeOf<First, Args...> { using type = First; };
+  template<class... Args>
+  using FirstTypeOf = _FirstTypeOf<Args...>::type;
+
+  // ---------------- conditional invocation ---------------------------
+
+  // if F is invocable with Args... yield the result of this invocation, otherwise yield Else
+  template<class F, class Else, class... Args> struct _invoke_result { using type = Else; };
+  template<class F, class Else, class... Args> requires std::invocable<F, Args...>
+  struct _invoke_result<F, Else, Args...> { using type = std::invoke_result_t<F, Args...>; };
+  template<class F, class Else, class... Args> 
+  using my_invoke_result = typename _invoke_result<F, Else, Args...>::type;
+
+#warning "TODO: unify this using proper type-/value- extraction from parameter packs"
+  // apply a function or pass through first argument if Function cannot be invoked with first and other_args
+  template<class Function, class FirstArg, class... OtherArgs>
+  my_invoke_result<Function, FirstArg, FirstArg, OtherArgs...>
+    apply_or_pass1(Function&& f, FirstArg&& first, OtherArgs&&... other_args) {
+      if constexpr (std::invocable<Function, FirstArg, OtherArgs...>)
+        return f(std::forward<FirstArg>(first), std::forward<OtherArgs>(other_args)...);
+      else return first;
+  }
+  // apply a function or pass through second argument if Function cannot be invoked with first and second and other_args
+  template<class Function, class FirstArg, class SecondArg, class... OtherArgs>
+  my_invoke_result<Function, SecondArg, FirstArg, SecondArg, OtherArgs...>
+    apply_or_pass2(Function&& f, FirstArg&& first, SecondArg&& second, OtherArgs&&... other_args) {
+      if constexpr (std::invocable<Function, FirstArg, SecondArg, OtherArgs...>)
+        return f(std::forward<FirstArg>(first), std::forward<SecondArg>(second), std::forward<OtherArgs>(other_args)...);
+      else return second;
+  }
 
   // ---------------- copy CV or & qualifiers from a type to the next -------------------
   // this is useful as what we're getting from a "const vector<int>" should be "const int", not "int" (the actualy value_type)
