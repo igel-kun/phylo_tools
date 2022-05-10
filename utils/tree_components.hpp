@@ -51,11 +51,20 @@ namespace PT{
 
   public:
 
-    NodeDesc visible_leaf_of(const NodeDesc u) const { assert(comp_info.contains(u)); return comp_info.set_of(u).payload; }
-    void set_visible_leaf(const NodeDesc u, const NodeDesc leaf) { assert(comp_info.contains(u)); comp_info.set_of(u).payload = leaf; }
+    NodeDesc visible_leaf_of(const NodeDesc u) const {
+      const auto iter = comp_info.find(u);
+      return (iter == comp_info.end()) ? NoNode : iter->second.payload;
+    }
+    bool set_visible_leaf(const NodeDesc u, const NodeDesc leaf) {
+      const auto iter = comp_info.find(u);
+      if(iter != comp_info.end()) {
+        comp_info.set_of(u).payload = iter->second.payload = leaf;
+        return true;
+      } else return false;
+    }
 
     // return the root of x's tree component
-    NodeDesc comp_root_of(const NodeDesc x) {
+    NodeDesc comp_root_of(const NodeDesc x) const {
       return comp_info.contains(x) ? comp_info.set_of(x).get_representative() : NoNode;
     }
 

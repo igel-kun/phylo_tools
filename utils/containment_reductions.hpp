@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "predicates.hpp"
 #include "types.hpp"
 #include "tree_tree_containment.hpp"
 #include "tree_comp_containment.hpp"
@@ -32,9 +33,11 @@ namespace PT {
     NodeSet node_queue;
     void add(const NodeDesc x) {
       append(node_queue, x);
-      std::cout << "adding node "<<x<<" to queue, now: "<<node_queue<<"\n";
+      //std::cout << "adding node "<<x<<" to queue, now: "<<node_queue<<"\n";
     }
     
+    // prepare first round of reticulations to merge
+    void init_queue() {}
   };
 
 
@@ -49,28 +52,31 @@ namespace PT {
     // remove leaves without label from the host
     bool apply() {
       auto& host = manager.contain.host;
-      std::cout << "removing orphans from "<<node_queue<<'\n';
+      std::cout << "removing orphans from "<<node_queue<<" in\n";
+      std::cout << host <<"\n";
       bool result = false;
       while(!node_queue.empty()){
         const NodeDesc v = std::value_pop(node_queue);
+        std::cout << "next orphan: "<<v<<"\n";
+        assert(host.label(v).empty());
+        assert(host.out_degree(v) <= 1);
+        assert((host.out_degree(v) == 0) || (host.in_degree(v) <= 1));
         // if u is unlabeled, queue its parents and remove u itself
-        if(host.label(v).empty() && (host.out_degree(v) <= 1)) {
-          if(host.out_degree(v) == 0) {
-            for(const NodeDesc u: host.parents(v))
-              if(host.out_degree(u) <= 2)
-                append(node_queue, u);
-            std::cout << "removing node "<<v<<"\n";
-            manager.remove_from_queues(v);
-            host.remove_node(v);
-          } else manager.suppress_node_in_host(v);
-          result = true;
-        }
+        if(host.out_degree(v) == 0) {
+          manager.suppress_leaf_in_host(v);
+        } else manager.suppress_node_in_host(v);
+        result = true;
       }
       return result;
     }
 
-    // prepare first round of reticulations to merge
-    void init_queue() {}
+    void init_queue() {
+      const auto& host = manager.contain.host;
+      for(const NodeDesc x: manager.contain.host.nodes())
+        if((host.in_degree(x) <= 1) && (host.out_degree(x) <= 1) && (host.label(x).empty()))
+          Parent::add(x);
+    }
+
   };
 
 
@@ -179,6 +185,7 @@ namespace PT {
   template<class Manager>
   struct CherryPicker: public ContainmentReductionWithNodeQueue<Manager> {
     using Parent = ContainmentReductionWithNodeQueue<Manager>;
+    using Parent::Parent;
     using typename Parent::Host;
     using typename Parent::Guest;
     using typename Parent::LabelMatching;
@@ -188,101 +195,127 @@ namespace PT {
     using Parent::comp_root_of;
     using Parent::add;
 
+    using LabelSet = HashSet<AsMapKey<LabelType>>;
+
     bool apply() { return simple_cherry_reduction(); }
 
     void init_queue() {
-      // put all leaves of the host in the queue
+      // put all labeled nodes of the host in the queue
       for(const auto uv: manager.contain.HG_label_match)
         add(uv.second.first);
     }
 
     bool simple_cherry_reduction() {
       std::cout << "\tCHERRY: applying reduction...\n";
-      bool result = false;
       while(!node_queue.empty()){
         std::cout << "value-popping "<<front(node_queue)<<"\n";
         const NodeDesc u = value_pop(node_queue);
         std::cout << "cherry on node "<<u<<"\n";
         const auto& label_match = manager.find_label_in_host(u);
         std::cout << "using label-match " << *label_match << "\n";
-        if(simple_cherry_reduction_from(label_match))
-          result = true;
+        if(simple_cherry_reduction_from(label_match)) return true;
       }
-      std::cout << "done with cherry reduction, result is "<<result<<"\n";
+      return false;
+    }
+#warning "TODO: make all functions static that don't need the node_queue"
+
+    // return the parent of u, the parent of v, and whether all degrees work out
+    static std::tuple<NodeDesc, NodeDesc, bool> label_matching_sanity_check(const NodeDesc host_x, const NodeDesc guest_x) {
+      std::tuple<NodeDesc, NodeDesc, bool> result{NoNode, NoNode, false};
+
+      if(Host::in_degree(host_x) == 1) {
+        const NodeDesc host_px = Host::parent(host_x);
+        if(Host::in_degree(host_px) <= 1) {
+          std::get<0>(result) = host_px;
+        } else return result;
+      } else return result;
+      
+      if(Guest::in_degree(guest_x) == 1) {
+        std::get<1>(result) = Guest::parent(guest_x);
+      } else return result;
+      get<2>(result) = true;
+      return result;
+    }
+
+#warning "TODO: try to work with NodeDesc's instead of labels here"
+    static LabelSet get_labels_of_children(const NodeDesc pv) {
+      LabelSet result;
+      for(const NodeDesc x: Guest::node_of(pv).children()) {
+        const auto& x_node = Guest::node_of(x);
+        // if pv is parent of a non-leaf in the guest, then cancel rule application by returning the empty set
+        if(x_node.out_degree() != 0) {
+          result.clear();
+          break;
+        }
+        append(result, x_node.label());
+      }
       return result;
     }
 
     bool simple_cherry_reduction_from(const std::iterator_of_t<LabelMatching>& uv_label_iter) {
       std::cout << "\tCHERRY: checking label matching "<<*uv_label_iter<<"\n";
       const auto& uv = uv_label_iter->second;
-      const NodeDesc u = uv.first;
-      const auto& u_node = node_of<Host>(u);
-      if(u_node.in_degree() != 1) return false;
-      
-      const NodeDesc v = uv.second;
-      const auto& v_node = node_of<Guest>(v);
-      if(v_node.in_degree() != 1) return false;
-      
-      const NodeDesc pu = u_node.any_parent();
-      const auto& pu_node = node_of<Host>(pu); 
-      if(pu_node.in_degree() > 1) return false;
+      const auto [u, v] = uv;
+      const auto [pu, pv, success] = label_matching_sanity_check(u, v);
+     
+      if(success) {
+        // degrees match, so see if the labels of the children match
+        // step 1: compute a set of leaves directly below the parent of v (in guest)
+        LabelSet seen = get_labels_of_children(pv);
+        if(!seen.empty()) {
+          //NOTE: detect reticulated cherries by passing through reticulations
+          const auto& puC = Host::children(pu);
+          std::cout << "\tCHERRY: considering children "<<puC<<" of "<<pu<<" in the host (leaves in guest: "<<seen<<")\n";
+          if(puC.size() >= seen.size()){
+            const auto& host = manager.contain.host;
 
-      const NodeDesc pv = v_node.any_parent();
-      const auto& pv_node = node_of<Guest>(pv);
-      
-
-      // degrees match, so see if the labels of the children match
-      // step 1: compute a set of leaves directly below the parent of v (in guest)
-      HashSet<AsMapKey<LabelType>> seen;
-      for(const NodeDesc x: pv_node.children()) {
-        const auto& x_node = node_of<Guest>(x);
-        if(x_node.out_degree() != 0) return false;
-        append(seen, x_node.label());
-      }
-      //NOTE: detect reticulated cherries by passing through reticulations
-      const auto& puC = pu_node.children();
-      std::cout << "\tCHERRY: considering children "<<puC<<" of "<<pu<<" in the host (leaves in guest: "<<seen<<")\n";
-      if(puC.size() >= seen.size()){
-        const auto& host = manager.contain.host;
-        std::vector<NodePair> edge_removals;
-        for(auto iter = puC.begin(); iter != puC.end();){
-          NodeDesc x = *iter; ++iter;
-          NodeDesc z = pu;
-          // get the first reti on the pu-->x path into y and it's parent into z
-          while((host.out_degree(x) == 1) && (host.in_degree(x) == 1)) x = host.any_child(z = x);
-          NodeDesc y = x;
-          // skip all remaining outdeg-1 nodes
-          while(host.out_degree(x) == 1) x = host.any_child(x);
-          // if we've arrived at a label below pu that is not below pv, then pu-->x will never be in an embedding of guest in host!
-          const auto seen_iter = seen.find(host.label(x));
-          if(seen_iter == seen.end()) {
-            append(edge_removals, z, y);
-          } else seen.erase(seen_iter);
-        }
-        bool result = !edge_removals.empty();
-        for(const auto& [z,y]: edge_removals)
-          if(host.in_degree(y) > 1)
-            manager.remove_edge_in_host(z, y);
-        if(!edge_removals.empty()) std::cout << "new host is:\n" << host <<'\n';
-        // if we found all labels occuring below pv also below pu, then we'll apply the cherry reduction
-        if(seen.empty()) {
-          std::cout << "\tCHERRY: found (reticulated) cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
-          // step 1: fix visibility labeling to u, because the leaf that pu's root is visible from may not survive the cherry reduction (but u will)
-          manager.contain.comp_info.set_visible_leaf(comp_root_of(pu), u);
-          // step 2: prune host and guest
-          manager.HG_match_rule.match_nodes(pu, pv, uv_label_iter);
-          std::cout << "\tCHERRY: after reduction:\nhost:\n"<<host<<"guest:\n"<<manager.contain.guest<<"\n";
-          std::cout << "comp-roots:\n"; for(const NodeDesc z: manager.contain.host.nodes()) std::cout << z <<": " << manager.contain.comp_info.comp_root_of(z) <<'\n';
-        } else return result;
-      } else manager.HG_match_rule.match_nodes(pu, v, uv_label_iter); // if puC is smaller than seen, then pu cannot display pv, so pu has to display v
-      return true;
-    }
-
-    bool simple_cherry_reduction_for_label(const LabelType& label) {
-      return label.empty() ? false : simple_cherry_reduction_from(manager.find_label(label));
-    }
-
-#warning "TODO: apply general cherry reduction before branching: 1. uv is cherry in guest and 2. lca(uv) is unique in host OR, slightly cheaper: 2. exists lowest ancestor x of u & v s.t. x visible on v (tree-path f.ex.) and the x-->u path is unqiue"
+            // step 1: collect all labels directly below x
+            NodeVec edge_removals;
+            for(const NodeDesc x: puC) {
+              NodeDesc y = x;
+              // if x is a reti, get the tree-node below x
+              while(Host::out_degree(y) == 1) y = Host::any_child(y);
+              // if we've arrived at a node whose visible leaf is not below pv, then pu-->x will never be in an embedding of guest in host!
+              const NodeDesc vis_leaf = manager.contain.comp_info.visible_leaf_of(y);
+              assert((vis_leaf != NoNode) || Host::label(y).empty()); // if x has a label, it should have a visible leaf
+              if(vis_leaf != NoNode) {
+                const auto& vis_label = Host::label(vis_leaf);
+                std::cout << "\tCHERRY: using visible-leaf "<<vis_leaf<<" with label "<<vis_label<<", seen = "<<seen<<"\n";
+                const auto seen_iter = seen.find(vis_label);
+                if(seen_iter == seen.end()) {
+                  append(edge_removals, x);
+                } else seen.erase(seen_iter);
+              }
+            }
+            // step 2: remove edges to nodes that see a label that is not below pv
+            bool result = !edge_removals.empty();
+            if(result) {
+              std::cout << "\tCHERRY: want to delete edges "<<edge_removals<<"\n";
+              for(const NodeDesc x: edge_removals) {
+                assert(Host::is_edge(pu,x));
+                if(Host::in_degree(x) == 1) {
+  #warning "TODO: deal with this properly instead of assert(false)"
+                  assert(false && "trying to cut-off a stable tree node, this should never happen if N displays T!");
+                  manager.remove_edges_to_retis_below(x);
+                } else manager.remove_edge_in_host(pu, x);
+              }
+              if(!edge_removals.empty()) std::cout << "new host is:\n" << host <<'\n';
+            }
+            // if we found all labels occuring below pv also below pu, then we'll apply the cherry reduction
+            if(seen.empty()) {
+              std::cout << "\tCHERRY: found (reticulated) cherry at "<<pu<<" (host) and "<<pv<<" (guest)\n";
+              // step 1: fix visibility labeling to u, because the leaf that pu's root is visible from may not survive the cherry reduction (but u will)
+              manager.contain.comp_info.set_visible_leaf(comp_root_of(pu), u);
+              // step 2: prune host and guest
+              manager.HG_match_rule.match_nodes(pu, pv, uv_label_iter);
+              std::cout << "\tCHERRY: after reduction:\nhost:\n"<<host<<"guest:\n"<<manager.contain.guest<<"\n";
+              std::cout << "comp-roots:\n"; for(const NodeDesc z: manager.contain.host.nodes()) std::cout << z <<": " << manager.contain.comp_info.comp_root_of(z) <<'\n';
+            } else return result;
+          } else manager.HG_match_rule.match_nodes(pu, v, uv_label_iter); // if puC is smaller than seen, then pu cannot display pv, so pu has to display v
+          return true;
+        } else return false; // if get_labels_of_children returned the empty set, this indicates that pv has a child that is not a leaf, so give up
+      } else return false; // if label_matching_sanity_check failed, then give up
+    } 
 
   };
 
@@ -387,6 +420,7 @@ namespace PT {
 
     // visible tree-component reduction: find a lowest visible tree component C and reduce it in O(|C|) time; return true if network & tree changed
     bool apply() {
+      std::cout << "\tVISIBLE COMPONENTS: applying reduction...\n";
       const NodeDesc rt = get_eligible_component_root();
       if(rt != NoNode){
         std::cout << "tree-component rule with eligible node "<< rt <<" ("<< manager.contain.comp_info.comp_root_of(rt)<<")\n";
@@ -445,37 +479,23 @@ namespace PT {
       }
     }
 
-    // remove edges that run from the 'tree-node-body' below u to any reticulation
-    void remove_edges_to_retis_below(const NodeDesc u) {
-      auto& host = manager.contain.host;
-      const auto& u_children = host.children(u);
-      NodeVec to_delete;
-      to_delete.reserve(u_children.size());
-      for(const NodeDesc v: u_children)
-        if(!host.is_reti(v))
-          remove_edges_to_retis_below(v);
-      for(const NodeDesc v: u_children)
-        if(host.is_reti(v))
-          append(to_delete, v);
-      std::cout << "removing edges from "<<u<<" to nodes in "<<to_delete<<"\n";
-      for(const NodeDesc v: to_delete)
-        manager.remove_edge_in_host(u, v);
-    }
-
     // this prunes the tree-remains left after recursively removing dangling leaves after pruning guest
     void prune_host_except(const NodeDesc rt, const NodeDesc except) {
       assert(rt != except);
       auto& host = manager.contain.host;
       // NOTE: all leaves below rt except 'except' have been declared orphans already.
       // step 1: remove all edges between tree nodes below rt and reticulations 
-      remove_edges_to_retis_below(rt);
+      manager.remove_edges_to_retis_below(rt);
       // step 2: rehang except onto rt and mark its parents for cleanup
-      for(const NodeDesc p: host.parents(except))
-        manager.clean_orphan_later(p);
+      assert(host.in_degree(except) == 1);
+      const NodeDesc e_parent = host.parent(except);
+      if(e_parent != rt) {
+        if(host.out_degree(e_parent) <= 2)
+          manager.clean_orphan_later(e_parent);
 
-      std::cout << "rehanging "<<except<<" (parents "<<host.parents(except)<<") below "<<rt<<"\n"; 
-      host.replace_parents(except, rt);
-      manager.clean_orphan_later(rt);
+        std::cout << "rehanging "<<except<<" (parents "<<host.parents(except)<<") below "<<rt<<"\n"; 
+        host.replace_parents(except, rt);
+      }
     }
 
     // after having identified a node host_u in the host that will be used to display the subtree below guest_v, remove the subtrees below them
@@ -508,6 +528,253 @@ namespace PT {
     }
   };
 
+  // a class for extended cherry reduction
+  // NOTE: one application of this runs in O(n) time
+  // NOTE the reduction works as follows for a cherry abc in guest:
+  //      1. let a have a tree path P to the parent px of any leaf x != a
+  //      2. let uv be an edge such that u is on P but v is not
+  //      3. let none of bc be below v (note that a cannot be below v)
+  //      ----> delete uv
+  //      Further, if
+  //      2. b or c has a unique path onto P, then fix this path (remove anything that strays from it)
+  template<class Manager>
+  struct ExtendedCherryPicker: public CherryPicker<Manager> {
+    using Parent = CherryPicker<Manager>;
+    using Parent::Parent;
+    using typename Parent::Host;
+    using typename Parent::Guest;
+    using typename Parent::LabelMatching;
+    using typename Parent::LabelType;
+    using typename Parent::LabelSet;
+    using Parent::manager;
+    using Parent::node_queue;
+    using Parent::comp_root_of;
+    using Parent::add;
+    using Parent::label_matching_sanity_check;
+    using Parent::get_labels_of_children;
+
+    using Path = NodeSet;
+
+    bool apply() {
+      std::cout << "\texCHERRY: applying reduction...\n";
+      while(!node_queue.empty()){
+        std::cout << "value-popping "<<front(node_queue)<<"\n";
+        const NodeDesc u = value_pop(node_queue);
+        std::cout << "ex-cherry on node "<<u<<"\n";
+        const auto& label_match = manager.find_label_in_host(u);
+        std::cout << "using label-match " << *label_match << "\n";
+        if(extended_cherry_reduction_from(label_match)) return true;
+      }
+      return false;
+    }
+
+    // find a labeled node below x, exploring only tree nodes
+    NodeDesc labeled_node_in_tree_comp_below(const NodeDesc x) {
+      if(Host::label(x).empty()) {
+        if(Host::in_degree(x) <= 1) {
+          for(const NodeDesc y: Host::children(x)) {
+            const NodeDesc l = labeled_node_in_tree_comp_below(y);
+            if(l != NoNode) return l;
+          }
+        }
+        return NoNode;
+      } else return x;
+    }
+
+    // return the top of the path P as well as the leaf reachable by treepath from top
+    std::pair<NodeDesc, NodeDesc> find_path_from(NodeDesc u, Path& P) {
+      append(P, u);
+      while(Host::in_degree(u) == 1) {
+        const NodeDesc pu = Host::parent(u);
+        append(P, pu);
+        for(const NodeDesc puc: Host::children(pu)) {
+          if(puc != u) {
+            const NodeDesc l = labeled_node_in_tree_comp_below(puc);
+            if(l != NoNode) return {pu, l};
+          }
+        }
+        u = pu;
+      }
+      return {NoNode, NoNode};
+    }
+
+    // remove all branches between a node 'bottom' and a set 'top' using a predicate NextParent that is true for (u,v) if u is v's next parent
+    // NOTE: return the number of branches encountered
+    // NOTE: no edges of top are removed and bottom has only its in-edges removed (except to the parent)
+    template<class Top, pred::PredicateType<NodeDesc, NodeDesc> NextParent = pred::TruePredicate>
+      requires (NodeSetType<Top> || std::is_same_v<std::remove_cvref_t<Top>, NodeDesc>)
+    size_t remove_branches_between(Top&& top, NodeDesc bottom, NextParent&& next_parent = NextParent()) {
+      std::vector<NodePair> removals;
+      while(1) {
+        NodeDesc parent = NoNode;
+        // step 1: mark incoming edges of bottom for removal (except from the next parent)
+        for(const NodeDesc z: Host::parents(bottom))
+          if(next_parent(z, bottom)) {
+            parent = z;
+          } else append(removals, z, bottom);
+        // step 2: test the parent
+        if((parent != NoNode) && !std::test(top, parent)) {
+          // step 3: mark outgoing edges of the parent for removal
+          for(const NodeDesc z: Host::children(parent)) if(bottom != z) append(removals, parent, z);
+          bottom = parent;
+        } else break;
+      }
+      std::cout << "removing edges in "<<removals<<"\n";
+      for(const auto& [u, v]: removals)
+        manager.remove_edges_to_retis_below(u, v);
+      return removals.size();
+    }
+
+    // decide if x has a unique reverse path into the tree-component C containing P and return the last node before the path diverges
+    // NOTE: if x has no such path, then return NoNode
+    // NOTE: if the path is unique into P, then the resulting node is on P, otherwise, it is below a reticulation directly below C
+    // NOTE: if a unique path is found, then x_path contains exactly its nodes; otherwise, encountered contains all nodes above x
+    // NOTE: x_path will be a subset of encountered
+    NodeDesc unique_path_to(NodeDesc x, const Path& P, Path& x_path, NodeSet& encountered, const bool already_seen_P = false) {
+      // we'll use a reverse DFS from x
+      // step 1: find the first reti above x
+      Path current_path;
+      while(1) {
+        if(set_val(encountered, x)) {
+          if(!already_seen_P) {
+            if(test(P, x)) {
+              append(x_path, std::move(current_path));
+              append(x_path, x);
+              return x;
+            } else append(current_path, x);
+          }
+        } else {
+          // if we arrived at a node on our tentative 'unique' path, then that path is actually not unique
+          if(test(x_path, x)) x_path.clear();
+          return NoNode;
+        }
+        switch(Host::in_degree(x)) {
+          default:{
+                    const NodeDesc top = unique_path_to_reti(x, P, x_path, encountered, already_seen_P);
+                    if(top != NoNode) {
+                      append(x_path, std::move(current_path));
+                      append(x_path, x);
+                    }
+                    return top;
+                  }
+          case 0: return NoNode;
+          case 1: x = Host::parent(x);
+        }
+      }
+    }
+
+    NodeDesc unique_path_to_reti(NodeDesc x, const Path& P, Path& x_path, NodeSet& encountered, bool already_seen_P = false) {
+      assert(Host::is_reti(x));
+      const auto& info = manager.contain.comp_info;
+      // when encountering a reticulation, recurse for all its parents
+      // NOTE: if this reticulation is directly below the tree-component C of P, then return this reticulation
+      NodeDesc result = x;
+      const NodeDesc C_root = info.comp_root_of(x);
+      if((C_root != NoNode) && (C_root == info.comp_root_of(front(P)))) {
+        if(!already_seen_P) {
+          // if C_root is in P then all reverse paths from parents of x hit P, so no reason to do any work here
+          if(!test(P, C_root)) {
+            append(encountered, C_root);
+            // so all of x's parents are in C; still some of them might not hit P so check that out
+            Path tmp_path, unique_path;
+            for(const NodeDesc p: Host::parents(x)) {
+              const NodeDesc top = unique_path_to(p, P, tmp_path, encountered, false);
+              // NOTE: we're only interested in paths hitting P
+              if(top != NoNode) {
+                if(unique_path.empty()) {
+                  result = top;
+                  unique_path = std::move(tmp_path);
+                  tmp_path.clear();
+                } else return x;
+              }
+            }
+            // if we reach this point, then there is only 1 reverse path from x into P, so add this to x_path
+            if(!unique_path.empty()) {
+              append(x_path, std::move(unique_path));
+            } else return x;
+          }
+        } else {
+          // we've already_seen_P and now we'll see it again, so x_path is not unique
+          x_path.clear();
+          return NoNode;
+        }
+      } else {
+        for(const NodeDesc p: Host::parents(x)) {
+          const NodeDesc top = unique_path_to(p, P, x_path, encountered, already_seen_P);
+          if(top != NoNode) {
+            // NOTE: if we've already_seen_P, then unique_path_to cannot possibly return anything else but NoNode
+            assert(!already_seen_P);
+            assert(result == x);
+            already_seen_P = true;
+            result = top;
+          }
+        }
+      }
+      return result;
+    }
+
+    bool extended_cherry_reduction_from(const std::iterator_of_t<LabelMatching>& uv_label_iter) {
+      std::cout << "\texCHERRY: checking label matching "<<*uv_label_iter<<"\n";
+      const auto& uv = uv_label_iter->second;
+      const auto [u, v] = uv;
+      const auto [pu, pv, success] = label_matching_sanity_check(u, v);
+     
+      if(success) {
+        // degrees match, so see if the labels of the children match
+        LabelSet cherry_leaves = get_labels_of_children(pv);
+        if(!cherry_leaves.empty()) {
+          // step 1:  move up from u to find the path P as well as potential edges to remove
+          Path P;
+          const auto [topP, other_leaf] = find_path_from(u, P);
+          const auto& other_label = Host::label(other_leaf);
+          assert(other_leaf != u);
+          assert(!other_label.empty());
+          if(test(cherry_leaves, other_label)) {
+            // if we found another label of our cherry, then there is another tree-path Q from topP to other_leaf, so we can remove all strays from both!
+            // NOTE: if there are no strays, then the simple cherry rule was not applied properly!
+            // step 2a: remove branches from Q (topP-->other_leaf)
+            const size_t removed_branches = remove_branches_between(topP, other_leaf) + remove_branches_between(topP, u);
+            assert(removed_branches > 0);
+            return true;
+          } else {
+            // if we found a label that is not in the cherry in the guest then we'll first try to find unique paths from the siblings of u
+            // if no sibling of u has a unique (reverse) path onto P, then we'll follow the paths all the way up
+            //    in order to determine the lowest node on P that has a path to a sibling of u
+            for(const auto& label: cherry_leaves){
+              // step 0: compute the 'siblings' of u, that is, the nodes in Host with the same labels as v's siblings in Guest
+              const auto iter = manager.find_label(label);
+              assert(iter != manager.contain.HG_label_match.end());
+              const NodeDesc x = iter->second.first;
+              assert(Host::label(x) == label);
+              if(x != u) {
+                std::cout << "\texCHERRY: finding reverse paths from "<<x<<" into "<<P<<"\n";
+                Path x_path;
+                NodeSet encountered;
+                // step 1: explore all (reverse) paths from x to the root and get a node from which we can remove branches downwards
+                // NOTE: top could also be a node right below the tree-component C that contains P - in this case, the path is only non-unique in C
+                // step 2: follow the paths all the way to the root
+                const NodeDesc top = unique_path_to(x, P, x_path, encountered);
+                if(top != NoNode) {
+                  std::cout << "\texCHERRY: found path on nodes "<<x_path<<" with top "<<top<<", now removing branches\n";
+                  // if we found a unique (reverse) path from x into P, then remove all branches from it
+                  const size_t removed_branches = remove_branches_between(top, x, [&](const NodeDesc par, const NodeDesc){ return test(x_path, par); });
+                  assert(removed_branches != 0);
+                  return true;
+                } else {
+                  std::cout << "\texCHERRY: marked all nodes above "<<x<<": "<<encountered<<", now removing branches\n";
+                  // if there is no unique path from P to x, then we still can remove all branches between u and the first encountered node
+                  const size_t removed_branches = remove_branches_between(encountered, u);
+                  if(removed_branches != 0) return true;
+                }
+              } // if x != u
+            } // for all 'siblings' x of u
+            return false;
+          }
+        } else return false; // if get_labels_of_children returned the empty set, this indicates that pv has a child that is not a leaf, so give up
+      } else return false; // if label_matching_sanity_check failed, then give up
+    } 
+  };
+
 
   // a class managing the application of all reduction rules in the correct order
   template<class _Containment>
@@ -524,6 +791,7 @@ namespace PT {
     CherryPicker<ReductionManager> cherry_rule;
     VisibleComponentRule<ReductionManager> visible_comp_rule;
     HostGuestMatch<ReductionManager> HG_match_rule;
+    ExtendedCherryPicker<ReductionManager> extended_cherries;
 
     ReductionManager(Containment& c):
       contain(c),
@@ -532,12 +800,40 @@ namespace PT {
       triangle_rule(*this),
       cherry_rule(*this),
       visible_comp_rule(*this),
-      HG_match_rule(*this)
+      HG_match_rule(*this),
+      extended_cherries(*this)
     {}
 
 
     void clean_orphan_later(const NodeDesc u) {
-      remove_orphans.add(u);
+      std::cout << "requested to clean orphan "<<u<<" later\n";
+      if(contain.host.label(u).empty())
+        remove_orphans.add(u);
+    }
+
+    void suppress_leaf_in_host(const NodeDesc u) {
+      auto& host = contain.host;
+      assert(host.out_degree(u) == 0);
+
+      for(const NodeDesc x: host.parents(u))
+        if(host.out_degree(x) <= 2)
+          clean_orphan_later(x);
+
+      remove_from_comp_DAG(u);
+      remove_from_queues(u);
+      contain.host.remove_node(u);
+    }
+
+    void remove_from_comp_DAG(const NodeDesc u) {
+      auto& info = contain.comp_info;
+      const auto iter = info.N_to_comp_DAG.find(u);
+      if(iter != info.N_to_comp_DAG.end()) {
+        const NodeDesc u_in_cDAG = iter->second;
+        if(info.comp_DAG.out_degree(u_in_cDAG) == 1)
+          info.comp_DAG.contract_down_unique(u_in_cDAG);
+        else info.comp_DAG.remove_node(u_in_cDAG);
+        info.N_to_comp_DAG.erase(iter);
+      }
     }
 
     void suppress_node_in_host(const NodeDesc u) {
@@ -555,9 +851,8 @@ namespace PT {
           if(info.comp_root_of(u) == u) {
             assert((host.in_degree(u) == 0) || host.is_reti(host.parent(u)));
             // if u is a component-root, then it should be a leaf in the comp_DAG, which we can remove now
-            const NodeDesc u_in_cDAG = info.N_to_comp_DAG.at(u);
-            assert(info.comp_DAG.is_leaf(u_in_cDAG));
-            info.comp_DAG.remove_node(u_in_cDAG);
+            assert(info.N_to_comp_DAG.contains(u));
+            remove_from_comp_DAG(u);
             info.replace_comp_root(u, u_child);
             std::cout << "changed comp-root of "<<u_child<<" to "<<info.comp_root_of(u_child)<<"\n";
           }
@@ -584,11 +879,8 @@ namespace PT {
         if(info.comp_root_of(u) == u) {
           assert(host.is_reti(u_parent));
           assert(info.N_to_comp_DAG.contains(u));
-          // if u is a component-root, then it should have out-deg 1 in the comp_DAG, so we can contract down
-          const NodeDesc u_in_cDAG = info.N_to_comp_DAG.at(u);
-          if(info.comp_DAG.out_degree(u_in_cDAG) == 1)
-            info.comp_DAG.contract_down_unique(u_in_cDAG);
-          else info.comp_DAG.remove_node(u_in_cDAG);
+          
+          remove_from_comp_DAG(u);
           // NOTE: since both u's child and parent are reticulations, we also want to contract u's parent down onto u's child
           host.contract_up(u, u_parent);
           contract_reti_onto_reti_child(u_parent);
@@ -615,18 +907,45 @@ namespace PT {
         host.contract_down(v);
       }
       // if u is now suppressible, then we either contract u down or its child up
-      if(host.out_degree(u) == 1) {
+      if(host.out_degree(u) == 1) 
         clean_orphan_later(u);
-        //suppress_node_in_host(u);
-      }
     }
 
     void contract_reti_onto_reti_child(const NodeDesc u) {
       auto& host = contain.host;
       assert(host.out_degree(u) == 1);
-      assert(host.is_reti(host.child(u)));
+      const NodeDesc u_child = host.child(u);
+      assert(host.is_reti(u_child));
       remove_from_queues(u);
-      host.contract_down_unique(u);
+      if(host.contract_down_unique(u) != 0)
+        for(const NodeDesc pu: host.parents(u_child))
+          if((host.in_degree(pu) <= 1) && (host.out_degree(pu) <= 1))
+            clean_orphan_later(pu);
+    }
+
+    // remove edges that run from the 'tree-node-body' below u to any reticulation
+    void remove_edges_to_retis_below(const NodeDesc u) {
+      assert(!contain.host.is_reti(u));
+      auto& host = contain.host;
+      const auto& u_children = host.children(u);
+      NodeVec to_delete;
+      to_delete.reserve(u_children.size());
+      for(const NodeDesc v: u_children)
+        if(!host.is_reti(v))
+          remove_edges_to_retis_below(v);
+      for(const NodeDesc v: u_children)
+        if(host.is_reti(v))
+          append(to_delete, v);
+      std::cout << "removing edges from "<<u<<" to nodes in "<<to_delete<<"\n";
+      for(const NodeDesc v: to_delete)
+        remove_edge_in_host(u, v);
+    }
+
+    // if v is a reti, then remove uv, otherwise remove edges in the subtree rooted at v
+    void remove_edges_to_retis_below(const NodeDesc u, const NodeDesc v) {
+      if(contain.host.is_reti(v)){
+        remove_edge_in_host(u,v);
+      } else remove_edges_to_retis_below(v);
     }
 
 
@@ -724,7 +1043,9 @@ namespace PT {
       std::cout << "cleaning "<<u<<" later, queue is now "<<to_clean<<"\n";
     }
 */
-    auto find_label(auto& label) const { return contain.HG_label_match.find(label); }
+    auto find_label(auto& label) const {
+      return contain.HG_label_match.find(label);
+    }
 
     auto find_label_in_guest(const NodeDesc u) const {
       return contain.HG_label_match.find(contain.guest.label(u));
@@ -741,6 +1062,14 @@ namespace PT {
     void apply() {
       std::cout << "\n ===== REDUCTION RULES ======\n\n";
       std::cout << "reti-m queue: "<<reti_merge.node_queue << "\n";
+      contain.comp_info.comp_DAG.print_subtree(std::cout, [](const NodeDesc u){ return std::to_string(u); });
+        
+      std::cout << "host:\n" << contain.host << "\nguest:\n" << contain.guest << "\ncomp-DAG:\n";
+
+      remove_orphans.init_queue();
+#warning "TODO: remove the following assert in production\n"
+      assert(remove_orphans.node_queue.empty());
+      remove_orphans.apply();
 
       reti_merge.init_queue();
       reti_merge.apply();
@@ -754,6 +1083,7 @@ namespace PT {
         std::cout << "host:\n" << contain.host << "\nguest:\n" << contain.guest << "\ncomp-DAG:\n";
         contain.comp_info.comp_DAG.print_subtree(std::cout, [](const NodeDesc u){ return std::to_string(u); });
         std::cout << "label matching: "<<contain.HG_label_match<<"\n";
+        std::cout << "visible leaves: "; for(const NodeDesc u:contain.host.nodes()) {const NodeDesc l = contain.comp_info.visible_leaf_of(u); if(l) std::cout << '(' << u << ": "<<l<<") "; } std::cout << '\n';
         std::cout << "comp-roots:\n"; for(const NodeDesc u: contain.host.nodes()) std::cout << u <<": " << contain.comp_info.comp_root_of(u) <<'\n';
 
         if(remove_orphans.apply()) continue;
@@ -766,6 +1096,11 @@ namespace PT {
 
         reti_merge.init_queue();
         if(reti_merge.apply()) continue;
+#warning "TObenchmark: on smaller networks, the extended cherry might actually be faster than visible-component rule, so maybe switch those in that case..."
+        if(contain.host.num_edges() - contain.host.num_nodes() >= config::min_retis_to_apply_extended_cherry) {
+          extended_cherries.init_queue();
+          if(extended_cherries.apply()) continue;
+        }
       }
       std::cout << "\n ===== REDUCTION done ======\n\n";
       std::cout << "host:\n" << contain.host << "guest:\n" << contain.guest << "comp-DAG:\n";

@@ -183,7 +183,7 @@ namespace std { // since it was the job of STL to provide for it and they failed
   bool set_val(S& s, const auto& val) { return append(s, val).second; }
   template<class S> requires (ContainerType<S> && SettableType<S>)
   bool set_val(S& s, const auto& val) { return s.set(val); }
-
+#warning "TODO: replace append into sets by set_val unless we need the iterator"
   // test if something is in the set
   template<SetType S>
   bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
@@ -191,8 +191,11 @@ namespace std { // since it was the job of STL to provide for it and they failed
   bool test(const M& _map, const key_type_of_t<M>& key) { return _map.count(key); }
   template<VectorType V>
   bool test(const V& vec, const auto& key) { return find(vec, key) != end(vec); }
+  template<class T>
+  bool test(const T& x, const T& y) { return x == y; }
 
   // I would write an operator= to assign unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
+#warning "TODO: this can be done by writing a manual conversion to unordered_set<uint32_t>"
   template<SetType C1, SetType C2> requires is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
   C2& copy(const C1& x, C2& y) {
     y.clear();

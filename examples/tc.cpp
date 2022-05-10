@@ -138,8 +138,12 @@ int main(const int argc, const char** argv) {
   MyNet& N = NT_tuple.first;
   MyTree& T = NT_tuple.second;
 
-  if(test(options, "-v"))
-    std::cout << "N:\n" << N << "\n" << get_extended_newick(N) << "\nT:\n" << T << "\n"<< get_extended_newick(T)<<"\n";
+  if(test(options, "-v")) {
+    std::cout << "N:\n" << N << "\n";
+    std::cout << get_extended_newick(N) << '\n';
+    std::cout << "T:\n" << T << '\n';
+    std::cout << get_extended_newick(T)<<'\n';
+  }
 
   std::cout << "\n\n starting the containment engine...\n\n";
   if(T.is_tree()) {
