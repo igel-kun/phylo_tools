@@ -723,20 +723,27 @@ namespace PT {
         // degrees match, so see if the labels of the children match
         LabelSet cherry_leaves = get_labels_of_children(pv);
         if(!cherry_leaves.empty()) {
+          std::cout << "\texCHERRY: found sibling-labels "<<cherry_leaves<<"\n";
           // step 1:  move up from u to find the path P as well as potential edges to remove
           Path P;
           const auto [topP, other_leaf] = find_path_from(u, P);
           const auto& other_label = Host::label(other_leaf);
           assert(other_leaf != u);
           assert(!other_label.empty());
+          std::cout << "\texCHERRY: found path on "<<P<<" with top "<<topP<<" seeing "<<other_leaf<<" on the other side\n";
           if(test(cherry_leaves, other_label)) {
-            // if we found another label of our cherry, then there is another tree-path Q from topP to other_leaf, so we can remove all strays from both!
-            // NOTE: if there are no strays, then the simple cherry rule was not applied properly!
+            // if we found another label of our cherry, then there is another tree-path Q from topP to other_leaf, so we can remove all branches from both!
+            // NOTE: if there are no branches, then the simple cherry rule was not applied properly!
             // step 2a: remove branches from Q (topP-->other_leaf)
             const size_t removed_branches = remove_branches_between(topP, other_leaf) + remove_branches_between(topP, u);
-            assert(removed_branches > 0);
-            return true;
-          } else {
+            // try and return early if we removed anything, so that cheaper reduction rules can finish the rest of the network
+            if(removed_branches > 0) return true;
+          }
+          // at this point, either other_leaf is not in cherry_leaves, or we could not remove any branches
+          // in the second case, maybe cherry_leaves contains even more 'siblings' of u, so we can try and find paths from them
+          cherry_leaves.erase(other_label);
+          cherry_leaves.erase(Host::label(u));
+          if(!cherry_leaves.empty()) {
             // if we found a label that is not in the cherry in the guest then we'll first try to find unique paths from the siblings of u
             // if no sibling of u has a unique (reverse) path onto P, then we'll follow the paths all the way up
             //    in order to determine the lowest node on P that has a path to a sibling of u
@@ -746,30 +753,29 @@ namespace PT {
               assert(iter != manager.contain.HG_label_match.end());
               const NodeDesc x = iter->second.first;
               assert(Host::label(x) == label);
-              if(x != u) {
-                std::cout << "\texCHERRY: finding reverse paths from "<<x<<" into "<<P<<"\n";
-                Path x_path;
-                NodeSet encountered;
-                // step 1: explore all (reverse) paths from x to the root and get a node from which we can remove branches downwards
-                // NOTE: top could also be a node right below the tree-component C that contains P - in this case, the path is only non-unique in C
-                // step 2: follow the paths all the way to the root
-                const NodeDesc top = unique_path_to(x, P, x_path, encountered);
-                if(top != NoNode) {
-                  std::cout << "\texCHERRY: found path on nodes "<<x_path<<" with top "<<top<<", now removing branches\n";
-                  // if we found a unique (reverse) path from x into P, then remove all branches from it
-                  const size_t removed_branches = remove_branches_between(top, x, [&](const NodeDesc par, const NodeDesc){ return test(x_path, par); });
-                  assert(removed_branches != 0);
-                  return true;
-                } else {
-                  std::cout << "\texCHERRY: marked all nodes above "<<x<<": "<<encountered<<", now removing branches\n";
-                  // if there is no unique path from P to x, then we still can remove all branches between u and the first encountered node
-                  const size_t removed_branches = remove_branches_between(encountered, u);
-                  if(removed_branches != 0) return true;
-                }
-              } // if x != u
+              assert(x != u);
+              std::cout << "\texCHERRY: finding reverse paths from "<<x<<" into "<<P<<"\n";
+              Path x_path;
+              NodeSet encountered;
+              // step 1: explore all (reverse) paths from x to the root and get a node from which we can remove branches downwards
+              // NOTE: top could also be a node right below the tree-component C that contains P - in this case, the path is only non-unique in C
+              // step 2: follow the paths all the way to the root
+              const NodeDesc top = unique_path_to(x, P, x_path, encountered);
+              if(top != NoNode) {
+                std::cout << "\texCHERRY: found path on nodes "<<x_path<<" with top "<<top<<", now removing branches\n";
+                // if we found a unique (reverse) path from x into P, then remove all branches from it
+                const size_t removed_branches = remove_branches_between(top, x, [&](const NodeDesc par, const NodeDesc){ return test(x_path, par); });
+                assert(removed_branches != 0);
+                return true;
+              } else {
+                std::cout << "\texCHERRY: marked all nodes above "<<x<<": "<<encountered<<", now removing branches\n";
+                // if there is no unique path from P to x, then we still can remove all branches between u and the first encountered node
+                const size_t removed_branches = remove_branches_between(encountered, u);
+                if(removed_branches != 0) return true;
+              }
             } // for all 'siblings' x of u
             return false;
-          }
+          } else return false; // if cherry_leaves is empty after not removing any branches, then we're done here
         } else return false; // if get_labels_of_children returned the empty set, this indicates that pv has a child that is not a leaf, so give up
       } else return false; // if label_matching_sanity_check failed, then give up
     } 
