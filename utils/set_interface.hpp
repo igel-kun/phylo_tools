@@ -297,13 +297,13 @@ namespace std { // since it was the job of STL to provide for it and they failed
     return result;
   }
   template<VectorType Q>
-  value_type_of_t<Q> value_pop(Q& q) {
-    value_type_of_t<Q> result = move(q.back());
+  auto value_pop(Q& q) {
+    auto result = move(q.back());
     q.pop_back();
     return result;
   }
   template<ContainerType Q> requires (!VectorType<Q>)
-  value_type_of_t<Q> value_pop(Q& q) {
+  auto value_pop(Q& q) {
     const auto iter = q.begin();
     value_type_of_t<Q> result = move(*iter);
     my_erase(q, iter);
@@ -311,32 +311,32 @@ namespace std { // since it was the job of STL to provide for it and they failed
   }
 
   template<ContainerType C>
-  value_type_of_t<C> value_pop(C& q, const iterator_of_t<const C>& iter) {
+  auto value_pop(C& q, const iterator_of_t<const C>& iter) {
     if(iter != end(q)) {
-      value_type_of_t<C> result = move(*iter);
+      auto result = move(*iter);
       q.erase(iter);
       return result;
     } else throw std::out_of_range("trying to pop values beyond the end");
   }
 
   template<IterableType C, class Key> requires requires(C c, Key k) { { std::find(c, k) } -> std::convertible_to<iterator_of_t<const C>>; }
-  value_type_of_t<C> value_pop(C& q, const Key& key) {
+  auto value_pop(C& q, const Key& key) {
     return value_pop(q, find(q, key));
   }
 
   template<ContainerType Q> requires requires(Q q) { { front(q) } -> convertible_to<value_type_of_t<Q>>; }
-  value_type_of_t<Q> value_pop_front(Q& q) {
+  auto value_pop_front(Q& q) {
     assert(!q.empty());
     const auto it = std::begin(q);
-    value_type_of_t<Q> v = move(*it);
+    auto v = move(*it);
     q.erase(it);
     return v;
   }
   template<IterableType Q> requires requires(Q q) { { back(q) } -> convertible_to<value_type_of_t<Q>>; }
-  value_type_of_t<Q> value_pop_back(Q& q) {
+  auto value_pop_back(Q& q) {
     assert(!q.empty());
     const auto it = std::prev(std::end(q));
-    value_type_of_t<Q> v = move(*it);
+    auto v = move(*it);
     q.erase(it);
     return v;
   }

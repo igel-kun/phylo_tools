@@ -1090,7 +1090,7 @@ namespace PT {
       std::cout << "extracter is "<<std::type_name<decltype(emplacer.data_extracter)>()<<"\n";
       build_from_edges(N.edges_below_preorder(in_root), emplacer);
       // mark the root
-      DEBUG4(std::cout << "marking root: "<<emplacer[in_root]<<"\n");
+      DEBUG4(std::cout << "marking root: "<<emplacer.at(in_root)<<"\n");
       emplacer.mark_root(in_root);
       DEBUG2(tree_summary(std::cout));
     }

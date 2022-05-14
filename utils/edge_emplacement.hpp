@@ -209,10 +209,24 @@ namespace PT {
         mark_roots(std::forward<Args>(args)...);
     }
 
-    NodeDesc operator[](const NodeDesc u) const { return helper.old_to_new.at(u); }
+    const NodeDesc& operator[](const NodeDesc u) const { return helper.old_to_new.at(u); }
+    NodeDesc at(const NodeDesc u) const { return helper.old_to_new.at(u); }
+    bool contains(const NodeDesc u) const { return helper.old_to_new.contains(u); }
+    NodeDesc lookup(const NodeDesc u, const NodeDesc _default = NoNode) const {
+      return_map_lookup(helper.old_to_new, u, _default);
+    }
 
     void clear() { helper.clear(); }
   };
+
+
+  // this saves you from writing 'EdgeEmplacementHelper' if you want to specify the Emplacer directly
+  template<bool _track_roots,
+           StrictPhylogenyType _TargetPhylo,
+           OptionalPhylogenyType _SourcePhylo = void,
+           NodeTranslationType OldToNewTranslation = NodeTranslation,
+           DataExtracterType Extracter = DataExtracter<_SourcePhylo, _TargetPhylo>>
+  using EdgeEmplacerWithHelper = EdgeEmplacer<EdgeEmplacementHelper<_track_roots, _TargetPhylo, _SourcePhylo, OldToNewTranslation>, Extracter>;
 
   template<class T> concept StrictEdgeEmplacerType = EmplacementHelperType<typename T::Helper>;
   template<class T> concept EdgeEmplacerType = StrictEdgeEmplacerType<std::remove_cvref_t<T>>;

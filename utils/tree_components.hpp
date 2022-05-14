@@ -26,8 +26,12 @@ namespace PT{
     mutable std::DisjointSetForest<NodeDesc, NodeDesc> comp_info;
 
   public:
+#warning "TODO: store the emplacer instead of the translation here"
+
     // each node in the component DAG will know its corresponding node in the Network
     using ComponentDAG = DefaultNetwork<NodeDesc>;
+//    using Emplacer = EdgeEmplacerWithHelper<false, ComponentDAG, void, NodeTranslation&, std::IdentityFunction<NodeDesc>>;
+#warning "TODO: make those protected and expose only const refs"
     // N_to_comp_DAG translates nodes of N into nodes of the component DAG
     NodeTranslation N_to_comp_DAG;
     ComponentDAG comp_DAG;
@@ -227,17 +231,94 @@ namespace PT{
       return x;
     }
 
+    // contract lower_root onto upper_root in the component after an edge deletion from one of the nodes in the compoenent of 'other_comp_root'
+    // NOTE: this takes nodes in N, not in the comp_DAG!
+    void merge_tree_components(const NodeDesc upper_root, const NodeDesc lower_root, const NodeDesc other_comp_root) {
+      assert(other_comp_root != NoNode);
+      assert(upper_root != NoNode);
+      assert(lower_root != NoNode);
+      assert(upper_root != lower_root);
+      const auto lower_root_in_cDAG_iter = N_to_comp_DAG.find(lower_root);
+      if(lower_root_in_cDAG_iter != N_to_comp_DAG.end()) {
+        const NodeDesc lower_root_in_cDAG = lower_root_in_cDAG_iter->second;
+        // NOTE: upper_root and other_comp_root MUST have a corresponding node in the cDAG
+        const NodeDesc other_comp_root_in_cDAG = N_to_comp_DAG.at(other_comp_root);
+        const NodeDesc upper_root_in_cDAG = N_to_comp_DAG.at(upper_root);
+        // if the two are different in the component DAG, then remove the edge corresponding to the deleted edge in N
+        if(other_comp_root_in_cDAG != upper_root_in_cDAG) {
+          assert(comp_DAG.is_edge(other_comp_root_in_cDAG, lower_root_in_cDAG));
+          comp_DAG.remove_edge(other_comp_root_in_cDAG, lower_root_in_cDAG);
+        }
+        // NOTE: upper_root should be the only predecessor of lower_root in the component DAG
+        assert(comp_DAG.in_degree(lower_root_in_cDAG) == 1);
+        // NOTE: it might happen that upper_root already has an edge to lower_root in the cDAG, in which case we simply remove v from the cDAG
+        for(const NodeDesc x: comp_DAG.children(upper_root_in_cDAG))
+          comp_DAG.remove_edge(lower_root_in_cDAG, x);
+        // finally, contract lower_root_in_cDAG up
+        comp_DAG.contract_up(lower_root_in_cDAG);
+        N_to_comp_DAG.erase(lower_root_in_cDAG_iter);
+      }
+      std::cout << "\tREACT: updating component roots...\n";
+      set_comp_root(lower_root, upper_root);
+    }
+
   public:
 
     // react to an edge deletion in the network between nodes u & v
+    // NOTE: this updates the component DAG, the component-root map, the visible-leaf map, and  the N_to_comp DAG translation
+    // NOTE: if the deletion of uv leaves v suppressible and v's parent is a reticulation and
+    //       (1) 'v_may_become_comp_root' == true, then we'll create a new node in the component DAG for v and put it at the appropriate spot
+    //       (2) 'v_may_become_comp_root' == false, then we will pretend as if v was a reticulation and not do anything else with it
+    template<bool v_may_become_comp_root = false>
     void react_to_edge_deletion(const NodeDesc u, const NodeDesc v) {
+      static_assert(!v_may_become_comp_root && "unimplemented");
       std::cout << "\tREACT: reacting to the deletion of "<<u<<" -> "<<v<<"\n";
       const NodeDesc u_rt = comp_root_of(u);
       assert(u_rt != NoNode);
       NodeDesc rt_below_v = get_tree_comp_below(v);
       std::cout << "\tREACT: comp-root of "<< u <<" is "<<u_rt<<" and the comp-root below "<<v<<" is "<<rt_below_v<<"\n";
       
-      if(rt_below_v != v) { // v is a reticulation
+      assert(N.out_degree(v) <= 1);
+      if(rt_below_v == v) { // v is no longer a reticulation, which means that v is now suppressible or a leaf; in the latter case nothing has to be done
+        assert(N.in_degree(v) == 1);
+        const auto& v_children = N.children(v);
+        if(!v_children.empty()) {
+          assert(v_children.size() == 1);
+          std::cout << "\tREACT: "<< v <<" is now suppressible\n";
+          // if v is suppressible, we still might have to remove the edge between rt_u and the component root below v in the component DAG
+          const NodeDesc v_child = front(v_children);
+          std::cout << "\tREACT: "<< v_child <<"'s comp root is "<< comp_root_of(v_child) << "\n";
+          const NodeDesc v_parent = N.parent(v);
+          if(!N.is_reti(v_child)) {
+            // if v's child is not a reticulation, it must be a (possibly trivial) component root (remember that v was a reticulation before removing uv)
+            assert(comp_root_of(v_child) == v_child); 
+            // IMPORTANT NOTE: if v's parent is not a reticulation, then we just merged 2 tree compoents together, so there's plenty of work to do
+            if(!N.is_reti(v_parent)) {
+              // since v_parent is not a reticulation, it must have a component root
+              const NodeDesc v_parent_rt = comp_root_of(v_parent);
+              merge_tree_components(v_parent_rt, v_child, comp_root_of(u));
+              set_comp_root(v, v_parent_rt);
+
+              std::cout << "cDAG after component update:\n";
+              comp_DAG.print_subtree_with_data();
+            } else {
+              if constexpr (v_may_become_comp_root) {
+#warning "TODO: write me"
+              }
+            }
+          } else {
+            if constexpr (v_may_become_comp_root) {
+#warning "TODO: write me"
+            } else {
+              const NodeDesc v_parent_rt = comp_root_of(v_parent);
+              if(v_parent_rt != NoNode) 
+                set_comp_root(v, v_parent_rt);
+            }
+            // NOTE: if v's child is a reti, we may just act as if the edge removal was between u and that child (slightly abusing notation)
+            react_to_edge_deletion(u, v_child);
+          }
+        }
+      } else { // v is a reticulation
         std::cout << "\tREACT: "<< v <<" is a reticulation above the comp-root "<<rt_below_v<<"\n";
         assert(rt_below_v != NoNode);
 
@@ -257,60 +338,8 @@ namespace PT{
             assert(comp_DAG.in_degree(rt_below_v_in_cDAG) > 0);
           }
         } else component_root_consensus_among_parents(rt_below_v);
-      } else {
-        // v is no longer a reticulation, which means that v is now suppressible or a leaf; in the latter case nothing has to be done
-        const auto& v_children = N.children(v);
-        assert(v_children.size() <= 1);
-        if(v_children.size() == 1) {
-          std::cout << "\tREACT: "<< v <<" is now suppressible\n";
-          // if v is suppressible, we still might have to remove the edge between rt_u and the component root below v in the component DAG
-          const NodeDesc v_child = front(v_children);
-          std::cout << "\tREACT: "<< v_child <<"'s comp root is "<< comp_root_of(v_child) << "\n";
-          if(!N.is_reti(v_child)) {
-            // if v's child is not a reticulation, it must be a (possibly trivial) component root (remember that v was a reticulation before removing uv)
-            assert(comp_root_of(v_child) == v_child);
-            // IMPORTANT NOTE: if v's parent is not a reticulation, then we just merged 2 tree compoents together, so there's plenty of work to do
-            const auto& v_parents = N.parents(v);
-            assert(v_parents.size() == 1);
-            const NodeDesc v_parent = front(v_parents);
-            if(!N.is_reti(v_parent)) {
-              const NodeDesc v_parent_rt = comp_root_of(v_parent);
-              // since v_parent is not a reticulation, it must have a component root
-              assert(v_parent_rt != NoNode);
-              // further, this component root cannot be the same as the root below v since otherwise we have a cycle in N
-              assert(v_parent_rt != v_child);
-              // thus, v_child's component_root is not the same as v_parent's -- we have to merge them in 2 steps:
-              // step 1: contract v's component root onto v_parent's in the component DAG
-              const auto v_child_in_cDAG_iter = N_to_comp_DAG.find(v_child);
-              if(v_child_in_cDAG_iter != N_to_comp_DAG.end()) {
-                const NodeDesc v_child_in_cDAG = v_child_in_cDAG_iter->second;
-                // NOTE: v_parent_rt should be the only predecessor of v_child in the component DAG
-                assert(comp_DAG.in_degree(v_child_in_cDAG) == 1);
-                // NOTE: it might happen that v_parent_rt already has an edge to v_child_rt in the cDAG, in which case we simply remove v from the cDAG
-                const NodeDesc v_parent_rt_in_cDAG = N_to_comp_DAG.at(v_parent_rt);
-                for(const NodeDesc x: comp_DAG.children(v_parent_rt_in_cDAG))
-                  comp_DAG.remove_edge(v_child_in_cDAG, x);
-                // finally, contract v_child_in_cDAG up
-                comp_DAG.contract_up(v_child_in_cDAG);
-                N_to_comp_DAG.erase(v_child_in_cDAG_iter);
-              }
-              // step 2: set v's component root to v_parent's
-              std::cout << "\tREACT: updating component roots...\n";
-              set_comp_root(v_child, v_parent_rt);
-              set_comp_root(v, v_parent_rt);
-              
-              std::cout << "cDAG after component update:\n";
-              comp_DAG.print_subtree_with_data();
-            } else {} // if v's parent is a reticulation, we're fine
-          } else {
-            // NOTE: if v's child is a reti, we may just act as if the edge removal was between u and that child (slightly abusing notation)
-            react_to_edge_deletion(u, v_child);
-          }
-        }
       }
     }
-
-
 
   };
     

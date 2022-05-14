@@ -339,15 +339,16 @@ namespace std{
   template<class ReturnType = void>
   struct IgnoreFunction {
     template<class... Args>
-    constexpr ReturnType operator()(Args&&... args) const { return ReturnType(); };
-  };
-  template<>
-  struct IgnoreFunction<void> {
-    template<class... Args>
-    constexpr void operator()(Args&&... args) const { };
+    constexpr ReturnType operator()(Args&&... args) const { if constexpr (!is_void_v<ReturnType>) return ReturnType(); };
   };
   // a functional that just returns its argument (and hopefully gets optimized out)
+  template<class T>
   struct IdentityFunction {
+    template<class Q> requires is_same_v<remove_cvref_t<T>, remove_cvref_t<Q>>
+    constexpr Q&& operator()(Q&& x) const { return forward<Q>(x); };
+  };
+  template<>
+  struct IdentityFunction<void> {
     template<class Arg>
     constexpr Arg&& operator()(Arg&& x) const { return forward<Arg>(x); };
   };

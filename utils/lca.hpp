@@ -16,7 +16,7 @@ namespace PT {
 		LCAOracle(const Phylo& _N): N(_N) {}
 	};
 
-	template<StrictPhylogenyType Tree>
+	template<class Tree> //requires PhylogenyType<Phylo> // NOTE: this will cause 'concept depends on itself'
 	class NaiveTreeLCAOracle: public LCAOracle<Tree> {
 		using Parent = LCAOracle<Tree>;
     using SeenSet = std::unordered_set<NodeDesc>;
