@@ -3,6 +3,7 @@
 
 #include <memory>
 #include "stl_utils.hpp"
+#include "trans_iter.hpp"
 
 namespace std {
 /*

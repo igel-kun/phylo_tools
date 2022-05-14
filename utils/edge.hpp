@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tags.hpp"
 #include "adjacency.hpp"
 
 namespace PT{
