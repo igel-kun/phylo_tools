@@ -20,7 +20,6 @@ namespace std {
   template<class T>
   using _iterator_of_t = typename _iterator_of<remove_reference_t<T>>::type;
 
-
   template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
   template<class T> concept PointerType = is_pointer_v<remove_cvref_t<T>>;
 
@@ -66,6 +65,13 @@ namespace std {
   template<class T>
   concept IterableTypeWithSameIterators = IterableType<T> && std::is_same_v<BeginType<T>, EndType<T>>;
 
+  // NOTE: 
+  // we do not need to store the end-iterator if the iterator type has "bool is_valid() const"
+  // (for example, the _auto_iter itself -- imagine an _auto_iter of _auto_iters)
+  template<class Iter>
+  concept iter_verifyable = requires(const Iter i) {
+    { i.is_valid() } -> convertible_to<bool>;
+  };
 
 
   // concept checking for STL-style container (thanks to https://stackoverflow.com/questions/60449592 )

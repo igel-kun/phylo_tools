@@ -6,6 +6,7 @@
 #include "types.hpp"
 #include "network.hpp"
 #include "edge_emplacement.hpp"
+#include "static_capacity_vector.hpp"
 
 namespace PT{
 
@@ -13,7 +14,7 @@ namespace PT{
 
   // map nodes to their TreeComponentData
   //NOTE: if the nodes of Network have node data that derives from TreeComponentData, then we use this node data by default, otherwise we use a map
-  template<StrictPhylogenyType Network>
+  template<StrictPhylogenyType Network, size_t num_vis_leaves = 1>
   class TreeComponentInfos {
     // TODO: deal with the case the Network has multiple roots! For now, we just disallow it
     static_assert(Network::has_unique_root);
@@ -21,9 +22,11 @@ namespace PT{
     Network& N;
     
     // we want to be able to merge tree components; thus, we will use a disjoint-set forest
-    // NOTE: as payload, we store visible leaves along with component roots
+    // NOTE: as payload, we store one visible leaf
+    //       we cannot store more than one because we have operations that might replace the second visible leaf by the first,
+    //       in which case we cannot distinguish the cases where there's a single visible leaf or more than one
     // NOTE: this has to be declared mutable to allow path-compression to occur
-    mutable std::DisjointSetForest<NodeDesc, NodeDesc> comp_info;
+    mutable std::DisjointSetForest<NodeDesc, NodeDesc> comp_root;
 
   public:
 #warning "TODO: store the emplacer instead of the translation here"
@@ -54,22 +57,22 @@ namespace PT{
     {}
 
   public:
-
     NodeDesc visible_leaf_of(const NodeDesc u) const {
-      const auto iter = comp_info.find(u);
-      return (iter == comp_info.end()) ? NoNode : iter->second.payload;
+      const auto iter = comp_root.find(u);
+      return (iter == comp_root.end()) ? NoNode : iter->second.payload;
     }
-    bool set_visible_leaf(const NodeDesc u, const NodeDesc leaf) {
-      const auto iter = comp_info.find(u);
-      if(iter != comp_info.end()) {
-        comp_info.set_of(u).payload = iter->second.payload = leaf;
+
+    bool replace_visible_leaf(const NodeDesc u, const NodeDesc new_leaf) {
+      const auto iter = comp_root.find(u);
+      if(iter != comp_root.end()) {
+        iter->second.payload = comp_root.set_of(u).payload = new_leaf;
         return true;
       } else return false;
     }
 
     // return the root of x's tree component
     NodeDesc comp_root_of(const NodeDesc x) const {
-      return comp_info.contains(x) ? comp_info.set_of(x).get_representative() : NoNode;
+      return comp_root.contains(x) ? comp_root.set_of(x).get_representative() : NoNode;
     }
 
     // replace a component root by a leaf
@@ -79,7 +82,7 @@ namespace PT{
       assert(N.is_leaf(new_rt));
       assert(comp_root_of(old_rt) == old_rt);
       assert(comp_root_of(new_rt) == old_rt);
-      comp_info.make_representative(new_rt);
+      comp_root.make_representative(new_rt);
     }
 
     // register the fact that the component of x is now rooted at rt
@@ -88,21 +91,22 @@ namespace PT{
       assert(x != NoNode);
       assert(rt != NoNode);
       if(x != rt) {
-        assert(comp_info.contains(rt));
+        assert(comp_root.contains(rt));
         // if x != rt then we suppose that rt already exists in the set forest
-        auto& rt_set = comp_info.set_of(rt);
+        auto& rt_set = comp_root.set_of(rt);
         // then, we can just add x to this set and update the visible leaf
         std::cout << "updating comp root of "<<x<<" to "<<rt_set.get_representative()<<"\n";
-        const auto [iter, success] = comp_info.emplace_item_to_set(rt_set, x, vis_leaf);
+        const auto [iter, success] = comp_root.emplace_item_to_set(rt_set, x, vis_leaf);
         if(!success) {
           // if x was already represented in the disjoint set forest, then merge it onto rt
-          comp_info.merge_sets_keep_order(rt_set, iter->second);
+          rt_set.payload = vis_leaf;
+          comp_root.merge_sets_keep_order(rt_set, iter->second);
+        } else {
         }
-        if(vis_leaf != NoNode) rt_set.payload = vis_leaf;
       } else {
-        std::cout << "adding new comp root for "<<x<<" with visible leaf "<<vis_leaf<<"\n";
-        comp_info.add_new_set(x, vis_leaf);
         // if x == rt then we are trying to add a new set into the set-forest
+        std::cout << "adding new comp root for "<<x<<" with visible leaf "<<vis_leaf<<"\n";
+        comp_root.add_new_set(x, vis_leaf);
       }
     }
     void set_comp_root(const NodeDesc x) { set_comp_root(x, x); }
@@ -167,7 +171,7 @@ namespace PT{
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
       std::cout << "1st pass over component roots\n";
-      std::cout << comp_info<<"\n";
+      std::cout << comp_root<<"\n";
       std::cout << "emplacer translation @"<< &(emplacer.helper.old_to_new)<<" our translation @"<<&N_to_comp_DAG<<"\n";
       for(const NodeDesc rt: non_trivial_roots)
         compute_edges<true>(rt, emplacer);
@@ -196,7 +200,11 @@ namespace PT{
             }
           } else {
             // if the parent is not a reticulation, copy their component root
-            set_comp_root(u, front(pu), (u_node.is_leaf() ? u : NoNode));
+            const NodeDesc u_parent = front(pu);
+            const NodeDesc vl = u_node.is_leaf() ? u : NoNode;
+            set_comp_root(u, u_parent, vl);
+            if(vl != NoNode)
+              comp_root.set_of(u_parent).payload = vl;
           }
         }
       }

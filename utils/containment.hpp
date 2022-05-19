@@ -11,7 +11,6 @@ namespace PT {
   // a containment checker, testing if a single-labelled host-network contains a single-labeled guest tree
   //NOTE: if an invisible tree component is encountered, we will branch on which subtree to display in the component
   //NOTE: this can be used to solve multi-labeled host networks: just add a reticulation for each multiply occuring label
-  //NOTE: if Host's NodeData is derived from TreeComponentData, then the NodeData will be used to store bookkeeping information!
   template<PhylogenyType Host,
            PhylogenyType Guest,
            StorageEnum HostLabelStorage = singleS,
@@ -19,7 +18,7 @@ namespace PT {
   struct TreeInNetContainment {
     using DecayedHost = std::remove_reference_t<Host>;
     using DecayedGuest = std::remove_reference_t<Guest>;
-    using ComponentInfos = TreeComponentInfos<DecayedHost>;
+    using ComponentInfos = TreeComponentInfos<DecayedHost, 2>;
     static constexpr bool host_is_tree = Host::is_declared_tree;
     static constexpr bool host_is_multi_labeled = (HostLabelStorage != singleS);
 
@@ -195,7 +194,7 @@ namespace PT {
         // step 1: for each leaf z that does not see a non-leaf-component root, get the reticulation above z (if z does not have
         // a reticulation parent, then cherry reduction must be applicable to it)
         std::cout << "visibility: ";
-        for(const NodeDesc x: host.nodes()) std::cout << comp_info.visible_leaf_of(x) <<"\n";
+        for(const NodeDesc x: host.nodes()) std::cout << x << ": " << comp_info.visible_leaf_of(x) <<"\n";
         std::cout << "label-matching: "<<HG_label_match<<"\n";
 
         std::priority_queue<BranchInfo, std::vector<BranchInfo>, std::greater<BranchInfo>> branching_candidates;

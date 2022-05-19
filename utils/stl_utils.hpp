@@ -150,13 +150,17 @@ namespace std{
   struct GenericEndIterator{
     static bool is_valid() { return false; }
     bool operator==(const GenericEndIterator& x) const { return true; }
-    template<class Other> bool operator==(const Other& x) const { return (x == *this); }
+    template<class Other>
+    bool operator==(const Other& x) const { return (x.operator==(*this)); }
+    template<class Other>
+    bool operator==(const Other* x) const { assert(x != nullptr); return static_cast<bool>(*x); }
     template<class Other> bool operator!=(const Other& x) const { return !operator==(x); }
   };
-  template<class T>
-  bool operator==(const T& other, const GenericEndIterator&) { return !other.is_valid(); }
-  template<class T>
-  bool operator!=(const T& other, const GenericEndIterator&) { return other.is_valid(); }
+  template<iter_verifyable Iter>
+  bool operator==(const Iter& other, const GenericEndIterator&) { return !other.is_valid(); }
+  template<iter_verifyable Iter>
+  bool operator!=(const Iter& other, const GenericEndIterator&) { return other.is_valid(); }
+
 
 
   // a class that returns itself on dereference 

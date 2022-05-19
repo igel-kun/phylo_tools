@@ -98,13 +98,18 @@ namespace std { // since it was the job of STL to provide for it and they failed
 
 
   template<IterableType T>
-  constexpr reference_of_t<T> front(T&& c) { assert(!c.empty()); return *(c.begin()); }
+  constexpr decltype(auto) front(T&& c) { assert(!c.empty()); return *(c.begin()); }
   template<IterableType T>
-  constexpr reference_of_t<T> next_to_front(T&& c) { assert(!c.empty()); return *(next(c.begin())); }
+  constexpr decltype(auto) next_to_front(T&& c) { assert(!c.empty()); return *(next(c.begin())); }
   template<IterableType T>
-  constexpr reference_of_t<T> back(T&& c) { assert(!c.empty()); return *(c.rbegin()); }
+  constexpr decltype(auto) back(T&& c) { assert(!c.empty()); return *(c.rbegin()); }
   template<IterableType T>
-  constexpr reference_of_t<T> next_to_back(T&& c) { assert(!c.empty()); return *(next(c.rbegin())); }
+  constexpr decltype(auto) next_to_back(T&& c) { assert(!c.empty()); return *(next(c.rbegin())); }
+
+  template<class T, T _invalid, IterableType Container> requires is_same_v<value_type_of_t<Container>, std::remove_cvref_t<T>>
+  constexpr T any_element(Container&& c) {
+    return c.empty() ? _invalid : front(std::forward<Container>(c));
+  }
 
   // unordered_set has no rbegin(), so we just alias it to begin()
   template<class Key, class Hash, class KE, class A>

@@ -109,8 +109,10 @@ namespace PT {
   using NodeDesc = uintptr_t;
 #endif
 
-  constexpr NodeDesc NoNode = NodeDesc(nullptr);
+  constexpr NodeDesc NoNode = NodeDesc{};
   const std::string NoName = "";
+
+  using OptionalNodeDesc = std::optional_by_invalid<NodeDesc, NoNode>;
 
   template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
@@ -166,10 +168,11 @@ namespace PT {
 
 
   using NodeVec = std::vector<NodeDesc>;
-  using NodeSet = std::unordered_set<NodeDesc>; // TODO: replace by vector_hash ?
+  using NodeSet = HashSet<NodeDesc>; // TODO: replace by vector_hash ?
   template<class T>
   using NodeMap = std::unordered_map<NodeDesc, T>;
   using NameVec = std::vector<std::string>;
+  using NodePairSet = HashSet<NodePair>;
 
   // an adjacency is something that can be converted to a NodeDesc
   template<class A>

@@ -43,6 +43,9 @@ namespace std {
     const T& operator*() const { return element; }
     T& value() { return element; }
     const T& value() const { return element; }
+    operator T() { return element; }
+    operator T() const { return element; }
+
 
     bool operator==(const optional_by_invalid& other) const { return element == other.element; }
     bool operator!=(const optional_by_invalid& other) const { return element != other.element; }
@@ -64,6 +67,9 @@ namespace std {
     operator bool() const { return has_value(); }
     bool has_value() const { return element != _invalid; }
 
+    friend ostream& operator<<(ostream& os, const optional_by_invalid& opt) {
+      return os << opt.element;
+    }
   };
 
   template<class T>
@@ -75,4 +81,5 @@ namespace std {
 
   template<class T>
   concept Optional = is_optional_v<remove_reference_t<T>>;
+
 }

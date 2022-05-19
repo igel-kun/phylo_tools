@@ -23,15 +23,6 @@ namespace std{
   template<class T>
   using InheritableIter = std::conditional_t<std::is_pointer_v<T>, PointerIterWrapper<T>, T>;
 
-
-  // NOTE: 
-  // we do not need to store the end-iterator if the iterator type has "bool is_valid() const"
-  // (for example, the _auto_iter itself -- imagine an _auto_iter of _auto_iters)
-  template<class Iter>
-  concept iter_verifyable = requires(const Iter i) {
-    { i.is_valid() } -> convertible_to<bool>;
-  };
-
   template<class Iterator>
   using CorrespondingEndIter = conditional_t<iter_verifyable<Iterator>, void, Iterator>;
 
@@ -145,5 +136,6 @@ namespace std{
            class KeyType,
            class Iterator = iterator_of_t<Container>>
   auto_iter<Iterator> auto_find(Container&& c, const KeyType& key) { return {c.find(key), end(c)}; }
- 
+
+
 } //namespace
