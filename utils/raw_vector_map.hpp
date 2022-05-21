@@ -107,8 +107,6 @@ namespace std {
     template<unsigned_integral __Key, class __Element>
     bool operator==(const raw_vector_map_iterator<__Key, __Element>& x) const { return index == x.index; }
     template<unsigned_integral __Key, class __Element>
-    bool operator!=(const raw_vector_map_iterator<__Key, __Element>& x) const { return index != x.index; }
-    template<unsigned_integral __Key, class __Element>
     friend class raw_vector_map_iterator;
   };
 

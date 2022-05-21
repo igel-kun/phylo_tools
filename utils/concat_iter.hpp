@@ -28,7 +28,6 @@ namespace std {
     bool operator==(const _concatenating_iterator& other) const {
       return is_valid() ? (it == other.it) : !other.is_valid();
     }
-    bool operator!=(const _concatenating_iterator& other) const { return !operator==(other); }
 
     // construct the container auto_iter from anything (could be a container of containers or a compatible auto_iter or 2 ContainerIter, etc)
     template<class... Args>

@@ -75,9 +75,6 @@ namespace std {
       } else return it.is_end();
     }
 
-    template<class SecondIterator>
-    bool operator!=(const cyclic_iterator<Container, SecondIterator>& it) const { return !operator==(it); }
-
     reference operator*() const { return *i; }
   
     template<class _Container, class SecondIterator>

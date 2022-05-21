@@ -46,7 +46,6 @@ namespace PT{
     SubsetIterator& operator--() { --bits; return *this; }
 
     bool operator==(const SubsetIterator& it) const { return bits == it.bits; }
-    bool operator!=(const SubsetIterator& it) const { return !operator==(it); }
 
     // dereference
     value_type operator*()

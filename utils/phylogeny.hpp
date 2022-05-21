@@ -183,6 +183,7 @@ namespace PT {
     using Parent::parents;
     using Parent::parent;
     using Parent::children;
+    using Parent::child;
     using Parent::in_degree;
     using Parent::out_degree;
     using Parent::in_edges;
@@ -463,6 +464,13 @@ namespace PT {
     {
       return transfer_child<check_uniqueness>(source, target, find(children(source), w), make_data);
     }
+#warning "TODO: rethink parameter ordering - maybe have w first, then source then target"
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
+    bool transfer_child(const Adj& target, const NodeDesc w, DataMaker&& make_data = DataMaker()) {
+      assert(in_degree(w) == 1);
+      const NodeDesc source = parent(w);
+      return transfer_child<check_uniqueness>(source, target, find(children(source), w), make_data);
+    }
     template<class... Args>
     bool transfer_child_unique(Args&&... args) {
       return transfer_child<!Parent::unique_edges>(std::forward<Args>(args)...);
@@ -545,6 +553,12 @@ namespace PT {
       auto w_iter = find(source_node.parents(), w);
       assert(w_iter != source_node.parents().end());
       return transfer_parent<check_uniqueness>(source, target, w_iter, make_data);
+    }
+    template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
+    bool transfer_parent(const Adj& target, const NodeDesc w, DataMaker&& make_data = DataMaker()) {
+      assert(out_degree(w) == 1);
+      const NodeDesc source = child(w);
+      return transfer_parent<check_uniqueness>(source, target, find(parents(source), w), make_data);
     }
     template<class... Args>
     bool transfer_parent_unique(Args&&... args) {
@@ -874,6 +888,7 @@ namespace PT {
 
     template<class Predicate, class... Args> requires std::invocable<Predicate, const NodeDesc>
     static auto nodes_with_below(Predicate&& predicate, Args&&... args) {
+      //return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
       return std::make_filtered_factory(nodes_below_preorder(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
     }
     template<class... Args>

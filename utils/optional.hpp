@@ -48,9 +48,7 @@ namespace std {
 
 
     bool operator==(const optional_by_invalid& other) const { return element == other.element; }
-    bool operator!=(const optional_by_invalid& other) const { return element != other.element; }
     bool operator==(const T& other) const { return element == other; }
-    bool operator!=(const T& other) const { return element != other; }
 
     optional_by_invalid& operator=(const optional_by_invalid& other) = default;
     optional_by_invalid& operator=(optional_by_invalid&& other) = default;

@@ -78,8 +78,6 @@ namespace std {
 
   template<Optional T, size_t _capacity>
   bool operator==(const typename array<T, _capacity>::iterator it, const GenericEndIterator) { return !it->has_value(); }
-  template<Optional T, size_t _capacity>
-  bool operator!=(const typename array<T, _capacity>::iterator it, const GenericEndIterator) { return it->has_value(); }
 
 
   template<class T, size_t cap> struct _choose_size { using type = size_storer<T, cap>; };

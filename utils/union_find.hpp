@@ -24,7 +24,6 @@ namespace std{
     _DSet() = default;
 
     bool operator==(const _DSet& y) const { return representative == y.representative; }
-    bool operator!=(const _DSet& y) const { return representative != y.representative; }
 
     void merge_onto(_DSet& x) {
       representative = x.representative;
@@ -73,12 +72,35 @@ namespace std{
     using Parent::try_emplace;
     using Parent::emplace;
     using Parent::erase;
+    using Parent::at;
+    using Parent::operator[];
+    using Parent::find;
 
     size_t _set_count = 0;
 
-  public:
-    using Parent::at;
 
+    static const Set& set_of(const Set& x_set) { return x_set; }
+    static Set& set_of(Set& x_set) { return x_set; }
+    static Key& representative(Set& x_set) { return x_set.representative; }
+    void shrink(const Key& x) { set_of(x).grow(-1); }
+
+    // return the set containing x, use path compression
+    Set& set_of(const Key& x, Set& x_set, const unsigned decrease_size = 0) {
+      const Key& x_set_rep = x_set.get_representative();
+      if(x_set_rep != x){
+        x_set.grow(-decrease_size);
+        Set& x_parent = at(x_set_rep);
+        const Key& x_parent_rep = x_parent.get_representative();
+        assert(x_parent_rep != x); // this is bizarre, we already know that x's representative is x_parent so why would their representative be x???
+        if(x_parent_rep != x){
+          Set& root_set = set_of(x_set_rep, x_parent, decrease_size + x_set.size());
+          x_set.representative = root_set.representative;
+          return root_set;
+        } else return at(x_parent_rep);
+      } else return x_set;
+    }
+
+  public:
 
     template<class... Args>
     auto emplace_set(const Key& x, Args&&... args) {
@@ -89,11 +111,9 @@ namespace std{
 
     // add a new set to the forest
     template<class... Args>
-    Set& add_new_set(const Key& x, Args&&... args) {
-      const auto [iter, success] = try_emplace(x, x, std::forward<Args>(args)...);
-      if(success) {
-        ++_set_count;
-      } else throw logic_error("trying to add existing item to set-forest");
+    const Set& add_new_set(const Key& x, Args&&... args) {
+      const auto [iter, success] = emplace_set(x, std::forward<Args>(args)...);
+      if(!success) throw logic_error("trying to add existing item to set-forest");
       return iter->second;
     }
 
@@ -144,36 +164,25 @@ namespace std{
       return merge_sets<false>(x, y);
     }
 
-    // return the set containing x, use path compression
-    Set& set_of(const Key& x, Set* x_set = nullptr, const unsigned decrease_size = 0) {
-      if(!x_set) x_set = &at(x);
-      const Key& x_set_rep = x_set->get_representative();
-      if(x_set_rep != x){
-        x_set->grow(-decrease_size);
-        Set& x_parent = at(x_set_rep);
-        const Key& x_parent_rep = x_parent.get_representative();
-        assert(x_parent_rep != x); // this is bizarre, we already know that x's representative is x_parent so why would their representative be x???
-        if(x_parent_rep != x){
-          Set& root_set = set_of(x_set_rep, &x_parent, decrease_size + x_set->size());
-          x_set->representative = root_set.representative;
-          return root_set;
-        } else return at(x_parent_rep);
-      } else return *x_set;
+    Set& set_of(const Key& x) { return set_of(x, at(x)); }
+
+    pair<Set*,Set*> lookup(const Key& x) {
+      const auto iter = this->find(x);
+      if(iter != this->end()) {
+        return {&(iter->second), &set_of(x, iter->second)};
+      } else return {nullptr, nullptr};
     }
 
-    // NOTE: while declared "const", this function may modify the data structure (but DOES NOT modify the "conceptual state")
-    // NOTE: I would declare the function 'mutable' but C++ does not allow this
-    const Set& set_of(const Key& x) const {
-      return const_cast<DisjointSetForest*>(this)->set_of(x);
-    }
-    const Set& set_of(const Set& x_set) const { return x_set; }
-    Set& set_of(Set& x_set) const { return x_set; }
+
+    static const Key& representative(const Set& x_set) { return x_set.representative; }
+    static const Key& representative(const Key& x) { return x; }
+
 
     // erase a Set s from the union-find structure
     // NOTE: this is only possible if s is a leaf-set
-    void erase_element(const auto& x) {
+    void erase_element(auto& x) {
       Set& x_set = set_of(x);
-      const Key& x_rep = x_set.get_representative();
+      const Key& x_rep = representative(x_set);
       
       // if x has a representative that is not x, then we need to shrink the representative's set
       assert((x_set.size() == 1) && "trying to erase a non-leaf set from a disjoint-set forest");
@@ -181,6 +190,19 @@ namespace std{
         set_of(x_rep).grow(-1);
 
       Parent::erase(x);
+    }
+
+    // split an element off its representative
+    void split_element(const Key& x) {
+      const auto iter = Parent::find(x);
+      assert(iter != Parent::end());
+      auto& x_set = iter->second;
+      const Key& x_rep = representative(x_set);
+     
+      if(x_rep != x) {
+        set_of(x_rep).grow(-x_set.size());
+        x_set.representative = x;
+      }
     }
 
     // replace the representative of a set of elements by re-hanging the representative from the given element
@@ -200,17 +222,13 @@ namespace std{
     bool is_root(const Key& x) const { return *(at(x).representative) == x; }
 
     // return true iff the given items are in the same set
-    bool in_same_set(const Key& x, const Key& y) {
-      return set_of(x) == set_of(y);
-    }
+    bool in_same_set(const Key& x, const Key& y) { return set_of(x) == set_of(y); }
 
     // return true iff the given items are in different sets
     bool in_different_sets(const Key& x, const Key& y) { return !in_same_set(x, y); }
 
     // return the number of sets in the forest
     size_t set_count() const { return _set_count; }
-
-    void shrink(const Key& x) { set_of(x).grow(-1); }
 
     // we'll need a custom copy and move constructor :/
 

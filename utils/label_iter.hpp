@@ -46,7 +46,6 @@ namespace PT {
     LabeledNodeIter operator++(int) { LabeledNodeIter result(it, getter); ++(*this); return result; }
 
     bool operator==(const LabeledNodeIter& _it) const { return _it.it == it; }
-    bool operator!=(const LabeledNodeIter& _it) const { return _it.it != it; }
   };
 
   template<class PropertyGetter>

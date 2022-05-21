@@ -6,50 +6,6 @@
 #include "trans_iter.hpp"
 
 namespace std {
-/*
-  // spew out all first/second in a container of pairs
-  template<class _TupleContainer>
-  class TupleIterator
-  {
-  protected:
-    using _Iterator = iterator_of_t<_TupleContainer>;
-
-    _Iterator pair_it;
-  public:
-    using value_type = typename my_iterator_traits<_Iterator>::value_type;
-    using reference = typename my_iterator_traits<_Iterator>::reference;
-    //using const_reference = typename my_iterator_traits<_Iterator>::const_reference; // why oh why, STL, do you not define that for pointers???
-    using const_reference = const_reference_t<reference>;
-
-    TupleIterator(const _Iterator& _it): pair_it(_it)
-    {}
-
-    TupleIterator(_TupleContainer& c): pair_it(c.begin())
-    {}
-
-    //! increment operator
-    TupleIterator& operator++()
-    {
-      ++pair_it;
-      return *this;
-    }
-
-    //! post-increment
-    TupleIterator operator++(int)
-    {
-      TupleIterator tmp(*this);
-      ++(*this);
-      return tmp;
-    }
-
-    bool operator==(const TupleIterator& it) const { return pair_it == it.pair_it; }
-    bool operator!=(const TupleIterator& it) const { return !operator==(it); }
-
-    bool operator==(const _Iterator& it) const { return pair_it == it; }
-    bool operator!=(const _Iterator& it) const { return !operator==(it); }
-
-  };
-*/
 
   template<class T, size_t get_num> struct __selecting_iterator { using type = transforming_iterator<T, std::selector<get_num>>; };
   template<IterableType T, size_t get_num> struct __selecting_iterator<T,get_num> { using type = transforming_iterator<iterator_of_t<T>, std::selector<get_num>>; };

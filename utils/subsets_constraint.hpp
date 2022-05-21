@@ -143,7 +143,6 @@ namespace PT{
       if(!it.is_valid()) return false;
       return current == it.current;
     }
-    bool operator!=(const NetworkConstraintSubsetIterator& it) const { return !operator==(it); }
 
     const Container& operator*() { return current; }
 

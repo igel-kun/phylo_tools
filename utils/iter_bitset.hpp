@@ -292,9 +292,6 @@ namespace std {
       return storage == bs.storage;
     }
     
-    template<typename Set>
-    bool operator!=(const Set& s) const { return !operator==(s); }
-
     template<class Container>
     iterable_bitset& operator-=(const Container& c)
     {
@@ -652,8 +649,6 @@ concept abc = requires(T x) {
       if(we_at_end && they_at_end) return true;
       return (index == it.index) && (buffer == it.buffer);
     }
-
-    bool operator!=(const bitset_iterator& it) const { return !this->operator==(it); }
   };
 
 

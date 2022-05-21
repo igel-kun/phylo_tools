@@ -248,7 +248,6 @@ namespace PT{
     CutIter& operator=(CutIter&&) = default;
 
     bool operator==(const CutIter& other) const { return iter == other.iter; }
-    template<class T> bool operator!=(const T& other) const { return !operator==(other); }
 
     template<class Iter = DFSIter, class Ref = typename Iter::reference>
     Ref operator*() const { return *iter; }

@@ -85,7 +85,8 @@ namespace PT {
         reduction_man.apply();
 
         // if the comp_DAG is edgeless, then visible-component reduction must have applied (unless the loop broke for the 2-label-case)
-        assert(!comp_info.comp_DAG.edgeless() || host.edgeless() || (HG_label_match.size() <= 2));
+        assert(failed || !comp_info.comp_DAG.edgeless() || host.edgeless() || (HG_label_match.size() <= 2));
+        assert(!failed && "remove me after testing");
       }
       std::cout << "done initializing Tree-in-Net containment checker; failed? "<<failed<<"\n";
     }

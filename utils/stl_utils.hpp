@@ -154,12 +154,9 @@ namespace std{
     bool operator==(const Other& x) const { return (x.operator==(*this)); }
     template<class Other>
     bool operator==(const Other* x) const { assert(x != nullptr); return static_cast<bool>(*x); }
-    template<class Other> bool operator!=(const Other& x) const { return !operator==(x); }
   };
   template<iter_verifyable Iter>
   bool operator==(const Iter& other, const GenericEndIterator&) { return !other.is_valid(); }
-  template<iter_verifyable Iter>
-  bool operator!=(const Iter& other, const GenericEndIterator&) { return other.is_valid(); }
 
 
 
@@ -216,11 +213,7 @@ namespace std{
   template<typename T>
   bool operator==(const T& i1, const reverse_iterator<T>& i2) {  return (next(i1) == i2.base()); }
   template<typename T>
-  bool operator!=(const T& i1, const reverse_iterator<T>& i2) {  return !operator==(i1,i2); }
-  template<typename T>
   bool operator==(const reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
-  template<typename T>
-  bool operator!=(const reverse_iterator<T>& i2, const T& i1) {  return !operator==(i1, i2); }
   
 
 

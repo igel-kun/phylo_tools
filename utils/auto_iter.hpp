@@ -28,24 +28,25 @@ namespace std{
 
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
-  template<class Iterator, class EndIterator = CorrespondingEndIter<Iterator>>
+  template<class Iterator, class _EndIterator = CorrespondingEndIter<Iterator>>
   class _auto_iter: public InheritableIter<Iterator> {
     static_assert(!iter_verifyable<Iterator>);
-    static_assert(!is_void_v<EndIterator>);
+    static_assert(!is_void_v<_EndIterator>);
 
-    EndIterator end_it;
+    _EndIterator end_it;
    public:
     using Parent = InheritableIter<Iterator>;
+    using EndIterator = _EndIterator;
     using iterator = Iterator;
     using const_iterator = Iterator;
 
     // when default-constructed, end_it == *this, so is_valid() will be false
-    _auto_iter(): Parent(), end_it(static_cast<EndIterator>(begin())) {}
+    _auto_iter(): Parent(), end_it(*this) {}
 
     // construct from two iterators (begin and end)
-    template<class _Iterator, class _EndIterator>
-      requires (is_convertible_v<remove_cvref_t<_Iterator>,Iterator> && is_convertible_v<remove_cvref_t<_EndIterator>, EndIterator>)
-    constexpr _auto_iter(_Iterator&& _it, _EndIterator&& _end): Parent(forward<_Iterator>(_it)), end_it(forward<_EndIterator>(_end)) {}
+    template<class _Iterator, class _EndIter>
+      requires (is_convertible_v<remove_cvref_t<_Iterator>,Iterator> && is_convertible_v<remove_cvref_t<_EndIter>, EndIterator>)
+    constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end): Parent(forward<_Iterator>(_it)), end_it(forward<_EndIter>(_end)) {}
     // construct from a container
     template<IterableType Container> requires (is_convertible_v<iterator_of_t<Container>, Iterator>)
     _auto_iter(Container&& c): _auto_iter(std::begin(c), std::end(c)) {}
@@ -64,23 +65,18 @@ namespace std{
 
     template<class T>
     bool operator==(const T& other) const { return is_valid() ? Iterator::operator==(other.it) : !(other.is_valid()); }
-    template<class T>
-    bool operator!=(const T& other) const { return !(other == *this); }
 
     bool is_valid() const { return end_it != static_cast<const Iterator&>(*this); }
     
-    const Iterator& begin() const & { return *this; }
-    Iterator&& begin() && { return *this; }
-    Iterator& begin() & { return *this; }
-
-    const EndIterator& end() const & { return end_it; }
-    EndIterator&  end() & { return end_it; }
-    EndIterator&& end() && { return move(end_it); }
+    EndIterator get_end() const & { return end_it; }
+    EndIterator get_end() & { return end_it; }
+    EndIterator get_end() && { return move(end_it); }
   };
 
 
-  template<class Iterator> requires (iter_verifyable<Iterator>)
+  template<iter_verifyable Iterator>
   struct _auto_iter<Iterator, void>: public Iterator {
+    using EndIterator = GenericEndIterator;
     using iterator = Iterator;
     using const_iterator = Iterator;
 
@@ -88,10 +84,7 @@ namespace std{
     template<class... Args>
     _auto_iter(Args&&... args): Iterator(forward<Args>(args)...) {}
 
-    const Iterator& begin() const & { return *this; }
-    Iterator& begin()      & { return *this; }
-    Iterator&& begin()    && { return move(*this); }
-    static auto end() { return GenericEndIterator(); }
+    static EndIterator get_end() { return GenericEndIterator(); }
   };
 
 
@@ -111,7 +104,6 @@ namespace std{
     operator bool() { return is_valid(); }
 
     bool operator==(const GenericEndIterator&) const { return is_valid(); }
-    bool operator!=(const GenericEndIterator&) const { return !is_valid(); }
     auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }
 

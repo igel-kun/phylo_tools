@@ -111,7 +111,9 @@ namespace PT{
 
   public:
     // NOTE: use this to construct an end-iterator
-    DFSIterator(): Traits(), root(NoNode) {}
+    DFSIterator(): Traits(), root(NoNode) {
+      DEBUG6(std::cout << "DFS: making new DFS end-iterator (type "<< o <<")\n");
+    }
 
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class... Args>
@@ -147,9 +149,6 @@ namespace PT{
         return is_valid() && (root == other.root) && (child_history.size() == other.child_history.size()) && (node_on_top() == other.node_on_top());
       } else return !is_valid();
     }
-
-    template<TraversalType OtherO, TraversalTraitsType OtherTraits>
-    bool operator!=(const DFSIterator<OtherO, OtherTraits>& other) const { return !operator==(other); }
 
     bool is_valid() const { return child_history.size() >= min_stacksize; }
     static constexpr auto get_end() { return std::GenericEndIterator(); }
@@ -207,7 +206,7 @@ namespace PT{
 
     reference operator*() const {
       assert(child_history.size() > 1);
-      DEBUG6(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n";)
+      DEBUG6(std::cout << "DFS: emitting edge "<<*(child_history[child_history.size() - 2])<<"\n");
       return *(child_history[child_history.size() - 2]);
     }
 
@@ -391,7 +390,7 @@ namespace PT{
     template<class... Args> requires (sizeof...(Args) != 0)
     auto begin(Args&&... args) { return Iter(std::piecewise_construct, std::forward_as_tuple(roots), std::forward_as_tuple(std::forward<Args>(args)...)); }
 
-    static auto end() { return std::GenericEndIterator(); }
+    static constexpr auto end() { return std::GenericEndIterator(); }
   };
 
   // in the single-rooted case, things become much simpler
@@ -442,7 +441,7 @@ namespace PT{
     template<class... Args> requires (sizeof...(Args) != 0)
     auto begin(Args&&... args) { return Iter(root, std::forward<Args>(args)...); }
 
-    static auto end() { return std::GenericEndIterator(); }
+    static constexpr auto end() { return std::GenericEndIterator(); }
   };
   template<TraversalType o,
            PhylogenyType Network,

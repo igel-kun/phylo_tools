@@ -19,7 +19,6 @@ namespace std {
     void insert(const T&) {}
     static void clear() {}
     bool operator==(const emptyset<T>&) const { return true; }
-    bool operator!=(const emptyset<T>&) const { return false; }
     emptyset& operator=(const emptyset<T>&) { return *this; }
   };
 }

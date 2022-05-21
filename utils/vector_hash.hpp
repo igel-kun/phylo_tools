@@ -458,8 +458,6 @@ namespace std{
         return true;
       } else return false;
     }
-    template<class Container>
-    inline bool operator!=(const Container& c) const { return !operator==(c); }
  
     iterator       begin()       { return {piecewise_construct, forward_as_tuple(vector_begin(), vector_end()), forward_as_tuple(*this)}; }
     const_iterator begin() const { return {piecewise_construct, forward_as_tuple(vector_begin(), vector_end()), forward_as_tuple(*this)}; }

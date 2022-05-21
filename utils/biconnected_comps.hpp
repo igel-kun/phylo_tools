@@ -146,12 +146,13 @@ namespace PT{
     BiconnectedComponentIter& operator++() { next_component(); return *this; }
     BiconnectedComponentIter& operator++(int) = delete;
 
-    bool operator!=(const BiconnectedComponentIter& other) const {
-      if(!is_valid()) return other.is_valid();
-      if(!other.is_valid()) return true;
-      return child_comp_iter != other.child_comp_iter;
+    bool operator==(const BiconnectedComponentIter& other) const {
+      if(is_valid()) {
+        if(other.is_valid()) {
+          return child_comp_iter == other.child_comp_iter;
+        } else return false;
+      } else return !other.is_valid();
     }
-    bool operator==(const BiconnectedComponentIter& other) const { return !operator!=(other); }
 
     // NOTE: calling operator* is expensive, consider calling it at most once for each item
     reference operator*() {

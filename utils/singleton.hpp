@@ -103,7 +103,6 @@ namespace std{
     bool operator==(const singleton_set& other) const {
       return empty() ? other.empty() : (storage == other.storage);
     }
-    bool operator!=(const singleton_set& other) const { return !operator==(other); }
   };
 
   template<class T> struct is_singleton_set: public std::false_type {};

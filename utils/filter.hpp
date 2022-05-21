@@ -100,8 +100,7 @@ namespace std{
   }
   template<class T, class Predicate>
   auto make_filtered_factory(T&& _iter, Predicate&& _pred) {
-    //return FilteredIterFactory<T, Predicate, void>(forward<T>(_iter), forward<Predicate>(_pred));
-    return filtered_iterator<T, Predicate>(forward<T>(_iter), forward<Predicate>(_pred));
+    return FilteredIterFactory<T, Predicate, void>(forward<T>(_iter), forward<Predicate>(_pred));
   }
 
 
