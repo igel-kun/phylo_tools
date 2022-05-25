@@ -402,6 +402,7 @@ namespace std{
   }
 
   template<class T> std::string to_string(const T& x) { std::stringstream out; out << x; return out.str(); }
+  template<class T> long to_int(const T& x) { std::stringstream out; out << x; const auto s = out.str(); return strtol(s.c_str(), nullptr, 10); }
 
   template <typename A, typename B>
   ostream& operator<<(ostream& os, const pair<A,B>& p)

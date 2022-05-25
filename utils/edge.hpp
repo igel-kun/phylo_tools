@@ -33,8 +33,7 @@ namespace PT{
     EdgeData&& data() && { return std::move(this->second.data()); }
   };
   template<>
-  struct Edge<void>: public ProtoEdge<void>
-  {
+  struct Edge<void>: public ProtoEdge<void> {
     using Parent = ProtoEdge<void>;
     using Parent::Parent;
   };

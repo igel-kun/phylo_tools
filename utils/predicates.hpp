@@ -124,19 +124,5 @@ namespace pred {
 
 
 #warning "TODO: replace all this by lambdas"
-#warning "TODO: implement static predicates correctly"
-  /* THIS DOESN'T WORK YET... ULTIMATELY, I WANT TWO DIFFERENT filter_iterators DEPENDING ON WHETHER THE predicate IS STATIC
-  // we'll assume that a class with a static member ::value(...) is a static predicate
-  template <typename T, typename X = int> // if value(cont X&) is templated, check for value<int>(...) by default
-  struct has_static_value_method {
-    template <class, class> class checker;
-    template <typename C> static std::true_type test(checker<C, decltype(C::value)> *);
-    template <typename C> static std::true_type test(checker<C, decltype(C::template value<X>)> *);
-    template <typename C> static std::false_type test(...);
-    typedef decltype(test<T>(nullptr)) type;
-    static const bool value = std::is_same<std::true_type, decltype(test<T>(nullptr))>::value;
-	};
-	template<class T> constexpr bool has_static_value_method_v = has_static_value_method<T>::value;
-	template<class T> constexpr bool is_static_predicate_v = has_static_value_method_v<T>;
-  */
+
 }

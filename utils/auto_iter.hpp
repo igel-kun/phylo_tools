@@ -36,11 +36,13 @@ namespace std{
     _EndIterator end_it;
    public:
     using Parent = InheritableIter<Iterator>;
+    using UnderlyingIterator = Iterator;
     using EndIterator = _EndIterator;
     using iterator = Iterator;
     using const_iterator = Iterator;
 
     // when default-constructed, end_it == *this, so is_valid() will be false
+    template<class = void> requires (std::is_default_constructible_v<Iterator>)
     _auto_iter(): Parent(), end_it(*this) {}
 
     // construct from two iterators (begin and end)
@@ -67,7 +69,11 @@ namespace std{
     bool operator==(const T& other) const { return is_valid() ? Iterator::operator==(other.it) : !(other.is_valid()); }
 
     bool is_valid() const { return end_it != static_cast<const Iterator&>(*this); }
-    
+    bool is_invalid() const { return !is_valid(); }
+    operator bool() const { return is_valid(); }
+    operator bool() { return is_valid(); }
+
+
     EndIterator get_end() const & { return end_it; }
     EndIterator get_end() & { return end_it; }
     EndIterator get_end() && { return move(end_it); }
@@ -97,12 +103,6 @@ namespace std{
     using Parent::Parent;
     using Parent::is_valid;
 
-    size_t size() const { return distance(static_cast<const iterator&>(*this), Parent::end()); }
-    bool empty() const { return !is_valid(); }
-    bool is_invalid() const { return !is_valid(); }
-    operator bool() const { return is_valid(); }
-    operator bool() { return is_valid(); }
-
     bool operator==(const GenericEndIterator&) const { return is_valid(); }
     auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }
@@ -119,10 +119,6 @@ namespace std{
     using auto_iter<T>::auto_iter;
   };
 
-
-  template<IterableType Container,
-           class Iterator = iterator_of_t<Container>>
-  auto_iter<Iterator> get_auto_iter(Container&& c) { return c; }
 
   template<IterableType Container,
            class KeyType,

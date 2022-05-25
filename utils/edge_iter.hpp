@@ -13,7 +13,7 @@ namespace PT{
     NodeDesc u;
     using Adj  = typename std::value_type_of_t<AdjContainer>;
     using Edge = typename Adj::Edge;
-    
+   
     template<class T> requires std::is_same_v<std::remove_cvref_t<T>, Adj>
     auto operator()(T&& adj) const {
       if constexpr(reverse)

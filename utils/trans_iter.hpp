@@ -9,11 +9,13 @@ namespace std {
   // this is an iterator that transforms items of a range on the fly
   // **IMPORTANT NOTE**: dereferencing such an iterator may (depending on the transformation) generate and return an rvalue, not an lvalue reference
   //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
-  template<class Iter, class Transformation>
+  template<class _Iter, class Transformation>
   class _proto_transforming_iterator {
-    Iter it;
+    _Iter it;
     Transformation trans;
   public:
+    using Iter = _Iter;
+    using UnderlyingIterator = Iter;
     using difference_type = ptrdiff_t;
     using reference       = decltype(trans(*it));
     using const_reference = decltype(trans(as_const(*it)));
@@ -28,7 +30,7 @@ namespace std {
     _proto_transforming_iterator(const _proto_transforming_iterator&) = default;
 
     // construct from an iterator alone, default-construct the transformation
-    template<class T> requires (!is_same_v<remove_cvref_t<T>, _proto_transforming_iterator>)
+    template<class T> requires ((!is_same_v<remove_cvref_t<T>, _proto_transforming_iterator>) && std::is_default_constructible_v<Transformation>)
     _proto_transforming_iterator(T&& iter): it(forward<T>(iter)), trans() {}
     // construct from iter and transformaiton
     template<class T, class F>
@@ -96,18 +98,40 @@ namespace std {
 
 
   template<class Iter, class T>
-  using transforming_iterator = typename _transforming_iterator<Iter, T>::type;
+  using transforming_iterator = typename _transforming_iterator<std::iterator_of_t<Iter>, T>::type;
 
 
   // factories
-  template<class Iter, class T, class BeginEndTransformation = void>
-  using TransformingIterFactory = IterFactory<transforming_iterator<Iter, T>, BeginEndTransformation>;
+  template<class Iter, class T, class BeginEndTransformation = void, class EndIterator = std::iterator_of_t<Iter>>
+  using TransformingIterFactory = IterFactory<transforming_iterator<Iter, T>, BeginEndTransformation, EndIterator>;
 
   template<IterableType Container, class Trans>
   auto get_transforming(Container&& c, Trans&& trans) {
     return TransformingIterFactory<iterator_of_t<Container>, Trans, void>(std::forward<Container>(c), std::forward<Trans>(trans));
   }
 
+
+  // ----------- special case: selecting first or second element from a pair ---------------
+
+  template<class T, size_t get_num> struct _selecting_iterator { using type = transforming_iterator<T, std::selector<get_num>>; };
+  template<IterableType T, size_t get_num> struct _selecting_iterator<T,get_num> { using type = transforming_iterator<iterator_of_t<T>, std::selector<get_num>>; };
+  template<class T, size_t get_num> using selecting_iterator = typename _selecting_iterator<T, get_num>::type;
+
+  template<class T> using firsts_iterator = selecting_iterator<T, 0>;
+  template<class T> using seconds_iterator = selecting_iterator<T, 1>;
+
+  template<class T, size_t get_num, class BeginEndTransformation = void, class EndIterator = std::iterator_of_t<T>>
+  using TupleItemIterFactory = IterFactory<selecting_iterator<T, get_num>, BeginEndTransformation, EndIterator>;
+
+  // convenience classes for selecting the first and second items of tuples/pairs
+  template<class T> using FirstsFactory = TupleItemIterFactory<T, 0>;
+  template<class T> using SecondsFactory = TupleItemIterFactory<T, 1>;
+
+  // convenience functions to construct selecting iterator factories for returning the first and second items of tuples/pairs
+  template<class TupleContainer>
+  constexpr auto firsts(TupleContainer&& c) { return FirstsFactory<TupleContainer>(forward<TupleContainer>(c)); }
+  template<class TupleContainer>
+  constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(forward<TupleContainer>(c)); }
 
 
 }
