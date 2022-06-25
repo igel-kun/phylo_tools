@@ -146,9 +146,12 @@ namespace PT{
           //const NodeDesc u = uv_iter->first;
           //const NodeDesc v = uv_iter->second;
           if(new_tree_nodes){
-            const auto xy = *get_random_iterator_except(edges, uv_iter, N.num_edges());
+            const auto xy_iter = get_random_iterator_except(edges, uv_iter, N.num_edges());
+            assert(xy_iter != uv_iter);
+            const auto xy = *xy_iter;
             const NodeDesc x = xy.tail();
             const auto& y = xy.head();
+            assert((x != u) || (y != v));
             const bool reverse_st = N.has_path(y,u);
             DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<"\t "<<y<<"-"<<u<<"-path? "<<reverse_st<<'\n');
             NodeDesc s = Net::create_node(extracter);
