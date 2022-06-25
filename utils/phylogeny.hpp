@@ -37,6 +37,7 @@ namespace PT {
     using RootContainer = StorageClass<_RootStorage, NodeDesc>;
     using DefaultSeen = NodeSet;
   protected:
+#warning "TODO: make counting nodes and edges optional by template!"
     RootContainer _roots;
 		size_t _num_nodes = 0u;
 		size_t _num_edges = 0u;
@@ -204,7 +205,9 @@ namespace PT {
     // ================ modification ======================
     // create a node in the void
     // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
-    template<class... Args> static constexpr NodeDesc create_node(Args&&... args) {
+    template<class... Args>
+      requires ((sizeof...(Args) != 1) || (!NodeFunctionType<std::FirstTypeOf<Args...>> && !DataExtracterType<std::FirstTypeOf<Args...>>))
+    static constexpr NodeDesc create_node(Args&&... args) {
       std::cout << "creating node with " << sizeof...(Args) << " arguments\n";
       return new Node(std::forward<Args>(args)...);
     }
@@ -239,7 +242,7 @@ namespace PT {
         return result;
       } else return create_node(std::forward<DataMaker>(data_maker));
     }
-    template<DataExtracterType DataMaker>
+    template<DataExtracterType DataMaker> requires (!NodeFunctionType<DataMaker>)
     static constexpr NodeDesc create_node(DataMaker&& data_maker) {
       if constexpr (!DataMaker::ignoring_node_data) {
         if constexpr (!DataMaker::ignoring_node_labels) {
@@ -480,8 +483,7 @@ namespace PT {
     template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     size_t transfer_children(const NodeDesc source, const Adj& target, DataMaker&& make_data = DataMaker()) {
       size_t result = 0;
-      Node& source_node = node_of(source);
-      auto& s_children = source_node.children();
+      auto& s_children = children(source);
 #warning "TODO: improve repeated-erase performance if children are stored as vecS"
 #warning "TODO: in particular, remove children from the BACK of the container EVERYWHERE!"
       Adjacency tmp(NoNode);
@@ -493,9 +495,9 @@ namespace PT {
             s_children.erase(w_iter);
           } else break;
         } else result += !transfer_child<check_uniqueness>(source, target, w_iter, make_data);
-        // restore target in the children of the source
-        if(tmp != NoNode) append(s_children, std::move(tmp));
       }
+      // restore target in the children of the source
+      if(tmp != NoNode) append(s_children, std::move(tmp));
       return result;
     }
     template<class... Args>
@@ -989,45 +991,67 @@ namespace PT {
         emplacer.emplace_edge(std::move(e));
     }
 
+
+    template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
+    void update_node_and_edge_numbers(Phylo& other, const NodeDesc other_x) {
+      // step 2: update node and edge numbers
+      std::pair<size_t,size_t> node_and_edge_count;
+
+      // if other_x was the only root of other, then we'll use other's node- and edge- numbers, otherwise we'll have to count them :/
+      if(other.is_root(other_x) && (other._roots.size() == 1)) {
+        node_and_edge_count = {other.num_nodes(), other.num_edges()};
+      } else {
+        node_and_edge_count = Phylo::node_of(other_x).count_nodes_and_edges_below();
+      }
+      std::cout << " got node and edge nums: "<<node_and_edge_count<<"\n";
+      count_node(node_and_edge_count.first);
+      count_edge(node_and_edge_count.second);
+      other.count_node(-node_and_edge_count.first);
+      other.count_edge(-node_and_edge_count.second);
+    }
+
     // move the subtree below other_x into us by changing the parents of other_x to {x}
     // NOTE: the edge x --> other_x will be initialized using "args"
     // NOTE: _Phylo needs to have the same NodeType as we do!
-    // NOTE: we are not removing other_x from ther other phylogeny; the caller should care for that!
+    // NOTE: if keep_other_x is true, then other_x survives in the other phylogeny
     template<bool count = true, StrictPhylogenyType Phylo, class... Args> requires std::is_same_v<Node, typename Phylo::Node>
     void place_below_by_move(Phylo&& other, const NodeDesc other_x, const NodeDesc x, Args&&... args) {
       assert(other_x != NoNode);
       std::cout << "moving subtree below "<<other_x<<"...\n";
       // step 1: move other_x over to us
-      auto& other_x_node = other.node_of(other_x);
-      auto& other_x_parents = other_x_node.parents();
-      const bool other_x_is_root = other_x_parents.empty();
-      
-      if(!other_x_parents.empty()){
-        while(!other_x_parents.empty())
-          other.remove_edge_no_cleanup(front(other_x_parents), other_x_node);
-      }
+      auto& other_x_parents = parents(other_x);
+     
+      while(!other_x_parents.empty())
+        other.remove_edge_no_cleanup(front(other_x_parents), other_x);
 
+      if constexpr (count) update_node_and_edge_numbers(other, other_x);
       if(x != NoNode) {
         const bool success = add_child(x, other_x, std::forward<Args>(args)...).second;
         assert(success);
-      } else append(_roots, other_x);
-
-      if constexpr (count) {
-        // step 2: update node and edge numbers
-        std::pair<size_t,size_t> node_and_edge_count;
-
-        // if other_x was the only root of other, then we'll use other's node- and edge- numbers, otherwise we'll have to count them :/
-        if(other_x_is_root && other._roots.empty()) {
-          node_and_edge_count = {other.num_nodes(), other.num_edges()};
-        } else {
-          node_and_edge_count = other.count_nodes_and_edges_below(other_x);
-        }
-        count_node(node_and_edge_count.first);
-        count_edge(node_and_edge_count.second);
-        other.count_node(-node_and_edge_count.first);
-        other.count_edge(-node_and_edge_count.second);
-      }
+      } else add_root(other_x);
     }
+    // same as above, but keep other_x in tact
+    template<bool count = true, StrictPhylogenyType Phylo, class... Args> requires std::is_same_v<Node, typename Phylo::Node>
+    void place_below_by_move_children(Phylo&& other, const NodeDesc other_x, const NodeDesc x, Args&&... args) {
+      assert(other_x != NoNode);
+      std::cout << "moving children and subtree below "<<other_x<<"...\n";
+
+#warning "uncomment this once bug 106046 is fixed: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106046"
+      //const NodeDesc target = create_node(other_x);
+      const NodeDesc target = create_node();
+
+      if constexpr (count) update_node_and_edge_numbers(other, other_x);
+      if(x != NoNode) {
+        const bool success = add_child(x, target, std::forward<Args>(args)...).second;
+        assert(success);
+      } else add_root(target);
+
+      // we'll slightly abuse the internal transfer function to transfer BETWEEN phylogenies
+      std::cout << "transfering children "<<children(other_x)<<" below "<<target<<"...\n";
+      transfer_children(other_x, target);
+
+    }
+
 
     // move a number of nodes below a node x (or as new roots if x is NoNode)
     // NOTE: to not erase the roots from the other phylogeny, pass false as second template parameter
@@ -1130,6 +1154,17 @@ namespace PT {
       // remember to manually remove the in_root from in_tree's root storage
       my_erase(in_tree._roots, in_root);
     }
+    // "move" construction making a copy of in_root instead of moving it
+    template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
+    Phylogeny(const policy_move_children_t, Phylo&& in_tree, const NodeDesc in_root) {
+      place_below_by_move_children(std::move(in_tree), in_root, NoNode);
+    }
+    template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
+    Phylogeny(const policy_move_children_t, Phylo&& in_tree, const RContainer in_roots) {
+#warning "TODO: write me"
+      std::cerr << "unimplemented\n";
+      exit(1);
+    }
 
     template<StrictPhylogenyType Phylo, class... Args>
     explicit Phylogeny(const Phylo& in_tree, Args&&... args):
@@ -1141,9 +1176,9 @@ namespace PT {
     {}
 
     template<StrictPhylogenyType Phylo, class... Args>
-      requires (!std::is_same_v<Phylo, Phylogeny> && std::is_same_v<Node, typename Phylo::Node>)
+      requires (std::is_same_v<Node, typename Phylo::Node> && !((sizeof...(Args) == 0) && std::is_same_v<Phylo, Phylogeny>))
     explicit Phylogeny(Phylo&& in_tree, Args&&... args):
-      Phylogeny(policy_move_t(), std::move(in_tree), in_tree._roots, std::forward<Args>(args)...)
+      Phylogeny(policy_move_t(), std::move(in_tree), std::forward<Args>(args)...)
     {}
     // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
     // NOTE: we have to make sure to remove the other phylogeny's roots, otherwise its destructor will destruct the roots as well

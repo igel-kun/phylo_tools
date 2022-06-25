@@ -29,12 +29,11 @@ namespace PT{
     mutable std::DisjointSetForest<NodeDesc, NodeDesc> comp_root;
 
   public:
-#warning "TODO: store the emplacer instead of the translation here"
-
     // each node in the component DAG will know its corresponding node in the Network
     using ComponentDAG = DefaultNetwork<NodeDesc>;
 //    using Emplacer = EdgeEmplacerWithHelper<false, ComponentDAG, void, NodeTranslation&, std::IdentityFunction<NodeDesc>>;
 #warning "TODO: make those protected and expose only const refs"
+#warning "TODO: store the emplacer instead of the translation here"
     // N_to_comp_DAG translates nodes of N into nodes of the component DAG
     NodeTranslation N_to_comp_DAG;
     ComponentDAG comp_DAG;
@@ -56,12 +55,13 @@ namespace PT{
       N(_N), N_to_comp_DAG(std::move(tc.N_to_comp_DAG)), comp_DAG(std::move(tc.comp_DAG))
     {}
 
-  public:
     NodeDesc comp_root_of(const NodeDesc x) const {
       if(const auto rep = comp_root.lookup(x).first; rep)
         return rep->get_representative();
       else return NoNode;
     }
+    
+    const auto& get_comp_root() const { return comp_root; }
 
     // replace a component root by a leaf
     // NOTE: this is useful when a reticulation between a non-trivial comp root 'old_rt' and a trivial comp root 'new_rt' is destroyed

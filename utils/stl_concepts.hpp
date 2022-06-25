@@ -29,7 +29,7 @@ namespace std {
   concept StrictVectorType = (VectorType<T> && !is_reference_v<T>);
 
   template<class T>
-  concept HasIterTraits = requires { typename iterator_traits<T>::value_type; };
+  concept HasIterTraits = requires { typename iterator_traits<T>; };
 
   template<class T> 
   concept IterableType = requires(T a) {

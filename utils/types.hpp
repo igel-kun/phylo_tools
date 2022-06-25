@@ -89,7 +89,7 @@ namespace PT{
       return *this;
     }
 
-    constexpr operator uintptr_t() const { return data; }
+    constexpr operator uintptr_t() const noexcept { return data; }
     
     // we have to forward-declare the output here to avoid having operator<< pick up the implicit conversion to uintptr_t and output the address
     friend std::ostream& operator<<(std::ostream& os, const NodeDesc nd);
@@ -100,7 +100,7 @@ namespace std {
   template<>
   struct hash<PT::NodeDesc> {
     std::hash<uintptr_t> uinthash;
-    size_t operator()(const PT::NodeDesc& x) const { return uinthash(x.data); }
+    size_t operator()(const PT::NodeDesc& x) const noexcept { return uinthash(x.data); }
   };
 }
 
@@ -116,6 +116,8 @@ namespace PT {
 
   template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
+  template<class T>
+  concept NodeDescType = std::is_convertible_v<std::remove_cvref_t<T>, NodeDesc>;
   template<class C>
   concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<std::iterator_of_t<C>>::value_type, NodeDesc>;
   template<class C>
@@ -140,6 +142,10 @@ namespace PT {
   template<class F> concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
   template<class F> concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
   template<class F> concept OptionalNodeFunctionType = NodeFunctionType<F> || std::is_void_v<F>;
+
+  template<class F> concept StrictNodePredicateType = std::predicate<F, NodeDesc>;
+  template<class F> concept NodePredicateType = StrictNodePredicateType<std::remove_reference_t<F>>;
+  template<class F> concept OptionalNodePredicateType = NodePredicateType<F> || std::is_void_v<F>;
 
 
 

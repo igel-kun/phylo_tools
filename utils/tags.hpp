@@ -18,11 +18,10 @@ namespace PT {
   struct policy_copy_t: public data_policy_t {};
   struct policy_inplace_t: public data_policy_t {};
   struct policy_noop_t: public data_policy_t {};
+  struct policy_move_children_t: public data_policy_t {};
 
   template<class T>
   concept DataPolicyTag = std::derived_from<T, data_policy_t>;
-
-
 
   // tags for the data extracter
   struct Ex_node_label {};

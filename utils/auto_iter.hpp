@@ -103,7 +103,6 @@ namespace std{
     using Parent::Parent;
     using Parent::is_valid;
 
-    bool operator==(const GenericEndIterator&) const { return is_valid(); }
     auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }
 

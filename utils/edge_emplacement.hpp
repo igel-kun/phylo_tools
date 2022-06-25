@@ -83,6 +83,7 @@ namespace PT {
 
     bool mark_root(const NodeDesc r) {
       assert(N.in_degree(r) == 0);
+      assert(old_to_new.contains(r));
       return append(N._roots, old_to_new.at(r)).second;
     }
     bool mark_root_directly(const NodeDesc r) {
@@ -209,8 +210,7 @@ namespace PT {
         mark_roots(std::forward<Args>(args)...);
     }
 
-    const NodeDesc& operator[](const NodeDesc u) const { return helper.old_to_new.at(u); }
-    NodeDesc at(const NodeDesc u) const { return helper.old_to_new.at(u); }
+    NodeDesc at(const NodeDesc u) const { assert(contains(u)); return helper.old_to_new.at(u); }
     bool contains(const NodeDesc u) const { return helper.old_to_new.contains(u); }
     NodeDesc lookup(const NodeDesc u, const NodeDesc _default = NoNode) const {
       return_map_lookup(helper.old_to_new, u, _default);

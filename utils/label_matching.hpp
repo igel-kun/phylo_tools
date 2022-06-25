@@ -43,7 +43,7 @@ namespace PT {
            StorageEnum _LabelStorageA = singleS,
            StorageEnum _LabelStorageB = singleS>
             requires CompatibleLabels<NetA, NetB>
-  class LabelMatching:
+  class _LabelMatching:
     public std::unordered_map<AsMapKey<typename NetA::LabelType>, LabelStoragePair<_LabelStorageA, _LabelStorageB>> {
   public:
     using LabelType = AsMapKey<typename NetA::LabelType>;
@@ -54,13 +54,13 @@ namespace PT {
   public:
 
     // allow empty label matchings
-    LabelMatching() {}
+    _LabelMatching() = default;
 
     // build a label matching from 2 iterator factories (one for each network) yielding (node, label) pairs
     // enable only if the labelcontainers have pairs as value types
     template<NodeIterableType NodeContainerA, NodeIterableType NodeContainerB>
       requires (!PhylogenyType<NodeContainerA> && !PhylogenyType<NodeContainerB>)
-    LabelMatching(const NodeContainerA& Nfac, const NodeContainerB& Tfac): Parent()
+    _LabelMatching(const NodeContainerA& Nfac, const NodeContainerB& Tfac): Parent()
     {
       // step 1: create a mapping of labels to nodes in N
       for(const NodeDesc p: Nfac) {
@@ -95,19 +95,27 @@ namespace PT {
       }
     }
 
-    LabelMatching(const NetA& A, const NetB& B): LabelMatching(A.nodes(), B.nodes()) {}
-    LabelMatching(const leaf_labels_only_tag, const NetA& A, const NetB& B): LabelMatching(A.leaves(), B.leaves()) {}
+    _LabelMatching(const NetA& A, const NetB& B): _LabelMatching(A.nodes(), B.nodes()) {}
+    _LabelMatching(const leaf_labels_only_tag, const NetA& A, const NetB& B): _LabelMatching(A.leaves(), B.leaves()) {}
 
     // construct a label matching from another label matching by, for each pair (A,B) of label sets corresponding to label L,
     // appending {L, other_pair_to_our_pair((A,B))} to this
     // NOTE: if the other label matching is not const, we WILL move out of it! If you don't want that, pass a const reference to other
-    template<CompatibleLabels<LabelMatching> OtherLabelMatching> requires (LabelMatchingType<OtherLabelMatching>)
-    LabelMatching(OtherLabelMatching&& other, auto&& other_pair_to_our_pair): Parent()
+    template<CompatibleLabels<_LabelMatching> Other_LabelMatching> requires (LabelMatchingType<Other_LabelMatching>)
+    _LabelMatching(Other_LabelMatching&& other, auto&& other_pair_to_our_pair): Parent()
     {
       for(auto&& [label, node_sets]: other)
         Parent::try_emplace(std::move(label), other_pair_to_our_pair(node_sets));
     }
   };
+
+  template<PhylogenyType NetA,
+           PhylogenyType NetB,
+           StorageEnum _LabelStorageA = singleS,
+           StorageEnum _LabelStorageB = singleS>
+            requires CompatibleLabels<NetA, NetB>
+  using LabelMatching = _LabelMatching<std::remove_reference_t<NetA>, std::remove_reference_t<NetB>, _LabelStorageA, _LabelStorageB>;
+
 
   template<StrictPhylogenyType NetA,
            StrictPhylogenyType NetB,

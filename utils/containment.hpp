@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "cuts.hpp"
 #include "tree_components.hpp"
 #include "tree_tree_containment.hpp"
 #include "tree_comp_containment.hpp"
@@ -16,16 +17,16 @@ namespace PT {
            StorageEnum HostLabelStorage = singleS,
            bool leaf_labels_only = true>
   struct TreeInNetContainment {
+    using LabelMatching = PT::LabelMatching<Host, Guest, HostLabelStorage, singleS>;
+    using ComponentInfos = TreeComponentInfos<std::remove_reference_t<Host>, 2>;
     using DecayedHost = std::remove_reference_t<Host>;
     using DecayedGuest = std::remove_reference_t<Guest>;
-    using ComponentInfos = TreeComponentInfos<DecayedHost, 2>;
-    static constexpr bool host_is_tree = Host::is_declared_tree;
+    static constexpr bool host_is_tree = DecayedHost::is_declared_tree;
     static constexpr bool host_is_multi_labeled = (HostLabelStorage != singleS);
 
     using HostEdge = typename DecayedHost::Edge;
     using NodeList = _NodeList<host_is_multi_labeled>;
-    using LabelMatching = PT::LabelMatching<DecayedHost, DecayedGuest, HostLabelStorage, singleS>;
-    using LM_Iter = typename LabelMatching::iterator;
+    using LM_Iter = std::iterator_of_t<LabelMatching>;
 
     Host host;
     Guest guest;
@@ -35,40 +36,66 @@ namespace PT {
 
     bool failed = false;
 
-
     // ***************************************
     //         private Construction
     // ***************************************
   protected:
 
     // general constructor with universal references and a bool sentinel
-    //NOTE: the public constructors below just call this one, but they are useful for the compiler to deduce the template arguments of the class
-    template<PhylogenyType _Host, PhylogenyType _Guest>
-    TreeInNetContainment(_Host&& _host, _Guest&& _guest, const bool _failed):
-      host(std::forward<_Host>(_host)),
-      guest(std::forward<_Guest>(_guest)),
-      HG_label_match(host, guest),
-      comp_info(host),
-      reduction_man(*this),
-      failed(_failed)
+
+    // this constructor is for constructing sub-containments when splitting at bridges
+    template<PhylogenyType _Host, PhylogenyType _Guest, class LMatch, class CInfo>
+    TreeInNetContainment(_Host&& _host, _Guest&& _guest, const bool _failed, LMatch&& lmatch, CInfo&& cinfo):
+      host{std::forward<_Host>(_host)},
+      guest{std::forward<_Guest>(_guest)},
+      HG_label_match{std::forward<LMatch>(lmatch)},
+      comp_info{std::forward<CInfo>(cinfo)},
+      reduction_man{*this},
+      failed{_failed}
     { init(); }
 
+    // this is used for branching - it forces u as parent of v
+    TreeInNetContainment(const TreeInNetContainment& tc, const NodeDesc u, const NodeDesc v):
+      host{tc.host},
+      guest{tc.guest},
+      HG_label_match{tc.HG_label_match},
+      comp_info{tc.comp_info, host},
+      reduction_man{*this},
+      failed{tc.failed}
+    {
+      force_parent(u, v);
+      reduction_man.apply();
+    }
+
+
+    template<PhylogenyType _Host, PhylogenyType _Guest>
+    TreeInNetContainment(_Host&& _host, _Guest&& _guest, const bool _failed):
+      host{std::forward<_Host>(_host)},
+      guest{std::forward<_Guest>(_guest)},
+      HG_label_match{host, guest},
+      comp_info{host},
+      reduction_man{*this},
+      failed{_failed}
+    { init(); }
+
+
     TreeInNetContainment(const TreeInNetContainment& tc):
-      host(tc.host),
-      guest(tc.guest),
-      HG_label_match(tc.HG_label_match),
-      comp_info(tc.comp_info, host),
-      reduction_man(*this),
-      failed(tc.failed)
+      host{tc.host},
+      guest{tc.guest},
+      HG_label_match{tc.HG_label_match},
+      comp_info{tc.comp_info, host},
+      reduction_man{*this},
+      failed{tc.failed}
     {}
 
+
     TreeInNetContainment(TreeInNetContainment&& tc):
-      host(std::move(tc.host)),
-      guest(std::move(tc.guest)),
-      HG_label_match(std::move(tc.HG_label_match)),
-      comp_info(std::move(tc.comp_info), host),
-      reduction_man(*this),
-      failed(std::move(tc.failed))
+      host{std::move(tc.host)},
+      guest{std::move(tc.guest)},
+      HG_label_match{std::move(tc.HG_label_match)},
+      comp_info{std::move(tc.comp_info), host},
+      reduction_man{*this},
+      failed{tc.failed}
     {}
 
     // ***************************************
@@ -153,6 +180,126 @@ namespace PT {
     };
 
 
+    // ***************************************
+    //            bridge splitting
+    // ***************************************
+    
+    // split the network at a bridge and call the containment for both components; return whether we managed to find a suitable bridge
+    // set 'failed' according to the results of the 2 recursive calls
+#warning "TODO: actually, this has to be done with cut-nodes instead of bridges! A cut node c may have children x,y,z such that cx & cy are in the same biconnected component distinct from that of cz. This situation should be reduced but there is no bridge"
+    bool split_by_bridge() {
+      for(const auto bridge: get_bridges(host)) {
+        const NodeDesc sub_root = bridge.head();
+        if(!Host::is_leaf(sub_root)) {
+          std::cout << "\n\n-------------splitting at " << bridge << " --------------\n";
+          // step 1: split off the host part below 'bridge'
+          assert(Host::out_degree(bridge.tail()) > 1);
+          // NOTE: keep sub_root in the host (the root of subhost will be a copy of sub_root)
+          std::cout << "creating host network\n";
+          Host subhost(policy_move_children_t{}, std::move(host), sub_root);
+          std::cout << "subhost is:\n" << subhost<<"\n";
+
+          // step 1.5: move all label-matches of the subhost into sub_match
+          std::cout << "splitting off label-sub-matching\n";
+          LabelMatching sub_match;
+          NodeDesc guestLCA = NoNode;
+          auto LCA = guest.LCA();
+          for(const NodeDesc x: subhost.leaves()) {
+            auto node_handle = HG_label_match.extract(Host::label(x));
+            assert(sub_match.get_allocator() == node_handle.get_allocator());
+            auto [iter, success, new_node_handle] = sub_match.insert(std::move(node_handle));
+            std::cout << "new sub-match: "<<sub_match<<"\n";
+            assert(success);
+            guestLCA = (guestLCA == NoNode) ? static_cast<const NodeDesc&>(iter->second.second) : LCA(guestLCA, iter->second.second);
+          }
+          assert(guestLCA != guest.root());
+          assert(guestLCA != NoNode);
+
+          // step 1.75: compute new ComponentInfos
+          std::cout << "computing new component infos\n";
+          ComponentInfos sub_cinfo{subhost};
+
+          // step 2: split off the guest part induced by the labels in the subhost
+          // NOTE: keep guestLCA in the host (the root of subguest will be a copy of guestLCA)
+          std::cout << "creating guest tree by moving everything below "<<guestLCA<<"\n";
+          Guest subguest(policy_move_children_t{}, std::move(guest), guestLCA);
+          std::cout << "subguest is:\n" << subguest<<"\n";
+
+          // step 3: check if subhost contains subguest
+          TreeInNetContainment sub_containment(std::move(subhost), std::move(subguest), false, std::move(sub_match), std::move(sub_cinfo));
+          if(sub_containment.displayed()) {
+            assert(!sub_containment.HG_label_match.empty());
+            // step 4: replace the subhost and subguest by a new leaf in HG_label_match and continue checking containment
+            // step 4a: find a new label
+            const auto& new_label = front(sub_containment.HG_label_match).first;
+            assert(!HG_label_match.contains(new_label));
+            std::cout << sub_root << " gets the label "<<new_label<<"\n";
+            // step 4b: give the label to both guestLCA and sub_host 
+            Host::label(sub_root) = new_label;
+            Guest::label(guestLCA) = new_label;
+            // step 4c: register the triple in HG_label_match
+            append(HG_label_match, new_label, sub_root, guestLCA);
+          } else failed = true;
+          return true;
+        }
+      }
+      return false;
+    }
+
+
+    // find a good branchin opportunity and solve
+    bool do_branch() {
+      // We'll have to branch at this point. We would like to make visible as many leaf-components as possible on each branch.
+      // Branching will be done on invisible reticulations r above leaves s.t. r has few parents that see no component root and,
+      // among them, those that see few non-leaf-component roots.
+
+      // step 1: for each leaf z that does not see a non-leaf-component root, get the reticulation above z (if z does not have
+      // a reticulation parent, then cherry reduction must be applicable to it)
+      std::priority_queue<BranchInfo, std::vector<BranchInfo>, std::greater<BranchInfo>> branching_candidates;
+      for(const auto& HG_leaf_pair: seconds(HG_label_match)){
+        const NodeDesc u = HG_leaf_pair.first;
+        const NodeDesc rt_u = comp_info.comp_root_of(u);
+        if(rt_u == NoNode) {
+          std::cout << u << " sees noone\n" << u <<"'s parents are "<<parents_of<Host>(u)<<"\n";
+          // if u does not see any component-root, then its parent is necessarily a reticulation (since cherry-reduction is applied continuously)
+          assert(host.in_degree(u) == 1);
+          const NodeDesc pu = host.parent(u);
+          assert(host.out_degree(pu) == 1);
+          assert(host.in_degree(pu) > 1);
+          // the parent reticulation cannot see a tree-component since u would see it too
+          assert(comp_info.comp_root_of(pu) == NoNode);
+          
+          BranchInfo pu_info(pu);
+          for(const NodeDesc x: host.parents(pu)) {
+            const NodeDesc rt_x = comp_info.comp_root_of(x);
+            std::cout << "considering comp-root "<<rt_x <<" ("<< comp_info.comp_root_of(x) <<") of "<<pu<<"\n";
+            if(rt_x != NoNode){
+              if(comp_info.comp_DAG.is_leaf(rt_x))
+                pu_info.parents_seeing_leaf_comp++;
+              else
+                pu_info.parents_seeing_non_leaf_comp++;
+            } else pu_info.parents_seeing_noone++;
+          }
+          std::cout << "branch-info for "<<pu<<": "<<pu_info<<"\n";
+          branching_candidates.emplace(std::move(pu_info));
+        } else std::cout << rt_u << " is visible from "<<u<<" so one of the implied branches does not make progress. Ignoring "<<u<<"...\n";
+      }
+      std::cout << "found "<<branching_candidates.size() <<" branching opportunities\n";
+      assert(!branching_candidates.empty());
+      std::cout << "best branching: "<< branching_candidates.top() << "\n";
+
+      // for each parent u of the best-branching node v, make a copy of *this and make u the only parent of v, then run the machine again
+      const NodeDesc u = branching_candidates.top().node;
+      for(const NodeDesc v: host.parents(u)){
+        std::cout << "\n================ new branch: keep "<<v<<" --> "<<u<<" ====================\n";
+        TreeInNetContainment sub_checker(std::as_const(*this), u, v);
+        if(sub_checker.displayed()) return true;
+        std::cout << "unsuccessful branch\n";
+      }
+      // if no branch returned true, then the tree is not displayed
+      return false;
+    }
+
 
 
   public:
@@ -178,8 +325,7 @@ namespace PT {
 
     bool displayed() {
       if(failed) return false;
-      reduction_man.apply();
-      if(failed) return false;
+      std::cout << "display-test for host\n"<<host<<"\n guest\n"<<guest<<"\n";
       std::cout << "number of edges: "<<host.num_edges() << " (host) "<<guest.num_edges()<<" (guest)\n";
       if(HG_label_match.size() <= 2) return true;
       if(host.edgeless()){
@@ -188,69 +334,20 @@ namespace PT {
         else
           return false;
       } else {
-        // We'll have to branch at this point. We would like to make visible as many leaf-components as possible on each branch.
-        // Branching will be done on invisible reticulations r above leaves s.t. r has few parents that see no component root and,
-        // among them, those that see few non-leaf-component roots.
-
-        // step 1: for each leaf z that does not see a non-leaf-component root, get the reticulation above z (if z does not have
-        // a reticulation parent, then cherry reduction must be applicable to it)
         std::cout << "visibility: ";
         for(const NodeDesc x: host.nodes()) std::cout << x << ": " << comp_info.visible_leaf_of(x) <<"\n";
         std::cout << "label-matching: "<<HG_label_match<<"\n";
 
-        std::priority_queue<BranchInfo, std::vector<BranchInfo>, std::greater<BranchInfo>> branching_candidates;
-        for(const auto& HG_leaf_pair: seconds(HG_label_match)){
-          const NodeDesc u = HG_leaf_pair.first;
-          const NodeDesc rt_u = comp_info.comp_root_of(u);
-          if(rt_u == NoNode) {
-            std::cout << u << " sees noone\n" << u <<"'s parents are "<<parents_of<Host>(u)<<"\n";
-            // if u does not see any component-root, then its parent is necessarily a reticulation (since cherry-reduction is applied continuously)
-            assert(host.in_degree(u) == 1);
-            const NodeDesc pu = host.parent(u);
-            assert(host.out_degree(pu) == 1);
-            assert(host.in_degree(pu) > 1);
-            // the parent reticulation cannot see a tree-component since u would see it too
-            assert(comp_info.comp_root_of(pu) == NoNode);
-            
-            BranchInfo pu_info(pu);
-            for(const NodeDesc x: host.parents(pu)) {
-              const NodeDesc rt_x = comp_info.comp_root_of(x);
-              std::cout << "considering comp-root "<<rt_x <<" ("<< comp_info.comp_root_of(x) <<") of "<<pu<<"\n";
-              if(rt_x != NoNode){
-                if(comp_info.comp_DAG.is_leaf(rt_x))
-                  pu_info.parents_seeing_leaf_comp++;
-                else
-                  pu_info.parents_seeing_non_leaf_comp++;
-              } else pu_info.parents_seeing_noone++;
-            }
-            std::cout << "branch-info for "<<pu<<": "<<pu_info<<"\n";
-            branching_candidates.emplace(std::move(pu_info));
-          } else std::cout << rt_u << " is visible from "<<u<<" so one of the implied branches does not make progress. Ignoring "<<u<<"...\n";
-        }
-        std::cout << "found "<<branching_candidates.size() <<" branching opportunities\n";
-        assert(!branching_candidates.empty());
-        std::cout << "best branching: "<< branching_candidates.top() << "\n";
-
-        // for each parent u of the best-branching node v, make a copy of *this and make u the only parent of v, then run the machine again
-        const NodeDesc u = branching_candidates.top().node;
-        for(const NodeDesc v: host.parents(u)){
-          std::cout << "\n================ new branch: keep "<<v<<" --> "<<u<<" ====================\n\n";
-          TreeInNetContainment sub_checker(std::as_const(*this));
-          sub_checker.force_parent(u, v);
-          if(sub_checker.displayed()) return true;
-          std::cout << "unsuccessful branch :/\n";
-        }
-        // if no branch returned true, then the tree is not displayed
-        return false;
+        return (split_by_bridge()) ? displayed() : do_branch();
       }
     }
+    
 
     // translate a node to its corresponding node in the compoent DAG
     NodeDesc host_to_compDAG(const NodeDesc u) const {
       return_map_lookup(comp_info.N_to_compDAG, u, NoNode);
     }
     
-    template<class> friend struct ReductionManager;
   };
 
 

@@ -20,7 +20,7 @@ namespace PT{
 
     // for debugging purposes, we may want to change the name to something more readable, like a successive numbering
     std::string name() const { return std::to_string(_name); }
-    NodeDesc get_desc() const { return this; }
+    NodeDesc get_desc() const noexcept { return this; }
   };
   inline uintptr_t _ProtoNode::num_names = 0;
   std::ostream& operator<<(std::ostream& os, const NodeDesc nd) {
@@ -29,7 +29,7 @@ namespace PT{
 #else
   struct _ProtoNode {
     static std::string name() { return ""; }
-    NodeDesc get_desc() const { return NodeDesc(this); }
+    NodeDesc get_desc() const noexcept { return NodeDesc(this); }
   };
 #endif
   // NOTE: we specifically refrain from polymorphic nodes (one node pointer that may point to a TreeNode or a NetworkNode) because
@@ -44,7 +44,7 @@ namespace PT{
     
     static constexpr StorageEnum SuccStorage = _SuccStorage;
     static constexpr StorageEnum PredStorage = _PredStorage;
-    static constexpr bool _is_tree_node = (PredStorage == singleS);
+    static constexpr bool is_defined_tree_node = (PredStorage == singleS);
     static constexpr bool has_edge_data = has_data<Adjacency>;
     static constexpr bool unique_edges = unique_elements<PredStorage> && unique_elements<SuccStorage>;
 
@@ -108,7 +108,7 @@ namespace PT{
     size_t degree() const { return in_degree() + out_degree(); }
     std::pair<size_t,size_t> degrees() const { return {in_degree(), out_degree()}; }
     bool is_root() const { return predecessors().empty(); }
-    bool is_tree_node() const { if constexpr(_is_tree_node) return true; else return in_degree() < 2; }
+    bool is_tree_node() const { if constexpr(is_defined_tree_node) return true; else return in_degree() < 2; }
     bool is_reti() const { return !is_tree_node(); }
     bool is_leaf() const { return successors().empty(); }
     bool is_suppressible() const { return (in_degree() == 1) && (out_degree() == 1); }
@@ -127,17 +127,43 @@ namespace PT{
       std::replace(successors(), old_child, forward<Adj>(new_child));
     }
 
+    void apply_to_subtree(auto&& function, NodeSet& seen) const {
+      function(*this);
+      for(const NodeDesc v: successors())
+        if(append(seen, v).second){
+          node_of<const ProtoNode>(v).apply_to_subtree(function, seen);
+        }
+    }
+    void apply_to_subtree(auto&& function, NodeSet& seen) {
+      function(*this);
+      for(const NodeDesc v: successors())
+        if(append(seen, v).second)
+          node_of<ProtoNode>(v).apply_to_subtree(function, seen);
+    }
+
   public:
     // convenient way of applying some function to all nodes of a subtree
-    void apply_to_subtree(auto&& function) const {
-      function(*this);
-      for(const NodeDesc v: successors())
-        static_cast<const ProtoNode*>(v)->apply_to_subtree(std::as_const(function));
+    template<class F>
+    void apply_to_subtree(F&& function) const {
+      if constexpr (is_defined_tree_node) {
+        function(*this);
+        for(const NodeDesc v: successors())
+          node_of<const ProtoNode>(v).apply_to_subtree(function);
+      } else {
+        NodeSet seen;
+        apply_to_subtree(function, seen);
+      }
     }
-    void apply_to_subtree(auto&& function) {
-      function(*this);
-      for(const NodeDesc v: successors())
-        static_cast<ProtoNode*>(v)->apply_to_subtree(std::as_const(function));
+    template<class F>
+    void apply_to_subtree(F&& function) {
+      if constexpr (is_defined_tree_node) {
+        function(*this);
+        for(const NodeDesc v: successors())
+          node_of<const ProtoNode>(v).apply_to_subtree(function);
+      } else {
+        NodeSet seen;
+        apply_to_subtree(function, seen);
+      }
     }
 
     size_t count_nodes_below() const {
@@ -147,7 +173,7 @@ namespace PT{
     }
     std::pair<size_t,size_t> count_nodes_and_edges_below() const {
       std::pair<size_t, size_t> result{0,0};
-      if constexpr (is_tree_node) {
+      if constexpr (is_defined_tree_node) {
         result.first = count_nodes_below();
         result.second = result.first - 1;
       } else apply_to_subtree([&](const auto& v){ ++(result.first); result.second += v.out_degree(); });
@@ -164,7 +190,7 @@ namespace PT{
     ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(get_desc(), _successors); }
     Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), front(_successors) }; }
     InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(get_desc(), _predecessors); }
-    ConstInEdgeContainer in_edges() const { return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
+    ConstInEdgeContainer in_edges() const {return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
     Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_t(), get_desc(), front(_predecessors) }; }
 
     // lookup a parent/child
@@ -310,6 +336,7 @@ namespace PT{
     
     static constexpr auto  name(const NodeDesc u) { return node_of(u).name(); }
     static constexpr auto& label(const NodeDesc u) { return node_of(u).label(); }
+    static constexpr auto& data(const NodeDesc u) { return node_of(u).data(); }
 
     static constexpr SuccContainer& successors(const NodeDesc u) { return node_of(u).successors(); }
     static constexpr SuccContainer& children(const NodeDesc u) { return node_of(u).successors(); }

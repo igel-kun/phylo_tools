@@ -7,7 +7,7 @@
 #include "tree_comp_containment.hpp"
 
 namespace PT {
- 
+
   template<class T>
   concept Reduction = requires(T t) { t.apply(); };
 
@@ -22,6 +22,7 @@ namespace PT {
 
     ContainmentReduction(Manager& c): manager(c) {}
 
+#warning "TODO: not all containment reductions need access to component roots and visible leaves"
     NodeDesc comp_root_of(const NodeDesc u) const { return manager.contain.comp_info.comp_root_of(u); }
     NodeDesc visible_leaf_of(const NodeDesc u) const { return manager.contain.comp_info.visible_leaf_of(u); }
   };
@@ -203,6 +204,7 @@ namespace PT {
     }
 
   };
+
 
   // a class to apply triangle reduction
   template<class Manager>
@@ -444,15 +446,15 @@ namespace PT {
     // a pair (v, 10) in PathProfile[u] means that there are 10 different u-->v paths in host
     using PathProfile = NodeMap<NodeMap<size_t>>;
 
-    // return whether u is half-eligible and, update u's paths
+    // return whether u is half-eligible and update u's paths
     //NOTE: the update to num_paths[u] are incorrect if u is not half-elighible!
     bool is_half_eligible(const NodeDesc u, PathProfile& num_paths, const NodeSet& half_eligible) const {
       auto& u_paths = num_paths[u];
       std::cout << "checking node "<<u<<" ("<< comp_root_of(u) <<") with current paths "<<u_paths<<"\n";
       const auto& host = manager.contain.host;
-      const auto& cDAG_node_u = node_of<ComponentDAG>(manager.contain.comp_info.N_to_comp_DAG.at(u));
-      for(const NodeDesc cDAG_v: cDAG_node_u.children()) {
-        if(const NodeDesc v = node_of<ComponentDAG>(cDAG_v).data(); test(half_eligible, v)) {
+      const NodeDesc u_in_cDAG = manager.contain.comp_info.N_to_comp_DAG.at(u);
+      for(const NodeDesc cDAG_v: ComponentDAG::children(u_in_cDAG)) {
+        if(const NodeDesc v = ComponentDAG::data(cDAG_v); test(half_eligible, v)) {
           std::cout << "next child: "<<v<<"\n";
           // to test if the u-v-path in host is unique, we'll look at all reticulations above v in host and check if we see u more than once
           assert(host.in_degree(v) == 1);
@@ -468,12 +470,15 @@ namespace PT {
                 std::cout << "registered "<< comp_root_of(r) <<"--"<<v<<" path. Now, "<<u<<" has "<<num_paths[comp_root_of(r)][v]<<" of them\n";
               } else append(retis_above, host.parents(r));
             }
+            assert(u_paths.contains(v));
             if(u_paths.at(v) > 1) return false; // if we ended up counting more than one path, return non-eligibility
           } else u_paths.at(v) = 1;
           // for each root that v has paths to, u also has paths to via v
-          for(const auto& node_and_paths: num_paths[v])
-            if((u_paths.at(node_and_paths.first) += node_and_paths.second) > 1)
-              return false;
+          for(const auto& [w, num_w_paths]: num_paths[v]) {
+            if(const auto iter = u_paths.find(w); iter != u_paths.end())
+              if((iter->second += num_w_paths) > 1)
+                return false;
+          }
           std::cout << "added paths to "<<u<<"'s paths, now: "<<u_paths<<"\n";
         } else return false;
       } // for all children of u in the comp-DAG
@@ -591,7 +596,7 @@ namespace PT {
 
     // after having identified a node host_u in the host that will be used to display the subtree below guest_v, remove the subtrees below them
     //NOTE: xy_label_iter points to the label-pair that will be spared (u and v will end up receiving this label)
-    void match_nodes(const NodeDesc host_u, const NodeDesc guest_v, const typename LabelMatching::iterator& xy_label_iter) {
+    void match_nodes(const NodeDesc host_u, const NodeDesc guest_v, const std::iterator_of_t<LabelMatching>& xy_label_iter) {
       // step 3a: prune guest and remove nodes with label below v (in guest) from both host and guest - also remove their label entries in HG_label_match
       const auto& vlabel = xy_label_iter->first;
       const NodeDesc host_x = xy_label_iter->second.first;
@@ -931,9 +936,10 @@ namespace PT {
   template<class _Containment>
   struct ReductionManager {
     using Containment = _Containment;
+    using ComponentInfos = std::remove_reference_t<typename Containment::ComponentInfos>;
+    using ComponentDAG = typename ComponentInfos::ComponentDAG;
     using Host = typename Containment::DecayedHost;
     using Guest = typename Containment::DecayedGuest;
-    using ComponentDAG = typename Containment::ComponentInfos::ComponentDAG;
 
     Containment& contain;
     NodeSet orphan_queueu;
@@ -1187,7 +1193,6 @@ namespace PT {
           extended_cherries.init_queue();
           if(extended_cherries.apply()) continue;
         }
-        exit(1);
         break;
       }
       std::cout << "\n ===== REDUCTION done ======\n\n";

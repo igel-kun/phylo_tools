@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "union_find.hpp"
 #include "types.hpp"
 #include "set_interface.hpp"
 
@@ -85,7 +86,7 @@ namespace PT{
         for(const auto i: v_info.neighbors) {
           const auto i_iter = std::partition_point(tmp.begin(), tmp.end(), [i](const auto& ele){ return ele.first.low() > i; });
           if((i_iter != tmp.end()) && i_iter->first.contains(i))
-            child_partition.merge_sets_of(i_iter->second, v);
+            child_partition.merge_sets(i_iter->second, v);
         }
       }
       // step 2.4: remove from tmp all nodes v s.t. either
@@ -216,10 +217,9 @@ namespace PT{
       } else return true;
     }
 
-    // the second DFS propagates the lowest and highest neighbors upwards in the DFS tree
     void advance() {
       if(iter.is_valid()) {
-        do { ++iter; } while(!is_yieldable());
+        do ++iter; while(!is_yieldable());
       }
     }
 
@@ -253,14 +253,11 @@ namespace PT{
     Ref operator*() const { return *iter; }
     typename DFSIter::pointer operator->() const { return operator*(); }
 
-    bool operator==(const std::GenericEndIterator&) const { return !is_valid(); }
     bool is_valid() const { return iter.is_valid(); }
 
     // NOTE: this can be used as predicate, deciding whether a node is a vertical cut-node or an edge is a bridge
     // NOTE: if you want to use this as a Node predicate, be sure to pass over all nodes BEFOREHAND in order to fill the cache!
-    bool is_cut_node(const NodeDesc u) const {
-      return node_infos.at(u).get_mark();
-    }
+    bool is_cut_node(const NodeDesc u) const { return node_infos.at(u).get_mark(); }
     bool operator()(const NodeDesc u) const { return is_cut_node(u); }
     template<EdgeType E> bool is_bridge(const E& uv) const { return node_infos.at(uv.head()).get_mark(); }
     template<EdgeType E> bool operator()(const E& uv) const { return is_bridge(uv); }
@@ -269,16 +266,14 @@ namespace PT{
 
   template<PhylogenyType Network>
   using CutNodeIter = CutIter<Network, CO_vertical_cut_node, std::iter_traits_from_reference<NodeDesc>>;
+  template<StrictPhylogenyType Network> using CutNodeIterFactory = std::IterFactory<CutNodeIter<Network>>;
+  template<StrictPhylogenyType Network> auto get_cut_nodes(const NodeDesc rt) { return CutNodeIterFactory<Network>(rt); }
+  template<StrictPhylogenyType Network> auto get_cut_nodes(const Network& N) { return CutNodeIterFactory<Network>(N.root()); }
 
   template<PhylogenyType Network>
   using BridgeIter = CutIter<Network, CO_bridge, std::my_iterator_traits<Traversal<all_edge_tail_postorder, Network, NodeDesc>>>;
-
-  template<StrictPhylogenyType Network> using CutNodeIterFactory = std::IterFactory<CutNodeIter<Network>>;
   template<StrictPhylogenyType Network> using BridgeIterFactory = std::IterFactory<BridgeIter<Network>>;
-
-  template<StrictPhylogenyType Network> CutNodeIterFactory<Network> get_cut_nodes(const NodeDesc rt) { return rt; }
-  template<StrictPhylogenyType Network> BridgeIterFactory<Network> get_bridges(const NodeDesc rt) { return rt; }
-  template<StrictPhylogenyType Network> CutNodeIterFactory<Network> get_cut_nodes(const Network& N) { return N.root(); }
-  template<StrictPhylogenyType Network> BridgeIterFactory<Network> get_bridges(const Network& N) { return N.root(); }
+  template<StrictPhylogenyType Network> auto get_bridges(const NodeDesc rt) { return BridgeIterFactory<Network>(rt); }
+  template<StrictPhylogenyType Network> auto get_bridges(const Network& N) { return BridgeIterFactory<Network>(N.root()); }
 
 }// namespace
