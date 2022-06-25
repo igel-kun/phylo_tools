@@ -325,8 +325,7 @@ namespace PT {
 
     bool displayed() {
       if(failed) return false;
-      std::cout << "display-test for host\n"<<host<<"\n guest\n"<<guest<<"\n";
-      std::cout << "number of edges: "<<host.num_edges() << " (host) "<<guest.num_edges()<<" (guest)\n";
+      std::cout << "display-test for host ("<<host.num_edges()<<" edges)\n"<<host<<"\n guest ("<<guest.num_edges()<<" edges)\n"<<guest<<"\n";
       if(HG_label_match.size() <= 2) return true;
       if(host.edgeless()){
         if(guest.edgeless())

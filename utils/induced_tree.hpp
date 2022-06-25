@@ -113,12 +113,12 @@ namespace PT{
         }
         append_unless_equal(result, inner_nodes.back().first, *leaf_iter);
         // step 2: get edges incoming to inner nodes
-        NodeDesc last_node = NoNode;
-        for(i = 0; i != inner_nodes.size(); ++i) if(last_node != inner_nodes[i].first){
+        NodeSet seen; // high-degree nodes may occur multiple times as inner nodes but we don't want to add multiple parents for them
+        for(i = 0; i != inner_nodes.size(); ++i) if(append(seen, inner_nodes[i].first).second) {
           const ssize_t parent_idx = choose_parent(v_left_idx[i], v_right_idx[i]);
           // for nodes of high-degree, we can see parent == u here, so don't add those edges
           if(parent_idx != -1)
-            append_unless_equal(result, inner_nodes[parent_idx].first, last_node = inner_nodes[i].first);
+            append_unless_equal(result, inner_nodes[parent_idx].first, inner_nodes[i].first);
         }
       }
       return result;
