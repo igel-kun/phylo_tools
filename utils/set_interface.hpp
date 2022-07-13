@@ -28,18 +28,18 @@ namespace std { // since it was the job of STL to provide for it and they failed
   template<class T>
   void flip(iterable_bitset<T>& _set, const uintptr_t index) { return _set.flip(index); }
 
+  // intersect a set with a list/vector/etc
+  template<SetType Set, ContainerType Other>
+  void intersect(Set& target, const Other& source) {
+    for(const auto& x: source) my_erase(target, x);
+  }
   // intersect 2 sets
-  template<SetType Set, SetType Other>
+  template<SetType Set, ContainerType Other> requires SetType<Other>
   void intersect(Set& target, const Other& source) {
     if(target.size() > source.size()) {
       for(const auto& x: source)
         my_erase(target, x);
     } else erase_if(target, [&source](const auto& x) { return !test(source, x); });
-  }
-  // intersect a set with a list/vector/etc
-  template<SetType Set, ContainerType Other>
-  void intersect(Set& target, const Other& source) {
-    for(const auto& x: source) my_erase(target, x);
   }
   template<SetType S, class T>
   void intersect(singleton_set<T>& target, const S& source) {
@@ -47,8 +47,8 @@ namespace std { // since it was the job of STL to provide for it and they failed
       target.clear();
   }
   // intersect 2 bitsets
-  template<class T>
-  void intersect(iterable_bitset<T>& target, const iterable_bitset<T>& source) { target &= source; }
+  template<ContainerType C> requires IterBitsetType<C>
+  void intersect(C& target, const C& source) { target &= source; }
 
   template<SetType S1, SetType S2 = S1>
   bool are_disjoint(const S1& x, const S2& y) {
@@ -208,9 +208,9 @@ namespace std { // since it was the job of STL to provide for it and they failed
     return y;
   }
 
-  template<class T, ContainerType C = unordered_set<T>>
-  C to_set(const iterable_bitset<T>& x, const C& sentinel = C()) {
-    C result;
+  template<OptionalContainerType C = void, class T, class _C = VoidOr<C, unordered_set<value_type_of_t<iterable_bitset<T>>>>>
+  _C to_set(const iterable_bitset<T>& x) {
+    _C result;
     return copy(x, result);
   }
 

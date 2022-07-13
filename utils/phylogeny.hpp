@@ -244,12 +244,13 @@ namespace PT {
     }
     template<DataExtracterType DataMaker> requires (!NodeFunctionType<DataMaker>)
     static constexpr NodeDesc create_node(DataMaker&& data_maker) {
-      if constexpr (!DataMaker::ignoring_node_data) {
-        if constexpr (!DataMaker::ignoring_node_labels) {
+      using StrictDataMaker = std::remove_reference_t<DataMaker>;
+      if constexpr (!StrictDataMaker::ignoring_node_data) {
+        if constexpr (!StrictDataMaker::ignoring_node_labels) {
           return create_node(data_maker.get_node_label, data_maker.get_node_data);
         } else return create_node(data_maker.get_node_data);
       } else {
-        if constexpr (!DataMaker::ignoring_node_labels) {
+        if constexpr (!StrictDataMaker::ignoring_node_labels) {
           create_node(data_maker.get_node_label);
         } else return create_node();
       }

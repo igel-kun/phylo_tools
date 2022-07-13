@@ -13,6 +13,8 @@
 
 namespace PT{
 
+  enum NodeTypeEnum { NODE_TYPE_LEAF, NODE_TYPE_INTERNAL_TREE, NODE_TYPE_INTERNAL_RETI};
+
 #ifndef NDEBUG
   struct _ProtoNode {
     static uintptr_t num_names;
@@ -114,6 +116,12 @@ namespace PT{
     bool is_suppressible() const { return (in_degree() == 1) && (out_degree() == 1); }
     bool is_inner_node() const { return !successors().empty(); }
     bool is_isolated() const { return predecessors().empty() && successors().empty(); }
+    NodeTypeEnum type_of() const {
+      switch(in_degree()) {
+        case 2: return NODE_TYPE_INTERNAL_RETI;
+        default: return out_degree() == 0 ? NODE_TYPE_LEAF : NODE_TYPE_INTERNAL_TREE;
+      }
+    }
 
   protected:
     template<AdjacencyType Adj>
@@ -412,6 +420,7 @@ namespace PT{
     static constexpr bool is_suppressible(const NodeDesc u) { return node_of(u).is_suppressible(); }
     static constexpr bool is_inner_node(const NodeDesc u) { return node_of(u).is_inner_node(); }
     static constexpr bool is_isolated(const NodeDesc u) { return node_of(u).is_isolated(); }
+    static constexpr NodeTypeEnum type_of(const NodeDesc u) { return node_of(u).type_of(); }
 /*
     template<AdjacencyType Adj>
     static constexpr void replace_parent(const NodeDesc u, const NodeDesc old_parent, Adj&& new_parent)

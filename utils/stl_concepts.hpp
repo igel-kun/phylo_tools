@@ -11,7 +11,14 @@ namespace std {
   // anything that can be converted from and to int is considered "basically arithmetic"
   template<class T> constexpr bool is_basically_arithmetic_v = is_convertible_v<int, remove_cvref_t<T>> && is_convertible_v<remove_cvref_t<T>, int>;
 
-  // ever needed to get an interator if T was non-const and a const_iterator if T was const? Try this:
+  // conditional_t that is usable with void
+  template<class Chooser, class T> struct _VoidOr { using type = Chooser; };
+  template<class T> struct _VoidOr<void, T> { using type = T; };
+  template<class Chooser, class T> using VoidOr = typename _VoidOr<Chooser, T>::type;
+
+
+
+  // ever needed to get an iterator if T was non-const and a const_iterator if T was const? Try this:
   template<class T> requires requires { typename T::iterator; typename T::const_iterator; } struct _iterator_of {
     using type = conditional_t<is_const_v<T>, typename T::const_iterator, typename T::iterator>;
   };

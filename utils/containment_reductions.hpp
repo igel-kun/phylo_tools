@@ -304,15 +304,14 @@ namespace PT {
 
       if(Host::in_degree(host_x) == 1) {
         const NodeDesc host_px = Host::parent(host_x);
-        if(Host::in_degree(host_px) <= 1) {
-          std::get<0>(result) = host_px;
-        } else return result;
-      } else return result;
+        std::get<0>(result) = host_px;
+        if(Host::in_degree(host_px) <= 1) std::get<2>(result) = true;
+      }
       
       if(Guest::in_degree(guest_x) == 1) {
         std::get<1>(result) = Guest::parent(guest_x);
-      } else return result;
-      get<2>(result) = true;
+      } else std::get<2>(result) = false;
+
       return result;
     }
 
@@ -528,8 +527,8 @@ namespace PT {
   // whenever a node in the host is identified that optimally displays a node in the guest, this class updates host and guest accordingly
   template<class Manager>
   struct HostGuestMatch {
-    using Host = typename Manager::Containment::DecayedHost;
-    using Guest = typename Manager::Containment::DecayedGuest;
+    using Host = typename Manager::Containment::Host;
+    using Guest = typename Manager::Containment::Guest;
     using LabelMatching = typename Manager::Containment::LabelMatching;
 
     Manager& manager;
@@ -639,7 +638,7 @@ namespace PT {
   // a class for extended cherry reduction
   // NOTE: one application of this runs in O(n) time
   // NOTE the reduction works as follows for a cherry abc in guest:
-  //      1. let a have a tree path P to the parent px of any leaf x != a
+  //      1. let P be a tree path from some x to a such that x is stable on any leaf z != a
   //      2. let uv be an edge such that u is on P but v is not
   //      3. let none of bc be below v (note that a cannot be below v)
   //      ----> delete uv
@@ -897,37 +896,34 @@ namespace PT {
       const auto [u, v] = uv;
       const auto [pu, pv, success] = label_matching_sanity_check(u, v);
      
-      if(success) {
-        // degrees match, so see if the labels of the children match
-        LabelSet cherry_labels = get_labels_of_children(pv);
-        if(!cherry_labels.empty()) {
-          P_Rel_clearer tmp{p_rel};
-          std::cout << "\texCHERRY: found sibling-labels "<<cherry_labels<<"\n";
-          // step 0: translate labels into nodes in the host
-          NodeSet cherry_leaves;
-          cherry_leaves.reserve(cherry_labels.size() - 1);
-          for(const auto& label: cherry_labels) {
-            const auto iter = manager.find_label(label);
-            assert(iter != manager.contain.HG_label_match.end());
-            const NodeDesc x = iter->second.first;
-            assert(Host::label(x) == label);
-            if(x != u) append(cherry_leaves, x);
-          }
-          // step 1:  move up from u to emplace the set P of unstable nodes above u
-          unstable_above<true>(u, u, NoNode, &cherry_leaves);
-          bool result = false;
-          for(const NodeDesc x: cherry_leaves){
-            std::cout << "next leaf: "<<x<<" ["<<Host::label(x)<<"]\n";
-            std::cout << *this;
-            unstable_above(x, x);
-            std::cout << "after marking:\n";
-            std::cout << *this;
-            result |= climb_and_remove_edges(x);
-            std::cout << "result is now "<<result<<"\n";
-          } // for all 'siblings' x of u
-          return result;
-        } else return false; // if get_labels_of_children returned the empty set, this indicates that pv has a child that is not a leaf, so give up
-      } else return false; // if label_matching_sanity_check failed, then give up
+      LabelSet cherry_labels = get_labels_of_children(pv);
+      if(!cherry_labels.empty()) {
+        P_Rel_clearer tmp{p_rel};
+        std::cout << "\texCHERRY: found sibling-labels "<<cherry_labels<<"\n";
+        // step 0: translate labels into nodes in the host
+        NodeSet cherry_leaves;
+        cherry_leaves.reserve(cherry_labels.size() - 1);
+        for(const auto& label: cherry_labels) {
+          const auto iter = manager.find_label(label);
+          assert(iter != manager.contain.HG_label_match.end());
+          const NodeDesc x = iter->second.first;
+          assert(Host::label(x) == label);
+          if(x != u) append(cherry_leaves, x);
+        }
+        // step 1:  move up from u to emplace the set P of unstable nodes above u
+        unstable_above<true>(u, u, NoNode, &cherry_leaves);
+        bool result = false;
+        for(const NodeDesc x: cherry_leaves){
+          std::cout << "next leaf: "<<x<<" ["<<Host::label(x)<<"]\n";
+          std::cout << *this;
+          unstable_above(x, x);
+          std::cout << "after marking:\n";
+          std::cout << *this;
+          result |= climb_and_remove_edges(x);
+          std::cout << "result is now "<<result<<"\n";
+        } // for all 'siblings' x of u
+        return result;
+      } else return false; // if get_labels_of_children returned the empty set, this indicates that pv has a child that is not a leaf, so give up
     } 
   };
 
@@ -938,8 +934,8 @@ namespace PT {
     using Containment = _Containment;
     using ComponentInfos = std::remove_reference_t<typename Containment::ComponentInfos>;
     using ComponentDAG = typename ComponentInfos::ComponentDAG;
-    using Host = typename Containment::DecayedHost;
-    using Guest = typename Containment::DecayedGuest;
+    using Host = typename Containment::Host;
+    using Guest = typename Containment::Guest;
 
     Containment& contain;
     NodeSet orphan_queueu;
@@ -1151,13 +1147,11 @@ namespace PT {
     void apply() {
       std::cout << "\n ===== REDUCTION RULES ======\n\n";
       std::cout << "reti-m queue: "<<reti_merge.node_queue << "\n";
+      std::cout << "host:\n" << contain.host << "\nguest:\n" << contain.guest << "\ncomp-DAG:\n";
       contain.comp_info.comp_DAG.print_subtree(std::cout, [](const NodeDesc u){ return std::to_string(u); });
         
-      std::cout << "host:\n" << contain.host << "\nguest:\n" << contain.guest << "\ncomp-DAG:\n";
 
       remove_orphans.init_queue();
-#warning "TODO: remove the following assert in production\n"
-      assert(remove_orphans.node_queue.empty());
       remove_orphans.apply();
 
       reti_merge.init_queue();

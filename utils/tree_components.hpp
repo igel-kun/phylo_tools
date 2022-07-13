@@ -48,9 +48,6 @@ namespace PT{
     }
 
     // we want to be able to give a new Network-reference when copy-constructing
-    TreeComponentInfos(const TreeComponentInfos& tc, Network& _N):
-      N(_N), N_to_comp_DAG(), comp_DAG(tc.comp_DAG)
-    {}
     TreeComponentInfos(TreeComponentInfos&& tc, Network& _N):
       N(_N), N_to_comp_DAG(std::move(tc.N_to_comp_DAG)), comp_DAG(std::move(tc.comp_DAG))
     {}

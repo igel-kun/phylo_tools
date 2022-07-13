@@ -59,6 +59,11 @@ namespace PT{
            class Hash = std::hash<Key>,
            class KeyEqual = std::equal_to<Key>>
   using HashSet = std::unordered_set<Key, Hash, KeyEqual>;
+  template<class Key,
+           class Value,
+           class Hash = std::hash<Key>,
+           class KeyEqual = std::equal_to<Key>>
+  using HashMap = std::unordered_map<Key, Value, Hash, KeyEqual>;
 
   template<class Key, class Value>
   using RawConsecutiveMap = std::raw_vector_map<Key, Value>;
@@ -76,6 +81,7 @@ namespace PT{
     template<class T>
     constexpr NodeDesc(const T* t): data(reinterpret_cast<uintptr_t>(t)) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
     constexpr NodeDesc(const nullptr_t n): data(reinterpret_cast<uintptr_t>(static_cast<void*>(n))) {}
+    constexpr NodeDesc(const uintptr_t t): data(t) {}
 
 
     NodeDesc& operator=(const NodeDesc& other) {
@@ -150,11 +156,12 @@ namespace PT {
 
 
   template<class T>
-  concept DataExtracterType = requires {
+  concept StrictDataExtracterType = requires {
     { T::ignoring_node_labels } -> std::convertible_to<const bool>;
     { T::ignoring_edge_data } -> std::convertible_to<const bool>;
     { T::ignoring_node_data } -> std::convertible_to<const bool>;
   };
+  template<class T> concept DataExtracterType = StrictDataExtracterType<std::remove_reference_t<T>>;
 
 
   // degrees
@@ -176,13 +183,14 @@ namespace PT {
   using NodeVec = std::vector<NodeDesc>;
   using NodeSet = HashSet<NodeDesc>; // TODO: replace by vector_hash ?
   template<class T>
-  using NodeMap = std::unordered_map<NodeDesc, T>;
+  using NodeMap = HashMap<NodeDesc, T>;
   using NameVec = std::vector<std::string>;
   using NodePairSet = HashSet<NodePair>;
 
   // an adjacency is something that can be converted to a NodeDesc
   template<class A>
-  concept AdjacencyType = std::is_convertible_v<const A, const NodeDesc&>;
+  concept AdjacencyType = std::is_same_v<std::remove_cvref_t<A>, NodeDesc> ||
+    (!std::ArithmeticType<A> && std::is_convertible_v<const A, const NodeDesc&>);
 
   template<class A>
   concept AdjacencyContainerType = (std::ContainerType<A> && AdjacencyType<typename std::value_type_of_t<A>>);

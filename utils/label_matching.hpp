@@ -49,8 +49,9 @@ namespace PT {
     using LabelType = AsMapKey<typename NetA::LabelType>;
     using StorageA = NodeStorage<_LabelStorageA>;
     using StorageB = NodeStorage<_LabelStorageB>;
+    using StoragePair = std::pair<StorageA, StorageB>;
   protected:
-    using Parent = std::unordered_map<LabelType, std::pair<StorageA, StorageB>>;
+    using Parent = std::unordered_map<LabelType, StoragePair>;
   public:
 
     // allow empty label matchings
@@ -101,11 +102,17 @@ namespace PT {
     // construct a label matching from another label matching by, for each pair (A,B) of label sets corresponding to label L,
     // appending {L, other_pair_to_our_pair((A,B))} to this
     // NOTE: if the other label matching is not const, we WILL move out of it! If you don't want that, pass a const reference to other
-    template<CompatibleLabels<_LabelMatching> Other_LabelMatching> requires (LabelMatchingType<Other_LabelMatching>)
-    _LabelMatching(Other_LabelMatching&& other, auto&& other_pair_to_our_pair): Parent()
+    template<CompatibleLabels<_LabelMatching> Other_LabelMatching, class Transformation> requires (LabelMatchingType<Other_LabelMatching>)
+    _LabelMatching(Other_LabelMatching&& other, Transformation&& other_pair_to_our_pair): Parent()
     {
+      assign_from(std::forward<Other_LabelMatching>(other), std::forward<Transformation>(other_pair_to_our_pair));
+    }
+
+    template<CompatibleLabels<_LabelMatching> Other_LabelMatching, class Transformation> requires (LabelMatchingType<Other_LabelMatching>)
+    _LabelMatching& assign_from(Other_LabelMatching&& other, Transformation&& other_pair_to_our_pair) {
       for(auto&& [label, node_sets]: other)
         Parent::try_emplace(std::move(label), other_pair_to_our_pair(node_sets));
+      return *this;
     }
   };
 

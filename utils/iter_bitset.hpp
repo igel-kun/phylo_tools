@@ -338,16 +338,13 @@ namespace std {
     }
   };
 
-
-template<class T>
-concept mod_assignable_from =
-  requires(T& lhs, T rhs) {
-    { lhs.operator=(rhs) } -> std::same_as<T&>;
-};
-template<class T>
-concept abc = requires(T x) {
-  T::operator=(x);
-};
+  template<class T>
+  concept StrictIterBitsetType = requires(T t){
+    typename T::bucket_map;
+    requires MapType<typename T::bucket_map>;
+    { t.test(0) } -> same_as<bool>;
+  };
+  template<class T> concept IterBitsetType = StrictIterBitsetType<remove_reference_t<T>>;
 
 
   // ------------------ unordered_map-based bitset ----------------------------

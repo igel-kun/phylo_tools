@@ -12,19 +12,21 @@ namespace PT {
   // a containment checker, testing if a single-labelled host-network contains a single-labeled guest tree
   //NOTE: if an invisible tree component is encountered, we will branch on which subtree to display in the component
   //NOTE: this can be used to solve multi-labeled host networks: just add a reticulation for each multiply occuring label
-  template<PhylogenyType Host,
-           PhylogenyType Guest,
+  template<StrictPhylogenyType _Host,
+           StrictPhylogenyType _Guest,
            StorageEnum HostLabelStorage = singleS,
            bool leaf_labels_only = true>
   struct TreeInNetContainment {
+    using Host = _Host;
+    using Guest = _Guest;
+
     using LabelMatching = PT::LabelMatching<Host, Guest, HostLabelStorage, singleS>;
-    using ComponentInfos = TreeComponentInfos<std::remove_reference_t<Host>, 2>;
-    using DecayedHost = std::remove_reference_t<Host>;
-    using DecayedGuest = std::remove_reference_t<Guest>;
-    static constexpr bool host_is_tree = DecayedHost::is_declared_tree;
+    using LabelMatchingPair = typename LabelMatching::StoragePair;
+    using ComponentInfos = TreeComponentInfos<Host, 2>;
+    static constexpr bool host_is_tree = Host::is_declared_tree;
     static constexpr bool host_is_multi_labeled = (HostLabelStorage != singleS);
 
-    using HostEdge = typename DecayedHost::Edge;
+    using HostEdge = typename Host::Edge;
     using NodeList = _NodeList<host_is_multi_labeled>;
     using LM_Iter = std::iterator_of_t<LabelMatching>;
 
@@ -41,37 +43,50 @@ namespace PT {
     // ***************************************
   protected:
 
-    // general constructor with universal references and a bool sentinel
 
     // this constructor is for constructing sub-containments when splitting at bridges
-    template<PhylogenyType _Host, PhylogenyType _Guest, class LMatch, class CInfo>
-    TreeInNetContainment(_Host&& _host, _Guest&& _guest, const bool _failed, LMatch&& lmatch, CInfo&& cinfo):
-      host{std::forward<_Host>(_host)},
-      guest{std::forward<_Guest>(_guest)},
+    template<PhylogenyType OtherHost, PhylogenyType OtherGuest, class LMatch, class CInfo>
+    TreeInNetContainment(OtherHost&& _host, OtherGuest&& _guest, const bool _failed, LMatch&& lmatch, CInfo&& cinfo):
+      host{std::forward<OtherHost>(_host)},
+      guest{std::forward<OtherGuest>(_guest)},
       HG_label_match{std::forward<LMatch>(lmatch)},
-      comp_info{std::forward<CInfo>(cinfo)},
+      comp_info{std::forward<CInfo>(cinfo), host},
       reduction_man{*this},
       failed{_failed}
     { init(); }
 
     // this is used for branching - it forces u as parent of v
-    TreeInNetContainment(const TreeInNetContainment& tc, const NodeDesc u, const NodeDesc v):
-      host{tc.host},
-      guest{tc.guest},
-      HG_label_match{tc.HG_label_match},
-      comp_info{tc.comp_info, host},
+    template<class Translation = NodeTranslation>
+    TreeInNetContainment(const TreeInNetContainment& tc, const NodeDesc u, const NodeDesc v, Translation&& trans = Translation()):
+      host{tc.host, trans},
+      guest{tc.guest, trans},
+      HG_label_match{tc.HG_label_match, [&](const auto& other_pair){
+        LabelMatchingPair result;
+        for(const NodeDesc& x: other_pair.first) append(result.first, trans.at(x));
+        for(const NodeDesc& y: other_pair.second) append(result.second, trans.at(y));
+        return result;
+      }},
+      comp_info{host}, // rebuilding the component info is not much more expensive than translating the existing one
       reduction_man{*this},
       failed{tc.failed}
     {
-      force_parent(u, v);
+      assert(test(trans, u));
+      assert(test(trans, v));
+     
+      std::cout << "host:\n" << host << "\nguest:\n" << guest << "\ncomp-DAG:\n";
+      comp_info.comp_DAG.print_subtree(std::cout, [](const NodeDesc x){ return std::to_string(x); });
+      std::cout << "comp-roots:\n"; for(const NodeDesc x: host.nodes()) std::cout << x <<": " << comp_info.comp_root_of(x) <<'\n';
+      
+      force_parent(trans.at(u), trans.at(v));
       reduction_man.apply();
     }
 
 
-    template<PhylogenyType _Host, PhylogenyType _Guest>
-    TreeInNetContainment(_Host&& _host, _Guest&& _guest, const bool _failed):
-      host{std::forward<_Host>(_host)},
-      guest{std::forward<_Guest>(_guest)},
+    // general constructor with universal references and a bool sentinel
+    template<PhylogenyType OtherHost, PhylogenyType OtherGuest>
+    TreeInNetContainment(OtherHost&& _host, OtherGuest&& _guest, const bool _failed):
+      host{std::forward<OtherHost>(_host)},
+      guest{std::forward<OtherGuest>(_guest)},
       HG_label_match{host, guest},
       comp_info{host},
       reduction_man{*this},
@@ -259,29 +274,30 @@ namespace PT {
       for(const auto& HG_leaf_pair: seconds(HG_label_match)){
         const NodeDesc u = HG_leaf_pair.first;
         const NodeDesc rt_u = comp_info.comp_root_of(u);
-        if(rt_u == NoNode) {
+        if((rt_u == NoNode) || (rt_u == u)) {
           std::cout << u << " sees noone\n" << u <<"'s parents are "<<parents_of<Host>(u)<<"\n";
           // if u does not see any component-root, then its parent is necessarily a reticulation (since cherry-reduction is applied continuously)
           assert(host.in_degree(u) == 1);
           const NodeDesc pu = host.parent(u);
           assert(host.out_degree(pu) == 1);
           assert(host.in_degree(pu) > 1);
-          // the parent reticulation cannot see a tree-component since u would see it too
-          assert(comp_info.comp_root_of(pu) == NoNode);
-          
-          BranchInfo pu_info(pu);
-          for(const NodeDesc x: host.parents(pu)) {
-            const NodeDesc rt_x = comp_info.comp_root_of(x);
-            std::cout << "considering comp-root "<<rt_x <<" ("<< comp_info.comp_root_of(x) <<") of "<<pu<<"\n";
-            if(rt_x != NoNode){
-              if(comp_info.comp_DAG.is_leaf(rt_x))
-                pu_info.parents_seeing_leaf_comp++;
-              else
-                pu_info.parents_seeing_non_leaf_comp++;
-            } else pu_info.parents_seeing_noone++;
-          }
-          std::cout << "branch-info for "<<pu<<": "<<pu_info<<"\n";
-          branching_candidates.emplace(std::move(pu_info));
+          // the parent reticulation should not see a tree-component since u would see it too
+          const NodeDesc rt_pu = comp_info.comp_root_of(pu);
+          if(rt_pu == NoNode) {
+            BranchInfo pu_info(pu);
+            for(const NodeDesc x: host.parents(pu)) {
+              const NodeDesc rt_x = comp_info.comp_root_of(x);
+              std::cout << "considering comp-root "<<rt_x <<" ("<< comp_info.comp_root_of(x) <<") of "<<pu<<"\n";
+              if(rt_x != NoNode){
+                if(comp_info.comp_DAG.is_leaf(rt_x))
+                  pu_info.parents_seeing_leaf_comp++;
+                else
+                  pu_info.parents_seeing_non_leaf_comp++;
+              } else pu_info.parents_seeing_noone++;
+            }
+            std::cout << "branch-info for "<<pu<<": "<<pu_info<<"\n";
+            branching_candidates.emplace(std::move(pu_info));
+          } else std::cout << u << "'s parent "<<pu<<" sees "<< rt_pu << " so one of the implied branches does not make progress. Ignoring "<<u<<"...\n"; 
         } else std::cout << rt_u << " is visible from "<<u<<" so one of the implied branches does not make progress. Ignoring "<<u<<"...\n";
       }
       std::cout << "found "<<branching_candidates.size() <<" branching opportunities\n";

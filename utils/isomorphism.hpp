@@ -34,15 +34,14 @@ namespace PT{
   //NOTE: you may customize the possibility-set type to your needs:
   //    for example, for single-labeled trees, we recommend a singleton_set,
   //    for low-multiply labeled trees & low-level networks an unordered_set<NodeDesc> should be good
-  template<class NetworkA, class NetworkB,
-    class _PossSet = std::conditional_t<NetworkB::has_consecutive_nodes, std::ordered_bitset, std::unordered_bitset>>
+  template<class NetworkA, class NetworkB, class _PossSet = std::unordered_bitset>
   class IsomorphismMapper
   {
     using PossSet     = _PossSet;
-    using MappingPossibility = typename NetworkA::template NodeMap<PossSet>;
+    using MappingPossibility = NodeMap<PossSet>;
     using UpdateSet   = std::unordered_bitset;
     using UpdateOrder = std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair> >;
-    using LabelMatch  = LabelMatchingFromNets<NetworkA, NetworkB>;
+    using LabelMatch  = LabelMatching<NetworkA, NetworkB>;
     using LabelType   = typename LabelMatch::LabelType;
 
     const NetworkA& N1;
@@ -67,9 +66,8 @@ namespace PT{
 
     inline size_t num_poss(const NodeDesc x) const { return mapping.at(x).size(); }
 
-    bool node_is_interesting(const NodeDesc v) const
-    {
-      switch(N1.type_of(v)){
+    bool node_is_interesting(const NodeDesc v) const {
+      switch(NetworkA::type_of(v)){
         case NODE_TYPE_LEAF:
           return (flags & FLAG_MAP_LEAF_LABELS);
         case NODE_TYPE_INTERNAL_TREE:
@@ -105,24 +103,21 @@ namespace PT{
     }
 
 
-    template<class Something>
-    void restrict_by_something(Something (NetworkA::*node_to_something_N1)(const NodeDesc) const, Something (NetworkB::*node_to_something_N2)(const NodeDesc) const)
-    {
-      using MySomething = std::remove_cvref_t<Something>;
+    template<class NetAndNodeFunc>
+    void restrict_by_something(const auto& N1_nodes, const auto& N2_nodes, NetAndNodeFunc&& f) {
+      using Something = std::remove_reference_t<std::invoke_result_t<NetAndNodeFunc, NetworkA, NodeDesc>>;
       // keep track of nodes in N2 mapping to each something
       // also keep a history of how many of each Something we've seen (this should be equal between N1 & N2)
       using PossAndHist = std::pair<PossSet, size_t>;
-      HashMap<MySomething, PossAndHist> poss_and_hist;
+      HashMap<Something, PossAndHist> poss_and_hist;
 
-      for(const NodeDesc u: N2){
-        const Something s = (N2.*node_to_something_N2)(u);
-        PossAndHist& ph = poss_and_hist.try_emplace(s, size_N, 0).first->second;
+      for(const NodeDesc u: N2_nodes){
+        PossAndHist& ph = poss_and_hist.try_emplace(f(N2,u), size_N, 0).first->second;
         ph.first.set(u);
         ph.second++;
       }
-      for(const NodeDesc u: N1){
-        const Something s = (N1.*node_to_something_N1)(u);
-        const auto it = poss_and_hist.find(s);
+      for(const NodeDesc u: N1_nodes){
+        const auto it = poss_and_hist.find(f(N1, u));
         if(it != poss_and_hist.end()) {
           update_poss(u, it->second.first);
           if((it->second.second)-- == 0) throw NoPoss("node histograms differ");
@@ -130,26 +125,21 @@ namespace PT{
       }
     }
 
-    // use labels to restrict possibilities
-    template<class NodeLabelMap>
-    void restrict_by_label(const NodeLabelMap& _map)
-    { restrict_by_something<const LabelType&>(&NetworkA::label, &NetworkB::label); }
-
-    void restrict_by_degree()
-    { restrict_by_something<InOutDegree>(&NetworkA::in_out_degree, &NetworkB::in_out_degree); }
-
     // use degrees and labels to restrict possibilities
     void degree_and_label_restrict()
     {
+      const auto get_label = [](const auto& Net, const NodeDesc u){ return Net.label(u); };
+      const auto get_degree = [](const auto& Net, const NodeDesc u){ return Net.degrees(u); };
+
       if(flags == FLAG_MAP_LEAF_LABELS)
-        restrict_by_label(N1.leaves_labeled());
+        restrict_by_something(N1.leaves(), N2.leaves(), get_label);
       else
-        restrict_by_label(N1.nodes_labeled());
+        restrict_by_something(N1.nodes(), N2.nodes(), get_label);
 
       // all updated nodes have been fixed
       if(nr_fix < size_N){
         treat_pending_updates();
-        restrict_by_degree();
+        restrict_by_something(N1.nodes(), N2.nodes(), get_degree);
       }
     }
 
@@ -210,16 +200,13 @@ namespace PT{
       try{
         treat_pending_updates();
 
-        DEBUG5(std::cout << "possibilities are:" << std::endl;
-            for(NodeDesc u = 0; u < size_N; ++u){
-              std::cout << u << "\t"<< to_set(mapping.at(u)) << std::endl;
-            })
+        DEBUG5(std::cout << "possibilities are:" << std::endl; for(NodeDesc u: N1.nodes()) std::cout << u << "\t"<< to_set(mapping.at(u)) << std::endl);
         DEBUG3(std::cout << "no more pending updated"<<std::endl);
 
         // find a vertex to branch on (minimum # possibilities)
-        NodeDesc min = 0;
-        size_t min_poss = num_poss(0);
-        for(NodeDesc u: N1){
+        NodeDesc min = NoNode;
+        size_t min_poss = size_N;
+        for(NodeDesc u: N1.nodes()){
           const size_t np = num_poss(u);
           if((np != 1) && (np < min_poss)){
             min_poss = np;
@@ -310,12 +297,12 @@ namespace PT{
   };
 
 
-  template<class NetworkA, class NetworkB>
+  template<StrictPhylogenyType NetworkA, StrictPhylogenyType NetworkB>
   IsomorphismMapper<NetworkA, NetworkB>
   make_iso_mapper(const NetworkA& _N1,
                   const NetworkB& _N2,
                   const unsigned char _flags,
-                  const LabelMatchingFromNets<NetworkA, NetworkB>* _lmatch = nullptr)
+                  const LabelMatching<NetworkA, NetworkB>* _lmatch = nullptr)
   {
     if(_lmatch){
       return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, *_lmatch, _flags);
