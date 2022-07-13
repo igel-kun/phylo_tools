@@ -63,20 +63,20 @@ int main(const int argc, const char** argv)
   std::cout << "\n\n assigning leaf-taxa\n\n";
   PT::sequential_taxon_name sqn;
   for(const auto& u: N.leaves()) N[u].label() = sqn;
-  std::cout << N;
+  std::cout << DisplayWithData{N};
 
   // play with numbered nodes: this gives each node the number in which it occurs in a DFS search (starting at 0)
   std::cout << "\n\n assigning DFS numbers\n\n";
   uint32_t DFS_counter = 0;
   assign_DFS_numbers(N.root(), DFS_counter);
-  std::cout << N;
+  std::cout << DisplayWithData{N};
 
   // play with nodes that have a string attached: each node is initialized with a random string
   // to this end, we use the node-data translation function (that takes the node-data of N (aka uint32_t)
   // and returns something from which N2's node-data can be initialized (aka a string))
   std::cout << "\n\n copy & change node-data\n\n";
   ISeqNetwork N2(N, [](const NodeDesc u){ std::cout << "assigning new empty sequences to node "<<u<<"\n"; return ""; } );
-  std::cout << N2 <<"\n\n";
+  std::cout << DisplayWithData{N2} <<"\n\n";
   for(const NodeDesc& u: N2.leaves()){
     const std::string s = random_seq(10 + throw_die(10));
     auto& data = N2[u].data();
@@ -92,11 +92,11 @@ int main(const int argc, const char** argv)
     else
       std::cout << "node "<<i<<" has no sequence" <<std::endl;
   }
-  std::cout << N2;
+  std::cout << DisplayWithData{N2} <<"\n";
 
 
   // finally, let's see how to deal with to initialize data instead of assigning data
-  std::cout << "\n\n initialize non-assignable node-data\n\n";
+  std::cout << "\n initialize non-assignable node-data\n\n";
   ConstISeqNetwork N3(N, [](const auto&){ return random_seq(10 + throw_die(10)); });
   for(const NodeDesc& i: N3.nodes()){
     if(!N3[i].data().seq.empty())
@@ -104,7 +104,7 @@ int main(const int argc, const char** argv)
     else
       std::cout << "node "<<i<<" has no sequence" <<std::endl;
   }
-  std::cout << N3;
+  std::cout << DisplayWithData{N3} <<"\n";
 
   std::cout << "all done\n";
 }

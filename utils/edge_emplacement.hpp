@@ -51,7 +51,7 @@ namespace PT {
     NodeDesc create_node_below_with_data(const NodeDesc u, Data&& data, Args&&... args) {
       if(u != NoNode) {
         NodeDesc v;
-        std::cout << "creating node with data "<<data<<"\n";
+        DEBUG4(std::cout << "creating node with data "<<data<<"\n");
         if constexpr (_TargetPhylo::has_node_data)
           v = N.create_node(std::forward<Data>(data));
         else v = N.create_node();
@@ -138,20 +138,20 @@ namespace PT {
     EdgeEmplacer(Helper&& _helper, Extracter&& _data_extracter = Extracter()): helper(std::move(_helper)), data_extracter(std::move(_data_extracter)) {}
 
     NodeDesc create_copy_of(const NodeDesc other_u) {
-      std::cout << "creating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new)<<'\n';
+      DEBUG5(std::cout << "creating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new)<<'\n');
       // check if other_u is known to the translation
       const auto [u_iter, u_success] = helper.old_to_new.try_emplace(other_u);
       NodeDesc& u_copy = u_iter->second;
       // if other_u has not been seen before, insert it as new root
       if(u_success) {
-        std::cout << "created copy " << u_copy << " of "<< other_u<<'\n';
-        std::cout << "extracting node data? "<<extract_node_data<<'\n';
+        DEBUG4(std::cout << "created copy " << u_copy << " of "<< other_u<<'\n');
+        DEBUG4(std::cout << "extracting node data? "<<extract_node_data<<'\n');
         if constexpr (extract_node_data) {
           u_copy = helper.create_root(data_extracter(Ex_node_data{}, other_u));
-          std::cout << "data of "<<u_copy<<" is now "<<helper.N[u_copy].data() << "\n";
+          DEBUG4(std::cout << "data of "<<u_copy<<" is now "<<helper.N[u_copy].data() << "\n");
         } else u_copy = helper.create_root();
         if constexpr (extract_labels) {
-          std::cout << "copying extracted label "<<data_extracter(Ex_node_label{}, other_u)<<" to "<<u_copy<<"\n";
+          DEBUG4(std::cout << "copying extracted label "<<data_extracter(Ex_node_label{}, other_u)<<" to "<<u_copy<<"\n");
           node_of<TargetPhylo>(u_copy).label() = data_extracter(Ex_node_label{}, other_u);
         }
       }

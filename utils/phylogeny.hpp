@@ -208,13 +208,13 @@ namespace PT {
     template<class... Args>
       requires ((sizeof...(Args) != 1) || (!NodeFunctionType<std::FirstTypeOf<Args...>> && !DataExtracterType<std::FirstTypeOf<Args...>>))
     static constexpr NodeDesc create_node(Args&&... args) {
-      std::cout << "creating node with " << sizeof...(Args) << " arguments\n";
-      return new Node(std::forward<Args>(args)...);
+      DEBUG5(std::cout << "creating node with " << sizeof...(Args) << " arguments\n");
+      return reinterpret_cast<uintptr_t>(new Node(std::forward<Args>(args)...));
     }
     // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
     template<NodeFunctionType DataMaker> requires (!DataExtracterType<DataMaker>)
     static constexpr NodeDesc create_node(DataMaker&& data_maker) {
-      std::cout << "creating node with data-maker\n";
+      DEBUG5(std::cout << "creating node with data-maker\n");
       if constexpr (!std::is_same_v<std::remove_cvref_t<DataMaker>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
         const NodeDesc result = space;
@@ -1108,10 +1108,10 @@ namespace PT {
     // "copy" construction with single root
     template<PhylogenyType Phylo, class... EmplacerArgs>
     Phylogeny(const policy_copy_t, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args) {
-      std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using root "<<in_root<<"\n";
+      DEBUG3(std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using root "<<in_root<<"\n");
       //auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
       auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
-      std::cout << "extracter is "<<std::type_name<decltype(emplacer.data_extracter)>()<<"\n";
+      DEBUG5(std::cout << "extracter is "<<std::type_name<decltype(emplacer.data_extracter)>()<<"\n");
       build_from_edges(N.edges_below_preorder(in_root), emplacer);
       // mark the root
       assert(emplacer.contains(in_root));
@@ -1299,7 +1299,7 @@ namespace PT {
             print_subtree(os, front(children(u)), prefix, seen, node_data_to_string);
             break;
           default:
-            prefix += std::string(u_name.length(), ' ' + u_reti) + '|';
+            prefix += std::string(u_name.length() + u_reti, ' ') + '|';
 
             uint32_t count = u_childs.size();
             for(const NodeDesc c: u_childs){
@@ -1345,12 +1345,26 @@ namespace PT {
   };
 
 
-  template<PhylogenyType _Phylo>
+  template<StrictPhylogenyType _Phylo>
   std::ostream& operator<<(std::ostream& os, const _Phylo& T) {
     if(!T.empty()) {
       T.print_subtree(os);
       return os;
     } else return os << "{}";
   }
+
+  template<StrictPhylogenyType Phylo>
+  struct DisplayWithData {
+    const Phylo& N;
+
+    friend std::ostream& operator<<(std::ostream& os, const DisplayWithData& x) {
+      if(!x.N.empty()) {
+        x.N.print_subtree_with_data(os);
+        return os;
+      } else return os << "{}";
+    }
+  };
+
+
 
 }

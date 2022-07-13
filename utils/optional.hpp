@@ -36,6 +36,7 @@ namespace std {
     template<class Q> requires (is_trivially_assignable_v<T&, Q&&>)
     constexpr T& emplace(Q&& other) {
       element = std::forward<Q>(other);
+      return element;
     }
 
     
