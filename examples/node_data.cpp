@@ -20,6 +20,8 @@ struct InformedSequence {
     seq = s;
     num_Ns = std::count(seq.begin(), seq.end(), 'N');
   }
+
+  friend auto& operator<<(std::ostream& os, const InformedSequence& seq) { return os << seq.seq << " (" << seq.num_Ns <<" Ns)"; }
 };
 
 using NumberNetwork = DefaultLabeledNetwork<uint32_t>;

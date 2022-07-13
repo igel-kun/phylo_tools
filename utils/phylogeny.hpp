@@ -279,9 +279,10 @@ namespace PT {
     }
     template<AdjacencyType Adj, DataExtracterType DataMaker>
     std::pair<Adjacency, bool> add_edge(const NodeDesc u, Adj&& v, DataMaker&& data_maker) {
-      if constexpr (!DataMaker::ignoring_edge_data)
+      using StrictDataMaker = std::remove_reference_t<DataMaker>;
+      if constexpr (!StrictDataMaker::ignoring_edge_data)
         return add_edge(u, std::forward<Adj>(v), data_maker.get_edge_data(u, v));
-      else add_edge(u, std::forward<Adj>(v));
+      else return add_edge(u, std::forward<Adj>(v));
     }
 
   protected:
