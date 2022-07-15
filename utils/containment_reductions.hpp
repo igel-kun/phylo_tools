@@ -286,8 +286,11 @@ namespace PT {
 
     void init_queue() {
       // put all labeled nodes of the host in the queue
-      for(const auto uv: manager.contain.HG_label_match)
-        add(uv.second.first);
+      for(const auto uv: manager.contain.HG_label_match){
+        const auto& U = uv.second.first;
+        assert(U.size() == 1);
+        add(U.front());
+      }
     }
 
     bool simple_cherry_reduction(const NodeDesc u) {
@@ -332,8 +335,12 @@ namespace PT {
 
     bool simple_cherry_reduction_from(const std::iterator_of_t<LabelMatching>& uv_label_iter) {
       std::cout << "\tCHERRY: checking label matching "<<*uv_label_iter<<"\n";
-      const auto& uv = uv_label_iter->second;
-      const auto [u, v] = uv;
+      const auto& UV = uv_label_iter->second;
+      const auto& [U, V] = UV;
+      assert(U.size() == 1);
+      assert(V.size() == 1);
+      const NodeDesc u = U.front();
+      const NodeDesc v = V.front();
       const auto [pu, pv, success] = label_matching_sanity_check(u, v);
      
       if(success) {
@@ -353,9 +360,9 @@ namespace PT {
               NodeDesc y = x;
               // if x is a reti, get the tree-node below x
               while(Host::out_degree(y) == 1) y = Host::any_child(y);
-              std::cout << "checking visible leaf of "<<y<<" for child "<<x<<" of "<<pu<<"\n";
               // if we've arrived at a node that is visible on a leaf that is not below pv, then pu-->x will never be in an embedding of guest in host!
               const NodeDesc vis_leaf = visible_leaf_of(y);
+              std::cout << "checking visible leaf "<<vis_leaf<<" of "<<y<<" for child "<<x<<" of "<<pu<<"\n";
               assert((vis_leaf != NoNode) || Host::label(y).empty()); // if x has a label, it should have a visible leaf
               if(vis_leaf != NoNode) {
                 const auto& vis_label = Host::label(vis_leaf);
@@ -367,15 +374,14 @@ namespace PT {
               }
             }
             // step 2: remove edges to nodes that see a label that is not below pv
-            bool result = !edge_removals.empty();
-            if(result) {
-              std::cout << "\tCHERRY: want to delete edges "<<edge_removals<<"\n";
+            if(!edge_removals.empty()) {
+              std::cout << "\tCHERRY: want to delete edges from "<<pu<<" to nodes in "<<edge_removals<<"\n";
               for(const NodeDesc x: edge_removals) {
                 assert(Host::is_edge(pu,x));
                 if(Host::in_degree(x) == 1) {
-  #warning "TODO: deal with this properly instead of assert(false)"
-                  assert(false && "trying to cut-off a stable tree node, this should never happen if N displays T!");
-                  manager.remove_edges_to_retis_below(x);
+                  manager.contain.failed = true;
+                  std::cout << "\tCHERRY: refusing to delete edge from "<<pu<<" to "<<x<<" since "<<x<<" is visible from "<<visible_leaf_of(x)<<" - containment is impossible\n";
+                  return true;
                 } else manager.remove_edge_in_host(pu, x);
               }
               if(!edge_removals.empty()) std::cout << "new host is:\n" << host <<'\n';
@@ -389,7 +395,7 @@ namespace PT {
               manager.HG_match_rule.match_nodes(pu, pv, uv_label_iter);
               std::cout << "\tCHERRY: after reduction:\nhost:\n"<<host<<"guest:\n"<<manager.contain.guest<<"\n";
               std::cout << "comp-roots:\n"; for(const NodeDesc z: manager.contain.host.nodes()) std::cout << z <<": " << manager.contain.comp_info.comp_root_of(z) <<'\n';
-            } else return result;
+            } else return !edge_removals.empty();
           } else manager.HG_match_rule.match_nodes(pu, v, uv_label_iter); // if puC is smaller than seen, then pu cannot display pv, so pu has to display v
           return true;
         } else return false; // if get_labels_of_children returned the empty set, this indicates that pv has a child that is not a leaf, so give up
@@ -428,7 +434,9 @@ namespace PT {
       assert(uv_label_iter != manager.contain.HG_label_match.end());
 
       // step 2: get the highest ancestor v of vis_leaf in T s.t. T_v is still displayed by N_u
-      const NodeDesc visible_leaf_in_guest = uv_label_iter->second.second;
+      const auto& matched_leaves = uv_label_iter->second.second;
+      assert(matched_leaves.size() == 1);
+      const NodeDesc visible_leaf_in_guest = front(matched_leaves);
       std::cout << "finding highest node displaying "<<visible_leaf_in_guest<<"\n";
       const NodeDesc v = tree_comp_display.highest_displayed_ancestor(visible_leaf_in_guest);
       std::cout << v << " is the highest displayed ancestor (or it's the root) - label: "<<vlabel<<"\n";
@@ -546,7 +554,9 @@ namespace PT {
         // if x has a label that matches in the host, then remove the corresponding node from the host and remove the matching entry as well
         const auto HG_match_iter = manager.find_label_in_guest(l);
         if(HG_match_iter != manager.contain.HG_label_match.end()) {
-          const NodeDesc host_l = HG_match_iter->second.first;
+          const auto& host_matched = HG_match_iter->second.first;
+          assert(host_matched.size() == 1);
+          const NodeDesc host_l = front(host_matched);
           append(host_leaves, host_l);
           Host::label(host_l).clear();
           manager.contain.HG_label_match.erase(HG_match_iter);
@@ -598,8 +608,11 @@ namespace PT {
     void match_nodes(const NodeDesc host_u, const NodeDesc guest_v, const std::iterator_of_t<LabelMatching>& xy_label_iter) {
       // step 3a: prune guest and remove nodes with label below v (in guest) from both host and guest - also remove their label entries in HG_label_match
       const auto& vlabel = xy_label_iter->first;
-      const NodeDesc host_x = xy_label_iter->second.first;
-      const NodeDesc guest_y = xy_label_iter->second.second;
+      const auto& [host_matched, guest_matched] = xy_label_iter->second;
+      assert(host_matched.size() == 1);
+      assert(guest_matched.size() == 1);
+      const NodeDesc host_x = front(host_matched);
+      const NodeDesc guest_y = front(guest_matched);
       const auto& host = manager.contain.host;
 
       std::cout << "\tMATCH: marking "<<guest_v<<" (guest) & "<<host_u<<" (host) with label "<<vlabel<<"\n";
@@ -892,8 +905,12 @@ namespace PT {
 
     bool extended_cherry_reduction_from(const std::iterator_of_t<LabelMatching>& uv_label_iter) {
       std::cout << "\texCHERRY: checking label matching "<<*uv_label_iter<<"\n";
-      const auto& uv = uv_label_iter->second;
-      const auto [u, v] = uv;
+      const auto& UV = uv_label_iter->second;
+      const auto& [U, V] = UV;
+      assert(U.size() == 1);
+      assert(V.size() == 1);
+      const NodeDesc u = front(U);
+      const NodeDesc v = front(V);
       const auto [pu, pv, success] = label_matching_sanity_check(u, v);
      
       LabelSet cherry_labels = get_labels_of_children(pv);
@@ -906,7 +923,9 @@ namespace PT {
         for(const auto& label: cherry_labels) {
           const auto iter = manager.find_label(label);
           assert(iter != manager.contain.HG_label_match.end());
-          const NodeDesc x = iter->second.first;
+          const auto& host_leaves = iter->second.first;
+          assert(host_leaves.size() == 1);
+          const NodeDesc x = front(host_leaves);
           assert(Host::label(x) == label);
           if(x != u) append(cherry_leaves, x);
         }

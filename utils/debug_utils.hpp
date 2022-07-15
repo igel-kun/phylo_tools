@@ -79,7 +79,6 @@ struct verbose_construct {
 };
 
 
-#ifndef NDEBUG
 #include <string>
 namespace std{
   // thanks @ https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c/56766138#56766138
@@ -104,4 +103,3 @@ namespace std{
     return name;
   }
 }
-#endif

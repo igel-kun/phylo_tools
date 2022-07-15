@@ -39,41 +39,33 @@ namespace PT{
 
     // add a node u and update sw using the set forest representing the current weak components in the extension
     // return the scanwidth of the given node
-    template<PhylogenyType Net, std::ContainerType _Container>
-    sw_t update_sw(const NodeDesc u,
-                   std::DisjointSetForest<typename Net::Edge>& weak_components,
-                   _Container& out) const
-    {
-      sw_t result;
+    template<PhylogenyType Net>
+    sw_t update_sw(const NodeDesc u, std::DisjointSetForest<NodeDesc, sw_t>& weak_components) const {
       try{
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         const auto& u_node = node_of<Net>(u);
-        if(!u_node.is_leaf()) {
-          // step 1: merge all in-edges to the same weak component
-          const auto& uv = std::front(u_node.out_edges());
-          for(const auto& wu: u_node.in_edges())
-            weak_components.add_item_to_set_of(uv, wu);
-          // step 2: merge all weak components of out-edges of u & remove all out-edges from the component
-          for(const auto& uw: u_node.out_edges()) {
-            weak_components.merge_sets_of(uv, uw);
-            weak_components.shrink(uw);
-          }
-          // step 3: record the size of the remaining component
-          result = weak_components.set_of(uv).size();
-        } else result = weak_components.add_new_set(u_node.in_edges()).size();
+        auto& u_comp = weak_components.add_new_set(u, u_node.in_degree());
+        auto& u_payload = u_comp.payload;
+        // step 1: merge all weak components of chilldren of u
+        for(const auto& v: u_node.children()) {
+          if(weak_components.in_different_sets(u, v)) {
+            // if v is in a different weak component than u, then merge the components and increases sw(u) by sw(v) minus 1 for the edge u-->v
+            weak_components.merge_sets(u, v);
+            u_payload += weak_components.at(v).payload - 1;
+          } else u_payload--; // if u and v are already in the same component, then just discount the edge u-->v from the scanwidth of u
+        }
+        return u_payload;
       } catch(std::out_of_range& e){
         throw(std::logic_error("trying to compute scanwidth of a non-extension"));
       }
-      append(out, u, result);
-      return result;
     }
 
     // get mapping of nodes to their scanwidth in the extension
     template<PhylogenyType Net, std::ContainerType _Container>
     void sw_map(_Container& out) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
-      std::DisjointSetForest<typename Net::Edge> weak_components;
-      for(const NodeDesc u: *this) update_sw<Net>(u, weak_components, out);
+      std::DisjointSetForest<NodeDesc, sw_t> weak_components;
+      for(const NodeDesc u: *this) append(out, u, update_sw<Net>(u, weak_components));
     }
 
     template<PhylogenyType Net, NodeMapType _Container = std::unordered_map<NodeDesc, sw_t>>

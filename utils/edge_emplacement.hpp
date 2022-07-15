@@ -13,17 +13,21 @@ namespace PT {
   template<bool _track_roots,
            StrictPhylogenyType _TargetPhylo,
            OptionalPhylogenyType _SourcePhylo = void,
-           NodeTranslationType OldToNewTranslation = NodeTranslation>
+           NodeTranslationType _OldToNewTranslation = NodeTranslation>
   struct EdgeEmplacementHelper: std::optional_tuple<std::conditional_t<_track_roots, NodeSet, void>> {
     using SourcePhylo = _SourcePhylo;
     using TargetPhylo = _TargetPhylo;
+    using OldToNewTranslation = _OldToNewTranslation;
+    using StrictTranslation = std::remove_reference_t<OldToNewTranslation>;
     static constexpr bool track_roots = _track_roots;
 
     TargetPhylo& N;
     OldToNewTranslation old_to_new;
 
     EdgeEmplacementHelper(TargetPhylo& _N): N(_N) {}
-    EdgeEmplacementHelper(TargetPhylo& _N, OldToNewTranslation&& _old_to_new): N(_N), old_to_new(_old_to_new) {}
+    EdgeEmplacementHelper(TargetPhylo& _N, const StrictTranslation& _old_to_new): N(_N), old_to_new(_old_to_new) {}
+    EdgeEmplacementHelper(TargetPhylo& _N, StrictTranslation& _old_to_new): N(_N), old_to_new(_old_to_new) {}
+    EdgeEmplacementHelper(TargetPhylo& _N, StrictTranslation&& _old_to_new): N(_N), old_to_new(std::move(_old_to_new)) {}
     EdgeEmplacementHelper(const EdgeEmplacementHelper&) = default;
     EdgeEmplacementHelper(EdgeEmplacementHelper&&) = default;
 
@@ -119,23 +123,43 @@ namespace PT {
   template<class T> concept EmplacementHelperType = StrictEmplacementHelperType<std::remove_cvref_t<T>>;
 
 
-  template<StrictEmplacementHelperType _Helper,
-           DataExtracterType Extracter = DataExtracter<typename _Helper::SourcePhylo, typename _Helper::TargetPhylo>>
+  template<StrictEmplacementHelperType _Helper, DataExtracterType Extracter>
   struct EdgeEmplacer {
     using Helper = _Helper;
+    using StrictExtracter = std::remove_reference_t<Extracter>;
     using SourcePhylo = typename Helper::SourcePhylo;
     using TargetPhylo = typename Helper::TargetPhylo;
     static constexpr bool track_roots = Helper::track_roots;
-    static constexpr bool extract_labels = !Extracter::ignoring_node_labels;
-    static constexpr bool extract_node_data = !Extracter::ignoring_node_data;
-    static constexpr bool extract_edge_data = !Extracter::ignoring_edge_data;
+    static constexpr bool extract_labels = !StrictExtracter::ignoring_node_labels;
+    static constexpr bool extract_node_data = !StrictExtracter::ignoring_node_data;
+    static constexpr bool extract_edge_data = !StrictExtracter::ignoring_edge_data;
 
     Helper helper;
     Extracter data_extracter;
 
-    EdgeEmplacer(const Helper& _helper, const Extracter& _data_extracter): helper(_helper), data_extracter(_data_extracter) {}
-    EdgeEmplacer(const Helper& _helper, Extracter&& _data_extracter): helper(_helper), data_extracter(std::move(_data_extracter)) {}
-    EdgeEmplacer(Helper&& _helper, Extracter&& _data_extracter = Extracter()): helper(std::move(_helper)), data_extracter(std::move(_data_extracter)) {}
+    EdgeEmplacer(const Helper& _helper, const StrictExtracter& _data_extracter): helper(_helper), data_extracter(_data_extracter) {}
+    EdgeEmplacer(const Helper& _helper, StrictExtracter& _data_extracter): helper(_helper), data_extracter(_data_extracter) {}
+    EdgeEmplacer(const Helper& _helper, StrictExtracter&& _data_extracter): helper(_helper), data_extracter(std::move(_data_extracter)) {}
+    EdgeEmplacer(Helper&& _helper, const StrictExtracter& _data_extracter): helper(std::move(_helper)), data_extracter(_data_extracter) {}
+    EdgeEmplacer(Helper&& _helper, StrictExtracter& _data_extracter): helper(std::move(_helper)), data_extracter(_data_extracter) {}
+    EdgeEmplacer(Helper&& _helper, StrictExtracter&& _data_extracter): helper(std::move(_helper)), data_extracter(std::move(_data_extracter)) {}
+
+    template<class... Args>
+    EdgeEmplacer(const StrictExtracter& _data_extracter, Args&&... helper_args):
+      helper(std::forward<Args>(helper_args)...), data_extracter(_data_extracter) {}
+    template<class... Args>
+    EdgeEmplacer(StrictExtracter& _data_extracter, Args&&... helper_args):
+      helper(std::forward<Args>(helper_args)...), data_extracter(_data_extracter) {}
+    template<class... Args>
+    EdgeEmplacer(StrictExtracter&& _data_extracter, Args&&... helper_args):
+      helper(std::forward<Args>(helper_args)...), data_extracter(std::move(_data_extracter)) {}
+
+    template<class HelperInit, class ExtracterInit>
+    EdgeEmplacer(const std::piecewise_construct_t, HelperInit&& _helper, ExtracterInit&& _extracter):
+      helper(std::make_from_tuple<Helper>(std::forward<HelperInit>(_helper))),
+      data_extracter(std::make_from_tuple<Extracter>(std::forward<ExtracterInit>(_extracter))) {}
+
+
 
     NodeDesc create_copy_of(const NodeDesc other_u) {
       DEBUG5(std::cout << "creating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new)<<'\n');
@@ -238,25 +262,33 @@ namespace PT {
   // network = the network
   // old_to_new = a node translation
   // ... = data extracter functions as specified in <extract_data.hpp>
-  template<bool track_roots, OptionalPhylogenyType SourcePhylo = void>
+  template<bool track_roots, OptionalPhylogenyType _SourcePhylo = void>
   struct EdgeEmplacers {
     template<StrictPhylogenyType TargetPhylo, NodeTranslationType OldToNewTranslation, class... Args>
     static auto make_emplacer(TargetPhylo& N, OldToNewTranslation&& old_to_new, Args&&... args) {
       // note that 'OldToNewTranslation' is an lvalue if old_to_new is an rvalue-ref and and lvalue-ref if old_to_new is an lvalue-ref...
       // thus, if an existing translation is passed, the helper will contain a reference to this translation, otherwise the helper has its own translation
+      using SourcePhylo = std::VoidOr<_SourcePhylo, TargetPhylo>;
       using Helper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, OldToNewTranslation>;
-      return EdgeEmplacer(Helper(N, std::forward<OldToNewTranslation>(old_to_new)), make_data_extracter<SourcePhylo, TargetPhylo>(std::forward<Args>(args)...));
+      using Extracter = decltype(make_data_extracter<SourcePhylo, TargetPhylo>(std::forward<Args>(args)...));
+      return EdgeEmplacer<Helper, Extracter>(
+          Helper(N, std::forward<OldToNewTranslation>(old_to_new)),
+          make_data_extracter<SourcePhylo, TargetPhylo>(std::forward<Args>(args)...));
     }
 
     template<StrictPhylogenyType TargetPhylo, class T, class... Args> requires (!NodeTranslationType<T>)
     static auto make_emplacer(TargetPhylo& N, T&& t, Args&&... args) {
+      using SourcePhylo = std::VoidOr<_SourcePhylo, TargetPhylo>;
       using Helper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, NodeTranslation>;
-      return EdgeEmplacer(Helper(N), make_data_extracter<SourcePhylo, TargetPhylo>(std::forward<T>(t), std::forward<Args>(args)...));
+      using Extracter = decltype(make_data_extracter<SourcePhylo, TargetPhylo>(std::forward<T>(t), std::forward<Args>(args)...));
+      return EdgeEmplacer<Helper, Extracter>(Helper(N), make_data_extracter<SourcePhylo, TargetPhylo>(std::forward<T>(t), std::forward<Args>(args)...));
     }
     template<StrictPhylogenyType TargetPhylo>
     static auto make_emplacer(TargetPhylo& N) {
+      using SourcePhylo = std::VoidOr<_SourcePhylo, TargetPhylo>;
       using Helper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, NodeTranslation>;
-      return EdgeEmplacer(Helper(N), make_data_extracter<SourcePhylo, TargetPhylo>());
+      using Extracter = decltype(make_data_extracter<SourcePhylo, TargetPhylo>());
+      return EdgeEmplacer<Helper, Extracter>(Helper(N), Extracter());
     }
 
     template<class... Args>

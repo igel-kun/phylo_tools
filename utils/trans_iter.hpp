@@ -17,8 +17,8 @@ namespace std {
     using Iter = _Iter;
     using UnderlyingIterator = Iter;
     using difference_type = ptrdiff_t;
-    using reference       = decltype(trans(*it));
-    using const_reference = decltype(trans(as_const(*it)));
+    using reference       = decltype(declval<Transformation>()(*it));
+    using const_reference = decltype(declval<Transformation>()(as_const(*it)));
     using value_type      = remove_reference_t<reference>;
     using pointer         = pointer_from_reference<reference>;
     using const_pointer   = pointer_from_reference<const_reference>;
@@ -56,7 +56,7 @@ namespace std {
   
     // NOTE: do not attempt to call ++ on the end-iterator lest you see segfaults
     _proto_transforming_iterator& operator++() { ++it; return *this; }
-    _proto_transforming_iterator& operator++(int) { _proto_transforming_iterator result(*this); ++this; return result; }
+    _proto_transforming_iterator operator++(int) { _proto_transforming_iterator result(*this); ++this; return result; }
 
     _proto_transforming_iterator& operator+=(int diff) { it += diff; return *this; }
     _proto_transforming_iterator& operator-=(int diff) { it -= diff; return *this; }

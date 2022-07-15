@@ -217,7 +217,7 @@ namespace std { // since it was the job of STL to provide for it and they failed
   //! a hash computation for a set, XORing its members
   template<IterableType C>
   struct set_hash {
-    static constexpr std::hash<value_type_of_t<C>> Hasher{};
+    constexpr static std::hash<std::remove_cvref_t<value_type_of_t<C>>> Hasher{};
     size_t operator()(const C& container) const {
       return accumulate(begin(container), end(container), size_t(0), [](const size_t x, const auto& y) { return x ^ Hasher(y); });
     }
@@ -387,7 +387,7 @@ namespace std { // since it was the job of STL to provide for it and they failed
   }
 
   template<IterableType C>
-  iterator_of_t<const C> max_element(const C& c) { return max_element(begin(c), end(c)); }
+  iterator_of_t<const C> max_element(const C& c) { return std::ranges::max_element(c); }
 
 
   // clear a container except for 1 item

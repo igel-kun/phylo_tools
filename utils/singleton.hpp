@@ -79,8 +79,8 @@ namespace std{
       insert(src_begin, src_end);
     }
     
-    operator const_reference() const { return front(); }
-    operator reference() { return front(); }
+    explicit operator const_reference() const { return front(); }
+    explicit operator reference() { return front(); }
     size_t size() const { return non_empty(); }
     reference       front() { return *storage; }
     const_reference front() const { return *storage; }

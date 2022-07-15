@@ -20,16 +20,12 @@ namespace PT{
     struct ExtToTreeHelper {
       template<PhylogenyType _Network,
                NodeTranslationType NetToTree = NodeTranslation,
-               NodeFunctionType CreateNodeData = ExtractData<_Network, Ex_node_data>,
-               NodeFunctionType CreateNodeLabel= ExtractData<_Network, Ex_node_label>,
-               class... Args>
+               DataExtracterType   Extracter = DataExtracter<_Network>>
       static void ext_to_tree(const _Network& N, const Extension& ex, ExtTree& T,
                               NetToTree&& net_to_tree = NetToTree(),
-                              CreateNodeData&& make_node_data = CreateNodeData(),
-                              CreateNodeLabel&& make_node_label = CreateNodeLabel(),
-                              Args&&... args)
+                              Extracter&& data_extracter = Extracter())
       {
-        auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, make_node_data, make_node_label);
+        auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, std::forward<Extracter>(data_extracter));
         // we can use a disjoint set forest with no-rank union to find the current highest node of the weakly-connected component of a node
         std::DisjointSetForest<NodeDesc> highest;
 
@@ -52,7 +48,7 @@ namespace PT{
           // step 4: add edges u->v to the edgelist
           for(const NodeDesc v: new_children){
             // NOTE: make sure the merge is not done by size but v is always plugged below u!
-            highest.merge_sets_of(u, v, false);
+            highest.merge_sets_keep_order(u, v);
             emplacer.emplace_edge(u, v);
           }
         }
@@ -62,7 +58,7 @@ namespace PT{
       // allow calling without a node translation
       template<PhylogenyType _Network, class First, class... Args> requires (!NodeTranslationType<First>)
       static void ext_to_tree(const _Network& N, const Extension& ex, ExtTree& T, First&& first, Args&&... args) {
-        ext_to_tree(N, ex, T, NodeTranslation(), std::forward<First>(first), std::forward<Args>(args)...);
+        ext_to_tree(N, ex, T, NodeTranslation(), make_data_extracter<_Network, ExtTree>(std::forward<First>(first), std::forward<Args>(args)...));
       }
     };
 

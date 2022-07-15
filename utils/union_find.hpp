@@ -13,6 +13,12 @@ namespace std{
     size_t _size = 0;
     
     void grow(const int x) { _size += x; }
+
+    void merge_onto(_DSet& x) {
+      representative = x.representative;
+      x._size += _size;
+    }
+
   public:
     const Key& get_representative() const { return representative; }
     size_t size() const { return _size; }
@@ -24,11 +30,6 @@ namespace std{
     _DSet() = default;
 
     bool operator==(const _DSet& y) const { return representative == y.representative; }
-
-    void merge_onto(_DSet& x) {
-      representative = x.representative;
-      x._size += _size;
-    }
 
     template<class, class>
     friend class DisjointSetForest;
@@ -72,7 +73,6 @@ namespace std{
     using Parent::try_emplace;
     using Parent::emplace;
     using Parent::erase;
-    using Parent::at;
     using Parent::operator[];
     using Parent::find;
 
@@ -101,6 +101,7 @@ namespace std{
     }
 
   public:
+    using Parent::at;
 
     template<class... Args>
     auto emplace_set(const Key& x, Args&&... args) {
@@ -111,7 +112,7 @@ namespace std{
 
     // add a new set to the forest
     template<class... Args>
-    const Set& add_new_set(const Key& x, Args&&... args) {
+    Set& add_new_set(const Key& x, Args&&... args) {
       const auto [iter, success] = emplace_set(x, std::forward<Args>(args)...);
       if(!success) throw logic_error("trying to add existing item to set-forest");
       return iter->second;
@@ -144,9 +145,7 @@ namespace std{
     // in case of ties, x is merged into y's set
     // return the set that the other has been merged into
     template<bool respect_sizes = true>
-    Set& merge_sets(auto& x, auto& y) {
-      Set& x_set = set_of(x);
-      Set& y_set = set_of(y);
+    Set& merge_sets(Set& x_set, Set& y_set) {
       if(x_set != y_set){
         --_set_count;
         if constexpr (respect_sizes) {
@@ -159,10 +158,12 @@ namespace std{
       }
       return x_set;
     }
+    template<bool respect_sizes = true> Set& merge_sets(const Key& x, Set& y_set) { return merge_sets<respect_sizes>(set_of(x), y_set); }
+    template<bool respect_sizes = true> Set& merge_sets(Set& x_set, const Key& y) { return merge_sets<respect_sizes>(x_set, set_of(y)); }
+    template<bool respect_sizes = true> Set& merge_sets(const Key& x, const Key& y) { return merge_sets<respect_sizes>(set_of(x), set_of(y)); }
+
     // merge y onto x (y's representative will be lost (set to x's representative))
-    Set& merge_sets_keep_order(auto& x, auto& y) {
-      return merge_sets<false>(x, y);
-    }
+    Set& merge_sets_keep_order(auto& x, auto& y) { return merge_sets<false>(x, y); }
 
     Set& set_of(const Key& x) { return set_of(x, at(x)); }
 
@@ -175,7 +176,7 @@ namespace std{
 
 
     static const Key& representative(const Set& x_set) { return x_set.representative; }
-    static const Key& representative(const Key& x) { return x; }
+    static const Key& representative(const Key& x) { return at(x).representative; }
 
 
     // erase a Set s from the union-find structure
@@ -219,7 +220,7 @@ namespace std{
     }
 
     // if one wants to keep a single item of each set, one can use is_root, which returns true if all elements in its set have x as their root
-    bool is_root(const Key& x) const { return *(at(x).representative) == x; }
+    bool is_root(const Key& x) const { return at(x).representative == x; }
 
     // return true iff the given items are in the same set
     bool in_same_set(const Key& x, const Key& y) { return set_of(x) == set_of(y); }

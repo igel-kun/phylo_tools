@@ -84,7 +84,6 @@ namespace PT {
                                   std::is_constructible_v<DataTypeOf<Tag, TargetPhylo>, DataTypeOf<Tag, SourcePhylo>>,
                                   _DefaultExtractData<Tag, std::remove_reference_t<SourcePhylo>>,
                                   void>;
-//                                  IgnoreExtractionFunction<Tag, TargetPhylo>>;
 
 
   
@@ -111,6 +110,11 @@ namespace PT {
     using ExtractNodeLabel = void;
     using NodeLabelReturnType = bool;
     using ConstNodeLabelReturnType = bool;
+
+    // NOTE: unfortunately, operator() is not inherited if it is overwritten, so we'll "use Parent::operator()" to inherit them
+    //       however, we then have to define an operator() even if we're not extracting anything :(
+    bool operator()(const Ex_node_label, const NodeDesc) const { return false; }
+
     static constexpr bool custom_node_label_maker = false;
     static constexpr bool ignoring_node_labels = true;
   };
@@ -126,6 +130,7 @@ namespace PT {
     using Parent = _DataExtracter_nl<Network, ExtractNodeLabel>;
     using ExtractEdgeData = _ExtractEdgeData;
     using Parent::custom_node_label_maker;
+    using Parent::operator();
  
     template<class... Args>
     using EdgeDataReturnType = decltype(std::declval<ExtractEdgeData>().operator()(std::declval<Args>()...));
@@ -180,8 +185,15 @@ namespace PT {
   struct _DataExtracter_ed_nl<Network, void, ExtractNodeLabel>: public _DataExtracter_nl<Network, ExtractNodeLabel> {
     using Parent = _DataExtracter_nl<Network, ExtractNodeLabel>;
     using ExtractEdgeData = void;
-    using Parent::Parent;
+    using Parent::operator();
  
+    template<class... Args> _DataExtracter_ed_nl(Args&&... args): Parent(std::forward<Args>(args)...) {}
+
+    // NOTE: unfortunately, operator() is not inherited if it is overwritten, so we'll "use Parent::operator()" to inherit them
+    //       however, we then have to define an operator() even if we're not extracting anything :(
+    template<class... Args>
+    bool operator()(const Ex_edge_data, Args&&...) const { return false; }
+
     static constexpr bool custom_edge_data_maker  = false;
     static constexpr bool ignoring_edge_data = true;
   };
@@ -197,6 +209,7 @@ namespace PT {
   struct _DataExtracter: public _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel>, public _ExtractNodeData {
     using Parent = _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel>;
     using ExtractNodeData = _ExtractNodeData;
+    using Parent::operator();
 
     using Parent::custom_node_label_maker;
     using Parent::custom_edge_data_maker;
@@ -242,9 +255,15 @@ namespace PT {
   struct _DataExtracter<Network, void, ExtractEdgeData, ExtractNodeLabel>: public _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel> {
     using Parent = _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel>;
     using ExtractNodeData = void;
-    using Parent::Parent;
     using NodeDataReturnType = bool;
     using ConstNodeDataReturnType = bool;
+    using Parent::operator();
+
+    // NOTE: unfortunately, operator() is not inherited if it is overwritten, so we'll "use Parent::operator()" to inherit them
+    //       however, we then have to define an operator() even if we're not extracting anything :(
+    bool operator()(const Ex_node_data, const NodeDesc) const { return false; }
+
+    template<class... Args> _DataExtracter(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     static constexpr bool custom_node_data_maker = false;
     static constexpr bool ignoring_node_data = true;
@@ -345,19 +364,19 @@ namespace PT {
     return Extracter(std::forward<ExtractNodeSomething>(nds), std::forward<ExtractEdgeData>(get_edge_data));
   }
 
-  // by default, a single NodeFunctionType is interpreted as node-data-extract, unless SourcePhylo is non-void and has no node data
-  template<OptionalPhylogenyType SourcePhylo>
+  // by default, a single NodeFunctionType is interpreted as node-data-extract, unless Phylo is non-void and has no node data
+  template<OptionalPhylogenyType Phylo>
   struct _choose_node_function { using type = Ex_node_data; };
-  template<OptionalPhylogenyType SourcePhylo> requires (!std::is_void_v<SourcePhylo> && !HasNodeData<SourcePhylo>)
-  struct _choose_node_function<SourcePhylo> { using type = Ex_node_label; };
-  template<OptionalPhylogenyType SourcePhylo>
-  using choose_node_function = typename _choose_node_function<SourcePhylo>::type;
+  template<OptionalPhylogenyType Phylo> requires (!std::is_void_v<Phylo> && !HasNodeData<Phylo>)
+  struct _choose_node_function<Phylo> { using type = Ex_node_label; };
+  template<OptionalPhylogenyType Phylo>
+  using choose_node_function = typename _choose_node_function<Phylo>::type;
 
   template<OptionalPhylogenyType SourcePhylo,
            OptionalPhylogenyType TargetPhylo = SourcePhylo,
-           NodeFunctionType ExtractNodeSomething>
+           NodeFunctionType ExtractNodeSomething> requires (!DataExtracterType<ExtractNodeSomething>)
   auto make_data_extracter(ExtractNodeSomething&& nds) {
-    using tag = choose_node_function<SourcePhylo>;
+    using tag = choose_node_function<std::VoidOr<TargetPhylo, SourcePhylo>>;
     return make_data_extracter<SourcePhylo, TargetPhylo>(tag{}, std::forward<ExtractNodeSomething>(nds));
   }
   template<OptionalPhylogenyType SourcePhylo,
@@ -366,7 +385,7 @@ namespace PT {
            class ExtractEdgeData> 
              requires (!NodeFunctionType<ExtractEdgeData>)
   auto make_data_extracter(ExtractNodeSomething&& nds, ExtractEdgeData&& get_edge_data) {
-    using tag = choose_node_function<SourcePhylo>;
+    using tag = choose_node_function<std::VoidOr<TargetPhylo, SourcePhylo>>;
     return make_data_extracter<SourcePhylo, TargetPhylo>(tag{}, std::forward<ExtractNodeSomething>(nds), std::forward<ExtractEdgeData>(get_edge_data));
   }
 
@@ -392,8 +411,10 @@ namespace PT {
                          DefaultExtractData<Ex_node_label, SourcePhylo, TargetPhylo>>;
     return Extracter();
   }
-  //! In order to allow passing a pre-made data extracter to the make_emplcer helper functions, we allow passing one here
-  template<DataExtracterType PremadeExtracter>
+  //! In order to allow passing a pre-made data extracter to the make_emplacer helper functions, we allow passing one here
+  template<OptionalPhylogenyType SourcePhylo,
+           OptionalPhylogenyType TargetPhylo = SourcePhylo,
+           DataExtracterType PremadeExtracter>
   auto make_data_extracter(PremadeExtracter&& extracter) {
     return extracter;
   }

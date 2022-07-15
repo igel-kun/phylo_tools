@@ -25,7 +25,7 @@ namespace PT{
     NodePair as_pair() const { return { this->first, this->second }; }
   };
 
-  template<class EdgeData>
+  template<class EdgeData = void>
   struct Edge: public ProtoEdge<EdgeData> {
     using Parent = ProtoEdge<EdgeData>;
     using Parent::Parent;

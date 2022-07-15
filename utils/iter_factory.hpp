@@ -12,6 +12,9 @@ namespace std {
   public:
     using Parent::Parent;
 
+    bool empty() const { return begin() == end(); }
+    size_t size() const { return std::distance(begin(), end()); }
+
     Iterator begin() const & { return static_cast<const Iterator&>(*this); }
     Iterator begin() & { return static_cast<Iterator&>(*this); }
     Iterator begin() && { return static_cast<Iterator&&>(*this); }

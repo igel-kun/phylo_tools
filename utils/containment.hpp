@@ -140,10 +140,11 @@ namespace PT {
         auto& uv = label_iter->second;
         // if the label only exists in the guest, but not in the host, then the host can never display the guest!
         if(uv.first.empty()) return failed = true; // this label occurs only in the guest, so the host can never display it
+        const NodeDesc u = uv.first.front();
         if(uv.second.empty()) {
           // this label occurs only in the host, but not in the guest, so we can simply remove it, along with the entry in the label-matching
           std::cout << "removing label "<<label_iter->first<<" from the host since it's not in the guest\n";
-          host.remove_upwards(uv.first);
+          host.remove_upwards(u);
           label_iter = HG_label_match.erase(label_iter);
         } else ++label_iter;
       }
@@ -225,7 +226,8 @@ namespace PT {
             auto [iter, success, new_node_handle] = sub_match.insert(std::move(node_handle));
             std::cout << "new sub-match: "<<sub_match<<"\n";
             assert(success);
-            guestLCA = (guestLCA == NoNode) ? static_cast<const NodeDesc&>(iter->second.second) : LCA(guestLCA, iter->second.second);
+            const NodeDesc iter_node = static_cast<const NodeDesc&>(iter->second.second);
+            guestLCA = (guestLCA == NoNode) ? iter_node : LCA(guestLCA, iter_node);
           }
           assert(guestLCA != guest.root());
           assert(guestLCA != NoNode);
@@ -272,7 +274,8 @@ namespace PT {
       // a reticulation parent, then cherry reduction must be applicable to it)
       std::priority_queue<BranchInfo, std::vector<BranchInfo>, std::greater<BranchInfo>> branching_candidates;
       for(const auto& HG_leaf_pair: seconds(HG_label_match)){
-        const NodeDesc u = HG_leaf_pair.first;
+        assert(HG_leaf_pair.first.size() == 1);
+        const NodeDesc u = front(HG_leaf_pair.first);
         const NodeDesc rt_u = comp_info.comp_root_of(u);
         if((rt_u == NoNode) || (rt_u == u)) {
           std::cout << u << " sees noone\n" << u <<"'s parents are "<<parents_of<Host>(u)<<"\n";

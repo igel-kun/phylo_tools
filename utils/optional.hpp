@@ -11,19 +11,21 @@ namespace std {
   public:
     using value_type = T;
 
-    optional_by_invalid() = default;
+    constexpr optional_by_invalid() = default;
+    //constexpr optional_by_invalid(const optional_by_invalid&) = default;
+    //constexpr optional_by_invalid(optional_by_invalid&&) = default;
 
     // in-place construct the element
     template<class... Args>
-    optional_by_invalid(const std::in_place_t, Args&&... args): element(std::forward<Args>(args)...) {}
+    constexpr optional_by_invalid(const std::in_place_t, Args&&... args): element(std::forward<Args>(args)...) {}
     template<class U, U I>
-    optional_by_invalid(const optional_by_invalid<U, I>& other): element(other.element) {}
+    constexpr optional_by_invalid(const optional_by_invalid<U, I>& other): element(other.element) {}
     template<class U, U I>
-    optional_by_invalid(optional_by_invalid<U, I>&& other): element(move(other.element)) {}
+    constexpr optional_by_invalid(optional_by_invalid<U, I>&& other): element(move(other.element)) {}
     template<class U = T>
-    optional_by_invalid(const U& other): element(other) {}
+    constexpr optional_by_invalid(const U& other): element(other) {}
     template<class U = T>
-    optional_by_invalid(U&& other): element(move(other)) {}
+    constexpr optional_by_invalid(U&& other): element(move(other)) {}
 
     // re-construct the element
     template<class... Args>
@@ -51,8 +53,8 @@ namespace std {
     bool operator==(const optional_by_invalid& other) const { return element == other.element; }
     bool operator==(const T& other) const { return element == other; }
 
-    optional_by_invalid& operator=(const optional_by_invalid& other) = default;
-    optional_by_invalid& operator=(optional_by_invalid&& other) = default;
+    //optional_by_invalid& operator=(const optional_by_invalid& other) = default;
+    //optional_by_invalid& operator=(optional_by_invalid&& other) = default;
     optional_by_invalid& operator=(const T& other) { element = other; return *this; }
     optional_by_invalid& operator=(T&& other) { element = move(other); return *this; }
 

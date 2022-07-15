@@ -11,7 +11,7 @@ namespace PT{
   // const Container& will be the return type of the dereference operator
   // for performance reasons, it should support fast std::test() queries, as well as insert() and erase()
   template<class Network, class Container = NodeSet, bool ignore_deg2_nodes = true>
-  class NetworkConstraintSubsetIterator {
+  class NetworkConstraintSubsetIterator: public std::iter_traits_from_reference<const Container&> {
   protected:
     NodeDesc root;
 

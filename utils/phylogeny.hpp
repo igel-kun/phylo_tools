@@ -217,7 +217,7 @@ namespace PT {
       DEBUG5(std::cout << "creating node with data-maker\n");
       if constexpr (!std::is_same_v<std::remove_cvref_t<DataMaker>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
-        const NodeDesc result = space;
+        const NodeDesc result = reinterpret_cast<uintptr_t>(space);
         new(space) Node(data_maker(result));
         return result;
       } else return create_node();
@@ -227,7 +227,7 @@ namespace PT {
     static constexpr NodeDesc create_node(Ex_node_label, LabelMaker&& label_maker) {
       if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
-        const NodeDesc result = space;
+        const NodeDesc result = reinterpret_cast<uintptr_t>(space);
         new(space) Node(label_maker(result));
         return result;
       } else return create_node();
@@ -237,7 +237,7 @@ namespace PT {
     static constexpr NodeDesc create_node(LabelMaker&& label_maker, DataMaker&& data_maker) {
       if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
         Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
-        const NodeDesc result = space;
+        const NodeDesc result = reinterpret_cast<uintptr_t>(space);
         new(space) Node(std::piecewise_construct, label_maker(result), data_maker(result));
         return result;
       } else return create_node(std::forward<DataMaker>(data_maker));
@@ -251,7 +251,7 @@ namespace PT {
         } else return create_node(data_maker.get_node_data);
       } else {
         if constexpr (!StrictDataMaker::ignoring_node_labels) {
-          create_node(data_maker.get_node_label);
+          return create_node(data_maker.get_node_label);
         } else return create_node();
       }
     }
