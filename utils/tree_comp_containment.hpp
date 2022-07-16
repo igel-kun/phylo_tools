@@ -31,8 +31,8 @@ namespace PT {
     //NOTE: this assumes that the cherry rule has been applied exhaustively
     template<StrictPhylogenyType Host>
     MulSubtree unzip_retis(const Host& host, const NodeDesc u, auto&& HG_label_match) {
-      std::cout << "unzipping reticulations under tree component below "<<u<<"...\n";
-      std::cout << "with label matching "<<HG_label_match<<"\n";
+      DEBUG2(std::cout << "unzipping reticulations under tree component below "<<u<<"...\n");
+      DEBUG2(std::cout << "with label matching "<<HG_label_match<<"\n");
       MulSubtree T;
       NodeTranslation host_to_subtree; // track translation
       
@@ -47,7 +47,7 @@ namespace PT {
       for(const auto xy: my_dfs){
         auto [x, y] = xy.as_pair();
         if(host.out_degree(x) != 1){
-          std::cout << "got edge "<<x<<"->"<<y<<"\n";
+          DEBUG2(std::cout << "got edge "<<x<<"->"<<y<<"\n");
           // skip reticulation chains
           while(host.out_degree(y) == 1) y = host.any_child(y);
           // add the edge to the subtree
@@ -66,7 +66,7 @@ namespace PT {
           }
         }
       }
-      std::cout << "got MUL-tree:\n"<<T<<"\n";
+      DEBUG2(std::cout << "got MUL-tree:\n"<<T<<"\n");
       return T;
     }
 
@@ -80,16 +80,15 @@ namespace PT {
       subtree(unzip_retis(_host, u, std::forward<HG_Label_Matching>(HG_label_match))),
       subtree_display(subtree, _guest, SG_label_match) // note: the checker may move out of the label matching
     {
-      std::cout << "\tconstructed TreeInComponent checker\n subtree is:\n"<<subtree<<"\nguest is at "<<&guest<<":\n"<<guest<<"\n";
+      DEBUG2(std::cout << "\tconstructed TreeInComponent checker\n subtree is:\n"<< ExtendedDisplay(subtree)<<"\nguest is at "<<&guest<<":\n"<<ExtendedDisplay(guest)<<"\n");
     }
 
     // get the highest ancestor of v in the guest that is still displayed by the tree-component
     NodeDesc highest_displayed_ancestor(NodeDesc v) {
-      std::cout << "mark, node: "<<v<<"\n";
-      std::cout << "guest:\n"<<guest<<"\n";
+      DEBUG2(std::cout << "guest:\n"<<guest<<"\n");
       // step 1: unzip the lowest reticulations
       NodeDesc pv = guest.parent(v);
-      std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
+      DEBUG2(std::cout << "testing parent "<<pv<<" of "<<v<<"\n");
       while(1) {
         const auto& pv_disp = subtree_display.who_displays(pv);
         if(pv_disp.empty()) return v;
@@ -97,7 +96,7 @@ namespace PT {
         if(pv == guest.root()) return v;
         if((pv_disp.size() == 1) && (front(pv_disp) == subtree.root())) return v;
         pv = guest.parent(pv);
-        std::cout << "testing parent "<<pv<<" of "<<v<<"\n";
+        DEBUG2(std::cout << "testing parent "<<pv<<" of "<<v<<"\n");
       }
     }
 

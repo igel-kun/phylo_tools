@@ -1,7 +1,7 @@
 
 #pragma once
 
-//#include <ranges>
+#include <iostream>
 #include "set_interface.hpp"
 
 #include "utils.hpp"
@@ -208,8 +208,10 @@ namespace PT {
     template<class... Args>
       requires ((sizeof...(Args) != 1) || (!NodeFunctionType<std::FirstTypeOf<Args...>> && !DataExtracterType<std::FirstTypeOf<Args...>>))
     static constexpr NodeDesc create_node(Args&&... args) {
-      DEBUG5(std::cout << "creating node with " << sizeof...(Args) << " arguments\n");
-      return reinterpret_cast<uintptr_t>(new Node(std::forward<Args>(args)...));
+      DEBUG5(std::cout << "creating node of type "<<std::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
+      Node* result = new Node(std::forward<Args>(args)...);
+      DEBUG5(std::cout << "created node at " << result << " (" << reinterpret_cast<uintptr_t>(result) << ")\n");
+      return reinterpret_cast<uintptr_t>(result);
     }
     // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
     template<NodeFunctionType DataMaker> requires (!DataExtracterType<DataMaker>)
@@ -1345,6 +1347,7 @@ namespace PT {
   };
 
 
+
   template<StrictPhylogenyType _Phylo>
   std::ostream& operator<<(std::ostream& os, const _Phylo& T) {
     if(!T.empty()) {
@@ -1353,16 +1356,28 @@ namespace PT {
     } else return os << "{}";
   }
 
-  template<StrictPhylogenyType Phylo>
-  struct DisplayWithData {
-    const Phylo& N;
 
-    friend std::ostream& operator<<(std::ostream& os, const DisplayWithData& x) {
-      if(!x.N.empty()) {
-        x.N.print_subtree_with_data(os);
-        return os;
-      } else return os << "{}";
-    }
+  enum { DISPLAY_DATA = 1, DISPLAY_NEWICK = 2 };
+
+#warning "TODO: turning this into a lambda crashes gcc up to (excluding) version 12"
+  struct my_to_string {
+    auto operator()(const auto& x) { return std::to_string(x); }
+  };
+
+  template<int flags>
+  using DefaultDataToString = std::conditional_t<flags & DISPLAY_DATA,
+                                                 my_to_string,
+                                                 std::IgnoreFunction<std::string>>;
+
+  template<int flags = DISPLAY_DATA, class NodeDataToString = DefaultDataToString<flags>>
+  std::string ExtendedDisplay(const auto& N, NodeDataToString nd_to_string = NodeDataToString()) {
+    if(!N.empty()) {
+      std::ostringstream out;
+      N.print_subtree(out, nd_to_string);
+      if constexpr (flags & DISPLAY_NEWICK)
+        out << '\n' << get_extended_newick(N) << '\n';
+      return std::move(out).str();
+    } else return "{};";
   };
 
 

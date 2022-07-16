@@ -289,25 +289,25 @@ namespace PT{
   template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData, class _LabelType>
   using DefaultNode = Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType>;
 
-  template<StrictNodeType Node>
-  Node& node_of(const NodeDesc x) { return *(reinterpret_cast<Node*>(static_cast<uintptr_t>(x))); }
+  template<NodeType Node>
+  Node& node_of(const NodeDesc x) { return *(reinterpret_cast<std::remove_cvref_t<Node>*>(static_cast<uintptr_t>(x))); }
 
   // NOTE: whatever cvref qualifiers Network may have, they are also applied to the Node, prominently:
   // if Network is a const lvalue ref, then return a const lvalue ref to a Node
   // if Network is an rvalue ref, then return an rvalue ref to a Node
   // if Network is a simple type, then return a (non-const) lvalue reference to a Node
   template<PhylogenyType Network>
-  std::copy_cvref_t<Network, typename Network::Node>& node_of(const NodeDesc x) {
-    return node_of<typename Network::Node>(x);
-  }
+  using NodeOf = std::copy_cvref_t<Network, typename std::remove_cvref_t<Network>::Node>;
+  template<PhylogenyType Network>
+  NodeOf<Network>& node_of(const NodeDesc x) { return node_of<NodeOf<Network>>(x); }
 
 
   template<StrictPhylogenyType T>
-  auto& children_of(const NodeDesc x) { return node_of<T>(x).children(); }
+  decltype(auto) children_of(const NodeDesc x) { return node_of<T>(x).children(); }
   template<StrictPhylogenyType T>
-  auto& parents_of(const NodeDesc x) { return node_of<T>(x).parents(); }
+  decltype(auto) parents_of(const NodeDesc x) { return node_of<T>(x).parents(); }
   template<StrictPhylogenyType T>
-  auto& any_parent_of(const NodeDesc x) { return node_of<T>(x).any_parent(); }
+  decltype(auto) any_parent_of(const NodeDesc x) { return node_of<T>(x).any_parent(); }
 
 
 

@@ -54,7 +54,7 @@ namespace PT{
     append(node_infos, *iter, 0, 0); // order number 0, distance to root 0
     for(++iter;iter.is_valid(); ++iter) {
       const NodeDesc parent = Tree::any_parent(*iter);
-      std::cout << "computing infos of "<<*iter <<" from infos of parent "<<parent<<": "<<node_infos.at(parent)<<"\n";
+      DEBUG4(std::cout << "computing infos of "<<*iter <<" from infos of parent "<<parent<<": "<<node_infos.at(parent)<<"\n");
       append(node_infos, *iter, node_infos.at(parent).dist_to_root + 1, ++counter);
     }
   }
@@ -140,7 +140,7 @@ namespace PT{
         const NodeDesc u = *iter;
         if(++iter == leaves_sorted.end()) break;
         const NodeDesc l = LCA(u, *iter);
-        std::cout << "adding LCA("<<u<<", "<<*iter<<") = "<<l<<" as inner node with dist " << node_infos.at(l).dist_to_root<<"\n";
+        DEBUG4(std::cout << "adding LCA("<<u<<", "<<*iter<<") = "<<l<<" as inner node with dist " << node_infos.at(l).dist_to_root<<"\n");
         append(inner_nodes, l, node_infos.at(l).dist_to_root);
       }
     }
@@ -161,10 +161,10 @@ namespace PT{
 
     void prepare_nodes() {
       if(leaves_sorted.size() > 1){
-        std::cout << "leaves:\t"<<leaves_sorted<<"\n";
+        DEBUG4(std::cout << "leaves:\t"<<leaves_sorted<<"\n");
         // step 2: compute stepwise LCAs
         compute_inner_nodes();
-        std::cout << "inner nodes:\t"<<inner_nodes<<"\n";
+        DEBUG4(std::cout << "inner nodes:\t"<<inner_nodes<<"\n");
         // step 3: compute v_left and v_right for each internal node v
         //         (v_x = the closest node x on the left/right of v whose dist to root is strictly smaller than v's)
         compute_nearest_above<1>(v_left_idx);

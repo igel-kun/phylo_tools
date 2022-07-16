@@ -40,12 +40,12 @@ namespace PT {
   struct _DefaultExtractData {};
 
 #warning "TODO: can we turn those into templates of constexpr lambdas?"
-#warning "TODO: when passing an rvalue-reference as Phylo, we should std::move the data out of its nodes"
+  // NOTE: when passing an rvalue-reference as Phylo, we will call the &&-qualified version of label() and data()
   template<PhylogenyType Phylo>
-  struct _DefaultExtractData<Ex_node_label, Phylo> { auto& operator()(const NodeDesc u) const { return node_of<Phylo>(u).label(); } };
+  struct _DefaultExtractData<Ex_node_label, Phylo> { decltype(auto) operator()(const NodeDesc u) const { return node_of<Phylo>(u).label(); } };
 
   template<PhylogenyType Phylo>
-  struct _DefaultExtractData<Ex_node_data, Phylo> { auto& operator()(const NodeDesc u) const { return node_of<Phylo>(u).data(); } };
+  struct _DefaultExtractData<Ex_node_data, Phylo> { decltype(auto) operator()(const NodeDesc u) const { return node_of<Phylo>(u).data(); } };
 
   template<PhylogenyType Phylo>
   struct _DefaultExtractData<Ex_edge_data, Phylo> {
