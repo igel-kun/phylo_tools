@@ -77,7 +77,7 @@ namespace PT {
             if(!success)
               throw std::logic_error("single-label map for multi-labeled tree/network (first argument of the label matching)");
           // otherwise, just add the node to (the first part of) the entry
-          append(iter->second.first, p);
+          mstd::append(iter->second.first, p);
         }
       }
       // step 2: for each node u with label l in T, add u to the set of T-nodes mapped to l
@@ -91,7 +91,7 @@ namespace PT {
             if(!matched_pair.second.empty())
               throw std::logic_error("single-label map for multi-labeled network/tree (second argument of the label matching)");
           // otherwise, just add p to (the second part of) the entry
-          append(matched_pair.second, p);
+          mstd::append(matched_pair.second, p);
         }
       }
     }

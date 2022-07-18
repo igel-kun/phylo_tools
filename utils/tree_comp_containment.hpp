@@ -60,8 +60,8 @@ namespace PT {
             std::cout << "mark - label("<<y<<") = "<<ylabel<<"\n";
             std::cout << "matching: "<<HG_label_match.at(ylabel)<<"\n";
             // register label and st_v in the label matching
-            auto& subtree_nodes_with_label = append(SG_label_match, ylabel).first->second;
-            append(subtree_nodes_with_label.first, y_copy);
+            auto& subtree_nodes_with_label = mstd::append(SG_label_match, ylabel).first->second;
+            mstd::append(subtree_nodes_with_label.first, y_copy);
             std::cout << "matched labels: "<< subtree_nodes_with_label <<"\n";
           }
         }
@@ -94,7 +94,7 @@ namespace PT {
         if(pv_disp.empty()) return v;
         v = pv;
         if(pv == guest.root()) return v;
-        if((pv_disp.size() == 1) && (front(pv_disp) == subtree.root())) return v;
+        if((pv_disp.size() == 1) && (mstd::front(pv_disp) == subtree.root())) return v;
         pv = guest.parent(pv);
         DEBUG2(std::cout << "testing parent "<<pv<<" of "<<v<<"\n");
       }

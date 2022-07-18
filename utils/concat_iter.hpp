@@ -3,11 +3,11 @@
 
 #include "stl_utils.hpp"
 
-namespace std {
+namespace mstd {
   // this is an iterator over multiple iterable objects, passing over each of them in turn, effectively concatenating them
   template<class ContainerIter, class ItemIter = iterator_of_t<value_type_of_t<ContainerIter>>>
-  class _concatenating_iterator: public my_iterator_traits<ItemIter> {
-    using Parent = my_iterator_traits<ItemIter>;
+  class _concatenating_iterator: public iterator_traits<ItemIter> {
+    using Parent = iterator_traits<ItemIter>;
     using Container = value_type_of_t<ContainerIter>;
 
     auto_iter<ContainerIter> cit;

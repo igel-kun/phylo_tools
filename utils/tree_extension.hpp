@@ -27,7 +27,7 @@ namespace PT{
       {
         auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, std::forward<Extracter>(data_extracter));
         // we can use a disjoint set forest with no-rank union to find the current highest node of the weakly-connected component of a node
-        std::DisjointSetForest<NodeDesc> highest;
+        mstd::DisjointSetForest<NodeDesc> highest;
 
         DEBUG3(std::cout << "constructing extension tree from "<<ex<<std::endl);
         for(const auto& u: ex){
@@ -38,7 +38,7 @@ namespace PT{
           NodeSet new_children; // NOTE: many children of u in the network may have the same "highest current ancestor" in the tree; use a set to avoid dupes
           for(const NodeDesc v: N.children(u)){
             try{
-              append(new_children, highest.set_of(v).get_representative());
+              mstd::append(new_children, highest.set_of(v).get_representative());
             } catch(std::out_of_range& e) {
               throw(std::logic_error("trying to compute extension tree on a non-extension"));
             }
@@ -85,7 +85,7 @@ namespace PT{
   //       to this end, the tree node has to be converted to a corresponding network node within the function
   //       this can be done by, for example, inverting the net_to_tree translation map filled by ext_to_tree()
   //       or by storing the network NodeDesc's inside the nodes themselves using the make_node_data function passed to ext_to_tree
-  template<TreeType _Tree, class NetworkDegrees, std::ContainerType _Container = NodeMap<Degree>>
+  template<TreeType _Tree, class NetworkDegrees, mstd::ContainerType _Container = NodeMap<Degree>>
   _Container ext_tree_sw_map(const _Tree& ext, NetworkDegrees&& network_degrees, _Container&& out = _Container()) {
     for(const NodeDesc u: ext.nodes_postorder()){
       auto [indeg, outdeg] = network_degrees(u);
@@ -93,7 +93,7 @@ namespace PT{
       for(const NodeDesc v: ext.children(u))
         sw_u += out[v];
       sw_u -= outdeg;
-      append(out, u, sw_u);
+      mstd::append(out, u, sw_u);
       DEBUG3(std::cout << "found sw("<<u<<") = "<<sw_u<<std::endl);
     }
     return out;

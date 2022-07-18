@@ -40,11 +40,11 @@ namespace PT{
 
     NodeDesc get_id(const std::string& name)
     {
-      auto emp_res = append(name_to_node, name);
+      auto emp_res = mstd::append(name_to_node, name);
       if(emp_res.second){
         const NodeDesc id = NodeDesc(names.size());
         emp_res.first->second = id;
-        append(names, id, name);
+        mstd::append(names, id, name);
         return id;
       } else return emp_res.first->second;
     }

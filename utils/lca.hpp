@@ -27,7 +27,7 @@ namespace PT {
     // helper function for the LCA
     bool update_for_LCA(SeenSet& seen, NodeDesc& z) const {
       if(z == N.root()) return false;
-      if(!set_val(seen, z)) return true;
+      if(!mstd::set_val(seen, z)) return true;
       z = N.parent(z);
       return false;
     }

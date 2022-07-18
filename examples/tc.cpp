@@ -26,7 +26,7 @@ void parse_options(const int argc, const char** argv)
 
   parse_options(argc, argv, description, help_message, options);
 
-  if(test(options, "-r")){
+  if(mstd::test(options, "-r")){
     const auto r_vec = options.at("-r");
     if(stoi(r_vec[0]) == 0) {
       std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes\n";
@@ -87,10 +87,10 @@ NetAndTree create_net_and_tree() {
 
   std::cout << "rolled tree:\n"<<result.second<<"\n";
 
-  std::cout << "network type is "<<std::type_name<MyNet>()<<"\n";
+  std::cout << "network type is "<<mstd::type_name<MyNet>()<<"\n";
   std::cout << "tree has label ? "<<PT::HasDataType<Ex_node_label, MyTree><<"\n";
   std::cout << "net has label ? "<<PT::HasDataType<Ex_node_label, MyNet><<"\n";
-  std::cout << "tree label type is "<<std::type_name<PT::DataTypeOf<Ex_node_label, MyTree>>()<<"\n";
+  std::cout << "tree label type is "<<mstd::type_name<PT::DataTypeOf<Ex_node_label, MyTree>>()<<"\n";
   
   std::cout << "copying tree...\n";
   result.first = result.second;
@@ -131,14 +131,14 @@ NetAndTree read_net_and_tree() {
 int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
-  auto NT_tuple = test(options, "-r") ?
+  auto NT_tuple = mstd::test(options, "-r") ?
     create_net_and_tree() :
     read_net_and_tree();
 
   MyNet& N = NT_tuple.first;
   MyTree& T = NT_tuple.second;
 
-  if(test(options, "-v")) {
+  if(mstd::test(options, "-v")) {
     std::cout << "N:\n" << N << "\n";
     std::cout << get_extended_newick(N) << '\n';
     std::cout << "T:\n" << T << '\n';

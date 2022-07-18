@@ -4,7 +4,7 @@
 #include <list>
 #include <unordered_map>
 
-namespace std {
+namespace mstd {
 
   template<class ForwardMap, class ReverseMap,
     enable_if_t<is_really_arithmetic_v<typename ForwardMap::key_type> &&

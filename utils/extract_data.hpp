@@ -7,9 +7,9 @@
 
 namespace PT {
 
-  template<OptionalPhylogenyType Phylo> struct _NodeLabelOf { using type = std::copy_cvref_t<Phylo, typename std::remove_reference_t<Phylo>::LabelType>; };
-  template<OptionalPhylogenyType Phylo> struct _NodeDataOf { using type = std::copy_cvref_t<Phylo, typename std::remove_reference_t<Phylo>::NodeData>; };
-  template<OptionalPhylogenyType Phylo> struct _EdgeDataOf { using type = std::copy_cvref_t<Phylo, typename std::remove_reference_t<Phylo>::EdgeData>; };
+  template<OptionalPhylogenyType Phylo> struct _NodeLabelOf { using type = mstd::copy_cvref_t<Phylo, typename std::remove_reference_t<Phylo>::LabelType>; };
+  template<OptionalPhylogenyType Phylo> struct _NodeDataOf { using type = mstd::copy_cvref_t<Phylo, typename std::remove_reference_t<Phylo>::NodeData>; };
+  template<OptionalPhylogenyType Phylo> struct _EdgeDataOf { using type = mstd::copy_cvref_t<Phylo, typename std::remove_reference_t<Phylo>::EdgeData>; };
   template<> struct _NodeLabelOf<void> { using type = void; };
   template<> struct _NodeDataOf<void> { using type = void; };
   template<> struct _EdgeDataOf<void> { using type = void; };
@@ -31,7 +31,7 @@ namespace PT {
                                     EdgeDataOf<Phylo>>>;
  
   template<DataTag Tag, OptionalPhylogenyType Phylo>
-  using ReturnableDataTypeOf = std::ReturnableType<DataTypeOf<Tag, Phylo>>;
+  using ReturnableDataTypeOf = mstd::ReturnableType<DataTypeOf<Tag, Phylo>>;
  
   template<DataTag Tag, OptionalPhylogenyType Phylo> constexpr bool HasDataType = !std::is_void_v<DataTypeOf<Tag, Phylo>>;
 
@@ -58,7 +58,7 @@ namespace PT {
 
     auto& operator()(const NodeDesc u, const NodeDesc v) const {
       auto& u_children = node_of<Phylo>(u).children();
-      const auto iter = std::find(u_children, v);
+      const auto iter = mstd::find(u_children, v);
       if(iter == u_children.end()) throw std::logic_error("trying to get data from a non-edge");
       return iter->data();
     }
@@ -376,7 +376,7 @@ namespace PT {
            OptionalPhylogenyType TargetPhylo = SourcePhylo,
            NodeFunctionType ExtractNodeSomething> requires (!DataExtracterType<ExtractNodeSomething>)
   auto make_data_extracter(ExtractNodeSomething&& nds) {
-    using tag = choose_node_function<std::VoidOr<TargetPhylo, SourcePhylo>>;
+    using tag = choose_node_function<mstd::VoidOr<TargetPhylo, SourcePhylo>>;
     return make_data_extracter<SourcePhylo, TargetPhylo>(tag{}, std::forward<ExtractNodeSomething>(nds));
   }
   template<OptionalPhylogenyType SourcePhylo,
@@ -385,7 +385,7 @@ namespace PT {
            class ExtractEdgeData> 
              requires (!NodeFunctionType<ExtractEdgeData>)
   auto make_data_extracter(ExtractNodeSomething&& nds, ExtractEdgeData&& get_edge_data) {
-    using tag = choose_node_function<std::VoidOr<TargetPhylo, SourcePhylo>>;
+    using tag = choose_node_function<mstd::VoidOr<TargetPhylo, SourcePhylo>>;
     return make_data_extracter<SourcePhylo, TargetPhylo>(tag{}, std::forward<ExtractNodeSomething>(nds), std::forward<ExtractEdgeData>(get_edge_data));
   }
 

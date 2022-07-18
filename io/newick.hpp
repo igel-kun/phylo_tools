@@ -28,7 +28,7 @@ namespace PT{
   template<class _Network, class Container = PT::NodeSet>
   std::string get_extended_newick(const _Network& N, const NodeDesc sub_root, Container&& retis_seen = Container()) {
     std::string accu = "";
-    if((N.in_degree(sub_root) <= 1) || !test(retis_seen, sub_root)){
+    if((N.in_degree(sub_root) <= 1) || !mstd::test(retis_seen, sub_root)){
       accu += '(';
       for(const auto& w: N.children(sub_root))
         accu += get_extended_newick(N, w, retis_seen) + ',';
@@ -39,7 +39,7 @@ namespace PT{
     if constexpr (_Network::Node::has_label) accu += N.label(sub_root);
     if(N.in_degree(sub_root) > 1) {
       accu += "#H" + std::to_string(sub_root);
-      append(retis_seen, sub_root);
+      mstd::append(retis_seen, sub_root);
     }
     return accu;
   }

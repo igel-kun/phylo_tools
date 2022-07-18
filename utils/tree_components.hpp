@@ -26,12 +26,12 @@ namespace PT{
     //       we cannot store more than one because we have operations that might replace the second visible leaf by the first,
     //       in which case we cannot distinguish the cases where there's a single visible leaf or more than one
     // NOTE: this has to be declared mutable to allow path-compression to occur
-    mutable std::DisjointSetForest<NodeDesc, NodeDesc> comp_root;
+    mutable mstd::DisjointSetForest<NodeDesc, NodeDesc> comp_root;
 
   public:
     // each node in the component DAG will know its corresponding node in the Network
     using ComponentDAG = DefaultNetwork<NodeDesc>;
-//    using Emplacer = EdgeEmplacerWithHelper<false, ComponentDAG, void, NodeTranslation&, std::IdentityFunction<NodeDesc>>;
+//    using Emplacer = EdgeEmplacerWithHelper<false, ComponentDAG, void, NodeTranslation&, mstd::IdentityFunction<NodeDesc>>;
 #warning "TODO: make those protected and expose only const refs"
 #warning "TODO: store the emplacer instead of the translation here"
     // N_to_comp_DAG translates nodes of N into nodes of the component DAG
@@ -120,7 +120,7 @@ namespace PT{
     // NOTE: the callable argument is applied to the component roots of all node we encounter
     // NOTE: if quit_early is true, we'll return failure once we know there is no consensus
     // NOTE: if recursive is true, we will call ourselves recursively for all reticulation parents
-    template<bool recursive = true, bool set_this_root = !recursive, bool quit_early = set_this_root, class Callback = std::IgnoreFunction<void>>
+    template<bool recursive = true, bool set_this_root = !recursive, bool quit_early = set_this_root, class Callback = mstd::IgnoreFunction<void>>
     NodeDesc component_root_consensus_among_parents(const NodeDesc v, Callback&& callback = Callback()) {
       std::cout << "computing consensus for nodes above "<<v<<"\n";
       NodeDesc consensus = v;
@@ -194,7 +194,7 @@ namespace PT{
         if(!u_node.is_reti()) {
           const auto& pu = u_node.parents();
           // if the parent is a reticulation, register new component root
-          if(pu.empty() || Network::is_reti(front(pu))){
+          if(pu.empty() || Network::is_reti(mstd::front(pu))){
             if(u_node.is_leaf()) {
               trivial_roots.push_back(u);
               set_comp_root(u, u, u);
@@ -204,7 +204,7 @@ namespace PT{
             }
           } else {
             // if the parent is not a reticulation, copy their component root
-            const NodeDesc u_parent = front(pu);
+            const NodeDesc u_parent = mstd::front(pu);
             const NodeDesc vl = u_node.is_leaf() ? u : NoNode;
             set_comp_root(u, u_parent, vl);
             if(vl != NoNode)
@@ -238,7 +238,7 @@ namespace PT{
         const auto& x_children = N.children(x);
         assert(x_children.size() <= 1);
         if(x_children.size() == 1) {
-          x = front(x_children);
+          x = mstd::front(x_children);
         } else return NoNode;
       }
       return x;
@@ -306,7 +306,7 @@ namespace PT{
           assert(v_children.size() == 1);
           std::cout << "\tREACT: "<< v <<" is now suppressible\n";
           // if v is suppressible, we still might have to remove the edge between rt_u and the component root below v in the component DAG
-          const NodeDesc v_child = front(v_children);
+          const NodeDesc v_child = mstd::front(v_children);
           std::cout << "\tREACT: "<< v_child <<"'s comp root is "<< comp_root_of(v_child) << "\n";
           const NodeDesc v_parent = N.parent(v);
           if(!N.is_reti(v_child)) {
@@ -324,13 +324,13 @@ namespace PT{
               NodeVec todo{v};
               NodeVec retis_below;
               while(!todo.empty()) {
-                const NodeDesc x = value_pop(todo);
+                const NodeDesc x = mstd::value_pop(todo);
                 assert(N.in_degree(x) <= 1);
                 for(const NodeDesc y: N.children(x))
                   if(N.out_degree(y) != 0){
                     if(N.in_degree(y) == 1)
-                      append(todo, y);
-                    else append(retis_below, y);
+                      mstd::append(todo, y);
+                    else mstd::append(retis_below, y);
                   }
               }
               std::cout << "retis below: "<<retis_below<<"\n";

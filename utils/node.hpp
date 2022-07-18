@@ -71,39 +71,39 @@ namespace PT{
     const PredContainer& parents() const { return _predecessors; }
     size_t in_degree() const { return predecessors().size(); }
 
-    const Adjacency& any_successor() const { return front(successors()); }
+    const Adjacency& any_successor() const { return mstd::front(successors()); }
     const Adjacency& any_child() const { return any_successor(); }
     const Adjacency& child() const { return any_successor(); }
-    Adjacency& any_successor() { return front(successors()); }
+    Adjacency& any_successor() { return mstd::front(successors()); }
     Adjacency& any_child() { return any_successor(); }
     Adjacency& child() { return any_successor(); }
 
   protected:
     template<class... Args>
-    auto add_successor(Args&&... args) { return append(successors(), std::forward<Args>(args)...); }
+    auto add_successor(Args&&... args) { return mstd::append(successors(), std::forward<Args>(args)...); }
     template<class... Args>
     auto add_child(Args&&... args) { return add_successor(std::forward<Args>(args)...); }
     size_t remove_successor(const NodeDesc n) { return std::erase(successors(), n); }
     size_t remove_child(const NodeDesc n) { return remove_successor(n); }
-    auto remove_any_successor() { return std::value_pop(successors()); }
+    auto remove_any_successor() { return mstd::value_pop(successors()); }
     auto remove_any_child() { return remove_any_successor(); }
 
   public:
-    const Adjacency& any_predecessor() const { return std::front(predecessors()); }
+    const Adjacency& any_predecessor() const { return mstd::front(predecessors()); }
     const Adjacency& any_parent() const { return any_predecessor(); }
     const Adjacency& parent() const { return any_predecessor(); }
-    Adjacency& any_predecessor() { return std::front(predecessors()); }
+    Adjacency& any_predecessor() { return mstd::front(predecessors()); }
     Adjacency& any_parent() { return any_predecessor(); }
     Adjacency& parent() { return any_predecessor(); }
 
   protected:
     template<class... Args>
-    auto add_predecessor(Args&&... args) { return append(predecessors(), std::forward<Args>(args)...); }
+    auto add_predecessor(Args&&... args) { return mstd::append(predecessors(), std::forward<Args>(args)...); }
     template<class... Args>
     auto add_parent(Args&&... args) { return add_predecessor(std::forward<Args>(args)...); }
     size_t remove_predecessor(const NodeDesc n) { return predecessors().erase(n); }
     size_t remove_parent(const NodeDesc n) { return remove_predecessor(n); }
-    void remove_any_predecessor() { std::pop(predecessors()); }
+    void remove_any_predecessor() { mstd::pop(predecessors()); }
     void remove_any_parent() { remove_any_predecessor(); }
 
   public:
@@ -126,26 +126,26 @@ namespace PT{
   protected:
     template<AdjacencyType Adj>
     void replace_parent(const NodeDesc old_parent, Adj&& new_parent) {
-      assert(test(predecessors(), old_parent));
+      assert(mstd::test(predecessors(), old_parent));
       std::replace(predecessors(), old_parent, forward<Adj>(new_parent));
     }
     template<AdjacencyType Adj>
     void replace_child(const NodeDesc old_child, Adj&& new_child) {
-      assert(test(successors(), old_child));
+      assert(mstd::test(successors(), old_child));
       std::replace(successors(), old_child, forward<Adj>(new_child));
     }
 
     void apply_to_subtree(auto&& function, NodeSet& seen) const {
       function(*this);
       for(const NodeDesc v: successors())
-        if(append(seen, v).second){
+        if(mstd::append(seen, v).second){
           node_of<const ProtoNode>(v).apply_to_subtree(function, seen);
         }
     }
     void apply_to_subtree(auto&& function, NodeSet& seen) {
       function(*this);
       for(const NodeDesc v: successors())
-        if(append(seen, v).second)
+        if(mstd::append(seen, v).second)
           node_of<ProtoNode>(v).apply_to_subtree(function, seen);
     }
 
@@ -196,10 +196,10 @@ namespace PT{
 
     OutEdgeContainer out_edges() { return make_outedge_factory<SuccContainer>(get_desc(), _successors); }
     ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(get_desc(), _successors); }
-    Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), front(_successors) }; }
+    Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), mstd::front(_successors) }; }
     InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(get_desc(), _predecessors); }
     ConstInEdgeContainer in_edges() const {return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
-    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_t(), get_desc(), front(_predecessors) }; }
+    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_t(), get_desc(), mstd::front(_predecessors) }; }
 
     // lookup a parent/child
     const Adjacency* find_predecessor(const NodeDesc v) const { return_pointer_lookup(_predecessors, v); }
@@ -297,7 +297,7 @@ namespace PT{
   // if Network is an rvalue ref, then return an rvalue ref to a Node
   // if Network is a simple type, then return a (non-const) lvalue reference to a Node
   template<PhylogenyType Network>
-  using NodeOf = std::copy_cvref_t<Network, typename std::remove_cvref_t<Network>::Node>;
+  using NodeOf = mstd::copy_cvref_t<Network, typename std::remove_cvref_t<Network>::Node>;
   template<PhylogenyType Network>
   NodeOf<Network>& node_of(const NodeDesc x) { return node_of<NodeOf<Network>>(x); }
 
@@ -390,13 +390,13 @@ namespace PT{
       Node& v_node = node_of(v);
       // step 1: remove u-->v & free the edge data
       auto& u_children = u_node.children();
-      const auto uv_iter = find(u_children, v_node.get_desc());
+      const auto uv_iter = mstd::find(u_children, v_node.get_desc());
       if(uv_iter != u_children.end()) {
         u_children.erase(uv_iter);
 
         // step 2: remove v-->u
         auto& v_parents = v_node.parents();
-        const auto vu_iter = find(v_parents, u_node.get_desc());
+        const auto vu_iter = mstd::find(v_parents, u_node.get_desc());
         assert(vu_iter != v_parents.end());
         v_parents.erase(vu_iter);
         DEBUG3(std::cout << "NodeAccess: removed edge "<<u<<" -> "<<v<<"\n");
@@ -446,8 +446,8 @@ namespace PT{
     static constexpr Edge any_in_edge(const NodeDesc u) { return node_of(u).any_in_edge(); }
 
     // NOTE: we expect lookups in the parents set to be faster than in the children set
-    static bool is_edge(const NodeDesc u, const NodeDesc v)  { return test(parents(v), u); }
-    static bool adjacent(const NodeDesc u, const NodeDesc v) { return test(parents(u), v) || test(parents(v), u); }
+    static bool is_edge(const NodeDesc u, const NodeDesc v)  { return mstd::test(parents(v), u); }
+    static bool adjacent(const NodeDesc u, const NodeDesc v) { return mstd::test(parents(u), v) || mstd::test(parents(v), u); }
 
     static Adjacency* find_predecessor(const NodeDesc u, const NodeDesc v) { return node_of(u).find_predecessor(v); }
     static Adjacency* find_parent(const NodeDesc u, const NodeDesc v) { node_of(u).find_predecessor(v); }

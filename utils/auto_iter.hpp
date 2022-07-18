@@ -3,7 +3,7 @@
 
 #include "stl_utils.hpp"
 
-namespace std{
+namespace mstd {
 
 
   template<class Ptr>
@@ -24,14 +24,14 @@ namespace std{
   using InheritableIter = std::conditional_t<std::is_pointer_v<T>, PointerIterWrapper<T>, T>;
 
   template<class Iterator>
-  using CorrespondingEndIter = conditional_t<iter_verifyable<Iterator>, void, Iterator>;
+  using CorrespondingEndIter = std::conditional_t<iter_verifyable<Iterator>, void, Iterator>;
 
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
   template<class Iterator, class _EndIterator = CorrespondingEndIter<Iterator>>
   class _auto_iter: public InheritableIter<Iterator> {
     static_assert(!iter_verifyable<Iterator>);
-    static_assert(!is_void_v<_EndIterator>);
+    static_assert(!std::is_void_v<_EndIterator>);
 
     _EndIterator end_it;
    public:
@@ -47,16 +47,16 @@ namespace std{
 
     // construct from two iterators (begin and end)
     template<class _Iterator, class _EndIter>
-      requires (is_convertible_v<remove_cvref_t<_Iterator>,Iterator> && is_convertible_v<remove_cvref_t<_EndIter>, EndIterator>)
-    constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end): Parent(forward<_Iterator>(_it)), end_it(forward<_EndIter>(_end)) {}
+      requires (std::is_convertible_v<std::remove_cvref_t<_Iterator>,Iterator> && std::is_convertible_v<std::remove_cvref_t<_EndIter>, EndIterator>)
+    constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end): Parent(std::forward<_Iterator>(_it)), end_it(std::forward<_EndIter>(_end)) {}
     // construct from a container
-    template<IterableType Container> requires (is_convertible_v<iterator_of_t<Container>, Iterator>)
+    template<IterableType Container> requires (std::is_convertible_v<iterator_of_t<Container>, Iterator>)
     _auto_iter(Container&& c): _auto_iter(std::begin(c), std::end(c)) {}
     // piecewise construct
     template<class IterTuple, class EndTuple>
-    _auto_iter(const piecewise_construct_t, IterTuple&& iter_init, EndTuple&& end_init):
-      Parent(make_from_tuple<Iterator>(forward<IterTuple>(iter_init))),
-      end_it(make_from_tuple<EndIterator>(forward<EndTuple>(end_init)))
+    _auto_iter(const std::piecewise_construct_t, IterTuple&& iter_init, EndTuple&& end_init):
+      Parent(make_from_tuple<Iterator>(std::forward<IterTuple>(iter_init))),
+      end_it(make_from_tuple<EndIterator>(std::forward<EndTuple>(end_init)))
     {}
 
     // copy and move-construction & assignment are default
@@ -88,14 +88,14 @@ namespace std{
 
     // this is a more thorough form of inheriting Iterator's constructors that also catches copy/move constructing the _auto_iter from an Iterator
     template<class... Args>
-    _auto_iter(Args&&... args): Iterator(forward<Args>(args)...) {}
+    _auto_iter(Args&&... args): Iterator(std::forward<Args>(args)...) {}
 
     static EndIterator get_end() { return GenericEndIterator(); }
   };
 
 
   // add some convenience functions to _auto_iters
-  template<class T, class EndIterator = conditional_t<iter_verifyable<iterator_of_t<T>>, void, iterator_of_t<T>>>
+  template<class T, class EndIterator = std::conditional_t<iter_verifyable<iterator_of_t<T>>, void, iterator_of_t<T>>>
   class auto_iter: public _auto_iter<iterator_of_t<T>, EndIterator> {
     using Parent = _auto_iter<iterator_of_t<T>, EndIterator>;
   public:
@@ -109,7 +109,7 @@ namespace std{
     // copy the elements in the traversal to a container using the 'append()'-function
     template<class _Container>
     _Container& append_to(_Container& c) const { append(c, *this); }
-    template<class _Container = vector<remove_cvref_t<value_type_of_t<T>>>>
+    template<class _Container = std::vector<std::remove_cvref_t<value_type_of_t<T>>>>
     _Container to_container() const { _Container result; append(result, *this); return result; }
   };
 

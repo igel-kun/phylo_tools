@@ -16,7 +16,7 @@
 
 using namespace PT;
 
-static_assert(std::IterableType<std::unordered_map<PT::NodeDesc, uint32_t>>);
+static_assert(mstd::IterableType<std::unordered_map<PT::NodeDesc, uint32_t>>);
 
 using MyNetwork = DefaultLabeledNetwork<>;
 using MyBCC = MyNetwork;
@@ -68,7 +68,7 @@ void check_empty(const T& x) {
 
 void check_insert(auto& container, const auto& item) {
   std::cout << "--("<<item<<")--\n";
-  if(!append(container, item).second)
+  if(!mstd::append(container, item).second)
     throw std::logic_error("double item: " + std::to_string(item));
 }
 
@@ -119,8 +119,8 @@ int main(const int argc, const char** argv) {
     check_insert(bridges, uv);
     const auto& [u, v] = uv.as_pair();
     // the endpoints of each bridge should be cut-nodes or leaves (but not both), but there might be cut-nodes that are not incident with bridges
-    assert(test(cut_nodes, u));
-    assert(test(cut_nodes, v) || test(leaves, v));
+    assert(mstd::test(cut_nodes, u));
+    assert(mstd::test(cut_nodes, v) || mstd::test(leaves, v));
   }
 
   size_t bcc_nodes_total = 0, bcc_edges_total = 0;

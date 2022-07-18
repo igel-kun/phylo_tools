@@ -34,13 +34,13 @@ namespace PT{
     // return the scanwidth of the extension in the network N
     template<PhylogenyType Net>
     sw_t scanwidth() const {
-      return this->empty() ? 0 : *std::max_element(seconds(sw_map<Net>()));
+      return this->empty() ? 0 : *mstd::max_element(mstd::seconds(sw_map<Net>()));
     }
 
     // add a node u and update sw using the set forest representing the current weak components in the extension
     // return the scanwidth of the given node
     template<PhylogenyType Net>
-    sw_t update_sw(const NodeDesc u, std::DisjointSetForest<NodeDesc, sw_t>& weak_components) const {
+    sw_t update_sw(const NodeDesc u, mstd::DisjointSetForest<NodeDesc, sw_t>& weak_components) const {
       try{
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         const auto& u_node = node_of<Net>(u);
@@ -61,11 +61,11 @@ namespace PT{
     }
 
     // get mapping of nodes to their scanwidth in the extension
-    template<PhylogenyType Net, std::ContainerType _Container>
+    template<PhylogenyType Net, mstd::ContainerType _Container>
     void sw_map(_Container& out) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
-      std::DisjointSetForest<NodeDesc, sw_t> weak_components;
-      for(const NodeDesc u: *this) append(out, u, update_sw<Net>(u, weak_components));
+      mstd::DisjointSetForest<NodeDesc, sw_t> weak_components;
+      for(const NodeDesc u: *this) mstd::append(out, u, update_sw<Net>(u, weak_components));
     }
 
     template<PhylogenyType Net, NodeMapType _Container = std::unordered_map<NodeDesc, sw_t>>

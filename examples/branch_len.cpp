@@ -49,7 +49,7 @@ int main(const int argc, const char** argv)
   std::ifstream in(options[""][0]);
   MyNetwork N(read_network(in));
 
-  if(test(options, "-v"))
+  if(mstd::test(options, "-v"))
     std::cout << N << std::endl;
  
   for(const auto uv: N.edges_preorder()){

@@ -18,9 +18,9 @@ namespace PT{
            StrictPhylogenyType Component = _Network,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            DataExtracterType   _Extracter = DataExtracter<_Network>>
-  class BiconnectedComponentIter: public CutIter<_Network, CO_BCC, std::iter_traits_from_reference<NodeDesc>> {
-    using Parent = CutIter<_Network, CO_BCC, std::iter_traits_from_reference<NodeDesc>>;
-    using Traits = std::iter_traits_from_reference<Component&>;
+  class BiconnectedComponentIter: public CutIter<_Network, CO_BCC, mstd::iter_traits_from_reference<NodeDesc>> {
+    using Parent = CutIter<_Network, CO_BCC, mstd::iter_traits_from_reference<NodeDesc>>;
+    using Traits = mstd::iter_traits_from_reference<Component&>;
   public:
     using Network = _Network;
     using Node = typename Network::Node;
@@ -38,7 +38,7 @@ namespace PT{
     // NOTE: for each cut node, we will add each of its child nodes into a disjoint set forest
     //       and then merge children v & w when they are in the same biconnected component
     // NOTE: we will use the CutNodeIter's interface to say when two siblings are in the same component
-    std::auto_iter<NodeVec> child_comp_iter;
+    mstd::auto_iter<NodeVec> child_comp_iter;
     NodeSet seen;
 
     // storing a pointer to the output allows us to not compute the actual component up until the point where operator*() is called
@@ -51,7 +51,7 @@ namespace PT{
     // construct a vertical biconnected component containing the arc uv and store it in 'output'
     //NOTE: remember to set the root of the output component after calling this!
     void make_component_along(const NodeDesc rt, const NodeDesc v, Emplacer& output_emplacer) {
-      if(append(seen, v).second){
+      if(mstd::append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v <<'\n');
         Node& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
         for(auto uv: v_node.in_edges()) output_emplacer.emplace_edge(uv);
@@ -174,7 +174,7 @@ namespace PT{
            PhylogenyType Component = _Network,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            DataExtracterType   _Extracter = DataExtracter<_Network>>
-  using BiconnectedComponents = std::IterFactory<BiconnectedComponentIter<_Network, Component, OldToNewTranslation, _Extracter>>;
+  using BiconnectedComponents = mstd::IterFactory<BiconnectedComponentIter<_Network, Component, OldToNewTranslation, _Extracter>>;
 
   // deduce parameters from arguments
   // NOTE: if you pass a PhylogenyType as first argument, be sure that it's the same as Network since, otherwise, a temporary copy will be made :(

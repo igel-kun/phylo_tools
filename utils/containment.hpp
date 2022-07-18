@@ -28,7 +28,7 @@ namespace PT {
 
     using HostEdge = typename Host::Edge;
     using NodeList = _NodeList<host_is_multi_labeled>;
-    using LM_Iter = std::iterator_of_t<LabelMatching>;
+    using LM_Iter = mstd::iterator_of_t<LabelMatching>;
 
     Host host;
     Guest guest;
@@ -62,16 +62,16 @@ namespace PT {
       guest{tc.guest, trans},
       HG_label_match{tc.HG_label_match, [&](const auto& other_pair){
         LabelMatchingPair result;
-        for(const NodeDesc& x: other_pair.first) append(result.first, trans.at(x));
-        for(const NodeDesc& y: other_pair.second) append(result.second, trans.at(y));
+        for(const NodeDesc& x: other_pair.first) mstd::append(result.first, trans.at(x));
+        for(const NodeDesc& y: other_pair.second) mstd::append(result.second, trans.at(y));
         return result;
       }},
       comp_info{host}, // rebuilding the component info is not much more expensive than translating the existing one
       reduction_man{*this},
       failed{tc.failed}
     {
-      assert(test(trans, u));
-      assert(test(trans, v));
+      assert(mstd::test(trans, u));
+      assert(mstd::test(trans, v));
      
       std::cout << "host:\n" << host << "\nguest:\n" << guest << "\ncomp-DAG:\n";
       comp_info.comp_DAG.print_subtree(std::cout, [](const NodeDesc x){ return std::to_string(x); });
@@ -248,14 +248,14 @@ namespace PT {
             assert(!sub_containment.HG_label_match.empty());
             // step 4: replace the subhost and subguest by a new leaf in HG_label_match and continue checking containment
             // step 4a: find a new label
-            const auto& new_label = front(sub_containment.HG_label_match).first;
+            const auto& new_label = mstd::front(sub_containment.HG_label_match).first;
             assert(!HG_label_match.contains(new_label));
             std::cout << sub_root << " gets the label "<<new_label<<"\n";
             // step 4b: give the label to both guestLCA and sub_host 
             Host::label(sub_root) = new_label;
             Guest::label(guestLCA) = new_label;
             // step 4c: register the triple in HG_label_match
-            append(HG_label_match, new_label, sub_root, guestLCA);
+            mstd::append(HG_label_match, new_label, sub_root, guestLCA);
           } else failed = true;
           return true;
         }
@@ -273,9 +273,9 @@ namespace PT {
       // step 1: for each leaf z that does not see a non-leaf-component root, get the reticulation above z (if z does not have
       // a reticulation parent, then cherry reduction must be applicable to it)
       std::priority_queue<BranchInfo, std::vector<BranchInfo>, std::greater<BranchInfo>> branching_candidates;
-      for(const auto& HG_leaf_pair: seconds(HG_label_match)){
+      for(const auto& HG_leaf_pair: mstd::seconds(HG_label_match)){
         assert(HG_leaf_pair.first.size() == 1);
-        const NodeDesc u = front(HG_leaf_pair.first);
+        const NodeDesc u = mstd::front(HG_leaf_pair.first);
         const NodeDesc rt_u = comp_info.comp_root_of(u);
         if((rt_u == NoNode) || (rt_u == u)) {
           std::cout << u << " sees noone\n" << u <<"'s parents are "<<parents_of<Host>(u)<<"\n";
@@ -336,7 +336,7 @@ namespace PT {
       // step 1: remove the "false" parents and clean-up retis and suppressible nodes
       auto& u_parents = host.parents(u);
       while(u_parents.size() > 1) {
-        NodeDesc pu = front(u_parents);
+        NodeDesc pu = mstd::front(u_parents);
         if(pu == v) pu = *(std::next(u_parents.begin()));
         reduction_man.remove_edge_in_host(pu, u);
       }

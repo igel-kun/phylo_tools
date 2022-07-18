@@ -14,7 +14,7 @@ namespace PT {
            StrictPhylogenyType _TargetPhylo,
            OptionalPhylogenyType _SourcePhylo = void,
            NodeTranslationType _OldToNewTranslation = NodeTranslation>
-  struct EdgeEmplacementHelper: std::optional_tuple<std::conditional_t<_track_roots, NodeSet, void>> {
+  struct EdgeEmplacementHelper: mstd::optional_tuple<std::conditional_t<_track_roots, NodeSet, void>> {
     using SourcePhylo = _SourcePhylo;
     using TargetPhylo = _TargetPhylo;
     using OldToNewTranslation = _OldToNewTranslation;
@@ -40,7 +40,7 @@ namespace PT {
 
     template<class... Args> requires (track_roots)
     void add_an_edge(const NodeDesc u, const NodeDesc v, Args&&... args) {
-      my_erase(root_candidates(), v);
+      mstd::erase(root_candidates(), v);
       N.add_edge(u,v, std::forward<Args>(args)...);
     }
  
@@ -61,7 +61,7 @@ namespace PT {
         else v = N.create_node();
         const bool success = N.add_child(u, v, std::forward<Args>(args)...).second;
         assert(success);
-        if constexpr (track_roots) my_erase(root_candidates(), v);
+        if constexpr (track_roots) mstd::erase(root_candidates(), v);
         return v;
       } else return create_root(std::forward<Data>(data));
     }
@@ -72,7 +72,7 @@ namespace PT {
         const NodeDesc v = N.create_node();
         const bool success = N.add_child(u, v, std::forward<Args>(args)...).second;
         assert(success);
-        if constexpr (track_roots) my_erase(root_candidates(), v);
+        if constexpr (track_roots) mstd::erase(root_candidates(), v);
         return v;
       } else return create_root();
     }
@@ -81,17 +81,17 @@ namespace PT {
     NodeDesc create_root(Args&&... args) {
       N.count_node();
       const NodeDesc v = N.create_node(std::forward<Args>(args)...);
-      if constexpr (track_roots) append(root_candidates(), v);
+      if constexpr (track_roots) mstd::append(root_candidates(), v);
       return v;
     }
 
     bool mark_root(const NodeDesc r) {
       assert(N.in_degree(r) == 0);
       assert(old_to_new.contains(r));
-      return append(N._roots, old_to_new.at(r)).second;
+      return mstd::append(N._roots, old_to_new.at(r)).second;
     }
     bool mark_root_directly(const NodeDesc r) {
-      return append(N._roots, r).second;
+      return mstd::append(N._roots, r).second;
     }
 
     void clear() {
@@ -107,7 +107,7 @@ namespace PT {
         DEBUG3(std::cout << "committing roots: "<<root_candidates()<<"\n");
         for(const NodeDesc r: root_candidates())
           if(N.in_degree(r) == 0)
-            append(N._roots, r);
+            mstd::append(N._roots, r);
         root_candidates().clear();
       }
     }

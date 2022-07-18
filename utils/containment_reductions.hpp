@@ -34,7 +34,7 @@ namespace PT {
 
     NodeSet node_queue;
     void add(const NodeDesc x) {
-      append(node_queue, x);
+      mstd::append(node_queue, x);
       //std::cout << "adding node "<<x<<" to queue, now: "<<node_queue<<"\n";
     }
     
@@ -136,7 +136,7 @@ namespace PT {
         std::cout << "removing orphans from "<<node_queue<<" in\n";
         std::cout << host <<"\n";
         std::cout << "comp-roots:\n"; for(const NodeDesc z: manager.contain.host.nodes()) std::cout << z <<": " << manager.contain.comp_info.comp_root_of(z) <<'\n';
-        const NodeDesc v = std::value_pop(node_queue);
+        const NodeDesc v = mstd::value_pop(node_queue);
         std::cout << "next orphan: "<<v<<" with comp root "<<comp_root_of(v)<<"\n";
         assert(host.label(v).empty());
         assert(host.out_degree(v) <= 1);
@@ -184,7 +184,7 @@ namespace PT {
       bool result = false;
       while(!node_queue.empty()){
         std::cout << "getting next node from "<<node_queue<<"\n";
-        const NodeDesc x = value_pop(node_queue);
+        const NodeDesc x = mstd::value_pop(node_queue);
         std::cout << "trying to contract reticulation "<<x<<'\n';
         // NOTE: please be sure that the nodes in the node_queue really exist in the host (have not been removed by other reductions)!
         if((manager.contain.host.out_degree(x) == 1) && contract_reti(x))
@@ -217,7 +217,7 @@ namespace PT {
     bool apply() {
       std::cout << "\tTRIANGLE: applying reduction...\n";
       while(!node_queue.empty()){
-        if(triangle_rule(value_pop(node_queue)))
+        if(triangle_rule(mstd::value_pop(node_queue)))
           return true;
       }
       return false;
@@ -278,7 +278,7 @@ namespace PT {
     bool apply() {
       std::cout << "\tCHERRY: applying reduction...\n";
       while(!node_queue.empty()){
-        if(simple_cherry_reduction(value_pop(node_queue)))
+        if(simple_cherry_reduction(mstd::value_pop(node_queue)))
           return true;
       }
       return false;
@@ -328,12 +328,12 @@ namespace PT {
           result.clear();
           break;
         }
-        append(result, x_node.label());
+        mstd::append(result, x_node.label());
       }
       return result;
     }
 
-    bool simple_cherry_reduction_from(const std::iterator_of_t<LabelMatching>& uv_label_iter) {
+    bool simple_cherry_reduction_from(const mstd::iterator_of_t<LabelMatching>& uv_label_iter) {
       std::cout << "\tCHERRY: checking label matching "<<*uv_label_iter<<"\n";
       const auto& UV = uv_label_iter->second;
       const auto& [U, V] = UV;
@@ -369,7 +369,7 @@ namespace PT {
                 std::cout << "\tCHERRY: using visible-leaf "<<vis_leaf<<" with label "<<vis_label<<", seen = "<<seen<<"\n";
                 const auto seen_iter = seen.find(vis_label);
                 if(seen_iter == seen.end()) {
-                  append(edge_removals, x);
+                  mstd::append(edge_removals, x);
                 } else seen.erase(seen_iter);
               }
             }
@@ -436,7 +436,7 @@ namespace PT {
       // step 2: get the highest ancestor v of vis_leaf in T s.t. T_v is still displayed by N_u
       const auto& matched_leaves = uv_label_iter->second.second;
       assert(matched_leaves.size() == 1);
-      const NodeDesc visible_leaf_in_guest = front(matched_leaves);
+      const NodeDesc visible_leaf_in_guest = mstd::front(matched_leaves);
       std::cout << "finding highest node displaying "<<visible_leaf_in_guest<<"\n";
       const NodeDesc v = tree_comp_display.highest_displayed_ancestor(visible_leaf_in_guest);
       std::cout << v << " is the highest displayed ancestor (or it's the root) - label: "<<vlabel<<"\n";
@@ -461,7 +461,7 @@ namespace PT {
       const auto& host = manager.contain.host;
       const NodeDesc u_in_cDAG = manager.contain.comp_info.N_to_comp_DAG.at(u);
       for(const NodeDesc cDAG_v: ComponentDAG::children(u_in_cDAG)) {
-        if(const NodeDesc v = ComponentDAG::data(cDAG_v); test(half_eligible, v)) {
+        if(const NodeDesc v = ComponentDAG::data(cDAG_v); mstd::test(half_eligible, v)) {
           std::cout << "next child: "<<v<<"\n";
           // to test if the u-v-path in host is unique, we'll look at all reticulations above v in host and check if we see u more than once
           assert(host.in_degree(v) == 1);
@@ -469,13 +469,13 @@ namespace PT {
           if(r != u) { // if v is also the child of u in host (!) then the u-v-path is unqiue
             NodeVec retis_above{r};
             while(!retis_above.empty()){
-              r = value_pop(retis_above);
+              r = mstd::value_pop(retis_above);
               std::cout << "exploring reti "<<r<<" ("<<manager.contain.comp_info.comp_root_of(r)<<") above "<<v<<"\n";
               if(host.in_degree(r) <= 1) {
                 assert(comp_root_of(r) != NoNode);
                 num_paths[comp_root_of(r)][v]++;
                 std::cout << "registered "<< comp_root_of(r) <<"--"<<v<<" path. Now, "<<u<<" has "<<num_paths[comp_root_of(r)][v]<<" of them\n";
-              } else append(retis_above, host.parents(r));
+              } else mstd::append(retis_above, host.parents(r));
             }
             assert(u_paths.contains(v));
             if(u_paths.at(v) > 1) return false; // if we ended up counting more than one path, return non-eligibility
@@ -505,7 +505,7 @@ namespace PT {
           if(is_half_eligible(u, num_paths, half_eligible)) {
             if(visible_leaf_of(u) == NoNode) {
               std::cout << u << " is 1/2-eligible\n";
-              append(half_eligible, u);
+              mstd::append(half_eligible, u);
             } else return u;
           } else std::cout << u<< " not eligible\n";
         }
@@ -556,12 +556,12 @@ namespace PT {
         if(HG_match_iter != manager.contain.HG_label_match.end()) {
           const auto& host_matched = HG_match_iter->second.first;
           assert(host_matched.size() == 1);
-          const NodeDesc host_l = front(host_matched);
-          append(host_leaves, host_l);
+          const NodeDesc host_l = mstd::front(host_matched);
+          mstd::append(host_leaves, host_l);
           Host::label(host_l).clear();
           manager.contain.HG_label_match.erase(HG_match_iter);
         }
-        append(to_suppress, l);
+        mstd::append(to_suppress, l);
       }
       for(NodeDesc l: to_suppress) {
         std::cout << "SUPPRESSING "<<l<<" in guest...\n";
@@ -605,14 +605,14 @@ namespace PT {
 
     // after having identified a node host_u in the host that will be used to display the subtree below guest_v, remove the subtrees below them
     //NOTE: xy_label_iter points to the label-pair that will be spared (u and v will end up receiving this label)
-    void match_nodes(const NodeDesc host_u, const NodeDesc guest_v, const std::iterator_of_t<LabelMatching>& xy_label_iter) {
+    void match_nodes(const NodeDesc host_u, const NodeDesc guest_v, const mstd::iterator_of_t<LabelMatching>& xy_label_iter) {
       // step 3a: prune guest and remove nodes with label below v (in guest) from both host and guest - also remove their label entries in HG_label_match
       const auto& vlabel = xy_label_iter->first;
       const auto& [host_matched, guest_matched] = xy_label_iter->second;
       assert(host_matched.size() == 1);
       assert(guest_matched.size() == 1);
-      const NodeDesc host_x = front(host_matched);
-      const NodeDesc guest_y = front(guest_matched);
+      const NodeDesc host_x = mstd::front(host_matched);
+      const NodeDesc guest_y = mstd::front(guest_matched);
       const auto& host = manager.contain.host;
 
       std::cout << "\tMATCH: marking "<<guest_v<<" (guest) & "<<host_u<<" (host) with label "<<vlabel<<"\n";
@@ -687,7 +687,7 @@ namespace PT {
 
     void mark_one(const NodeDesc u, const P_contain pc) {
       std::cout << "marking "<<u<<" as "<<rel_to_string[static_cast<int>(pc)]<<"\n";
-      append(p_rel, u, pc);
+      mstd::append(p_rel, u, pc);
     }
     void mark_all(const NodeVec& v, const P_contain pc) {
       for(const NodeDesc u: v) mark_one(u, pc);
@@ -735,8 +735,8 @@ namespace PT {
     bool apply() {
       std::cout << "\texCHERRY: applying reduction...\n";
       while(!node_queue.empty()){
-        std::cout << "value-popping "<<front(node_queue)<<"\n";
-        const NodeDesc u = value_pop(node_queue);
+        std::cout << "value-popping "<<mstd::front(node_queue)<<"\n";
+        const NodeDesc u = mstd::value_pop(node_queue);
         std::cout << "ex-cherry on node "<<u<<"\n";
         const auto& label_match = manager.find_label_in_host(u);
         std::cout << "using label-match " << *label_match << "\n";
@@ -760,11 +760,11 @@ namespace PT {
         for(const NodeDesc z: Host::parents(bottom))
           if(next_parent(z, bottom)) {
             parent = z;
-          } else append(removals, z, bottom);
+          } else mstd::append(removals, z, bottom);
         // step 2: test the parent
-        if((parent != NoNode) && !std::test(top, parent)) {
+        if((parent != NoNode) && !mstd::test(top, parent)) {
           // step 3: mark outgoing edges of the parent for removal
-          for(const NodeDesc z: Host::children(parent)) if(bottom != z) append(removals, parent, z);
+          for(const NodeDesc z: Host::children(parent)) if(bottom != z) mstd::append(removals, parent, z);
           bottom = parent;
         } else break;
       }
@@ -828,7 +828,7 @@ namespace PT {
               mark_all(current_nodes, construct_P ? P_contain::in_P : P_contain::not_below_P);
               if constexpr (construct_P) {
                 assert(cherry_leaves);
-                if(test(*cherry_leaves, vl))
+                if(mstd::test(*cherry_leaves, vl))
                   mark_one(x, P_contain::in_P);
               }
               return false;
@@ -867,7 +867,7 @@ namespace PT {
             } else result = NoNode;
             break;
           default:
-            append(to_remove, px, x);
+            mstd::append(to_remove, px, x);
         }
       }
       // if we found no parent that is in or below P, then host cannot display guest
@@ -885,7 +885,7 @@ namespace PT {
         if(Host::out_degree(y) > 1) {
           for(const NodeDesc cy: Host::children(y))
             if(cy != child_except)
-              append(to_remove, y, cy);
+              mstd::append(to_remove, y, cy);
         }
         // step 2: climb until we see anyone in_P or below_P
         std::cout << "\texCHERRY: finding rev paths from "<<y<<" into P\n";
@@ -903,14 +903,14 @@ namespace PT {
       } else return false;
     }
 
-    bool extended_cherry_reduction_from(const std::iterator_of_t<LabelMatching>& uv_label_iter) {
+    bool extended_cherry_reduction_from(const mstd::iterator_of_t<LabelMatching>& uv_label_iter) {
       std::cout << "\texCHERRY: checking label matching "<<*uv_label_iter<<"\n";
       const auto& UV = uv_label_iter->second;
       const auto& [U, V] = UV;
       assert(U.size() == 1);
       assert(V.size() == 1);
-      const NodeDesc u = front(U);
-      const NodeDesc v = front(V);
+      const NodeDesc u = mstd::front(U);
+      const NodeDesc v = mstd::front(V);
       const auto [pu, pv, success] = label_matching_sanity_check(u, v);
      
       LabelSet cherry_labels = get_labels_of_children(pv);
@@ -925,9 +925,9 @@ namespace PT {
           assert(iter != manager.contain.HG_label_match.end());
           const auto& host_leaves = iter->second.first;
           assert(host_leaves.size() == 1);
-          const NodeDesc x = front(host_leaves);
+          const NodeDesc x = mstd::front(host_leaves);
           assert(Host::label(x) == label);
-          if(x != u) append(cherry_leaves, x);
+          if(x != u) mstd::append(cherry_leaves, x);
         }
         // step 1:  move up from u to emplace the set P of unstable nodes above u
         unstable_above<true>(u, u, NoNode, &cherry_leaves);
@@ -1022,7 +1022,7 @@ namespace PT {
 
         // if v is now suppressible, then contract v onto its child
         if(Host::in_degree(v) == 1) {
-          my_erase(triangle_rule.node_queue, u);
+          mstd::erase(triangle_rule.node_queue, u);
           if(Host::label(v).empty()) 
             clean_orphan_later(v);
         }
@@ -1045,7 +1045,7 @@ namespace PT {
           remove_edges_to_retis_below(v);
       for(const NodeDesc v: u_children)
         if(host.is_reti(v))
-          append(to_delete, v);
+          mstd::append(to_delete, v);
       std::cout << "removing edges from "<<u<<" to nodes in "<<to_delete<<"\n";
       for(const NodeDesc v: to_delete)
         remove_edge_in_host(u, v);
@@ -1137,11 +1137,11 @@ namespace PT {
     void clean_up_now(const bool recursive = true, const bool apply_reti_reduction = true) {
       while(!to_clean.empty()){
         std::cout << "remaining queue to clean: "<<to_clean<<'\n';
-        clean_up_node(value_pop(to_clean), recursive, apply_reti_reduction);
+        clean_up_node(mstd::value_pop(to_clean), recursive, apply_reti_reduction);
       }
     }
     void clean_up_later(const NodeDesc u) {
-      append(to_clean, u);
+      mstd::append(to_clean, u);
       std::cout << "cleaning "<<u<<" later, queue is now "<<to_clean<<"\n";
     }
 */
@@ -1156,11 +1156,11 @@ namespace PT {
       return contain.HG_label_match.find(contain.host.label(u));
     }
     void remove_from_queues(const NodeDesc u) {
-      my_erase(reti_merge.node_queue, u);
-      my_erase(triangle_rule.node_queue, u);
-      my_erase(remove_orphans.node_queue, u);
-      my_erase(cherry_rule.node_queue, u);
-      my_erase(extended_cherries.node_queue, u);
+      mstd::erase(reti_merge.node_queue, u);
+      mstd::erase(triangle_rule.node_queue, u);
+      mstd::erase(remove_orphans.node_queue, u);
+      mstd::erase(cherry_rule.node_queue, u);
+      mstd::erase(extended_cherries.node_queue, u);
     }
 
     void apply() {
@@ -1176,7 +1176,7 @@ namespace PT {
       reti_merge.init_queue();
       reti_merge.apply();
 
-      append(triangle_rule.node_queue, contain.host.retis());
+      mstd::append(triangle_rule.node_queue, contain.host.retis());
       // if, at some point, there are only 2 leaves left, then simply say 'yes'
       while(!contain.failed && (contain.HG_label_match.size() > 2)) {
         std::cout << "\n === restart rule-application ===\n";

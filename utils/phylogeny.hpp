@@ -74,7 +74,7 @@ namespace PT {
     bool is_forest() const { return _num_nodes == _num_edges + _roots.size(); }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return _num_edges; }
-    NodeDesc root() const { return front(_roots); }
+    NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
     bool has_path(const NodeDesc x, NodeDesc y) const {
@@ -83,12 +83,12 @@ namespace PT {
       while(1) {
         do {
           if(LIKELY(!todo.empty())) {
-            y = std::value_pop(todo);
+            y = mstd::value_pop(todo);
           } else return false;
-        } while(test(seen, y));
+        } while(mstd::test(seen, y));
         if(LIKELY(y != x)) {
-          append(todo, this->parents(y));
-          append(seen, y);
+          mstd::append(todo, this->parents(y));
+          mstd::append(seen, y);
         } else return true;
       }
       return false;
@@ -143,7 +143,7 @@ namespace PT {
     static constexpr bool is_forest() { return true; }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - _roots.size(); }
-    NodeDesc root() const { return front(_roots); }
+    NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
     //! return whether there is a directed path from x to y in the tree
@@ -206,9 +206,9 @@ namespace PT {
     // create a node in the void
     // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
     template<class... Args>
-      requires ((sizeof...(Args) != 1) || (!NodeFunctionType<std::FirstTypeOf<Args...>> && !DataExtracterType<std::FirstTypeOf<Args...>>))
+      requires ((sizeof...(Args) != 1) || (!NodeFunctionType<mstd::FirstTypeOf<Args...>> && !DataExtracterType<mstd::FirstTypeOf<Args...>>))
     static constexpr NodeDesc create_node(Args&&... args) {
-      DEBUG5(std::cout << "creating node of type "<<std::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
+      DEBUG5(std::cout << "creating node of type "<<mstd::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
       Node* result = new Node(std::forward<Args>(args)...);
       DEBUG5(std::cout << "created node at " << result << " (" << reinterpret_cast<uintptr_t>(result) << ")\n");
       return reinterpret_cast<uintptr_t>(result);
@@ -320,7 +320,7 @@ namespace PT {
     bool remove_edge(const NodeDesc u, const NodeDesc v) {
       const int result = Parent::remove_edge(u,v);
       count_edge(-result);
-      if(in_degree(v) == 0) append(_roots, v);
+      if(in_degree(v) == 0) mstd::append(_roots, v);
       return result;
     }
 
@@ -335,7 +335,7 @@ namespace PT {
         case 0: {
           auto& v_parents = v_node.parents();
           while(!v_parents.empty()) {
-            const NodeDesc u = front(v_parents);
+            const NodeDesc u = mstd::front(v_parents);
             remove_edge_no_cleanup(u,v);
             remove_upwards(u);
           }
@@ -373,7 +373,7 @@ namespace PT {
       if(result.second) {
 				count_node();
         erase(_roots, v);
-        append(_roots, u);
+        mstd::append(_roots, u);
       }
       return result;
     }
@@ -381,7 +381,7 @@ namespace PT {
     // this marks a node as new root
     bool mark_root(const NodeDesc u) {
       assert(in_degree(u) == 0);
-      const bool result = append(_roots, u).second;
+      const bool result = mstd::append(_roots, u).second;
       return result;
     };
 
@@ -413,7 +413,7 @@ namespace PT {
     template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_child(const NodeDesc source,
                         const Adj& target,
-                        const std::iterator_of_t<typename Node::SuccContainer>& w_iter,
+                        const mstd::iterator_of_t<typename Node::SuccContainer>& w_iter,
                         DataMaker&& make_data = DataMaker())
     {
       assert(w_iter != children(source).end());
@@ -423,11 +423,11 @@ namespace PT {
       auto& w_parents = parents(w);
       children(source).erase(w_iter);
 
-      const auto sw_iter = find(w_parents, source);
+      const auto sw_iter = mstd::find(w_parents, source);
       assert(sw_iter != w_parents.end()); // since w_iter exists, sw_iter should exist!
       
       if constexpr (check_uniqueness) {
-        if(test(w_parents, target)) {
+        if(mstd::test(w_parents, target)) {
           w_parents.erase(sw_iter);
           count_edge(-1);
           return false;
@@ -438,7 +438,7 @@ namespace PT {
         // set the target in-place
         sw_iter->nd = target;
         // insert a new adjacency into target's children
-        const bool success = append(children(target), w, std::apply_or_pass2(make_data, target, *sw_iter)).second;
+        const bool success = mstd::append(children(target), w, mstd::apply_or_pass2(make_data, target, *sw_iter)).second;
         // if we could not append w as child of target (that is, the edge target->w already existed) then the edge source->w should be deleted
         if(!success){
           w_parents.erase(sw_iter);
@@ -448,12 +448,12 @@ namespace PT {
       } else { // if the PredStorage cannot be modified in place, we'll have to remove the source_to_w adjacency, change it, and reinsert it
         // step 1: move EdgeData out of the parents-storage
         // step 2: merge EdgeData with that passed with target
-        Adjacency source_to_w = apply_or_pass2(make_data, target, std::value_pop(w_parents, sw_iter));
+        Adjacency source_to_w = apply_or_pass2(make_data, target, mstd::value_pop(w_parents, sw_iter));
         // step 3: put back the Adjacency with changed node
-        const auto [wpar_iter, success] = append(w_parents, static_cast<const NodeDesc>(target), std::move(source_to_w));
+        const auto [wpar_iter, success] = mstd::append(w_parents, static_cast<const NodeDesc>(target), std::move(source_to_w));
 
         if(success) {
-          const bool target_success = append(children(target), w, *wpar_iter).second;
+          const bool target_success = mstd::append(children(target), w, *wpar_iter).second;
           assert(target_success);
           return true;
         } else {
@@ -468,14 +468,14 @@ namespace PT {
                         const NodeDesc w,
                         DataMaker&& make_data = DataMaker())
     {
-      return transfer_child<check_uniqueness>(source, target, find(children(source), w), make_data);
+      return transfer_child<check_uniqueness>(source, target, mstd::find(children(source), w), make_data);
     }
 #warning "TODO: rethink parameter ordering - maybe have w first, then source then target"
     template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_child(const Adj& target, const NodeDesc w, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(w) == 1);
       const NodeDesc source = parent(w);
-      return transfer_child<check_uniqueness>(source, target, find(children(source), w), make_data);
+      return transfer_child<check_uniqueness>(source, target, mstd::find(children(source), w), make_data);
     }
     template<class... Args>
     bool transfer_child_unique(Args&&... args) {
@@ -501,7 +501,7 @@ namespace PT {
         } else result += !transfer_child<check_uniqueness>(source, target, w_iter, make_data);
       }
       // restore target in the children of the source
-      if(tmp != NoNode) append(s_children, std::move(tmp));
+      if(tmp != NoNode) mstd::append(s_children, std::move(tmp));
       return result;
     }
     template<class... Args>
@@ -512,7 +512,7 @@ namespace PT {
     template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     bool transfer_parent(const NodeDesc source,
                          const Adj& target,
-                         const std::iterator_of_t<typename Node::PredContainer>& w_iter,
+                         const mstd::iterator_of_t<typename Node::PredContainer>& w_iter,
                          DataMaker&& make_data = DataMaker())
     {
 #warning "TODO: use inplace_modifyable to improve performance"
@@ -527,19 +527,19 @@ namespace PT {
 
       auto& t_parents = parents(target);
       if constexpr (check_uniqueness) {
-        if(test(t_parents, w)) {
+        if(mstd::test(t_parents, w)) {
           count_edge(-1);
-          my_erase(w_children, source);
+          mstd::erase(w_children, source);
           return false;
         }
       }
       // step 1: move Adjacency of w-->source out of the children-storage of w
-      Adjacency ws = std::apply_or_pass2(make_data, target, std::value_pop(w_children, source));
+      Adjacency ws = mstd::apply_or_pass2(make_data, target, mstd::value_pop(w_children, source));
       // step 3: put back the Adjacency with changed node
-      const auto [wc_iter, success] = append(w_children, static_cast<NodeDesc>(target), std::move(ws));
+      const auto [wc_iter, success] = mstd::append(w_children, static_cast<NodeDesc>(target), std::move(ws));
       // step 4: add w as a new parent of the target
       if(success) {
-        const bool t_success = append(t_parents, w, *wc_iter).second;
+        const bool t_success = mstd::append(t_parents, w, *wc_iter).second;
         assert(t_success);
         return true;
       } else {
@@ -555,7 +555,7 @@ namespace PT {
                          DataMaker&& make_data = DataMaker())
     {
       Node& source_node = node_of(source);
-      auto w_iter = find(source_node.parents(), w);
+      auto w_iter = mstd::find(source_node.parents(), w);
       assert(w_iter != source_node.parents().end());
       return transfer_parent<check_uniqueness>(source, target, w_iter, make_data);
     }
@@ -563,7 +563,7 @@ namespace PT {
     bool transfer_parent(const Adj& target, const NodeDesc w, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(w) == 1);
       const NodeDesc source = child(w);
-      return transfer_parent<check_uniqueness>(source, target, find(parents(source), w), make_data);
+      return transfer_parent<check_uniqueness>(source, target, mstd::find(parents(source), w), make_data);
     }
     template<class... Args>
     bool transfer_parent_unique(Args&&... args) {
@@ -590,7 +590,7 @@ namespace PT {
           } else break;
         } else result += !transfer_parent<check_uniqueness>(source, target, w_iter, make_data);
       }
-      if(tmp != NoNode) append(s_parents, std::move(tmp));
+      if(tmp != NoNode) mstd::append(s_parents, std::move(tmp));
       return result;
     }
     template<class... Args>
@@ -608,7 +608,7 @@ namespace PT {
       auto iter = v_parents.end();
       for(auto i = v_parents.begin(); i != v_parents.end(); ++i) {
         if(*i != target) {
-          my_erase(children(*i), v);
+          mstd::erase(children(*i), v);
         } else iter = i;
       }
       // step 2: clear v_parents and count edges
@@ -662,7 +662,7 @@ namespace PT {
     template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     size_t contract_up(const NodeDesc v, Adj&& u_adj, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(v) == 1);
-      assert(u_adj == front(parents(v)));
+      assert(u_adj == mstd::front(parents(v)));
       const NodeDesc u = u_adj;
       const size_t result = transfer_children<check_uniqueness>(v, std::move(u_adj), make_data);
       // finally, remove the edge uv and free v's storage
@@ -673,7 +673,7 @@ namespace PT {
     template<bool check_uniqueness = false, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
     size_t contract_up(const NodeDesc v, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(v) == 1);
-      return contract_up<check_uniqueness>(v, front(parents(v)), make_data);
+      return contract_up<check_uniqueness>(v, mstd::front(parents(v)), make_data);
     }
 
     template<bool check_uniqueness = false, EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
@@ -693,13 +693,13 @@ namespace PT {
     template<bool check_uniqueness = false, AdjacencyType Adj, class DataMaker = bool>
     size_t contract_down(const NodeDesc u, Adj&& v_adj, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(u) == 1);
-      assert(v_adj == front(children(u)));
+      assert(v_adj == mstd::front(children(u)));
       const NodeDesc v = v_adj;
       size_t result = 0;
       if(is_root(u)) {
-        const auto iter = find(_roots, u);
+        const auto iter = mstd::find(_roots, u);
         assert(iter != _roots.end());
-        std::replace(_roots, iter, v);
+        mstd::replace(_roots, iter, v);
       } else result = transfer_parents<check_uniqueness>(u, std::move(v_adj), make_data);
       // finally, remove the edge uv and free u's storage
       remove_edge_and_parent(u, v);
@@ -709,7 +709,7 @@ namespace PT {
     template<bool check_uniqueness = false, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
     size_t contract_down(const NodeDesc u, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(u) == 1);
-      return contract_down<check_uniqueness>(u, front(children(u)), make_data);
+      return contract_down<check_uniqueness>(u, mstd::front(children(u)), make_data);
     }
 
     template<bool check_uniqueness = false, EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
@@ -743,12 +743,12 @@ namespace PT {
       // step 1: remove outgoing arcs of v
       const auto& v_children = v_node.children();
       while(!v_children.empty())
-        remove_edge_no_cleanup(v, front(v_children));
+        remove_edge_no_cleanup(v, mstd::front(v_children));
       // step 2: remove incoming arcs of v
       const auto& v_parents = v_node.parents();
       if(!v_parents.empty()){
         while(!v_parents.empty())
-          remove_edge_no_cleanup(front(v_parents), v);
+          remove_edge_no_cleanup(mstd::front(v_parents), v);
       } else _roots.erase(v);
       // step 3: free storage
       delete_node(v);
@@ -834,7 +834,7 @@ namespace PT {
 
     template<NodePredicateType Predicate, class... Args>
     static auto nodes_with_below(Predicate&& predicate, Args&&... args) {
-      return std::make_filtered_factory(nodes_below(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
+      return mstd::make_filtered_factory(nodes_below(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
     }
     template<class... Args> static auto leaves_below(Args&&... args) { return nodes_with_below(is_leaf, std::forward<Args>(args)...); }
     template<class... Args> static auto retis_below(Args&&... args) { return nodes_with_below(is_reti, std::forward<Args>(args)...); }
@@ -851,7 +851,7 @@ namespace PT {
 
     template<TraversalType o = preorder, NodePredicateType Predicate, class... Args>
     static auto nodes_with_above(Predicate&& predicate, Args&&... args) {
-      return std::make_filtered_factory(nodes_above<o>(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
+      return mstd::make_filtered_factory(nodes_above<o>(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
     }
     template<TraversalType o = preorder, class... Args>
     static auto retis_above(Args&&... args) { return nodes_with_above<o>(is_reti, std::forward<Args>(args)...); }
@@ -920,7 +920,7 @@ namespace PT {
         NodeSet seen;
         NodeTraversal<preorder, Phylogeny, void, void> no_tracking_dfs(_roots);
         for(const NodeDesc x: no_tracking_dfs)
-          if(!append(seen, x).second)
+          if(!mstd::append(seen, x).second)
             return true;
         return false;
       } else return false;
@@ -931,7 +931,7 @@ namespace PT {
         const Node& y_node = node_of(y);
         const Node& z_node = node_of(z);
         if(!y_node.is_root() && !z_node.is_root()) {
-          return std::are_disjoint(y_node.parents(), z_node.parents());
+          return mstd::are_disjoint(y_node.parents(), z_node.parents());
         } else return false;
        } else return true;
     }
@@ -941,7 +941,7 @@ namespace PT {
       if(y != z) {
         const Node& z_node = node_of(z);
       	if(!y_node.is_root() && !z_node.is_root()) {
-          const auto iter = std::common_element(y_node.parents(), z_node.parents());
+          const auto iter = mstd::common_element(y_node.parents(), z_node.parents());
 					return iter ? *iter : NoNode;
         } else return NoNode;
       } else return y_node.is_root() ? NoNode : y_node.any_parent();
@@ -955,11 +955,11 @@ namespace PT {
       	if(!y_node.is_root() && !z_node.is_root()) {
           if(y_node.in_degree() > z_node.in_degree()) {
             for(const auto& u: y_node.parents())
-              if(test(z_node.parents(), u))
+              if(mstd::test(z_node.parents(), u))
                 result.push_back(u);
           } else {
             for(const auto& u: z_node.parents())
-              if(test(y_node.parents(), u))
+              if(mstd::test(y_node.parents(), u))
                 result.push_back(u);
           }
         }
@@ -986,7 +986,7 @@ namespace PT {
     // NOTE: the emplacer_args allow you to pass your own (partial) node translation old_to_new in order to pre-define node-correspondances (powerfull!)
     //       if you do this, make sure that all values in the translation are valid node descriptors (point to constructed nodes of the correct type)
     //       see <edge_emplacement.hpp> and <extract_data.hpp> for more info on passing node-translation functions
-    template<std::IterableType Edges, EdgeEmplacerType Emplacer>
+    template<mstd::IterableType Edges, EdgeEmplacerType Emplacer>
     void build_from_edges(Edges&& edges, Emplacer&& emplacer) {
       DEBUG3(std::cout << "init Network with edges "<<edges<<"\n");
       // step 1: copy other_x
@@ -1026,7 +1026,7 @@ namespace PT {
       auto& other_x_parents = parents(other_x);
      
       while(!other_x_parents.empty())
-        other.remove_edge_no_cleanup(front(other_x_parents), other_x);
+        other.remove_edge_no_cleanup(mstd::front(other_x_parents), other_x);
 
       if constexpr (count) update_node_and_edge_numbers(other, other_x);
       if(x != NoNode) {
@@ -1066,7 +1066,7 @@ namespace PT {
       for(const NodeDesc r: in_roots)
         place_below_by_move(std::move(other), r, NoNode);
       if constexpr (remove_foreign_roots) {
-        my_erase(other._roots, in_roots);     
+        mstd::erase(other._roots, in_roots);     
       }
     }
 
@@ -1076,7 +1076,7 @@ namespace PT {
     Phylogeny() = default;
 
     // initialize tree from any std::IterableType, for example, std::vector<PT::Edge<>>
-    template<std::IterableType Edges, class... EmplacerArgs> requires (!PhylogenyType<Edges>)
+    template<mstd::IterableType Edges, class... EmplacerArgs> requires (!PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges, EmplacerArgs&&... args) {
       build_from_edges(std::forward<Edges>(edges), EdgeEmplacers<true>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...));
       DEBUG2(tree_summary(std::cout));
@@ -1096,7 +1096,7 @@ namespace PT {
       if(!in_roots.empty()) {
         auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
         if(in_roots.size() == 1) {
-          build_from_edges(N.edges_below_preorder(front(in_roots)), emplacer);
+          build_from_edges(N.edges_below_preorder(mstd::front(in_roots)), emplacer);
         } else {
           build_from_edges(N.edges_below_preorder(in_roots), emplacer);
         }
@@ -1113,7 +1113,7 @@ namespace PT {
       DEBUG3(std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using root "<<in_root<<"\n");
       //auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
       auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
-      DEBUG5(std::cout << "extracter is "<<std::type_name<decltype(emplacer.data_extracter)>()<<"\n");
+      DEBUG5(std::cout << "extracter is "<<mstd::type_name<decltype(emplacer.data_extracter)>()<<"\n");
       build_from_edges(N.edges_below_preorder(in_root), emplacer);
       // mark the root
       assert(emplacer.contains(in_root));
@@ -1131,7 +1131,7 @@ namespace PT {
     template<PhylogenyType Phylo, class First, class... Args>
       requires (!NodeIterableType<First> && std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_t, Phylo&& N, First&& first, Args&&... args):
-      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), front(N.roots()), std::forward<First>(first), std::forward<Args>(args)...)
+      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), mstd::front(N.roots()), std::forward<First>(first), std::forward<Args>(args)...)
     {}
     template<PhylogenyType Phylo> requires (!std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_t, Phylo&& N):
@@ -1139,7 +1139,7 @@ namespace PT {
     {}
     template<PhylogenyType Phylo> requires (std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_t, Phylo&& N):
-      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), front(N.roots()))
+      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), mstd::front(N.roots()))
     {}
 
 
@@ -1156,7 +1156,7 @@ namespace PT {
     Phylogeny(const policy_move_t, Phylo&& in_tree, const NodeDesc in_root) {
       place_below_by_move(std::move(in_tree), in_root, NoNode);
       // remember to manually remove the in_root from in_tree's root storage
-      my_erase(in_tree._roots, in_root);
+      mstd::erase(in_tree._roots, in_root);
     }
     // "move" construction making a copy of in_root instead of moving it
     template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
@@ -1235,7 +1235,7 @@ namespace PT {
     void delete_all_nodes() {
       NodeVec all_nodes;
       all_nodes.reserve(_num_nodes);
-      append(all_nodes, nodes());
+      mstd::append(all_nodes, nodes());
       for(const NodeDesc u: all_nodes)
         Parent::delete_node(u);
     }
@@ -1260,7 +1260,7 @@ namespace PT {
       return os << "\n";
     }
 
-    template<class NodeDataToString = std::IgnoreFunction<std::string>>
+    template<class NodeDataToString = mstd::IgnoreFunction<std::string>>
     static void print_subtree(std::ostream& os,
                               const NodeDesc u,
                               std::string prefix,
@@ -1289,16 +1289,16 @@ namespace PT {
       if(u_reti) os << 'R';
       
       bool u_seen = true;
-      if(!u_reti || !(u_seen = test(seen, u))) {
+      if(!u_reti || !(u_seen = mstd::test(seen, u))) {
         const auto& u_childs = children(u);
-        if(u_reti) append(seen, u);
+        if(u_reti) mstd::append(seen, u);
         switch(u_childs.size()){
           case 0:
             os << std::endl;
             break;
           case 1:
             prefix += std::string(u_name.length() + 1 + u_reti, ' ');
-            print_subtree(os, front(children(u)), prefix, seen, node_data_to_string);
+            print_subtree(os, mstd::front(children(u)), prefix, seen, node_data_to_string);
             break;
           default:
             prefix += std::string(u_name.length() + u_reti, ' ') + '|';
@@ -1313,24 +1313,24 @@ namespace PT {
       } else os << std::endl;
     }
 
-    template<class NodeDataToString = std::IgnoreFunction<std::string>>
+    template<class NodeDataToString = mstd::IgnoreFunction<std::string>>
     static void print_subtree(std::ostream& os, const NodeDesc u, NodeDataToString&& node_data_to_string = NodeDataToString()) {
       NodeSet tmp;
       print_subtree(os, u, "", tmp, std::forward<NodeDataToString>(node_data_to_string));
     }
     
-    template<class NodeDataToString = std::IgnoreFunction<std::string>>
+    template<class NodeDataToString = mstd::IgnoreFunction<std::string>>
     void print_subtree(std::ostream& os, NodeDataToString&& node_data_to_string = NodeDataToString()) const {
       if(!_roots.empty()) {
-        print_subtree(os, front(_roots), std::forward<NodeDataToString>(node_data_to_string));
+        print_subtree(os, mstd::front(_roots), std::forward<NodeDataToString>(node_data_to_string));
       } else os << "(empty)\n";
     }
 
     void print_subtree_with_data(std::ostream& os = std::cout) const {
       if(!_roots.empty()) {
         if constexpr (Parent::has_node_data) {
-          print_subtree(os, front(_roots), [](const auto& x){ return std::to_string(x); });
-        } else print_subtree(os, front(_roots));
+          print_subtree(os, mstd::front(_roots), [](const auto& x){ return std::to_string(x); });
+        } else print_subtree(os, mstd::front(_roots));
       } else os << "(empty)\n";
     }
 
@@ -1367,7 +1367,7 @@ namespace PT {
   template<int flags>
   using DefaultDataToString = std::conditional_t<flags & DISPLAY_DATA,
                                                  my_to_string,
-                                                 std::IgnoreFunction<std::string>>;
+                                                 mstd::IgnoreFunction<std::string>>;
 
   template<int flags = DISPLAY_DATA, class NodeDataToString = DefaultDataToString<flags>>
   std::string ExtendedDisplay(const auto& N, NodeDataToString nd_to_string = NodeDataToString()) {

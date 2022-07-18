@@ -18,7 +18,7 @@ namespace PT{
 
     sw_t get_scanwidth() const { return ex.template scanwidth<Network>(); }
     // update entry with the next node u
-    void update(const NodeDesc u) { append(ex, u); }
+    void update(const NodeDesc u) { mstd::append(ex, u); }
   };
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
@@ -28,7 +28,7 @@ namespace PT{
     using Edge = typename Network::Edge;
     using Parent::ex;
 
-    std::DisjointSetForest<NodeDesc, sw_t> weak_components;
+    mstd::DisjointSetForest<NodeDesc, sw_t> weak_components;
     sw_t scanwidth = 0;
 
     sw_t get_scanwidth() const { return scanwidth; }
@@ -46,7 +46,7 @@ namespace PT{
     using DPEntry = typename std::conditional_t<low_memory_version, _DPEntryLowMem<Network>, _DPEntry<Network>>;
  
   protected:
-    using DPTable = std::unordered_map<NodeSet, DPEntry, std::set_hash<NodeSet>>;
+    using DPTable = std::unordered_map<NodeSet, DPEntry, mstd::set_hash<NodeSet>>;
     
     Network& N;
     DPTable dp_table;
@@ -55,8 +55,8 @@ namespace PT{
     bool is_root_in_set(const NodeDesc u, const NodeSet& c) {
       for(auto v: node_of<Network>(u).parents()){
         // ignore deg-2 nodes
-        if(ignore_deg2) while(N.is_suppressible(v)) v = std::front(N.parents(v));
-        if(test(c, v)) return false;
+        if(ignore_deg2) while(N.is_suppressible(v)) v = mstd::front(N.parents(v));
+        if(mstd::test(c, v)) return false;
       }
       return true;
     }
@@ -85,7 +85,7 @@ namespace PT{
         for(auto& nodes: NetworkConstraintSubsetFactory<Network>(N)){
           DEBUG4(std::cout << "\tcurrent subset: "<<nodes<<"\n");
           sw_t best_sw = N.num_nodes() + 1;
-          last_iter = append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
+          last_iter = mstd::append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
           DPEntry& best_entry = last_iter->second;
 
           STAT(++num_subsets);
@@ -130,10 +130,10 @@ namespace PT{
         size_t num_nodes = ex.size();
         if constexpr (!include_root) --num_nodes;
         for(size_t i = 0; i != num_nodes; ++i)
-          std::append(_register_node, ex[i]);
+          mstd::append(_register_node, ex[i]);
       } else {
         if constexpr (include_root)
-          std::append(_register_node, N.root());
+          mstd::append(_register_node, N.root());
       }
     }
   };
@@ -150,17 +150,17 @@ namespace PT{
       DEBUG5(std::cout << "found biconnected component:\n"; std::cout << bcc <<"\n";)
       if(bcc.num_edges() != 1){
         DPType dp(bcc);
-        dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ std::append(_register_node, node_of<Component>(u).data()); });
+        dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ mstd::append(_register_node, node_of<Component>(u).data()); });
       } else {
         DEBUG5(std::cout << "only 1 edge, so adding its head to ex\n");
-        const auto uv = std::front(bcc.edges());
+        const auto uv = mstd::front(bcc.edges());
         //const auto& uv = std::front(bcc.edges());
         DEBUG5(std::cout << "edge is "<<uv<<"\n");
-        std::append(_register_node, node_of<Component>(uv.head()).data());
+        mstd::append(_register_node, node_of<Component>(uv.head()).data());
       }
       DEBUG5(std::cout << "done working with\n"; std::cout <<bcc<<"\n";)
     }
-    std::append(_register_node, N.root());
+    mstd::append(_register_node, N.root());
   }
 
 

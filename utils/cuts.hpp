@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "linear_interval.hpp"
 #include "union_find.hpp"
 #include "types.hpp"
 #include "set_interface.hpp"
@@ -15,11 +16,11 @@ namespace PT{
   enum CutObject { CO_vertical_cut_node = 0, CO_bridge = 1, CO_BCC = 2 };
 
   struct CutInfo {
-    using IntervalAndNode = std::pair<std::linear_interval<>, NodeDesc>;
+    using IntervalAndNode = std::pair<mstd::linear_interval<>, NodeDesc>;
 
     uint32_t DFS_descendants; // number of non-strict (!) descendants in the DFS subtree (always >= 1)
     uint32_t disc_time;
-    std::linear_interval<> neighbors; // smallest and highest preprder number of any neighbor of any non-strict descendant
+    mstd::linear_interval<> neighbors; // smallest and highest preprder number of any neighbor of any non-strict descendant
     bool up_to_date = false; // TODO: find a better way to track bottom-up updates!
 
     CutInfo(const uint32_t _disc_time):
@@ -29,7 +30,7 @@ namespace PT{
     }
  
     // the DFS interval of v is [disc_time : disc_time + DFS_descendants]
-    std::linear_interval<> get_DFS_interval() const { return { disc_time, disc_time + DFS_descendants - 1 }; }
+    mstd::linear_interval<> get_DFS_interval() const { return { disc_time, disc_time + DFS_descendants - 1 }; }
     uint32_t first_outside_subtree() const { return disc_time + DFS_descendants; }
     void update_lowest_neighbor(const uint32_t u) { neighbors.update_lo(u); }
     void update_highest_neighbor(const uint32_t u) { neighbors.update_hi(u); }
@@ -37,7 +38,7 @@ namespace PT{
     void update_from_child(const CutInfo& other) { neighbors.merge(other.neighbors); }
 
     // return true if the given CutInfo has a descendant that "sees" someone outside our DFS-subtree
-    bool child_has_outside_neighbor(const std::linear_interval<>& child_neighbors) const {
+    bool child_has_outside_neighbor(const mstd::linear_interval<>& child_neighbors) const {
       return (child_neighbors[0] < disc_time) || (child_neighbors[1] >= first_outside_subtree());
     }
     bool child_has_outside_neighbor(const CutInfo& child) const {
@@ -67,7 +68,7 @@ namespace PT{
       // our main data-structure is a vector of nodes with their neighbor interval; we will sort this by interval and then progressively merge
       std::vector<IntervalAndNode> tmp;
       tmp.reserve(u_children.size());
-      std::DisjointSetForest<NodeDesc> child_partition;
+      mstd::DisjointSetForest<NodeDesc> child_partition;
       // step 2.1: add all intervals and nodes to tmp - NOTE: keep in mind that DFS-intervals are DISJOINT!
       for(const NodeDesc v: u_children) {
         tmp.emplace_back(node_infos.at(v).get_DFS_interval(), v);
@@ -139,7 +140,7 @@ namespace PT{
     bool compute_mark(const Node& u_node, const auto& node_infos) {
       if(!u_node.is_leaf()) {
         // use the callback to put all cut-children of u into our cut_children vector
-        CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ append(cut_children, v); return false; });
+        CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ mstd::append(cut_children, v); return false; });
         cut_node_mark = !cut_children.empty();
       } else cut_node_mark = 0;
       return cut_node_mark;
@@ -158,7 +159,7 @@ namespace PT{
 
 
   // this is a base for iterators listing vertical cut-nodes or -edges (aka bridges)
-  template<PhylogenyType Network, CutObject cut_object, std::HasIterTraits _Traits>
+  template<PhylogenyType Network, CutObject cut_object, mstd::HasIterTraits _Traits>
   class CutIter: public _Traits {
   protected:
     using Traits = _Traits;
@@ -175,7 +176,7 @@ namespace PT{
 
     // the first DFS sets up preorder numbers and numbers of descendants in the node_infos
     // NOTE: we use node_infos to indicate which nodes we have already visited
-    std::emplace_result<InfoMap> setup_DFS(const NodeDesc u, uint32_t& time) {
+    mstd::emplace_result<InfoMap> setup_DFS(const NodeDesc u, uint32_t& time) {
       const auto emp_res = node_infos.emplace(u, time);
       if(emp_res.second){
         ++time;
@@ -265,14 +266,14 @@ namespace PT{
 
 
   template<PhylogenyType Network>
-  using CutNodeIter = CutIter<Network, CO_vertical_cut_node, std::iter_traits_from_reference<NodeDesc>>;
-  template<StrictPhylogenyType Network> using CutNodeIterFactory = std::IterFactory<CutNodeIter<Network>>;
+  using CutNodeIter = CutIter<Network, CO_vertical_cut_node, mstd::iter_traits_from_reference<NodeDesc>>;
+  template<StrictPhylogenyType Network> using CutNodeIterFactory = mstd::IterFactory<CutNodeIter<Network>>;
   template<StrictPhylogenyType Network> auto get_cut_nodes(const NodeDesc rt) { return CutNodeIterFactory<Network>(rt); }
   template<StrictPhylogenyType Network> auto get_cut_nodes(const Network& N) { return CutNodeIterFactory<Network>(N.root()); }
 
   template<PhylogenyType Network>
-  using BridgeIter = CutIter<Network, CO_bridge, std::my_iterator_traits<Traversal<all_edge_tail_postorder, Network, NodeDesc>>>;
-  template<StrictPhylogenyType Network> using BridgeIterFactory = std::IterFactory<BridgeIter<Network>>;
+  using BridgeIter = CutIter<Network, CO_bridge, mstd::iterator_traits<Traversal<all_edge_tail_postorder, Network, NodeDesc>>>;
+  template<StrictPhylogenyType Network> using BridgeIterFactory = mstd::IterFactory<BridgeIter<Network>>;
   template<StrictPhylogenyType Network> auto get_bridges(const NodeDesc rt) { return BridgeIterFactory<Network>(rt); }
   template<StrictPhylogenyType Network> auto get_bridges(const Network& N) { return BridgeIterFactory<Network>(N.root()); }
 

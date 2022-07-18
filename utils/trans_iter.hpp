@@ -5,7 +5,7 @@
 #include "stl_utils.hpp"
 #include "iter_factory.hpp"
 
-namespace std {
+namespace mstd {
   // this is an iterator that transforms items of a range on the fly
   // **IMPORTANT NOTE**: dereferencing such an iterator may (depending on the transformation) generate and return an rvalue, not an lvalue reference
   //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
@@ -17,31 +17,31 @@ namespace std {
     using Iter = _Iter;
     using UnderlyingIterator = Iter;
     using difference_type = ptrdiff_t;
-    using reference       = decltype(declval<Transformation>()(*it));
-    using const_reference = decltype(declval<Transformation>()(as_const(*it)));
-    using value_type      = remove_reference_t<reference>;
+    using reference       = decltype(std::declval<Transformation>()(*it));
+    using const_reference = decltype(std::declval<Transformation>()(std::as_const(*it)));
+    using value_type      = std::remove_reference_t<reference>;
     using pointer         = pointer_from_reference<reference>;
     using const_pointer   = pointer_from_reference<const_reference>;
-    using iterator_category = typename my_iterator_traits<Iter>::iterator_category;
-    static constexpr bool reference_is_rvalue = !is_reference_v<reference>;
+    using iterator_category = typename mstd::iterator_traits<Iter>::iterator_category;
+    static constexpr bool referenceis__rvalue = !std::is_reference_v<reference>;
 
     _proto_transforming_iterator() = default;
     _proto_transforming_iterator(_proto_transforming_iterator&&) = default;
     _proto_transforming_iterator(const _proto_transforming_iterator&) = default;
 
     // construct from an iterator alone, default-construct the transformation
-    template<class T> requires ((!is_same_v<remove_cvref_t<T>, _proto_transforming_iterator>) && std::is_default_constructible_v<Transformation>)
-    _proto_transforming_iterator(T&& iter): it(forward<T>(iter)), trans() {}
+    template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, _proto_transforming_iterator>) && std::is_default_constructible_v<Transformation>)
+    _proto_transforming_iterator(T&& iter): it(std::forward<T>(iter)), trans() {}
     // construct from iter and transformaiton
     template<class T, class F>
-    _proto_transforming_iterator(T&& iter, F&& f): it(forward<T>(iter)), trans(forward<F>(f)) {}
+    _proto_transforming_iterator(T&& iter, F&& f): it(std::forward<T>(iter)), trans(std::forward<F>(f)) {}
 
 
-    // piecewise construction of the iter and the transformation
+    // std::piecewise construction of the iter and the transformation
     template<class IterTuple, class TransTuple>
-    constexpr _proto_transforming_iterator(const piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init):
-      it(make_from_tuple<Iter>(forward<IterTuple>(iter_init))),
-      trans(make_from_tuple<Transformation>(forward<TransTuple>(trans_init)))
+    constexpr _proto_transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init):
+      it(make_from_tuple<Iter>(std::forward<IterTuple>(iter_init))),
+      trans(make_from_tuple<Transformation>(std::forward<TransTuple>(trans_init)))
     {}
 
 
@@ -65,8 +65,8 @@ namespace std {
 
     reference operator*() { return trans(*it); }
     reference operator*() const { return trans(*it); }
-    pointer operator->() { if constexpr (reference_is_rvalue) return operator*(); else return &(trans(*it)); }
-    pointer operator->() const { if constexpr (reference_is_rvalue) return operator*(); else return &(trans(*it)); }
+    pointer operator->() { if constexpr (referenceis__rvalue) return operator*(); else return &(trans(*it)); }
+    pointer operator->() const { if constexpr (referenceis__rvalue) return operator*(); else return &(trans(*it)); }
 
     operator Iter() const { return it; }
   };
@@ -84,25 +84,25 @@ namespace std {
   template<iter_verifyable Iter, class Transformation>
   struct proto_transforming_iterator<Iter, Transformation> { using type = verifyable_proto_transforming_iterator<Iter, Transformation>; };
 
-  // the second argument is either a transformation function or, if the second template argument ("T") is not invocable,
+  // the second argument is either a transformation function or, if the second template argument ("T") is not std::invocable,
   // then we interpret it as target_value_type and the transformation function will be std::function<target_value_type(Iter::reference)>
   template<class Iter, class Result>
   struct _transforming_iterator {
-    using F = std::function<Result(std::reference_of_t<Iter>)>;
+    using F = std::function<Result(mstd::reference_of_t<Iter>)>;
     using type = typename proto_transforming_iterator<Iter, F>::type;
   };  
-  template<class Iter, invocable<reference_of_t<Iter>> Transformation>
+  template<class Iter, std::invocable<reference_of_t<Iter>> Transformation>
   struct _transforming_iterator<Iter, Transformation> {
     using type = typename proto_transforming_iterator<Iter, Transformation>::type;
   };
 
 
   template<class Iter, class T>
-  using transforming_iterator = typename _transforming_iterator<std::iterator_of_t<Iter>, T>::type;
+  using transforming_iterator = typename _transforming_iterator<iterator_of_t<Iter>, T>::type;
 
 
   // factories
-  template<class Iter, class T, class BeginEndTransformation = void, class EndIterator = std::iterator_of_t<Iter>>
+  template<class Iter, class T, class BeginEndTransformation = void, class EndIterator = iterator_of_t<Iter>>
   using TransformingIterFactory = IterFactory<transforming_iterator<Iter, T>, BeginEndTransformation, EndIterator>;
 
   template<IterableType Container, class Trans>
@@ -113,14 +113,14 @@ namespace std {
 
   // ----------- special case: selecting first or second element from a pair ---------------
 
-  template<class T, size_t get_num> struct _selecting_iterator { using type = transforming_iterator<T, std::selector<get_num>>; };
-  template<IterableType T, size_t get_num> struct _selecting_iterator<T,get_num> { using type = transforming_iterator<iterator_of_t<T>, std::selector<get_num>>; };
+  template<class T, size_t get_num> struct _selecting_iterator { using type = transforming_iterator<T, selector<get_num>>; };
+  template<IterableType T, size_t get_num> struct _selecting_iterator<T,get_num> { using type = transforming_iterator<iterator_of_t<T>, selector<get_num>>; };
   template<class T, size_t get_num> using selecting_iterator = typename _selecting_iterator<T, get_num>::type;
 
   template<class T> using firsts_iterator = selecting_iterator<T, 0>;
   template<class T> using seconds_iterator = selecting_iterator<T, 1>;
 
-  template<class T, size_t get_num, class BeginEndTransformation = void, class EndIterator = std::iterator_of_t<T>>
+  template<class T, size_t get_num, class BeginEndTransformation = void, class EndIterator = iterator_of_t<T>>
   using TupleItemIterFactory = IterFactory<selecting_iterator<T, get_num>, BeginEndTransformation, EndIterator>;
 
   // convenience classes for selecting the first and second items of tuples/pairs
@@ -129,9 +129,9 @@ namespace std {
 
   // convenience functions to construct selecting iterator factories for returning the first and second items of tuples/pairs
   template<class TupleContainer>
-  constexpr auto firsts(TupleContainer&& c) { return FirstsFactory<TupleContainer>(forward<TupleContainer>(c)); }
+  constexpr auto firsts(TupleContainer&& c) { return FirstsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
   template<class TupleContainer>
-  constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(forward<TupleContainer>(c)); }
+  constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
 
 
 }

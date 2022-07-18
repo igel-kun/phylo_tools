@@ -3,7 +3,7 @@
 
 #pragma once
 
-namespace std {
+namespace mstd {
 
   // this makes normal iterators cyclic
   template<class Container, class NormalIterator>

@@ -17,16 +17,16 @@
 #define POS_OF(x) ((x) % BITSET_BITS_IN_BUCKET)
 #define TEST_IN_BUCKET(x, y) ((((x) >> POS_OF(y)) & 1) == 1)
 
-namespace std {
+namespace mstd {
 
-  template<MapType bucket_map = std::raw_vector_map<size_t, uint64_t> >
+  template<MapType bucket_map = mstd::raw_vector_map<size_t, uint64_t> >
   class bitset_iterator;
 
   class ordered_bitset;
   class unordered_bitset;
 
   // ATTENTION: this does not do error checking if NDEBUG is on (except front())
-  template<MapType _bucket_map = std::raw_vector_map<size_t, uint64_t> >
+  template<MapType _bucket_map = mstd::raw_vector_map<size_t, uint64_t> >
   class iterable_bitset: public iter_traits_from_reference<uintptr_t> {
     // NOTE: bitsets cannot provide meaningful references to their members
     using traits = iter_traits_from_reference<uintptr_t>;
@@ -285,7 +285,7 @@ namespace std {
       return true;
     }
 
-    template<class T = std::raw_vector_map<size_t, uint64_t> >
+    template<class T = mstd::raw_vector_map<size_t, uint64_t> >
     bool operator==(const iterable_bitset<T>& bs) const
     {
       if(_count != bs._count) return false;
@@ -328,23 +328,26 @@ namespace std {
     iterator end() const;
     iterator find(const value_type x) const;
   };
-
+}
+namespace std {
   template<typename bucket_map>
-  struct hash<iterable_bitset<bucket_map>>{
-    size_t operator()(const iterable_bitset<bucket_map>& bs) const{
+  struct hash<mstd::iterable_bitset<bucket_map>>{
+    size_t operator()(const mstd::iterable_bitset<bucket_map>& bs) const{
       size_t result = 0;
       for(const auto& item: bs.data()) result ^= item;
       return result;
     }
   };
+}
+namespace mstd {
 
   template<class T>
   concept StrictIterBitsetType = requires(T t){
     typename T::bucket_map;
     requires MapType<typename T::bucket_map>;
-    { t.test(0) } -> same_as<bool>;
+    { t.test(0) } -> std::same_as<bool>;
   };
-  template<class T> concept IterBitsetType = StrictIterBitsetType<remove_reference_t<T>>;
+  template<class T> concept IterBitsetType = StrictIterBitsetType<std::remove_reference_t<T>>;
 
 
   // ------------------ unordered_map-based bitset ----------------------------
@@ -371,9 +374,9 @@ namespace std {
 
   // ------------------ vector-based bitset ----------------------------
 
-  class ordered_bitset: public iterable_bitset<std::raw_vector_map<size_t, uint64_t>>
+  class ordered_bitset: public iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>
   {
-    using Parent = iterable_bitset<std::raw_vector_map<size_t, uint64_t>>;
+    using Parent = iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>;
     using Parent::storage;
     using Parent::num_buckets;
     using Parent::clear;
@@ -673,8 +676,8 @@ namespace std {
   }
 
 
-  template<class C, class = void> struct is_bitset : false_type {};
-  template<class C> struct is_bitset<C, void_t<typename C::bucket_map>>: true_type {};
+  template<class C, class = void> struct is_bitset: public std::false_type {};
+  template<class C> struct is_bitset<C, std::void_t<typename C::bucket_map>>: public std::true_type {};
   template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_cvref_t<C>>::value;
 
 }

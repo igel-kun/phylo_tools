@@ -67,7 +67,7 @@ namespace PT{
     const NodeDesc rt = T.add_root(make_data);
     
     NodeSet current_leaves; // nodes that can accept in-degree (should contain at least 2 nodes at all times)
-    append(current_leaves, rt);
+    mstd::append(current_leaves, rt);
     for(size_t i = 0; i != num_internal; ++i){
       // each time we turn a leaf into an internal node, we have to create 2 leaves, so we need to reserve 1 leaf for each internal_to_go
       const size_t internals_to_go = num_internal - i - 1;
@@ -82,7 +82,7 @@ namespace PT{
       for(size_t j = 0; j != degree; ++j) {
         const NodeDesc v = T.create_node(make_data);
         T.add_child(u, v, make_data);
-        append(current_leaves, v);
+        mstd::append(current_leaves, v);
       }
     }
   }
@@ -128,9 +128,9 @@ namespace PT{
       NodeSet tree_nodes, retis;
       for(const NodeDesc u: N.nodes())
         if(N.is_reti(u))
-          append(retis, u);
+          mstd::append(retis, u);
         else if(!N.is_leaf(u))
-          append(tree_nodes, u);
+          mstd::append(tree_nodes, u);
 
       if(retis.empty() && !new_reticulations)
         throw std::logic_error("cannot add " + std::to_string(num_edges) + " edges without introducing a reticulation");
@@ -169,8 +169,8 @@ namespace PT{
             if(reverse_st) std::swap(s,t);
             DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             N.add_edge(s, t, extracter); --num_edges;
-            append(tree_nodes, s);  --new_tree_nodes;
-            append(retis, t);       --new_reticulations;
+            mstd::append(tree_nodes, s);  --new_tree_nodes;
+            mstd::append(retis, t);       --new_reticulations;
           } else {
             if(u != N.root()){
               NodeDesc s;
@@ -181,7 +181,7 @@ namespace PT{
               do s = *(get_random_iterator(tree_nodes)); while((s != u) && !N.has_path(v, s));
               DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
               N.add_edge(s, t, extracter);    --num_edges;
-              append(retis, t);       --new_reticulations;
+              mstd::append(retis, t);       --new_reticulations;
             }
           }
         } else {
@@ -202,7 +202,7 @@ namespace PT{
             }
             DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
             N.add_edge(s, t, extracter); --num_edges;
-            append(tree_nodes, s);  --new_tree_nodes;
+            mstd::append(tree_nodes, s);  --new_tree_nodes;
           } else {
             const NodeDesc s = *(get_random_iterator(tree_nodes));
             if(!N.has_path(t,s)){
@@ -259,7 +259,7 @@ namespace PT{
       const NodeDesc v = Net::create_node(extracter);
       N.add_child(u, v, extracter);
 
-      const bool removed = !decrease_or_remove(dangling, parent_it);
+      const bool removed = !mstd::decrease_or_remove(dangling, parent_it);
       DEBUG5(std::cout << " node #"<<i<<"\t- "<<reti_count <<" retis & "<<tree_count<<" tree nodes - ");
       
       // the new node v might be a reticulation if there are at least 2 unsatisfied nodes
@@ -274,7 +274,7 @@ namespace PT{
         const NodeDesc w = dang_it->first;
 
         N.add_child(w, v, extracter);
-        decrease_or_remove(dangling, dang_it);
+        mstd::decrease_or_remove(dangling, dang_it);
         dangling[v] = 1;
         ++reti_count;
       } else {
@@ -291,7 +291,7 @@ namespace PT{
       const NodeDesc u = iter->first;
       NodeDesc v = Net::create_node(extracter);
       N.add_child(u, v, extracter);
-      decrease_or_remove(dangling, iter);
+      mstd::decrease_or_remove(dangling, iter);
       
       DEBUG5(std::cout << " node #"<<i<<" is a leaf"<<std::endl);
     }
@@ -377,14 +377,14 @@ namespace PT{
 
 
   //! simulate reticulate species evolution
-  template<PhylogenyType Net, EdgeContainerType Edges, std::ContainerType Names>
+  template<PhylogenyType Net, EdgeContainerType Edges, mstd::ContainerType Names>
   void simulate_species_evolution(Edges& edges, Names& names, const uint32_t number_taxa, const float recombination_rate)
   {
 #warning writeme
   }
 
   //! simulate reticulate gene evolution
-  template<PhylogenyType Net, EdgeContainerType Edges, std::ContainerType Names>
+  template<PhylogenyType Net, EdgeContainerType Edges, mstd::ContainerType Names>
   void simulate_gene_evolution(Edges& edges, Names& names, const uint32_t number_taxa, const float recombination_rate)
   {
 #warning writeme

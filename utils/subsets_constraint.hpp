@@ -9,15 +9,15 @@
 namespace PT{
 
   // const Container& will be the return type of the dereference operator
-  // for performance reasons, it should support fast std::test() queries, as well as insert() and erase()
+  // for performance reasons, it should support fast mstd::test() queries, as well as insert() and erase()
   template<class Network, class Container = NodeSet, bool ignore_deg2_nodes = true>
-  class NetworkConstraintSubsetIterator: public std::iter_traits_from_reference<const Container&> {
+  class NetworkConstraintSubsetIterator: public mstd::iter_traits_from_reference<const Container&> {
   protected:
     NodeDesc root;
 
     Container current; // current output set
     std::map<size_t, NodeDesc> available; // this maps post-order numbers to their nodes for all available nodes, sorted by post-order number
-    std::iterable_stack<NodeDesc> branched; // nodes whose value has been branched
+    mstd::iterable_stack<NodeDesc> branched; // nodes whose value has been branched
 
     std::unordered_map<NodeDesc, size_t> zero_fixed_children; // number of children that are not in the current set
     std::unordered_map<NodeDesc, size_t> po_number; // save the post-order number for each node
@@ -28,22 +28,22 @@ namespace PT{
     void init_DFS(const NodeDesc u, size_t& time) {
       // use zero_fixed_children as indicator whether we've already seen u
       const auto& u_node = node_of(u);
-      const bool success = append(zero_fixed_children, u, u_node.out_degree()).second;
+      const bool success = mstd::append(zero_fixed_children, u, u_node.out_degree()).second;
       if(success){
         if(!u_node.is_leaf()) {
           for(NodeDesc v: u_node.children()){
             if constexpr (ignore_deg2_nodes){
               while(node_of(v).is_suppressible())
-                v = std::front(node_of(v).children());
+                v = mstd::front(node_of(v).children());
             }
             init_DFS(v, time);
           }
         } else branched.push(u);
-        append(po_number, u, ++time);
+        mstd::append(po_number, u, ++time);
       }
     }
 
-    bool current_state(const NodeDesc u) const { return test(current, u); }
+    bool current_state(const NodeDesc u) const { return mstd::test(current, u); }
 
     void first_subset() {
       size_t time = 0;
@@ -52,7 +52,7 @@ namespace PT{
 
     // set a branched-on node to 0 and mark it available
     void un_branch(const NodeDesc u) {
-      append(available, po_number.at(u), u);
+      mstd::append(available, po_number.at(u), u);
       current.erase(u);
     }
 
@@ -63,7 +63,7 @@ namespace PT{
       for(NodeDesc v: u_node.parents()){
         if constexpr (ignore_deg2_nodes)
           while(node_of(v).is_suppressible())
-            v = std::front(node_of(v).parents());
+            v = mstd::front(node_of(v).parents());
         if(++zero_fixed_children[v] == 1){
           available.erase(po_number.at(v));
           propagate_zero_up(node_of(v));
@@ -77,9 +77,9 @@ namespace PT{
       for(NodeDesc v: u_node.parents()){
         if constexpr (ignore_deg2_nodes)
           while(node_of(v).is_suppressible())
-            v = std::front(node_of(v).parents());
+            v = mstd::front(node_of(v).parents());
         if(--zero_fixed_children[v] == 0){
-          append(available, po_number.at(v), v);
+          mstd::append(available, po_number.at(v), v);
           propagate_nonzero_up(node_of(v));
         }
       }
@@ -88,15 +88,15 @@ namespace PT{
     // set a node to 1 and propagate
     // note: no need to change availability since it's already non-available due to its 0-branch
     void branch_to_one(const NodeDesc u) {
-      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 1"<<std::endl);
-      append(current, u);
+      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<mstd::test(available, po_number.at(u))<<"] to 1"<<std::endl);
+      mstd::append(current, u);
       propagate_nonzero_up(node_of(u));
       DEBUG5(std::cout << "b1("<<u<<") -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
     }
 
     // first branch of a node u: mark u unavailable and propagate
     void branch_to_zero(const NodeDesc u) {
-      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<test(available, po_number.at(u))<<"] to 0"<<std::endl);
+      DEBUG4(std::cout << "switching branch of "<< u << " from "<<current_state(u)<<" ["<<mstd::test(available, po_number.at(u))<<"] to 0"<<std::endl);
       available.erase(po_number.at(u));
       propagate_zero_up(node_of(u));
       branched.push(u);
@@ -115,7 +115,7 @@ namespace PT{
       if(is_valid()){
         branch_to_one(branched.top());
         // establish branches on all available nodes
-        while(!available.empty()) branch_to_zero(front(available).second);
+        while(!available.empty()) branch_to_zero(mstd::front(available).second);
         DEBUG5(std::cout << "++ -- current: "<<current<<" - available: "<<available<<" - branched: "<<branched<<std::endl);
       }
     }
@@ -154,7 +154,7 @@ namespace PT{
   };
 
   template<class Network, class Container = NodeSet>
-  using NetworkConstraintSubsetFactory = std::IterFactory<NetworkConstraintSubsetIterator<Network, Container>>;
+  using NetworkConstraintSubsetFactory = mstd::IterFactory<NetworkConstraintSubsetIterator<Network, Container>>;
  
 }// namespace
 

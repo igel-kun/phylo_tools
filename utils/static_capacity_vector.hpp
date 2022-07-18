@@ -2,7 +2,7 @@
 #pragma once
 #include "optional.hpp"
 
-namespace std {
+namespace mstd {
   // NOTE: all static_capacity vectors have their empty elements in the end!
 
   template<Optional T, size_t _capacity>
@@ -29,9 +29,9 @@ namespace std {
       const size_t i = size(data);
       if(i < _capacity) {
         data[i].emplace(std::forward<Args>(args)...);
-      } else throw out_of_range("trying to add item to full static-capacity vector");
+      } else throw std::out_of_range("trying to add item to full static-capacity vector");
     }
-    template<class _Data> requires (is_same_v<remove_cvref_t<_Data>, Data>)
+    template<class _Data> requires (std::is_same_v<std::remove_cvref_t<_Data>, Data>)
     static auto get_begin(_Data&& _data) { return forward<_Data>(_data).begin(); }
     static auto get_end(const Data&) { return GenericEndIterator{}; }
   };
@@ -46,7 +46,7 @@ namespace std {
     bool empty(const Data&) const { return _size == 0; }
     size_t size(const Data&) const { return _size; }
     void clear(Data& _data) {
-      if constexpr (!is_trivially_destructible_v<T>) {
+      if constexpr (!std::is_trivially_destructible_v<T>) {
         for(size_t i = 0; i < _size; ++i)
           _data[i] = T{};
       }
@@ -59,7 +59,7 @@ namespace std {
     void emplace_back(Data& data, Args&&... args) {
       if(_size < _capacity) {
         data[_size++] = T(std::forward<Args>(args)...);
-      } else throw out_of_range("trying to add item to full static-capacity vector");
+      } else throw std::out_of_range("trying to add item to full static-capacity vector");
     }
     template<class... Args>
     bool emplace_back_if_possible(Data& data, Args&&... args) {
@@ -70,14 +70,14 @@ namespace std {
     }
 
 
-    template<class _Data> requires (is_same_v<remove_reference_t<_Data>, Data>)
+    template<class _Data> requires (std::is_same_v<std::remove_reference_t<_Data>, Data>)
     static auto get_begin(T&& _data) { return forward<_Data>(_data).begin(); }
-    template<class _Data> requires (is_same_v<remove_reference_t<_Data>, Data>)
+    template<class _Data> requires (std::is_same_v<std::remove_reference_t<_Data>, Data>)
     static auto get_end(_Data&& _data) { return forward<_Data>(_data).end(); }
   };
 
   template<Optional T, size_t _capacity>
-  bool operator==(const typename array<T, _capacity>::iterator it, const GenericEndIterator) { return !it->has_value(); }
+  bool operator==(const typename std::array<T, _capacity>::iterator it, const mstd::GenericEndIterator) { return !it->has_value(); }
 
 
   template<class T, size_t cap> struct _choose_size { using type = size_storer<T, cap>; };
@@ -87,8 +87,8 @@ namespace std {
 
   // if T is an Optional type (std::optional or std::optional_by_invalid) then we will not store the size but loop over these, unless force_store_size == true
   template<class T, size_t _capacity, bool force_store_size = false>
-  class _static_capacity_vector: public conditional_t<force_store_size, size_storer<T, _capacity>, choose_size<T, _capacity>> {
-    using Size = conditional_t<force_store_size, size_storer<T, _capacity>, choose_size<T, _capacity>>;
+  class _static_capacity_vector: public std::conditional_t<force_store_size, size_storer<T, _capacity>, choose_size<T, _capacity>> {
+    using Size = std::conditional_t<force_store_size, size_storer<T, _capacity>, choose_size<T, _capacity>>;
     using Data = std::array<T, _capacity>;
     Data _data;
   public:
@@ -126,7 +126,7 @@ namespace std {
 
 
   template<class T, size_t _capacity, bool force_store_size = false>
-  using static_capacity_vector = conditional_t<Optional<T> && _capacity == 1,
+  using static_capacity_vector = std::conditional_t<Optional<T> && _capacity == 1,
         singleton_set<T>,
         _static_capacity_vector<T, _capacity, force_store_size>>;
 

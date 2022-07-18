@@ -11,28 +11,28 @@
 #include <cassert>
 #include <vector>
 
-namespace std{
+namespace mstd{
   struct Symmetric {};
   struct Asymmetric {};
   
-  template<typename Element, typename Something = vector<Element>, typename Symmetry = Asymmetric>
+  template<typename Element, typename Something = std::vector<Element>, typename Symmetry = Asymmetric>
   class Something2d : public Something
   {
   protected:
     size_t columns = 0;
     using Parent = Something;
-    using Coords = pair<size_t, size_t>;
+    using Coords = std::pair<size_t, size_t>;
 
     static constexpr bool is_symmetric = std::is_same_v<Symmetry, Symmetric>;
 
 
-    template<class Sym = Symmetry, enable_if_t<!is_same_v<Sym, Symmetric>, int> = 0>
+    template<class Sym = Symmetry> requires (!std::is_same_v<Sym, Symmetric>)
     size_t linearize(const Coords& coords) const
     {
       return coords.second * columns + coords.first;
     }
 
-    template<class Sym = Symmetry, enable_if_t<is_same_v<Sym, Symmetric>, int> = 0>
+    template<class Sym = Symmetry> requires (std::is_same_v<Sym, Symmetric>)
     size_t linearize(const Coords& coords) const
     {
       if(coords.first <= coords.second)
@@ -51,15 +51,13 @@ namespace std{
       Something::resize(linearize({cols - 1, rows - 1}) + 1, element);
     }
 
-    template<class Sym = Symmetry, enable_if_t<!is_same_v<Sym, Symmetric>, int> = 0>
-    Coords size() const
-    {
+    template<class Sym = Symmetry> requires (!std::is_same_v<Sym, Symmetric>)
+    Coords size() const {
       assert(columns > 0);
       return {columns, Something::size() / columns};
     }
-    template<class Sym = Symmetry, enable_if_t<is_same_v<Sym, Symmetric>, int> = 0>
-    Coords size() const
-    {
+    template<class Sym = Symmetry> requires (std::is_same_v<Sym, Symmetric>)
+    Coords size() const {
       assert(columns > 0);
       return {columns, columns};
     }
@@ -101,9 +99,9 @@ namespace std{
 
 
   template<typename Element>
-  using vector2d = Something2d<Element, vector<Element>, Asymmetric>;
+  using vector2d = Something2d<Element, std::vector<Element>, Asymmetric>;
   template<typename Element>
-  using symmetric_vector2d = Something2d<Element, vector<Element>, Symmetric>;
+  using symmetric_vector2d = Something2d<Element, std::vector<Element>, Symmetric>;
 
 
 }// namespace

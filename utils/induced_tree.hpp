@@ -38,7 +38,7 @@ namespace PT{
   concept SubtreeInfo = StrictSubtreeInfo<std::remove_reference_t<T>>;
 
   template<class M>
-  concept StrictSubtreeInfoMap = std::MapType<M> && SubtreeInfo<typename M::mapped_type>;
+  concept StrictSubtreeInfoMap = mstd::MapType<M> && SubtreeInfo<typename M::mapped_type>;
   template<class T> 
   concept SubtreeInfoMap = StrictSubtreeInfoMap<std::remove_reference_t<T>>;
 
@@ -51,11 +51,11 @@ namespace PT{
     // get a preorder because we need to access the distance to the root of the parent
     const auto preorder_dfs = Tree::nodes_below_preorder(root); // const since our preorder doesn't need to track seen nodes (we're in a tree)
     auto iter = preorder_dfs.begin(); // this is the root now
-    append(node_infos, *iter, 0, 0); // order number 0, distance to root 0
+    mstd::append(node_infos, *iter, 0, 0); // order number 0, distance to root 0
     for(++iter;iter.is_valid(); ++iter) {
       const NodeDesc parent = Tree::any_parent(*iter);
       DEBUG4(std::cout << "computing infos of "<<*iter <<" from infos of parent "<<parent<<": "<<node_infos.at(parent)<<"\n");
-      append(node_infos, *iter, node_infos.at(parent).dist_to_root + 1, ++counter);
+      mstd::append(node_infos, *iter, node_infos.at(parent).dist_to_root + 1, ++counter);
     }
   }
 
@@ -105,7 +105,7 @@ namespace PT{
         // step 1: get edges incoming to leaves
         size_t i = 0;
         auto leaf_iter = leaves_sorted.begin();
-        append_unless_equal(result, front(inner_nodes).first, *leaf_iter);
+        append_unless_equal(result, mstd::front(inner_nodes).first, *leaf_iter);
         for(++leaf_iter; i + 1 != inner_nodes.size(); ++leaf_iter, ++i){
           const NodeDesc parent = inner_nodes[choose_parent(i, i + 1)].first;
           // if the input contains a "leaf" that is ancestor of another, we may see parent == *leaf_iter here, so don't add those edgees
@@ -114,7 +114,7 @@ namespace PT{
         append_unless_equal(result, inner_nodes.back().first, *leaf_iter);
         // step 2: get edges incoming to inner nodes
         NodeSet seen; // high-degree nodes may occur multiple times as inner nodes but we don't want to add multiple parents for them
-        for(i = 0; i != inner_nodes.size(); ++i) if(append(seen, inner_nodes[i].first).second) {
+        for(i = 0; i != inner_nodes.size(); ++i) if(mstd::append(seen, inner_nodes[i].first).second) {
           const ssize_t parent_idx = choose_parent(v_left_idx[i], v_right_idx[i]);
           // for nodes of high-degree, we can see parent == u here, so don't add those edges
           if(parent_idx != -1)
@@ -125,7 +125,7 @@ namespace PT{
     }
 
   protected:
-    void append_unless_equal(EdgeVec& ev, const NodeDesc u, const NodeDesc v) { if(u != v) append(ev, u, v); }
+    void append_unless_equal(EdgeVec& ev, const NodeDesc u, const NodeDesc v) { if(u != v) mstd::append(ev, u, v); }
     // choose the right parent between a choice of two indices in inner_nodes (which may be -1)
     ssize_t choose_parent(const ssize_t u_idx, const ssize_t v_idx) const {
       if(u_idx == -1) return v_idx;
@@ -141,7 +141,7 @@ namespace PT{
         if(++iter == leaves_sorted.end()) break;
         const NodeDesc l = LCA(u, *iter);
         DEBUG4(std::cout << "adding LCA("<<u<<", "<<*iter<<") = "<<l<<" as inner node with dist " << node_infos.at(l).dist_to_root<<"\n");
-        append(inner_nodes, l, node_infos.at(l).dist_to_root);
+        mstd::append(inner_nodes, l, node_infos.at(l).dist_to_root);
       }
     }
 
@@ -178,7 +178,7 @@ namespace PT{
   void sort_by_order_number(LeafList&& _leaves, const NodeInfoMap& node_infos) {
     auto sort_by_order = [&](const auto& a, const auto& b){ return node_infos.at(a).order_number > node_infos.at(b).order_number; };
     // move the given leaflist into a sortable range & sort
-    std::flexible_sort(_leaves.begin(), _leaves.end(), sort_by_order);
+    mstd::flexible_sort(_leaves.begin(), _leaves.end(), sort_by_order);
   }
 
 
@@ -216,7 +216,7 @@ namespace PT{
   //NOTE: needs write access to the leaf-container
   //NOTE: on some containers, sort is more efficient than on others...
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap>
-    requires (!std::is_const_ref<LeafList>)
+    requires (!mstd::is_const_ref<LeafList>)
   auto get_induced_edges(const policy_inplace_t, const Tree& supertree, LeafList&& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
     get_induced_subtree_infos(supertree, node_infos);
     sort_by_order_number(leaves, node_infos);
@@ -227,7 +227,7 @@ namespace PT{
   //NOTE: in particular, this assumees that your leaves ARE NOT SORTED! If they are, call the policy_noop version for more speed :)
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = SparseInducedSubtreeInfoMap>
   auto get_induced_edges(const Tree& supertree, LeafList&& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
-    if constexpr (std::is_const_ref<LeafList>)
+    if constexpr (mstd::is_const_ref<LeafList>)
       return get_induced_edges(policy_copy_t(), supertree, leaves, std::forward<NodeInfoMap>(node_infos));
     else
       return get_induced_edges(policy_inplace_t(), supertree, leaves, std::forward<NodeInfoMap>(node_infos));

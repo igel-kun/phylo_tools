@@ -33,19 +33,19 @@ namespace PT{
 
   template<StorageEnum storage, class Element> struct _StorageClass { };
   template<class Element> struct _StorageClass<vecS, Element>     { using type = std::vector<Element>; };
-  template<class Element> struct _StorageClass<sortvecS, Element> { using type = std::sorted_vector<Element>; };
+  template<class Element> struct _StorageClass<sortvecS, Element> { using type = mstd::sorted_vector<Element>; };
   template<class Element> struct _StorageClass<setS, Element>     { using type = std::set<Element>; };
   template<class Element> struct _StorageClass<hashsetS, Element> { using type = std::unordered_set<Element>; };
   template<class Element> struct _StorageClass<multisetS, Element>{ using type = std::unordered_multiset<Element>; };
-  template<class Element> struct _StorageClass<vecsetS, Element>  { using type = std::vector_hash<Element>; };
-  template<std::PointerType Element> struct _StorageClass<singleS, Element>  {
-    using type = std::singleton_set<std::optional_by_invalid<Element, nullptr>>;
+  template<class Element> struct _StorageClass<vecsetS, Element>  { using type = mstd::vector_hash<Element>; };
+  template<mstd::PointerType Element> struct _StorageClass<singleS, Element>  {
+    using type = mstd::singleton_set<mstd::optional_by_invalid<Element, nullptr>>;
   };
   template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  {
-    using type = std::singleton_set<std::optional_by_invalid<Element, Element(-1)>>;
+    using type = mstd::singleton_set<mstd::optional_by_invalid<Element, Element(-1)>>;
   };
   template<class Element> struct _StorageClass<singleS, Element>  {
-    using type = std::singleton_set<std::optional<Element>>;
+    using type = mstd::singleton_set<std::optional<Element>>;
   };
   template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
 
@@ -66,9 +66,9 @@ namespace PT{
   using HashMap = std::unordered_map<Key, Value, Hash, KeyEqual>;
 
   template<class Key, class Value>
-  using RawConsecutiveMap = std::raw_vector_map<Key, Value>;
-  template<class Key, class Value, class InvalidElement = std::default_invalid_t<Value>>
-  using ConsecutiveMap = std::vector_map<Key, Value, InvalidElement>;
+  using RawConsecutiveMap = mstd::raw_vector_map<Key, Value>;
+  template<class Key, class Value, class InvalidElement = mstd::default_invalid_t<Value>>
+  using ConsecutiveMap = mstd::vector_map<Key, Value, InvalidElement>;
 
   // node descriptors
 #ifndef NDEBUG
@@ -118,32 +118,32 @@ namespace PT {
   constexpr NodeDesc NoNode = NodeDesc{};
   const std::string NoName = "";
 
-  using OptionalNodeDesc = std::optional_by_invalid<NodeDesc, NoNode>;
+  using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc, NoNode>;
 
   template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
   template<class T>
   concept NodeDescType = std::is_convertible_v<std::remove_cvref_t<T>, NodeDesc>;
   template<class C>
-  concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<std::iterator_of_t<C>>::value_type, NodeDesc>;
+  concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<mstd::iterator_of_t<C>>::value_type, NodeDesc>;
   template<class C>
   concept HasNodeKey = std::is_convertible_v<typename std::remove_cvref_t<C>::key_type, NodeDesc>;
   template<class C>
-  concept NodeIterableType = (std::IterableType<C> && HasNodeValue<C>);
+  concept NodeIterableType = (mstd::IterableType<C> && HasNodeValue<C>);
   template<class C>
-  concept NodeContainerType = (std::ContainerType<C> && HasNodeValue<C>);
+  concept NodeContainerType = (mstd::ContainerType<C> && HasNodeValue<C>);
   template<class C>
-  concept NodeSetType = (std::SetType<C> && HasNodeValue<C>);
+  concept NodeSetType = (mstd::SetType<C> && HasNodeValue<C>);
   template<class C>
-  concept NodeMapType = (std::MapType<C> && HasNodeKey<C>);
+  concept NodeMapType = (mstd::MapType<C> && HasNodeKey<C>);
   template<class C>
-  concept OptionalNodeContainerType = (std::is_void_v<C> || (std::ContainerType<C> && HasNodeValue<C>));
+  concept OptionalNodeContainerType = (std::is_void_v<C> || (mstd::ContainerType<C> && HasNodeValue<C>));
   template<class C>
-  concept OptionalNodeSetType = (std::is_void_v<C> || (std::SetType<C> && HasNodeValue<C>));
+  concept OptionalNodeSetType = (std::is_void_v<C> || (mstd::SetType<C> && HasNodeValue<C>));
   template<class C>
-  concept OptionalNodeMapType = (std::is_void_v<C> || (std::MapType<C> && HasNodeKey<C>));
+  concept OptionalNodeMapType = (std::is_void_v<C> || (mstd::MapType<C> && HasNodeKey<C>));
   template<class C>
-  concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<std::mapped_type_of_t<C>, NodeDesc>);
+  concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<mstd::mapped_type_of_t<C>, NodeDesc>);
 
   template<class F> concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
   template<class F> concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
@@ -173,7 +173,7 @@ namespace PT {
   using NodeSingleton = StorageClass<singleS, NodeDesc>;
 #warning "TODO: find out why this uses std::optional and not optional_by_invalid!"
 
-  using ConsecutiveNodeSet = std::ordered_bitset;
+  using ConsecutiveNodeSet = mstd::ordered_bitset;
   template<class T>
   using NodeWith = std::pair<NodeDesc, T>;
   using NodeWithDegree = NodeWith<Degree>;
@@ -190,10 +190,10 @@ namespace PT {
   // an adjacency is something that can be converted to a NodeDesc
   template<class A>
   concept AdjacencyType = std::is_same_v<std::remove_cvref_t<A>, NodeDesc> ||
-    (!std::ArithmeticType<A> && std::is_convertible_v<const A, const NodeDesc&>);
+    (!mstd::ArithmeticType<A> && std::is_convertible_v<const A, const NodeDesc&>);
 
   template<class A>
-  concept AdjacencyContainerType = (std::ContainerType<A> && AdjacencyType<typename std::value_type_of_t<A>>);
+  concept AdjacencyContainerType = (mstd::ContainerType<A> && AdjacencyType<typename mstd::value_type_of_t<A>>);
 
   // a node is something providing a bunch of types and whose predecessors and successors can be queried
   template<typename N>
@@ -256,7 +256,7 @@ namespace PT {
 
 
   template<class T>
-  concept EdgeContainerType = (std::ContainerType<T> && EdgeType<typename T::value_type>);
+  concept EdgeContainerType = (mstd::ContainerType<T> && EdgeType<typename T::value_type>);
 
   template<class T>
   constexpr bool has_data = std::remove_reference_t<T>::has_data;

@@ -18,8 +18,8 @@ namespace PT {
     
     const Adjacencies& adj;
 
-    using NodeList = std::mapped_type_of_t<Adjacencies>;
-    using adj_pair = std::value_type_of_t<Adjacencies>;
+    using NodeList = mstd::mapped_type_of_t<Adjacencies>;
+    using adj_pair = mstd::value_type_of_t<Adjacencies>;
 
     // match a node u greedily in V (it's neighbors)
     void initial_greedy_one_node(const adj_pair& uV) {
@@ -30,7 +30,7 @@ namespace PT {
           return;
         }
       }
-      set_val(left_unmatched, u);
+      mstd::set_val(left_unmatched, u);
     }
 
     void initial_greedy() { for(const auto& uV: adj) initial_greedy_one_node(uV); }
@@ -38,9 +38,9 @@ namespace PT {
     // return whether the matching has been augmented, use 'seen' to indicate the visited nodes
     //NOTE: u is a node on the left
     bool augment_matching(const NodeDesc u) {
-      if(!set_val(left_seen, u)) return false;
+      if(!mstd::set_val(left_seen, u)) return false;
       // if u is matched, ignore u's matching partner when looking for augmenting paths
-      const NodeDesc skip = map_lookup(left_match, u, NoNode);
+      const NodeDesc skip = mstd::map_lookup(left_match, u, NoNode);
       for(const NodeDesc v: adj.at(u)) if(v != skip) {
         // if v is not matched either, we can augment the matching with uv
         const auto [v_match_it, success] = right_match.emplace(v, u);
@@ -64,7 +64,7 @@ _start_here:
       left_seen.clear();
       for(const NodeDesc u: left_unmatched)
         if(augment_matching(u)){
-          my_erase(left_unmatched, u);
+          mstd::erase(left_unmatched, u);
           goto _start_here;
         }
     }

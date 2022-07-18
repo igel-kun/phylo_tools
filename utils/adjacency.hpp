@@ -82,11 +82,11 @@ namespace PT {
   concept AdjAdapterType = std::invocable<T, const Adj&, typename Phylo::Adjacency&>;
 
 
-  template<std::Printable T>
+  template<mstd::Printable T>
   std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
     return os << a.nd << '[' << *(a.data_ptr) << ']';
   }
-  template<class T> requires (!std::Printable<T>)
+  template<class T> requires (!mstd::Printable<T>)
   std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
     if constexpr(Adjacency<T>::has_data) {
       return os << a.nd << '[' << '@' << a.data_ptr << ']';

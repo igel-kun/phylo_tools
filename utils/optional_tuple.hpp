@@ -1,7 +1,7 @@
 
 #pragma once
 
-namespace std {
+namespace mstd {
 /*
 
   template<class T1> struct optional_member {
@@ -74,7 +74,7 @@ namespace std {
     optional_item(const optional_item&) = default;
     optional_item(optional_item&&) = default;
     
-    template<class... Args> requires (!is_reference_v<T> || (sizeof...(Args) != 0))
+    template<class... Args> requires (!std::is_reference_v<T> || (sizeof...(Args) != 0))
     optional_item(Args&&... args): value(std::forward<Args>(args)...) {}
 
     operator T&() { return value; }
@@ -102,7 +102,7 @@ namespace std {
   {
     _optional_tuple(){};
 
-    template<class _LastT, class... _Rest> requires (!is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, remove_cvref_t<_LastT>>)
+    template<class _LastT, class... _Rest> requires (!std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>>)
     _optional_tuple(_LastT&& last, _Rest&&... rest):
       optional_item<i, LastT>(std::forward<_LastT>(last)),
       _optional_tuple<i + 1, Rest...>(std::forward<_Rest>(rest)...)
@@ -153,7 +153,7 @@ namespace std {
   struct _optional_tuple<i, void, Rest...>: public _optional_tuple<i + 1, Rest...> {
     _optional_tuple(){};
 
-    template<class _LastT, class... _Rest> requires (!is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, remove_cvref_t<_LastT>>)
+    template<class _LastT, class... _Rest> requires (!std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>>)
     _optional_tuple(_LastT&& last, _Rest&&... rest):
       _optional_tuple<i + 1, Rest...>(std::forward<_Rest>(rest)...)
     {}
@@ -194,7 +194,7 @@ namespace std {
   }
 
   template<size_t i, class T>
-  struct _has_value { static constexpr bool value = !is_void_v<T>; };
+  struct _has_value { static constexpr bool value = !std::is_void_v<T>; };
   template<size_t i, class LastT, class... Rest>
   struct _has_value<i, _optional_tuple<i, LastT, Rest...>> { static constexpr bool value = !std::is_void_v<LastT>; };
 

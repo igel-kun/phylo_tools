@@ -11,10 +11,10 @@
 
 #pragma once
 
-namespace std{
+namespace mstd{
   // do binary search on the vector
   template<class Iter, class Comp, class Key>
-  inline pair<Iter, bool> my_binary_search(Iter min, Iter past_end, const Comp& _comp, const Key& key)
+  inline std::pair<Iter, bool> my_binary_search(Iter min, Iter past_end, const Comp& _comp, const Key& key)
   {
     // the sought value is always in the range [min, past_end - 1] until min == past_end
     while(min != past_end){
@@ -29,15 +29,15 @@ namespace std{
   }
 
   template<class Key, class Compare = std::less<Key>, class Allocator = std::allocator<Key>>
-  class sorted_vector: private vector<Key>
+  class sorted_vector: private std::vector<Key>
   {
     protected:
-      using Parent = vector<Key>;
+      using Parent = std::vector<Key>;
     public:
       using typename Parent::iterator;
       using typename Parent::const_iterator;
-      using insert_result = pair<iterator, bool>;
-      using const_insert_result = pair<const_iterator, bool>;
+      using insert_result = std::pair<iterator, bool>;
+      using const_insert_result = std::pair<const_iterator, bool>;
 
       using Parent::erase;
       using Parent::begin;
@@ -74,7 +74,7 @@ namespace std{
     public:
 
       sorted_vector(): Parent() {}
-      sorted_vector(const initializer_list<Key>& li):
+      sorted_vector(const std::initializer_list<Key>& li):
         Parent(li)
       { sortme(); }
       template<class InputIt>

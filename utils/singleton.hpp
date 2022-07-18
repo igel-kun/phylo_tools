@@ -3,7 +3,7 @@
 
 #include "optional.hpp"
 
-namespace std{
+namespace mstd{
 
   // a set holding at most one element, but having a set-interface
   template<Optional Container>
@@ -52,9 +52,9 @@ namespace std{
     }
 
     template<class... Args>
-    constexpr pair<iterator, bool> emplace(Args&&... args) {
+    constexpr std::pair<iterator, bool> emplace(Args&&... args) {
       if(empty()){
-        value_type& emplace_result = storage.emplace(forward<Args>(args)...);
+        value_type& emplace_result = storage.emplace(std::forward<Args>(args)...);
         return {&emplace_result, true};
       } else {
         assert(false && "trying to add second element to singleton set");
@@ -63,7 +63,7 @@ namespace std{
     }
 
     template<class... Args>
-    pair<iterator, bool> emplace_back(Args&&... args) { return emplace(forward<Args>(args)...); }
+    std::pair<iterator, bool> emplace_back(Args&&... args) { return emplace(std::forward<Args>(args)...); }
  
     template<class Iter>
     void insert(const Iter& src_begin, const Iter& src_end)
@@ -108,6 +108,6 @@ namespace std{
   template<class T> struct is_singleton_set: public std::false_type {};
   template<class T> struct is_singleton_set<singleton_set<T>>: public std::true_type {};
   template<class T> constexpr bool is_singleton_set_v = is_singleton_set<T>::value;
-  template<class T> concept SingletonSetType = is_singleton_set_v<remove_cvref_t<T>>;
+  template<class T> concept SingletonSetType = is_singleton_set_v<std::remove_cvref_t<T>>;
 
 }

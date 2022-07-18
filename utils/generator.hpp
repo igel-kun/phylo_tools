@@ -4,7 +4,7 @@
 #include <coroutine>
 #include "stl_utils.hpp"
 
-namespace std {
+namespace mstd {
 
   template<class T>
   class generator: public iter_traits_from_reference<T> {
@@ -19,7 +19,7 @@ namespace std {
     using coro_handle = std::coroutine_handle<promise_type>;
 
     struct promise_type {
-      using TempStorage = std::conditional_t<Traits::returning_rvalue, T, reference_wrapper<remove_reference_t<T>>>;
+      using TempStorage = std::conditional_t<Traits::returning_rvalue, T, std::reference_wrapper<std::remove_reference_t<T>>>;
 
       TempStorage current_value;
       auto get_return_object() { return generator{coro_handle::from_promise(*this)}; }

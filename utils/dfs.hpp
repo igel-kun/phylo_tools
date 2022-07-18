@@ -163,7 +163,7 @@ namespace PT{
     }
 
     bool is_valid() const { return child_history.size() >= min_stacksize; }
-    static constexpr auto get_end() { return std::GenericEndIterator(); }
+    static constexpr auto get_end() { return mstd::GenericEndIterator(); }
 
     // DFSIterators for other traversal types are our friends!
     template<TraversalType, TraversalTraitsType>
@@ -250,7 +250,7 @@ namespace PT{
   class DFSAllEdgesTailPOIterator: public DFSNodeIterator<postorder, _Network, _SeenSet, _Forbidden> {
     using Parent = DFSNodeIterator<postorder, _Network, _SeenSet, _Forbidden>;
     using Traits = AllEdgesTraits<_Network, _SeenSet, false, _Forbidden>;
-    using InternalIter = std::auto_iter<typename _Network::SuccContainer>;
+    using InternalIter = mstd::auto_iter<typename _Network::SuccContainer>;
     InternalIter current_children;
 
     void advance_dfs_nodes() {
@@ -338,25 +338,25 @@ namespace PT{
            OptionalNodeSetType SeenSet,
            class Forbidden>
   struct TraversalHelper:
-    public std::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
+    public mstd::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
   {
     using ForbiddenPred = pred::AsContainmentPred<Forbidden>;
-    using Parent = std::optional_tuple<ForbiddenPred, SeenSet>;
+    using Parent = mstd::optional_tuple<ForbiddenPred, SeenSet>;
     // we can pass both an iterator or a container as Roots
-    using RootIter = std::iterator_of_t<Roots>;
+    using RootIter = mstd::iterator_of_t<Roots>;
     // we'll give references to our seen set and the forbidden predicate to each sub-iterator
     using SeenSetRef = std::add_lvalue_reference_t<SeenSet>;
     using ForbiddenPredRef = std::add_lvalue_reference_t<ForbiddenPred>;
     using SingleRootIter = choose_iterator<o, Network, SeenSetRef, ForbiddenPredRef>;
-    using SingleRootIterFac = std::IterFactory<SingleRootIter>;
+    using SingleRootIterFac = mstd::IterFactory<SingleRootIter>;
     static constexpr bool is_multi_rooted = true;
     static constexpr bool has_forbidden_pred = std::is_void_v<Forbidden>;
     static constexpr bool has_seen_set = std::is_void_v<SeenSet>;
     
     // transformation turning each root into an iterfactory of DFS-iterators from that node
     template<class TransForbidden, class TransSeen>
-    struct MultiRootIterTrans: std::optional_tuple<TransForbidden, TransSeen> {
-      using Parent = std::optional_tuple<TransForbidden, TransSeen>;
+    struct MultiRootIterTrans: mstd::optional_tuple<TransForbidden, TransSeen> {
+      using Parent = mstd::optional_tuple<TransForbidden, TransSeen>;
       using Parent::Parent;
 
       auto operator()(const NodeDesc r) const {
@@ -376,10 +376,10 @@ namespace PT{
       };
     };
 
-    using Iter = std::concatenating_iterator<std::transforming_iterator<RootIter, MultiRootIterTrans<ForbiddenPredRef, SeenSetRef>>>;
-    using OwningIter = std::concatenating_iterator<std::transforming_iterator<RootIter, MultiRootIterTrans<ForbiddenPred, SeenSet>>>;
+    using Iter = mstd::concatenating_iterator<mstd::transforming_iterator<RootIter, MultiRootIterTrans<ForbiddenPredRef, SeenSetRef>>>;
+    using OwningIter = mstd::concatenating_iterator<mstd::transforming_iterator<RootIter, MultiRootIterTrans<ForbiddenPred, SeenSet>>>;
 
-    std::auto_iter<RootIter> roots;
+    mstd::auto_iter<RootIter> roots;
 
     template<class RootInit, class... Args>
     TraversalHelper(RootInit&& _roots, Args&&... args):
@@ -406,7 +406,7 @@ namespace PT{
     template<class... Args> requires (sizeof...(Args) != 0)
     auto begin(Args&&... args) { return Iter(std::piecewise_construct, std::forward_as_tuple(roots), std::forward_as_tuple(std::forward<Args>(args)...)); }
 
-    static constexpr auto end() { return std::GenericEndIterator(); }
+    static constexpr auto end() { return mstd::GenericEndIterator(); }
   };
 
   // in the single-rooted case, things become much simpler
@@ -415,10 +415,10 @@ namespace PT{
            OptionalNodeSetType SeenSet,
            class Forbidden>
   struct TraversalHelper<o, Network, void, SeenSet, Forbidden>:
-    public std::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
+    public mstd::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
   {
     using ForbiddenPred = pred::AsContainmentPred<Forbidden>;
-    using Parent = std::optional_tuple<ForbiddenPred, SeenSet>;
+    using Parent = mstd::optional_tuple<ForbiddenPred, SeenSet>;
 
     // we'll give references to our seen set and the forbidden predicate to each sub-iterator
     using SeenSetRef = std::add_lvalue_reference_t<SeenSet>;
@@ -457,7 +457,7 @@ namespace PT{
     template<class... Args> requires (sizeof...(Args) != 0)
     auto begin(Args&&... args) { return Iter(root, std::forward<Args>(args)...); }
 
-    static constexpr auto end() { return std::GenericEndIterator(); }
+    static constexpr auto end() { return mstd::GenericEndIterator(); }
   };
   template<TraversalType o,
            PhylogenyType Network,
@@ -492,10 +492,10 @@ namespace PT{
            class Forbidden = void>
   struct Traversal:
     public TraversalHelper<o, Network, std::remove_cvref_t<Roots>, SeenSet, Forbidden>,
-    public std::my_iterator_traits<typename TraversalHelper<o, Network, std::remove_cvref_t<Roots>, SeenSet, Forbidden>::Iter>
+    public mstd::iterator_traits<typename TraversalHelper<o, Network, std::remove_cvref_t<Roots>, SeenSet, Forbidden>::Iter>
   {
     using Parent = TraversalHelper<o, Network, Roots, SeenSet, Forbidden>;
-    using Traits = std::my_iterator_traits<typename TraversalHelper<o, Network, std::remove_cvref_t<Roots>, SeenSet, Forbidden>::Iter>;
+    using Traits = mstd::iterator_traits<typename TraversalHelper<o, Network, std::remove_cvref_t<Roots>, SeenSet, Forbidden>::Iter>;
     using iterator = typename Parent::Iter;
     using const_iterator = iterator;
     using Parent::Parent;
@@ -514,7 +514,7 @@ namespace PT{
     auto& forbidden_predicate() { return Parent::template get<0>(); }
     const auto& forbidden_predicate() const { return Parent::template get<0>(); }
 
-    template<std::ContainerType Container>
+    template<mstd::ContainerType Container>
     Container& append_to(Container& c) { append(c, *this); return c; }
   };
 

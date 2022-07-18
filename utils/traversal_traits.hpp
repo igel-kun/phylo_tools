@@ -56,14 +56,14 @@ namespace PT {
 
 	// NOTE: _SeenSet may be a reference (or even void)
   template<StrictPhylogenyType _Network,
-           std::IterableType _ItemContainer,
+           mstd::IterableType _ItemContainer,
            OptionalNodeSetType _SeenSet,
            class _Forbidden>
   struct _TraversalTraits:
-    public std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
-    public std::my_iterator_traits<std::iterator_of_t<_ItemContainer>>
+    public mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
+    public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
   {
-    using Parent = std::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>;
+    using Parent = mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>;
     using Parent::Parent;
 
     // NOTE: this forwarding constructor is necessary to construct _TraversalTraits from optional_tuples
@@ -87,10 +87,10 @@ namespace PT {
     // we consider a node 'seen' if it's either seen or forbidden
     bool is_seen(const NodeDesc u) const {
       bool result = is_forbidden(u);
-      if constexpr (has_seen) result |= test(this->template get<1>(), u);
+      if constexpr (has_seen) result |= mstd::test(this->template get<1>(), u);
       return result;
     }
-    void mark_seen(const NodeDesc u) { append(this->template get<1>(), u); }
+    void mark_seen(const NodeDesc u) { mstd::append(this->template get<1>(), u); }
   };
 
 
@@ -104,17 +104,17 @@ namespace PT {
            class _Forbidden = void>
   class NodeTraversalTraits: public _TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _SeenSet, _Forbidden> {
     using Parent = _TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _SeenSet, _Forbidden>;
-    using IterTraits = std::my_iterator_traits<std::iterator_of_t<NextNodeContainer<_Network, reverse>>>;
+    using IterTraits = mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, reverse>>>;
   public:
     using typename Parent::Network;
     using typename Parent::ItemContainer;
     using value_type      = const NodeDesc;
     using reference       = value_type;
     using const_reference = reference;
-    using pointer         = std::pointer_from_reference<reference>;
-    using const_pointer   = std::pointer_from_reference<const_reference>;
+    using pointer         = mstd::pointer_from_reference<reference>;
+    using const_pointer   = mstd::pointer_from_reference<const_reference>;
     using ItemContainerRef = ItemContainer&;
-    using child_iterator  = std::auto_iter<std::iterator_of_t<ItemContainer>>;
+    using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
@@ -139,8 +139,8 @@ namespace PT {
            class _Forbidden = void>
   class EdgeTraversalTraits: public _TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _SeenSet, _Forbidden> {
     using Parent = _TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _SeenSet, _Forbidden>;
-    using EdgeIter = std::iterator_of_t<NextEdgeContainer<_Network, reverse>>;
-    using EdgeIterTraits = std::my_iterator_traits<EdgeIter>;
+    using EdgeIter = mstd::iterator_of_t<NextEdgeContainer<_Network, reverse>>;
+    using EdgeIterTraits = mstd::iterator_traits<EdgeIter>;
   public:
     // NOTE: the DFS traversal stack will hold auto-iters for iterators into _Network::(Out)EdgeContainer (which is an IterFactory)
     //       such iterators construct edges from the child-adjacencies on the fly when they are de-referenced (rvalues instead of lvalue references).
@@ -157,7 +157,7 @@ namespace PT {
     using Adjacency = typename _Network::Adjacency;
     using Parent::mark_seen;
     using Parent::is_seen;
-    using child_iterator  = std::auto_iter<std::iterator_of_t<ItemContainer>, typename EdgeIter::UnderlyingIterator>;
+    using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>, typename EdgeIter::UnderlyingIterator>;
 
     // an empty stack represents the end-iterator
     static constexpr unsigned char min_stacksize = 2;

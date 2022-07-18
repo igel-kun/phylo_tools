@@ -103,13 +103,13 @@ namespace pred {
 
   // predicate for containers of sets, returning whether the given set is empty
   struct EmptyPredicate {
-    template<std::IterableType _Set> constexpr bool operator()(const _Set& x) const { return x.empty();} 
-    template<std::IterableType _Set> constexpr bool operator()(const _Set& x) { return x.empty();} 
+    template<mstd::IterableType _Set> constexpr bool operator()(const _Set& x) const { return x.empty();} 
+    template<mstd::IterableType _Set> constexpr bool operator()(const _Set& x) { return x.empty();} 
   };
   using NonEmptyPredicate = NotPredicate<EmptyPredicate>;
 
   // a predicate returning true/or false depending on whether the query is in a given set
-  template<std::IterableType Container, bool is_in = true>
+  template<mstd::IterableType Container, bool is_in = true>
   struct ContainmentPredicate {
     const Container& c;
     constexpr ContainmentPredicate(const Container& _c): c(_c) {}
@@ -119,7 +119,7 @@ namespace pred {
 
   // if P is iterable, get its containment predicate
   template<class P> struct _AsContainmentPred { using type = P; };
-  template<std::IterableType P> struct _AsContainmentPred<P> { using type = ContainmentPredicate<P>; };
+  template<mstd::IterableType P> struct _AsContainmentPred<P> { using type = ContainmentPredicate<P>; };
   template<class P> using AsContainmentPred = typename _AsContainmentPred<P>::type;
 
 

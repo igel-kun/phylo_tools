@@ -2,7 +2,7 @@
 // a dummy structure with a set interface that does not contain anything (even if you try to insert things)
 #pragma once
 
-namespace std {
+namespace mstd {
 
   template<class T>
   struct emptyset: public iter_traits_from_reference<T&> {

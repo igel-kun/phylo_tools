@@ -6,7 +6,7 @@
 #include "utils.hpp"
 #include<unordered_map>
 
-namespace std{
+namespace mstd{
   template<class Key>
   class _DSet {
     Key representative;    // the representative element of our set
@@ -55,7 +55,7 @@ namespace std{
 
 
   template<class K, class P>
-  ostream& operator<<(ostream& os, const DSet<K,P>& ds) { 
+  std::ostream& operator<<(std::ostream& os, const DSet<K,P>& ds) { 
     os << "->" << ds.get_representative() << " [size "<<ds.size();
     if constexpr (std::is_void_v<P>) 
       return os<<"]";
@@ -66,8 +66,8 @@ namespace std{
 
   // a union-find datastructure on keys, allowing an additional payload to be stored for each key
   template<class Key, class Payload = void>
-  class DisjointSetForest: public unordered_map<Key, DSet<Key, Payload>> {
-    using Parent = unordered_map<Key, DSet<Key, Payload>>;
+  class DisjointSetForest: public std::unordered_map<Key, DSet<Key, Payload>> {
+    using Parent = std::unordered_map<Key, DSet<Key, Payload>>;
   protected:
     using Set = DSet<Key, Payload>;
     using Parent::try_emplace;
@@ -114,7 +114,7 @@ namespace std{
     template<class... Args>
     Set& add_new_set(const Key& x, Args&&... args) {
       const auto [iter, success] = emplace_set(x, std::forward<Args>(args)...);
-      if(!success) throw logic_error("trying to add existing item to set-forest");
+      if(!success) throw std::logic_error("trying to add existing item to set-forest");
       return iter->second;
     }
 
@@ -135,7 +135,7 @@ namespace std{
       if(success){
         y_set.grow(1);
         return iter->second;
-      } else throw logic_error("trying to add existing item to set-forest");
+      } else throw std::logic_error("trying to add existing item to set-forest");
     }
     // add a new item x to the set of another item y
     Set& add_item_to_set_of(const Key& y, const Key& x) { return add_item_to_set(set_of(y), x); }
@@ -167,7 +167,7 @@ namespace std{
 
     Set& set_of(const Key& x) { return set_of(x, at(x)); }
 
-    pair<Set*,Set*> lookup(const Key& x) {
+    std::pair<Set*,Set*> lookup(const Key& x) {
       const auto iter = this->find(x);
       if(iter != this->end()) {
         return {&(iter->second), &set_of(x, iter->second)};
@@ -239,7 +239,7 @@ namespace std{
     {}
     // for moving, the unordered_map move-constructor should be fine
     DisjointSetForest(DisjointSetForest&& _dsf):
-      Parent(_dsf), _set_count(move(_dsf._set_count))
+      Parent(_dsf), _set_count(std::move(_dsf._set_count))
     {}
 
     DisjointSetForest& operator=(const DisjointSetForest& _dsf) {

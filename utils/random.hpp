@@ -36,17 +36,17 @@ namespace PT{
   }
 
   //! get an iterator to a (uniformly) random item in the container
-  template<std::IterableType Container>
+  template<mstd::IterableType Container>
   auto get_random_iterator(Container&& c, const size_t container_size) {
     assert(!c.empty());
     return std::next(c.begin(), throw_die(container_size));
   }
 
-  template<std::IterableTypeWithSize Container>
+  template<mstd::IterableTypeWithSize Container>
   auto get_random_iterator(Container&& c) { return get_random_iterator(std::forward<Container>(c), c.size()); }
 
   //! get an iterator to a (uniformly) random item in the container, except a given iterator
-  template<std::IterableType Container>
+  template<mstd::IterableType Container>
   auto get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size) {
     assert((container_size >= 2) || (_except == std::end(c)));
     auto result = std::begin(std::forward<Container>(c));
@@ -55,7 +55,7 @@ namespace PT{
     return result;
   }
 
-  template<std::IterableTypeWithSize Container>
+  template<mstd::IterableTypeWithSize Container>
   auto get_random_iterator_except(Container&& c, const auto& _except)
   {
     return get_random_iterator_except(std::forward<Container>(c), _except, c.size());

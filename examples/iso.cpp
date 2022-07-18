@@ -72,12 +72,12 @@ int main(const int argc, const char** argv)
   }
   NetworkB N1(read_from_stream<NetworkB>(in));
 
-  if(test(options, "-v"))
+  if(mstd::test(options, "-v"))
     std::cout << "N0: " << std::endl << N0 << std::endl << "N1:" <<std::endl << N1 << std::endl;
-  const unsigned char iso_flags = ((!test(options, "-il")) ? FLAG_MAP_LEAF_LABELS : 0) |
-                                  ((test(options, "-mt")) ? FLAG_MAP_TREE_LABELS : 0) |
-                                  ((test(options, "-mr")) ? FLAG_MAP_RETI_LABELS : 0) |
-                                  ((test(options, "-ma")) ? FLAG_MAP_ALL_LABELS : 0);
+  const unsigned char iso_flags = ((!mstd::test(options, "-il")) ? FLAG_MAP_LEAF_LABELS : 0) |
+                                  ((mstd::test(options, "-mt")) ? FLAG_MAP_TREE_LABELS : 0) |
+                                  ((mstd::test(options, "-mr")) ? FLAG_MAP_RETI_LABELS : 0) |
+                                  ((mstd::test(options, "-ma")) ? FLAG_MAP_ALL_LABELS : 0);
 
   std::cout << "checking isomorphism..."<<std::endl;
   auto M = make_iso_mapper(N0, N1, iso_flags);

@@ -9,7 +9,7 @@
 #include "iter_bitset.hpp"
 #include "filter.hpp"
 
-namespace std{
+namespace mstd{
 
   template<class _Key, class _Element, class _AbsentPredicate>
   class _vector_map: public raw_vector_map<_Key, _Element> {
@@ -22,9 +22,9 @@ namespace std{
     using Parent::size;
 
     using AbsentPredicate = _AbsentPredicate;
-    using iterator = std::filtered_iterator<Parent, AbsentPredicate>;
+    using iterator = filtered_iterator<Parent, AbsentPredicate>;
     using const_iterator = filtered_iterator<const Parent, AbsentPredicate>;
-    using insert_result = pair<iterator, bool>;
+    using insert_result = std::pair<iterator, bool>;
   protected:
     void raw_resize(const key_type new_size) { Parent::resize(new_size); }
     void resize(const key_type new_size, const _Element& fill) { Parent::resize(new_size, fill); }
@@ -71,7 +71,7 @@ namespace std{
     // insert and emplace are (almost) synonymous to try_emplace
     template<class... Args>
     insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, forward<Args>(args)...); }
-    insert_result insert(const pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
+    insert_result insert(const std::pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
     iterator begin() { return make_iterator(Parent::begin()); }
     const_iterator begin() const { return make_iterator(Parent::begin()); }

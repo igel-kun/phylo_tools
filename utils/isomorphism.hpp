@@ -34,12 +34,12 @@ namespace PT{
   //NOTE: you may customize the possibility-set type to your needs:
   //    for example, for single-labeled trees, we recommend a singleton_set,
   //    for low-multiply labeled trees & low-level networks an unordered_set<NodeDesc> should be good
-  template<class NetworkA, class NetworkB, class _PossSet = std::unordered_bitset>
+  template<class NetworkA, class NetworkB, class _PossSet = mstd::unordered_bitset>
   class IsomorphismMapper
   {
     using PossSet     = _PossSet;
     using MappingPossibility = NodeMap<PossSet>;
-    using UpdateSet   = std::unordered_bitset;
+    using UpdateSet   = mstd::unordered_bitset;
     using UpdateOrder = std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair> >;
     using LabelMatch  = LabelMatching<NetworkA, NetworkB>;
     using LabelType   = typename LabelMatch::LabelType;

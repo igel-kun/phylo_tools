@@ -15,7 +15,7 @@ using namespace PT;
 
 using MyNetwork = DefaultLabeledNetwork<>;
 using MyEdge = typename MyNetwork::Edge;
-using SWIter = std::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
+using SWIter = mstd::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
 
 OptionMap options;
 
@@ -89,7 +89,7 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   // compute scanwidth of ex
   const auto sw = ex.sw_map<MyNetwork>();
 
-  std::cout << "sw: "<< sw << " --- (max: "<<*(std::max_element(seconds(sw)))<<")"<<std::endl;
+  std::cout << "sw: "<< sw << " --- (max: "<<*(mstd::max_element(mstd::seconds(sw)))<<")"<<std::endl;
 
   std::cout << "constructing extension tree\n";
   GammaType Gamma(ExtToTree<GammaType>::ext_to_tree(N, ex, [](const NodeDesc& u){ return u; }));
@@ -98,7 +98,7 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   const auto gamma_sw = ext_tree_sw_map(Gamma, [&](const NodeDesc& tree_u){ return N.degrees(Gamma.node_of(tree_u).data()); } );
   std::cout << "sw map: " << gamma_sw << std::endl;
 
-  std::cout << "(sw = "<< *std::max_element(seconds(gamma_sw))<<")"<<std::endl;
+  std::cout << "(sw = "<< *mstd::max_element(mstd::seconds(gamma_sw))<<")"<<std::endl;
 }
 
 
@@ -109,10 +109,10 @@ int main(const int argc, const char** argv) {
 
   std::cout << "reading network...\n";
   MyNetwork N(read_network(std::ifstream(options[""][0])));
-  if(test(options, "-v"))
+  if(mstd::test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
-//  if(test(options, "-pp") sw_preprocess(N);
+//  if(mstd::test(options, "-pp") sw_preprocess(N);
 
   std::cout << "\n ==== computing silly post-order extension ===\n";  
   Extension ex;
@@ -124,7 +124,7 @@ int main(const int argc, const char** argv) {
   std::cout << "\n ==== computing optimal extension ===\n";
   Extension ex_opt;
   ex_opt.reserve(N.num_nodes());
-  if(test(options, "-lm")){
+  if(mstd::test(options, "-lm")){
     std::cout << "using low-memory version...\n";
     compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex_opt.push_back(u); });
     //compute_min_sw_extension<true>(N, ex_opt); // this is equivalent

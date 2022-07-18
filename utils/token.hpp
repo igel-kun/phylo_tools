@@ -3,7 +3,7 @@
 
 #include <string>
 
-namespace std{
+namespace mstd{
 
   class Tokenizer
   {

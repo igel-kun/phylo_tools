@@ -3,7 +3,7 @@
 
 #include <optional>
 
-namespace std {
+namespace mstd {
   // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (much like nullptr)
   template<class T, T _invalid>
   class optional_by_invalid {
@@ -35,7 +35,7 @@ namespace std {
       new(addr) T(std::forward<Args>(args)...);
       return *addr;
     }
-    template<class Q> requires (is_trivially_assignable_v<T&, Q&&>)
+    template<class Q> requires (std::is_trivially_assignable_v<T&, Q&&>)
     constexpr T& emplace(Q&& other) {
       element = std::forward<Q>(other);
       return element;
@@ -68,7 +68,7 @@ namespace std {
     operator bool() const { return has_value(); }
     bool has_value() const { return element != _invalid; }
 
-    friend ostream& operator<<(ostream& os, const optional_by_invalid& opt) {
+    friend std::ostream& operator<<(std::ostream& os, const optional_by_invalid& opt) {
       return os << opt.element;
     }
   };
@@ -76,11 +76,11 @@ namespace std {
   template<class T>
   static constexpr bool is_optional_v = false;
   template<class T>
-  static constexpr bool is_optional_v<optional<T>> = true;
+  static constexpr bool is_optional_v<std::optional<T>> = true;
   template<class T, T _invalid>
   static constexpr bool is_optional_v<optional_by_invalid<T, _invalid>> = true;
 
   template<class T>
-  concept Optional = is_optional_v<remove_reference_t<T>>;
+  concept Optional = is_optional_v<std::remove_reference_t<T>>;
 
 }
