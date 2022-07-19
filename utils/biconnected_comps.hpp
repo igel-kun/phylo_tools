@@ -72,9 +72,10 @@ namespace PT{
 
     void make_component_along(const NodeDesc v) {
       output = std::make_unique<Component>();
-      Emplacer output_emplacer{data_extracter, *output, old_to_new};
       const NodeDesc u = get_current_cut_node();
+      Emplacer output_emplacer{data_extracter, *output, old_to_new};
       make_component_along(u, v, output_emplacer);
+      std::cout << "marking " << u << " as the root\n";
       output_emplacer.mark_root(u);
     }
 
@@ -189,6 +190,22 @@ namespace PT{
     return BiconnectedComponents<Network, Component, OldToNewTranslation, Extracter>(
         std::forward<CutsInit>(cuts),
         std::forward<OldToNewTranslation>(old_to_new),
+        std::forward<ExtracterArgs>(ex_args)...);
+  }
+
+  template<StrictPhylogenyType Network,
+           StrictPhylogenyType Component = Network,
+           class CutsInit,
+           class First,
+           class... ExtracterArgs>
+             requires ((!PhylogenyType<CutsInit> || std::is_same_v<std::remove_cvref_t<CutsInit>,std::remove_cvref_t<Network>>) &&
+                 !NodeTranslationType<First>)
+  auto get_biconnected_components(CutsInit&& cuts, First&& first, ExtracterArgs&&... ex_args) {
+    using Extracter = decltype(make_data_extracter<Network, Component>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...));
+    return BiconnectedComponents<Network, Component, NodeTranslation, Extracter>(
+        std::forward<CutsInit>(cuts),
+        NodeTranslation(),
+        std::forward<First>(first),
         std::forward<ExtracterArgs>(ex_args)...);
   }
 

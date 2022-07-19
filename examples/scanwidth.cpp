@@ -82,7 +82,9 @@ MyNetwork read_network(std::ifstream&& in) {
 
 void print_extension(const MyNetwork& N, const Extension& ex) {
   // for educational purposes, each Node of the extension tree will store the description of the corresponding node in the network
-  using GammaType = CompatibleTree<const MyNetwork, const NodeDesc>;
+  using GammaTree = CompatibleTree<const MyNetwork, const NodeDesc>;
+  using NodeSWMap = NodeMap<NodeSet>;
+  using EdgeSWMap = NodeMap<EdgeSet<>>;
 
   std::cout << "extension: " << ex << std::endl;
 
@@ -92,10 +94,16 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   std::cout << "sw: "<< sw << " --- (max: "<<*(mstd::max_element(mstd::seconds(sw)))<<")"<<std::endl;
 
   std::cout << "constructing extension tree\n";
-  GammaType Gamma(ExtToTree<GammaType>::ext_to_tree(N, ex, [](const NodeDesc& u){ return u; }));
-  std::cout << "extension tree:\n" << Gamma << std::endl;
+  const GammaTree Gamma(ExtToTree<MyNetwork, GammaTree, false>::ext_to_tree(ex, [](const NodeDesc u){ return u; }));
+  std::cout << "extension tree:\n" << ExtendedDisplay(Gamma) << std::endl;
   
-  const auto gamma_sw = ext_tree_sw_map(Gamma, [&](const NodeDesc& tree_u){ return N.degrees(Gamma.node_of(tree_u).data()); } );
+  const auto gamma_nodes = ext_tree_sw_nodes_map<MyNetwork, NodeSWMap>(Gamma, [](const NodeDesc tree_u){ return GammaTree::node_of(tree_u).data(); });
+  std::cout << "scanwidth node-map: " << gamma_nodes << std::endl;
+
+  const auto gamma_edges = ext_tree_sw_edges_map<MyNetwork, EdgeSWMap>(Gamma, [](const NodeDesc tree_u){ return GammaTree::node_of(tree_u).data(); });
+  std::cout << "scanwidth edge-map: " << gamma_edges << std::endl;
+
+  const auto gamma_sw = ext_tree_sw_map(Gamma, [](const NodeDesc tree_u){ return MyNetwork::degrees(GammaTree::node_of(tree_u).data()); } );
   std::cout << "sw map: " << gamma_sw << std::endl;
 
   std::cout << "(sw = "<< *mstd::max_element(mstd::seconds(gamma_sw))<<")"<<std::endl;

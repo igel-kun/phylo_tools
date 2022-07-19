@@ -20,7 +20,7 @@ namespace PT {
     using OldToNewTranslation = _OldToNewTranslation;
     using StrictTranslation = std::remove_reference_t<OldToNewTranslation>;
     static constexpr bool track_roots = _track_roots;
-
+#warning "TODO: if _SourcePhylo is void, we will surely not need the Translation!"
     TargetPhylo& N;
     OldToNewTranslation old_to_new;
 
@@ -86,11 +86,11 @@ namespace PT {
     }
 
     bool mark_root(const NodeDesc r) {
-      assert(N.in_degree(r) == 0);
       assert(old_to_new.contains(r));
-      return mstd::append(N._roots, old_to_new.at(r)).second;
+      return mark_root_directly(old_to_new.at(r));
     }
     bool mark_root_directly(const NodeDesc r) {
+      assert(N.in_degree(r) == 0);
       return mstd::append(N._roots, r).second;
     }
 

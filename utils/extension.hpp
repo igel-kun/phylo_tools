@@ -13,16 +13,20 @@ namespace PT{
     // import constructors
     using Parent::Parent;
 
-    void get_inverse(std::unordered_map<NodeDesc, sw_t>& inverse) const {
-       for(unsigned i = 0; i < this->size(); ++i) inverse.emplace(this->at(i), i);
+    void compute_inverse(std::unordered_map<NodeDesc, sw_t>& inverse) const {
+       for(size_t i = 0; i < this->size(); ++i) inverse.emplace(this->at(i), i);
+    }
+    auto get_inverse() const {
+      std::unordered_map<NodeDesc, sw_t> result;
+      compute_inverse(result);
+      return result;
     }
 
     // return if the extension is valid for a given network
     template<PhylogenyType Net>
-    bool is_valid_for(const Net& N) {
+    bool is_valid_for(const Net& N) const {
       // construct inverse of the extension, mapping each node to its position
-      std::unordered_map<NodeDesc, sw_t> inverse;
-      get_inverse(inverse);
+      const std::unordered_map<NodeDesc, sw_t> inverse = get_inverse();
 
       // check if all arcs in the network go backwards in the extension
       for(const auto& uv: N.get_edges())

@@ -68,11 +68,12 @@ namespace mstd {
     template<class T>
     bool operator==(const T& other) const { return is_valid() ? Iterator::operator==(other.it) : !(other.is_valid()); }
 
-    bool is_valid() const { return end_it != static_cast<const Iterator&>(*this); }
+    const Iterator& get_iter() const { return static_cast<const Iterator&>(*this); }
+
+    bool is_valid() const { return end_it != get_iter(); }
     bool is_invalid() const { return !is_valid(); }
     operator bool() const { return is_valid(); }
     operator bool() { return is_valid(); }
-
 
     EndIterator get_end() const & { return end_it; }
     EndIterator get_end() & { return end_it; }
@@ -108,9 +109,9 @@ namespace mstd {
 
     // copy the elements in the traversal to a container using the 'append()'-function
     template<class _Container>
-    _Container& append_to(_Container& c) const { append(c, *this); }
+    _Container& append_to(_Container& c) const { for(auto i = Parent::get_iter(); i != Parent::get_end(); ++i) c += *i; return c; }
     template<class _Container = std::vector<std::remove_cvref_t<value_type_of_t<T>>>>
-    _Container to_container() const { _Container result; append(result, *this); return result; }
+    _Container to_container() const { _Container result; return append_to(result); }
   };
 
   template<class T>

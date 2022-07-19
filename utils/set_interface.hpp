@@ -66,9 +66,10 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<ContainerType C, FindableType<C> Key>
   auto find(C&& c, const Key& key) {
-    if constexpr (VectorType<C>)
+    if constexpr (VectorType<C>){
+      std::cout << "finding "<<key<<" in "<<c<<"\n";
       return std::find(begin(c), end(c), key);
-    else return c.find(key);
+    } else return c.find(key);
   }
 
   template<SetType S1, SetType S2 = S1> requires std::is_convertible_v<typename S2::const_iterator, typename S1::const_iterator>
@@ -131,12 +132,16 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> std::convertible_to<bool>; };
   template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
 
+  // on arithmetic types just adds the second to the first
+  template<ArithmeticType P, ArithmeticType Q>
+  auto append(P& p, Q&& q) { return p += std::forward<Q>(q); }
+
   // on callables, append will call the function and return the result
   template<class T, std::invocable<T&&> F>
   auto append(F&& f, T&& t) { return std::forward<F>(f)(std::forward<T>(t)); }
 
   // append with 2 containers means to add the second to the end of the first
-  template<ContainerType C1, IterableTypeWithSameIterators C2> requires (ConvertibleValueTypes<C1,C2> && !VectorType<C1>)
+  template<ContainerType C1, IterableTypeWithSameIterators C2> requires (ConvertibleValueTypes<C1,C2> && !VectorOrStringType<C1>)
   auto append(C1& x, C2&& y) {
     x.insert(y.begin(), y.end());
     return emplace_result<C1>{x.begin(), true};
@@ -148,14 +153,16 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   }
 
   // on non-map containers, append = emplace
-  template<IterableType C, class First, class ...Args> requires (!MapType<C> && !VectorType<C> && !CompatibleValueTypes<C, First>)
+  template<IterableType C, class First, class ...Args>
+    requires (!MapType<C> && !VectorOrStringType<C> && !CompatibleValueTypes<C, First> &&
+        std::is_constructible_v<mstd::value_type_of_t<C>, First&&, Args&&...>)
   auto append(C& container, First&& first, Args&&... args) { return container.emplace(std::forward<First>(first), std::forward<Args>(args)...); }
 
   // on vectors, append =  emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
-  template<VectorType V, class First, class... Args> requires (!ConvertibleValueTypes<V, First>)
+  template<VectorOrStringType V, class First, class... Args> requires (!ConvertibleValueTypes<V, First>)
   auto append(V& _vec, First&& first, Args&&... args) { 
     return emplace_result<V>{_vec.emplace(_vec.end(), std::forward<First>(first), std::forward<Args>(args)...), true};
   }
@@ -251,9 +258,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       return c.erase(key);
     else if constexpr (std::is_same_v<std::remove_cvref_t<Key>, const_iterator_of_t<C>>)
       return c.erase(key);
-    else if constexpr (VectorType<C>)
-      return c.erase(find(c, key));
-    else return c.erase(key);
+    else if constexpr (VectorType<C>){
+      const auto iter = find(c, key);
+      if(iter != c.end()) {
+        return c.erase(iter);
+      } else return c.end();
+    } else return c.erase(key);
   }
   template<ContainerType C, IterableType Keys>
   void erase_by_iterating_keys(C& c, const Keys& keys) {
@@ -424,6 +434,22 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     }
 
   };
+}
 
+
+namespace std {
+  template<mstd::ContainerType Container, class T> requires (!is_same_v<std::remove_cvref_t<Container>, std::string>)
+  Container& operator-=(Container& container, T&& item) {
+    mstd::erase(container, std::forward<T>(item));
+    return container;
+  }
+
+  template<mstd::ContainerType Container, class T> requires (!is_same_v<std::remove_cvref_t<Container>, std::string>)
+  Container& operator+=(Container& container, T&& item) {
+    mstd::append(container, std::forward<T>(item));
+    return container;
+  }
 
 }
+
+

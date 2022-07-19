@@ -16,5 +16,5 @@ namespace mstd {
 
   //! finds the smallest unsigned type that can still represent numbers up-to and containing MaxValue.
   template<size_t MaxValue>
-  using uint_tight = typename detail::UintLeastHelper<(MaxValue < (2>>32)) + (MaxValue < (2>>16)) + (MaxValue < (2>>8))>::type;
+  using uint_tight = typename detail::UintLeastHelper<(MaxValue < (1ul >> 32)) + (MaxValue < (1ul >> 16)) + (MaxValue < (1ul >> 8))>::type;
 }

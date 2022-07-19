@@ -145,7 +145,7 @@ namespace PT{
     using DPType = ScanwidthDP<low_memory_version, const Component>;
     
     DEBUG4(std::cout << "getting biconnected component factory\n");
-    const auto bc_components = get_biconnected_components<Network, Component>(N, NodeTranslation(), [](const NodeDesc u){ return u; });
+    const auto bc_components = get_biconnected_components<Network, Component>(N, [](const NodeDesc u){ return u; });
     for(const auto& bcc: bc_components){
       DEBUG5(std::cout << "found biconnected component:\n"; std::cout << bcc <<"\n";)
       if(bcc.num_edges() != 1){

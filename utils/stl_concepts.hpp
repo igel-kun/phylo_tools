@@ -31,6 +31,12 @@ namespace mstd {
   concept StrictVectorType = (VectorType<T> && !std::is_reference_v<T>);
 
   template<class T>
+  concept VectorOrStringType = VectorType<T> || std::is_same_v<std::remove_cvref_t<T>, std::string>;
+  template<class T>
+  concept StrictVectorOrStringType = (VectorOrStringType<T> && !std::is_reference_v<T>);
+
+
+  template<class T>
   concept HasIterTraits = requires { typename std::iterator_traits<T>; };
 
   template<class Iter, class T>
