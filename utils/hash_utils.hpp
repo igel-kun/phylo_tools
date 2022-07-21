@@ -45,5 +45,13 @@ uint64_t hash_combine(size_t x, const size_t y)
   return x;
 }
 
+// when computing the hash value of unordered containers, the specific order of items must not matter
+// (otherwise, two unoredered_set representations of the same logical set might get different hashes
+uint64_t hash_combine_symmetric(size_t x, const size_t y)
+{
+  x^= y * y + 1;
+  return x;
+}
+
 
 

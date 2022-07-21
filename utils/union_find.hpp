@@ -146,6 +146,7 @@ namespace mstd{
     // return the set that the other has been merged into
     template<bool respect_sizes = true>
     Set& merge_sets(Set& x_set, Set& y_set) {
+      std::cout << "\tmerging sets of "<<x_set.representative<<" & "<<y_set.representative<<"\n";
       if(x_set != y_set){
         --_set_count;
         if constexpr (respect_sizes) {

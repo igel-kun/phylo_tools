@@ -22,13 +22,13 @@ namespace PT{
   using Forest = Phylogeny<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node>;
 
   // if you have a tree and want a forest that uses the same NodeType, you can use these to declare the forest (or vice versa)
-  template<PhylogenyType _Phylo,
+  template<StrictPhylogenyType _Phylo,
     class _NodeData = typename _Phylo::NodeData,
     class _EdgeData = typename _Phylo::EdgeData,
     class _LabelType = typename _Phylo::LabelType>
   using CompatibleTree = Tree<_Phylo::SuccStorage, _NodeData, _EdgeData, _LabelType>;
 
-  template<PhylogenyType _Phylo,
+  template<StrictPhylogenyType _Phylo,
            StorageEnum _RootStorage = _Phylo::RootStorage,
            class _NodeData = typename _Phylo::NodeData,
            class _EdgeData = typename _Phylo::EdgeData,

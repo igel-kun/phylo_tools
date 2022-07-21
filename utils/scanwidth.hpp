@@ -28,14 +28,17 @@ namespace PT{
     using Edge = typename Network::Edge;
     using Parent::ex;
 
-    mstd::DisjointSetForest<NodeDesc, sw_t> weak_components;
+    mstd::DisjointSetForest<NodeDesc> weak_components;
+    NodeMap<sw_t> sw_values;
     sw_t scanwidth = 0;
 
     sw_t get_scanwidth() const { return scanwidth; }
     // update entry with the next node u
     void update(const NodeDesc u) {
       Parent::update(u);
-      scanwidth = std::max(scanwidth, ex.template update_sw<Network>(u, weak_components));
+      const auto sw_u = ex.template update_sw<Network>(u, weak_components, sw_values);
+      append(sw_values, u, sw_u);
+      scanwidth = std::max(scanwidth, sw_u);
     }
   };
 

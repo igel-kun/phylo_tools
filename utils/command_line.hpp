@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "utils.hpp"
+#include "linear_interval.hpp"
 
 namespace PT{
 
@@ -53,5 +54,45 @@ namespace PT{
       }
     }
   }
+
+  // parses an argument with only a subset of valid values, throwing std::invalid_argument if the argument doesn't pass the test(s)
+  template<class _ExtractArgFromString, class _ValidityChecker>
+  struct ConstraintArgumentParser {
+    using ExtractArgFromString = _ExtractArgFromString;
+    using ValidityChecker = _ValidityChecker;
+    const std::vector<std::string>& arguments;
+    ExtractArgFromString extract;
+    ValidityChecker check_valid;
+    size_t arg_index = 0;
+
+    using T = decltype(extract(std::string{}));
+
+    T parse_next_argument() {
+      if(arguments.size() > arg_index) {
+        T result = extract(arguments.at(arg_index));
+        if(!check_valid(result)) {
+          std::cerr << "unexpected argument '"<< arguments.at(arg_index) << "', please see the help screen (--help)\n";
+          exit(1);
+        } else return result;
+      } else {
+        std::cerr << "not enough arguments for an option, please see the help screen (--help)\n";
+        exit(1);
+      }
+    }
+  };
+
+  struct StringToInt { constexpr auto operator()(const auto& x) const {return std::stoi(x);} };
+
+  template<class T>
+  using ProtoConstraintIntParser = ConstraintArgumentParser<StringToInt, mstd::linear_interval<int>>;
+
+
+  struct ConstraintIntParser: public ProtoConstraintIntParser<mstd::linear_interval<int>> {
+    using Parent = ProtoConstraintIntParser<mstd::linear_interval<int>>;
+    using Parent::ExtractArgFromString;
+    ConstraintIntParser(const std::vector<std::string>& _arguments, const int lo, const int hi):
+      Parent{_arguments, ExtractArgFromString{}, mstd::linear_interval<int>{lo, hi}, 0}
+    {}
+  };
 
 }

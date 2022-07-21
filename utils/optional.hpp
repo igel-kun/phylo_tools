@@ -5,7 +5,7 @@
 
 namespace mstd {
   // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (much like nullptr)
-  template<class T, T _invalid>
+  template<class T, T _invalid = std::numeric_limits<T>::max()>
   class optional_by_invalid {
     T element = _invalid;
   public:

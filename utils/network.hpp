@@ -25,7 +25,7 @@ namespace PT{
 
   // if you have a tree or network and want a network that uses the same Child-storage, you can use CompatibleNetwork to declare it easily
   // NOTE: if you pass a tree, this will change the parent-storage to be a vector
-  template<PhylogenyType _Phylo,
+  template<StrictPhylogenyType _Phylo,
     class _NodeData = typename _Phylo::NodeData,
     class _EdgeData = typename _Phylo::EdgeData,
     class _LabelType = typename _Phylo::LabelType,
@@ -33,7 +33,7 @@ namespace PT{
   using CompatibleNetwork = Network<_PredStorage, _Phylo::SuccStorage, _NodeData, _EdgeData, _LabelType>;
 
   // if you have a network or tree and want a DAG that uses the same NodeType, you can use CompatibleDAG to declare it easily
-  template<PhylogenyType _Phylo,
+  template<StrictPhylogenyType _Phylo,
            StorageEnum _RootStorage = _Phylo::RootStorage,
            class _NodeData = typename _Phylo::NodeData,
            class _EdgeData = typename _Phylo::EdgeData,

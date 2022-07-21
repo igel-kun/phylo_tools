@@ -307,6 +307,19 @@ namespace std {
       return hash_combine(hasher1(p.first), hasher2(p.second));
     }
   };
+  template<mstd::ContainerType C>
+  struct hash<C>{
+    size_t operator()(const C& c) const{
+      const std::hash<std::remove_cvref_t<mstd::value_type_of_t<C>>> hasher;
+      size_t result = 0;
+      for(const auto& x: c) {
+        if constexpr (mstd::UnorderedContainerType<C>)
+          result = hash_combine_symmetric(result, hasher(x));
+        else result = hash_combine(result, hasher(x));
+      }
+      return result;
+    }
+  };
   template<typename T>
   struct hash<std::reference_wrapper<T>>: public std::hash<T> {
     size_t operator()(const std::reference_wrapper<T>& p) const {

@@ -101,6 +101,12 @@ namespace mstd {
   template<class T>
   concept OptionalContainerType = std::is_void_v<T> || ContainerType<T>;
 
+  template <class T> 
+  concept UnorderedContainerType = ContainerType<T> && requires { typename T::hasher; };
+  template<class T>
+  concept OptionalUnorderedContainerType = std::is_void_v<T> || UnorderedContainerType<T>;
+
+
   template<class Iter, class C>
   concept StrictIteratorTypeOf = ContainerType<C> && !ContainerType<Iter> &&
                                   std::is_same_v<typename std::iterator_traits<Iter>::value_type, C::value_type>;

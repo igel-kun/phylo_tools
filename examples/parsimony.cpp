@@ -1,6 +1,5 @@
 
 #include "io/newick.hpp"
-#include "io/edgelist.hpp"
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
@@ -10,12 +9,14 @@
 #include "utils/tree_extension.hpp"
 #include "utils/extension.hpp"
 #include "utils/scanwidth.hpp"
+#include "utils/parsimony.hpp"
 
 using namespace PT;
 
 using MyNetwork = DefaultLabeledNetwork<>;
 using MyEdge = typename MyNetwork::Edge;
 using SWIter = mstd::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
+using CharacterStates = NodeMap<uint8_t>;
 
 OptionMap options;
 
@@ -27,14 +28,16 @@ void parse_options(const int argc, const char** argv) {
   description["-pp"] = {0,0};
   description["-lm"] = {0,0};
   description["-m"] = {1,1};
+  description["-s"] = {1,1};
   description[""] = {1,1};
   const std::string help_message(std::string(argv[0]) + " <file>\n\
       \tcompute the scanwidth (+extension and/or extension tree) of the network described in file (extended newick or edgelist format)\n\
       FLAGS:\n\
+      \t-s x\tnumber of character states to generate (between 2 and 256) [default: x = 2]\n\
       \t-v\tverbose output, prints network\n\
       \t-e\tprint an optimal extension\n\
       \t-et\tprint an optimal extension tree (corresponds to the extension)\n\
-      \t-lm\tuse low-memory data structures when doing dynamic programming (uses 25% of the space at the cost of factor |V(N)| running time)\n\
+      \t-lm\tuse low-memory data structures for computing scanwidth (uses 25% of the space at the cost of factor |V(N)| running time)\n\
       \t-m x\tmethod to use to compute scanwidth [default: x = 3]:\n\
       \t\t\tx = 0: brute force all permutations,\n\
       \t\t\tx = 1: dynamic programming on all vertices,\n\
@@ -52,21 +55,16 @@ void parse_options(const int argc, const char** argv) {
     }
 }
 
-unsigned parse_method() {
-  try{
-    const unsigned method = std::stoi(options["-m"][0]);
-    if(method > 4){
-      std::cout << method << " is not a vlid method, check help screen for valid methods" <<std::endl;
-      exit(1);
-    } else return method;
-  } catch (const std::invalid_argument& ia) {
-    // -m with non-integer argument
-    std::cout << "-m expects an integer argument from 0 to 4" <<std::endl;
-    exit(1);
-  } catch (...) {
-    // default method is 3
-    return 3;
-  } 
+size_t parse_method() {
+  if(test(options, "-m"))
+    return ConstraintIntParser{options["-m"], 0, 4}.parse_next_argument();
+  else return 3;
+}
+
+size_t parse_num_states() {
+  if(test(options, "-s"))
+    return ConstraintIntParser{options["-s"], 2, 256}.parse_next_argument();
+  else return 2;
 }
 
 MyNetwork read_network(std::ifstream&& in) {
@@ -80,33 +78,14 @@ MyNetwork read_network(std::ifstream&& in) {
 
 
 
-void print_extension(const MyNetwork& N, const Extension& ex) {
+size_t get_parsimony_score(const MyNetwork& N, const Extension& ex, CharacterStates& cs, const size_t num_states) {
   // for educational purposes, each Node of the extension tree will store the description of the corresponding node in the network
-  using GammaTree = TreeExtension<MyNetwork, const NodeDesc>;
-  // since we're storing the network nodes in the nodes of Gamma, the translation of Gamma's nodes to network nodes simply returns their data
-  constexpr auto Gamma_to_net = [](const NodeDesc gamma_u) { return GammaTree::node_of(gamma_u).data(); };
-
-  std::cout << "extension: " << ex << std::endl;
-
-  // compute scanwidth of ex
-  const auto sw = ex.sw_map<MyNetwork>();
-
-  std::cout << "sw: "<< sw << " --- (max: "<<*(mstd::max_element(mstd::seconds(sw)))<<")"<<std::endl;
-
-  std::cout << "constructing extension tree\n";
-  const GammaTree Gamma(ex, [](const NodeDesc u){ return u; });
-  std::cout << "extension tree:\n" << ExtendedDisplay(Gamma) << std::endl;
-  
-  const auto gamma_nodes = Gamma.sw_nodes_map(Gamma_to_net);
-  std::cout << "scanwidth node-map: " << gamma_nodes << std::endl;
-
-  const auto gamma_edges = Gamma.sw_edges_map(Gamma_to_net);
-  std::cout << "scanwidth edge-map: " << gamma_edges << std::endl;
-
-  const auto gamma_sw = Gamma.sw_map(Gamma_to_net);
-  std::cout << "sw map: " << gamma_sw << std::endl;
-
-  std::cout << "(sw = "<< *mstd::max_element(mstd::seconds(gamma_sw))<<")"<<std::endl;
+  std::cout << "extension: " << ex << '\n';
+  std::cout << "using character-state map "<<cs<<'\n';
+  const auto solution = make_parsimony_HW_DP(N, ex, cs, num_states);
+  assert(&N == &(solution.N)); // make sure it didn't make its own copy of N
+  std::cout << "extended to character-state map "<<cs<<'\n';
+  return solution.score();
 }
 
 
@@ -120,14 +99,20 @@ int main(const int argc, const char** argv) {
   if(mstd::test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
+  const size_t num_states = parse_num_states();
+  CharacterStates cs;
+  std::cout << "putting random character-states...\n";
+  for(const NodeDesc x: N.leaves()) cs.emplace(x, rand() % num_states);
+
+
 //  if(mstd::test(options, "-pp") sw_preprocess(N);
 
   std::cout << "\n ==== computing silly post-order extension ===\n";  
   Extension ex;
+  CharacterStates silly_cs{cs};
   ex.reserve(N.num_nodes());
   for(const auto& x: N.nodes_postorder()) ex.push_back(x);
-  std::cout << ex << "\n";
-
+  const size_t hw_score = get_parsimony_score(N, ex, silly_cs, num_states);
 
   std::cout << "\n ==== computing optimal extension ===\n";
   Extension ex_opt;
@@ -140,17 +125,13 @@ int main(const int argc, const char** argv) {
     std::cout << "using faster, more memory hungry version...\n";
     compute_min_sw_extension<false>(N, ex_opt);
   }
-  std::cout << "computed "<<ex_opt << "\n";
-  
-  std::cout << "\n\nsilly extension:\n";
-  print_extension(N, ex);
+  std::cout << "computed "<<ex_opt << "\n";  
+  const size_t hw_score2 = get_parsimony_score(N, ex, cs, num_states);
+  std::cout << "HW score (silly extension): "<<hw_score <<'\n';
+  std::cout << "HW score (optimal extension): "<<hw_score2 <<'\n';
 
-  std::cout << "\n\noptimal extension:\n";
-  print_extension(N, ex_opt);
+  assert(hw_score == hw_score2);
 
-  std::cout << "The End\n";
-//  if(contains(options, "-e")) sw_print_extension();
-//  if(contains(options, "-et")) sw_print_extension_tree();
 }
 
 

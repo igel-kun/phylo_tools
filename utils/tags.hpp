@@ -11,6 +11,8 @@ namespace PT {
   // general no-cleanup tag, indicating that we will do a cleanup later
   struct no_cleanup_t {};
 
+  // in order to pass only the type of something to a constructor, we will use a type-carrying-tag
+  template<class T> struct type_carrier { using type = T; };
 
   // data transfer policies
   struct data_policy_t {};

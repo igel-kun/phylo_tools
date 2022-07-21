@@ -42,7 +42,7 @@ namespace PT{
     using type = mstd::singleton_set<mstd::optional_by_invalid<Element, nullptr>>;
   };
   template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  {
-    using type = mstd::singleton_set<mstd::optional_by_invalid<Element, Element(-1)>>;
+    using type = mstd::singleton_set<mstd::optional_by_invalid<Element>>;
   };
   template<class Element> struct _StorageClass<singleS, Element>  {
     using type = mstd::singleton_set<std::optional<Element>>;

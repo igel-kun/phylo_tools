@@ -39,7 +39,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     if(target.size() > source.size()) {
       for(const auto& x: source)
         erase(target, x);
-    } else erase_if(target, [&source](const auto& x) { return !test(source, x); });
+    } else erase(target, [&source](const auto& x) { return !test(source, x); });
   }
   template<SetType S, class T>
   void intersect(singleton_set<T>& target, const S& source) {
@@ -252,23 +252,46 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   };
 
 
-  template<ContainerType C, class Key> requires (!IterableType<Key>)
+  template<ContainerType C, class Key>
+    requires std::is_convertible_v<const Key&, value_type_of_t<C>>
   auto erase(C& c, const Key& key) {
     if constexpr (std::is_same_v<std::remove_cvref_t<Key>, iterator_of_t<C>>)
       return c.erase(key);
     else if constexpr (std::is_same_v<std::remove_cvref_t<Key>, const_iterator_of_t<C>>)
       return c.erase(key);
-    else if constexpr (VectorType<C>){
-      const auto iter = find(c, key);
-      if(iter != c.end()) {
-        return c.erase(iter);
-      } else return c.end();
+    else if constexpr (VectorType<C>) {
+      return c.erase(std::remove(c.begin(), c.end(), key), c.end());
     } else return c.erase(key);
   }
+  template<MapType M, class Key>
+    requires std::is_convertible_v<const Key&, key_type_of_t<M>>
+  auto erase(M& m, const Key& key) { return erase(m, key); }
+  template<ContainerType C, class Key>
+    requires std::is_convertible_v<const Key&, const_iterator_of_t<C>>
+  auto erase(C& c, const Key& key) { return c.erase(key); }
+
+  template<ContainerType C, class Key>
+    requires (std::is_invocable_v<Key, mstd::value_type_of_t<C>>)
+  auto erase(C& c, const Key& key) {
+    if constexpr (VectorType<C>) {
+      return c.erase(std::remove_if(c.begin(), c.end(), key), c.end());
+    } else {
+      for(auto iter = c.begin(); iter != c.end();)
+        if(key(*iter)) iter = c.erase(iter); else ++iter;
+    }
+  }
+
   template<ContainerType C, IterableType Keys>
+    requires (std::is_convertible_v<std::remove_cvref_t<value_type_of_t<Keys>>, value_type_of_t<C>>)
   void erase_by_iterating_keys(C& c, const Keys& keys) {
     for(const auto& key: keys) erase(c, key);
   }
+  template<MapType M, IterableType Keys>
+    requires (std::is_convertible_v<std::remove_cvref_t<value_type_of_t<Keys>>, key_type_of_t<M>>)
+  void erase_by_iterating_keys(M& m, const Keys& keys) {
+    for(const auto& key: keys) erase(m, key);
+  }
+
   template<ContainerType C, IterableType Keys>
   void erase_by_iterating_container(C& c, const Keys& keys) {
     for(auto iter = begin(c); iter != end(c);)
@@ -450,6 +473,14 @@ namespace std {
     return container;
   }
 
+}
+
+
+
+namespace std {
+  template<class... Args> bool test(Args&&... args) { return mstd::test(std::forward<Args>(args)...); }
+  template<class... Args> decltype(auto) append(Args&&... args) { return mstd::append(std::forward<Args>(args)...); }
+  template<class... Args> decltype(auto) erase(Args&&... args) { return mstd::erase(std::forward<Args>(args)...); }
 }
 
 

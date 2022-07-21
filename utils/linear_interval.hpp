@@ -2,6 +2,7 @@
 #pragma once
 
 #include <array>
+#include <ranges>
 
 namespace mstd {
 
@@ -20,27 +21,32 @@ namespace mstd {
     linear_interval(const T& init): linear_interval(init, init) {}
     
     void merge(const linear_interval& other) {
-      update_lo(other.at(0));
-      update_hi(other.at(1));
+      update_lo(other.low());
+      update_hi(other.high());
     }
     void intersect(const linear_interval& other) {
-      at(0) = std::max(at(0), other.at(0));
-      at(1) = std::min(at(1), other.at(1));
+      low() = std::max(low(), other.low());
+      high() = std::min(high(), other.high());
     }
-    void update_lo(const T& lo) { at(0) = std::min(at(0), lo); }
-    void update_hi(const T& hi) { at(1) = std::max(at(1), hi); }
+    void update_lo(const T& lo) { low() = std::min(low(), lo); }
+    void update_hi(const T& hi) { high() = std::max(high(), hi); }
     void update(const T& x) { update_lo(x); update_hi(x); }
 
-    bool contains(const linear_interval& other) const { return (at(0) <= other.at(0)) && (at(1) >= other.at(1)); }
-    bool contains(const T& val) const { return (at(0) <= val) && (at(1) >= val); }
-    bool overlaps(const linear_interval& other) const { return (at(0) >= other.at(0)) ? (at(0) <= other.at(1)) : (at(1) >= other.at(0)); }
+    bool contains(const linear_interval& other) const { return (low() <= other.low()) && (high() >= other.high()); }
+    bool contains(const T& val) const { return (low() <= val) && (val <= high()); }
+    bool overlaps(const linear_interval& other) const { return (low() >= other.low()) ? (low() <= other.high()) : (high() >= other.low()); }
     bool contained_in(const linear_interval& other) const { return other.contains(*this); }
-    bool left_of(const T& val) { return at(1) <= val; }
-    bool strictly_left_of(const T& val) { return at(1) < val; }
-    bool right_of(const T& val) { return val <= at(0); }
-    bool strictly_right_of(const T& val) { return val < at(0); }
+    bool left_of(const T& val) { return high() <= val; }
+    bool strictly_left_of(const T& val) { return high() < val; }
+    bool right_of(const T& val) { return val <= low(); }
+    bool strictly_right_of(const T& val) { return val < low(); }
+    bool operator()(const T& val) const { return contains(val); }
 
-    friend std::ostream& operator<<(std::ostream& os, const linear_interval& i) { return os << '[' << i.at(0) << ',' << i.at(1) << ']'; }
+    // we just use iota_view's begin()/end() since iota_view is a burrowed range, these iterators survive its destruction
+    decltype(auto) begin() const { return std::ranges::iota_view{low(), high()}.begin(); }
+    decltype(auto) end() const { return std::ranges::iota_view{low(), high()}.end(); }
+
+    friend std::ostream& operator<<(std::ostream& os, const linear_interval& i) { return os << '[' << i.low() << ',' << i.high() << ']'; }
   };
 
   // an interval is "bigger than" a value if it lies entirely on the right of that value
