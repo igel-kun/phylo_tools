@@ -13,7 +13,7 @@
 
 using namespace PT;
 
-using MyNetwork = DefaultLabeledNetwork<uint8_t>;
+using MyNetwork = DefaultLabeledNetwork<mstd::singleton_set_by_invalid<uint16_t>>;
 using MyEdge = typename MyNetwork::Edge;
 using SWIter = mstd::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
 
@@ -42,8 +42,7 @@ void parse_options(const int argc, const char** argv) {
       \t\t\tx = 1: dynamic programming on all vertices,\n\
       \t\t\tx = 2: brute force on raising vertices only,\n\
       \t\t\tx = 3: dynamic programming on raising vertices only,\n\
-      \t\t\tx = 4: heuristic\n\
-      \t-pp\tuse preprocessing\n");
+      \t\t\tx = 4: heuristic\n");
 
   parse_options(argc, argv, description, help_message, options);
 
@@ -93,15 +92,13 @@ int main(const int argc, const char** argv) {
 
   std::cout << "reading network...\n";
   MyNetwork N(read_network(std::ifstream(options[""][0])));
-  if(mstd::test(options, "-v"))
-    std::cout << "N: " << std::endl << N << std::endl;
 
   const size_t num_states = parse_num_states();
-  std::cout << "putting random character-states...\n";
+  std::cout << "putting random character-states between 0 and "<<num_states-1<<"...\n";
   for(const NodeDesc x: N.leaves()) node_of<MyNetwork>(x).data() = rand() % num_states;
 
-
-//  if(mstd::test(options, "-pp") sw_preprocess(N);
+  if(mstd::test(options, "-v"))
+    std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
 
   std::cout << "\n ==== computing silly post-order extension ===\n";  
   Extension ex;

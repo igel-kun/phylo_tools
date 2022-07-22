@@ -119,7 +119,7 @@ namespace PT{
       );
     }
     template<class Out = NodeMap<sw_t>, class NodeConverter>
-    Out sw_map(NodeConverter&& tree_node_to_network_node) const {
+    Out get_sw_map(NodeConverter&& tree_node_to_network_node) const {
       Out result;
       sw_map(std::forward<NodeConverter>(tree_node_to_network_node), result);
       return result;
@@ -140,7 +140,7 @@ namespace PT{
       );
     }
     template<NodeMapType Out = NodeMap<NodeVec>, class NodeConverter>
-    Out sw_nodes_map(NodeConverter&& tree_node_to_network_node) const {
+    Out get_sw_nodes_map(NodeConverter&& tree_node_to_network_node) const {
       Out result;
       sw_nodes_map(std::forward<NodeConverter>(tree_node_to_network_node), result);
       return result;
@@ -161,7 +161,7 @@ namespace PT{
       );
     }
     template<NodeMapType Out = NodeMap<typename Network::EdgeVec>, class NodeConverter>
-    Out sw_edges_map(NodeConverter&& tree_node_to_network_node) const {
+    Out get_sw_edges_map(NodeConverter&& tree_node_to_network_node) const {
       Out result;
       sw_edges_map(std::forward<NodeConverter>(tree_node_to_network_node), result);
       return result;

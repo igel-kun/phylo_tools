@@ -137,12 +137,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   auto append(P& p, Q&& q) { p += std::forward<Q>(q); return std::pair{&p, true}; }
 
   // on callables, append will call the function and return the result
-  template<class T, std::invocable<T&&> F>
-  auto append(F&& f, T&& t) {
-    using F_Result = decltype(std::forward<F>(f)(std::forward<T>(t)));
+  template<class F, class... Args> requires std::is_invocable_v<F, Args&&...>
+  auto append(F&& f, Args&&... args) {
+    using F_Result = decltype(std::forward<F>(f)(std::forward<Args>(args)...));
     if constexpr (std::is_void_v<F_Result>)
-      return std::forward<F>(f)(std::forward<T>(t));
-    else return std::pair<F_Result,bool>{std::forward<F>(f)(std::forward<T>(t)), true};
+      return std::forward<F>(f)(std::forward<Args>(args)...);
+    else return std::pair<F_Result,bool>{std::forward<F>(f)(std::forward<Args>(args)...), true};
   }
 
   // append with 2 containers means to add the second to the end of the first
@@ -227,10 +227,16 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool test(const V& vec, const auto& key) { return mstd::find(vec, key) != std::end(vec); }
   template<class T>
   bool test(const T& x, const T& y) { return x == y; }
-  template<class T, std::invocable<T> F>
-  decltype(auto) test(const F& f, const T& x) { return f(x); }
 
-  // I would write an operator= to assign std::unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
+  template<class T, std::invocable<T> F>
+    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> || mstd::IterableTypeWithSize<std::invoke_result_t<F,T>>)
+  decltype(auto) test(const F& f, const T& x) {
+    decltype(auto) y = f(x);
+    if constexpr (mstd::IterableTypeWithSize<decltype(y)>)
+      return !y.empty();
+    else return y;
+  }
+
 #warning "TODO: this can be done by writing a manual conversion to std::unordered_set<uint32_t>"
   template<SetType C1, SetType C2> requires std::is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
   C2& copy(const C1& x, C2& y) {
@@ -476,13 +482,13 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
 
 namespace std {
-  template<mstd::ContainerType Container, class T> requires (!is_same_v<std::remove_cvref_t<Container>, std::string>)
+  template<mstd::ContainerType Container, class T> requires (!is_convertible_v<std::remove_cvref_t<Container>, std::string_view>)
   Container& operator-=(Container& container, T&& item) {
     mstd::erase(container, std::forward<T>(item));
     return container;
   }
 
-  template<mstd::ContainerType Container, class T> requires (!is_same_v<std::remove_cvref_t<Container>, std::string>)
+  template<mstd::ContainerType Container, class T> requires (!is_convertible_v<std::remove_cvref_t<Container>, std::string_view>)
   Container& operator+=(Container& container, T&& item) {
     mstd::append(container, std::forward<T>(item));
     return container;

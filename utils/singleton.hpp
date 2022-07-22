@@ -29,14 +29,14 @@ namespace mstd{
 
     void push_back(value_type&& el) {
       assert((non_empty(), "trying to add second element to singleton set"));
-      storage.emplace(move(el));
+      storage.emplace(std::move(el));
     }
     void push_back(const value_type& el) {
       assert((non_empty(), "trying to add second element to singleton set"));
       storage.emplace(el);
     }
 
-    singleton_set& operator=(value_type&& x) { clear(); push_back(move(x)); return *this; }
+    singleton_set& operator=(value_type&& x) { clear(); push_back(std::move(x)); return *this; }
     singleton_set& operator=(const value_type& x) { clear(); push_back(x); return *this; }
     //singleton_set& operator=(const singleton_set& s) = default;
 
@@ -104,6 +104,9 @@ namespace mstd{
       return empty() ? other.empty() : (storage == other.storage);
     }
   };
+
+  template<class T, T _invalid = std::numeric_limits<T>::max()>
+  using singleton_set_by_invalid = singleton_set<optional_by_invalid<T, _invalid>>;
 
   template<class T> struct is_singleton_set: public std::false_type {};
   template<class T> struct is_singleton_set<singleton_set<T>>: public std::true_type {};

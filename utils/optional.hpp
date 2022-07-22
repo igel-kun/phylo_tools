@@ -10,6 +10,8 @@ namespace mstd {
     T element = _invalid;
   public:
     using value_type = T;
+    using reference = T&;
+    using const_reference = const T&;
 
     constexpr optional_by_invalid() = default;
     //constexpr optional_by_invalid(const optional_by_invalid&) = default;
@@ -21,11 +23,9 @@ namespace mstd {
     template<class U, U I>
     constexpr optional_by_invalid(const optional_by_invalid<U, I>& other): element(other.element) {}
     template<class U, U I>
-    constexpr optional_by_invalid(optional_by_invalid<U, I>&& other): element(move(other.element)) {}
-    template<class U = T>
-    constexpr optional_by_invalid(const U& other): element(other) {}
-    template<class U = T>
-    constexpr optional_by_invalid(U&& other): element(move(other)) {}
+    constexpr optional_by_invalid(optional_by_invalid<U, I>&& other): element(std::move(other.element)) {}
+    template<class U = T> requires (std::is_constructible_v<T, U&&>)
+    constexpr optional_by_invalid(U&& other): element(std::forward<U>(other)) {}
 
     // re-construct the element
     template<class... Args>
@@ -56,7 +56,7 @@ namespace mstd {
     //optional_by_invalid& operator=(const optional_by_invalid& other) = default;
     //optional_by_invalid& operator=(optional_by_invalid&& other) = default;
     optional_by_invalid& operator=(const T& other) { element = other; return *this; }
-    optional_by_invalid& operator=(T&& other) { element = move(other); return *this; }
+    optional_by_invalid& operator=(T&& other) { element = std::move(other); return *this; }
 
 
     template<class U>
@@ -82,5 +82,14 @@ namespace mstd {
 
   template<class T>
   concept Optional = is_optional_v<std::remove_reference_t<T>>;
+}
+
+namespace std {
+  template<mstd::Optional T>
+  struct hash<T>: public std::hash<typename T::value_type> {
+    size_t operator()(const T& x) const {
+      if(x) return this->operator()(*x); else return 0;
+    }
+  };
 
 }

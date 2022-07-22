@@ -50,13 +50,6 @@ namespace PT {
   };
 
   template<class T>
-  struct _CharacterOf { using type = T; };
-  template<mstd::ContainerType C>
-  struct _CharacterOf<C> { using type = mstd::value_type_of_t<C>; };
-  template<class T>
-  using CharacterOf = typename _CharacterOf<T>::type;
-
-  template<class T>
   struct _CharacterSetRefOf {};
   template<NodeMapType GetCharacterState>
   struct _CharacterSetRefOf<GetCharacterState> {
@@ -75,43 +68,46 @@ namespace PT {
 
 
   template<PhylogenyType Phylo, class GetCharacterState>
+    requires (mstd::IterableType<CharacterSetRefOf<GetCharacterState>>)
   struct Parsimony_HW_DP {
     using PlainPhylo = std::remove_cvref_t<Phylo>;
     using CharSetRef = CharacterSetRefOf<GetCharacterState>;
     using CharSetConstRef = CharacterSetConstRefOf<GetCharacterState>;
-    using Char = CharacterOf<std::remove_cvref_t<CharSetRef>>;
+    using Char = mstd::value_type_of_t<CharSetRef>;
     using Bag = HW_DP_Bag<Char>;
     using Index = typename Bag::Index;
     using ExtIndex = size_t;
-    using CharHistogram = std::unordered_map<Char, size_t>;
 
-    static_assert(mstd::ArithmeticType<Char>);
+    struct CharHistogram {
+      std::unordered_map<Char, size_t> data;
+      size_t num_items = 0;
+
+      CharHistogram(const Index& index): data{}, num_items{index.size()}
+      { for(const auto& c: index) ++(data[c]); }
+
+      size_t lookup(const Char c) const { return_map_lookup(data, c, 0); }
+
+      size_t cost_of_state(const Char state) const { return num_items - lookup(state); }
+    };
 
     Phylo N;
     Extension ext;
     GetCharacterState cs;
     size_t num_states;
 
+  protected:
+    mutable NodeMap<Bag> dp_table;
+    NodeMap<NodeSet> highest_children_of;
 
+  public:
     template<class PhyloInit, class ExtInit, class CSInit>
     Parsimony_HW_DP(PhyloInit&& _N, ExtInit&& _ext, CSInit&& _cs, size_t _num_states):
       N{std::forward<PhyloInit>(_N)}, ext{std::forward<ExtInit>(_ext)}, cs{std::forward<CSInit>(_cs)}, num_states{_num_states}
-    {
-      create_all_bags();
-    }
-
-    static CharHistogram make_histogram(const Index& index) {
-      CharHistogram result;
-      for(const auto& c: index)
-        ++(result[c]);
-      return result;
-    }
+    { create_all_bags(); }
 
   protected:
-    mutable std::unordered_map<NodeDesc, Bag> dp_table = {};
-
     void create_all_bags() {
-      const auto sw_nodes = ext.template sw_nodes_map<PlainPhylo>();
+      const auto sw_nodes = ext.template get_sw_nodes_map<PlainPhylo>(highest_children_of);
       for(const NodeDesc u: ext) {
         append(dp_table, u, sw_nodes.at(u));
         std::cout << "created bag for "<<u<<": \t"<<dp_table.at(u).index_to_node<<"\n";
@@ -121,78 +117,66 @@ namespace PT {
     bool has_states(const NodeDesc u) const { return mstd::test(cs, u); }
     CharSetConstRef states_of(const NodeDesc u) const { return mstd::lookup(cs, u); }
 
-    template<class States>
-    void for_each_state(const States& states, auto&& f) const { 
-      if constexpr (mstd::IterableType<States>) {
-        for(const auto& c: states) f(c);
-      } else f(states);
-    }
     void for_each_state_of(const NodeDesc u, auto&& f) const { 
       if(has_states(u)) {
-        for_each_state(states_of(u), f);
+        for(const auto& c: states_of(u)) f(c);
       } else for(size_t i = 0; i != num_states; ++i) f(i);
     }
 
+    // remove all nodes from the index that do not contribute to the node-scanwidth of the given bag
+    Index prepare_index(const Index& index, const Bag& parent_bag, const Bag& child_bag) const {
+      Index result;
+      result.reserve(child_bag.size());
+      for(const NodeDesc x: child_bag.index_to_node) {
+        std::cout << "node "<<x<<" in bag "<< child_bag.index_to_node<<"\n";
+        const auto iter = parent_bag.node_to_index.find(x);
+        if(iter != parent_bag.node_to_index.end()) {
+          const size_t x_index_in_parent = iter->second;
+          result.emplace_back(index.at(x_index_in_parent));
+        } else result.emplace_back();
+      }
+      return result;
+    }
+
+
   public:
 
-    size_t score_for(const ExtIndex i, const Index& index) const {
-      const NodeDesc u = ext.at(i);
-      std::cout << "ext["<<i<<"] = "<<u<<" - checking index "<<index<<"\n";
-      auto& bag = dp_table[u];
-      auto [iter, success] = append(bag.costs, index);
+    size_t score_for(const NodeDesc u, const Index& index) const {
+      std::cout << "node "<<u<<" - checking index "<<index<<"\n";
+      auto& u_bag = dp_table[u];
+      auto [iter, success] = append(u_bag.costs, index);
       size_t& cost = iter->second;
-      // index was not found in the table, so compute its cost using the previous table entry
-      if(!node_of<Phylo>(u).is_leaf()) {
-        assert(i > 0);
-        if(success) {
-          size_t sub_cost = std::numeric_limits<size_t>::max();
-          const NodeDesc v = ext.at(i-1);
-          const auto& prev_bag = dp_table.at(v);
-          // step 1: remove all nodes from the index that do not contribute to the node-scanwidth of the previous entry
-          Index sub_index;
-          sub_index.reserve(prev_bag.size());
-          for(const NodeDesc x: prev_bag.index_to_node) {
-            std::cout << "node "<<x<<" in bag "<<prev_bag.index_to_node<<"\n";
-            if(x != u) {
-              assert(test(bag.node_to_index, x));
-              const size_t x_index = bag.node_to_index.at(x);
-              assert(x_index < index.size());
-              sub_index.emplace_back(index.at(x_index));
-            } else sub_index.emplace_back();
-          }
-          // step 2: add u with all possible character states
-          for_each_state_of(u, [&](const Char state){
-              prev_bag.set_state_in(u, sub_index, state);
-              size_t new_cost = score_for(i - 1, sub_index);
-              for(const NodeDesc pu: node_of<Phylo>(u).parents()) {
-                assert(test(bag.node_to_index, pu));
-                const size_t pu_index = bag.node_to_index.at(pu);
-                assert(pu_index < index.size());
-                new_cost += (index.at(pu_index) != state);
-              }
+      if(success) {
+        // index was not found in the table, so compute its cost using the previous table entry
+        // step 1: compute the histogram of character-states for the parents of u
+        const CharHistogram hist{index};
+        // step 2: add u with all possible character states
+        size_t sub_cost = std::numeric_limits<size_t>::max();
+        for_each_state_of(u, [&](const Char state){
+            for(const NodeDesc v: highest_children_of.at(u)) {
+              const auto& v_bag = dp_table.at(v);
+              // step 1: translate the index for v's bag, leaving a spot for u
+              Index sub_index = prepare_index(index, u_bag, v_bag);
+              const size_t u_index = v_bag.node_to_index.at(u);
+
+              std::cout << "setting state "<<state<<" for "<<u<<":\n";
+              sub_index[u_index] = state;
+              std::cout << "recursive call for "<< v <<" and index "<<sub_index<<"\n";
+              size_t new_cost = score_for(v, sub_index);
+              // step 3: add the cost between u and its parents, depending on u's new state
+              new_cost += hist.cost_of_state(state);
               sub_cost = std::min(sub_cost, new_cost);
-            });
-      
-          cost = sub_cost;
-        }
-      } else {
-        // if u is a leaf, then count for all nodes in the index how often their character appears and derive the cost from the max among them
-        const auto hist = make_histogram(index);
-        auto max = hist.begin();
-        if(has_states(u)) {
-          for_each_state(states_of(u), [&](const Char& c){
-              const auto h_it = hist.find(c);
-              assert(h_it != hist.end());
-              if(h_it->second > max->second) max = h_it;
-            });
-        } else max = std::ranges::max_element(hist, [](const auto& lhs, const auto& rhs){ return lhs.second < rhs.second; });
-        cost = index.size() - max->second;
+            }
+          });
+        cost = sub_cost;
       }
+      std::cout << "\tfound that cost["<<u<<", "<<index<<"] = "<<cost<<"\n";
       return cost;
     }
 
     size_t score() const {
-      return score_for(ext.size() - 1, Index{});
+      std::cout << "computing parsimony score via the extension "<<ext<<"\n";
+      return score_for(ext.back(), Index{});
     }
   };
 

@@ -173,7 +173,7 @@ namespace mstd{
     const T* operator->() const { return &t; }
   };
   template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
-  using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer<std::remove_reference_t<R>>, self_deref<R>>;
+  using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, self_deref<R>>;
 
 
   template<class Ref>
@@ -407,10 +407,16 @@ namespace mstd {
 namespace std {
   // ----------------------- OUTPUT ---------------------------------------
   template<mstd::IterableType C> requires (!std::is_convertible_v<C,std::string_view>)
-  inline std::ostream& operator<<(std::ostream& os, const C& objs)
-  {
+  inline std::ostream& operator<<(std::ostream& os, const C& objs) {
     os << '[';
-    for(auto const& obj : objs) os << obj << ' ';
+    for(const auto& obj : objs) {
+      using Item = std::remove_cvref_t<decltype(obj)>;
+      if constexpr (mstd::PointerType<Item>) {
+        os << hex << obj << ' ';
+      } else if constexpr (mstd::ArithmeticType<Item>) {
+        os << +obj << ' ';
+      } else os << obj << ' ';
+    }
     return os << ']';
   }
 
