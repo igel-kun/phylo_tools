@@ -79,13 +79,14 @@ namespace mstd{
     size_t _set_count = 0;
 
 
-    static const Set& set_of(const Set& x_set) { return x_set; }
-    static Set& set_of(Set& x_set) { return x_set; }
+    Set& _set_of(const Key& x) { return _set_of(x, at(x)); }
+    static const Set& _set_of(const Set& x_set) { return x_set; }
+    static Set& _set_of(Set& x_set) { return x_set; }
     static Key& representative(Set& x_set) { return x_set.representative; }
-    void shrink(const Key& x) { set_of(x).grow(-1); }
+    void shrink(const Key& x) { _set_of(x).grow(-1); }
 
     // return the set containing x, use path compression
-    Set& set_of(const Key& x, Set& x_set, const unsigned decrease_size = 0) {
+    Set& _set_of(const Key& x, Set& x_set, const unsigned decrease_size = 0) {
       const Key& x_set_rep = x_set.get_representative();
       if(x_set_rep != x){
         x_set.grow(-decrease_size);
@@ -93,7 +94,7 @@ namespace mstd{
         const Key& x_parent_rep = x_parent.get_representative();
         assert(x_parent_rep != x); // this is bizarre, we already know that x's representative is x_parent so why would their representative be x???
         if(x_parent_rep != x){
-          Set& root_set = set_of(x_set_rep, x_parent, decrease_size + x_set.size());
+          Set& root_set = _set_of(x_set_rep, x_parent, decrease_size + x_set.size());
           x_set.representative = root_set.representative;
           return root_set;
         } else return at(x_parent_rep);
@@ -137,8 +138,12 @@ namespace mstd{
         return iter->second;
       } else throw std::logic_error("trying to add existing item to set-forest");
     }
+
+
+    Set& set_of(const Key& x) { return _set_of(x, at(x)); }
+
     // add a new item x to the set of another item y
-    Set& add_item_to_set_of(const Key& y, const Key& x) { return add_item_to_set(set_of(y), x); }
+    Set& add_item_to_set_of(const Key& y, const Key& x) { return add_item_to_set(_set_of(y), x); }
 
     // merge two sets into one
     // the one with the lower size is merged into the one with the higher
@@ -159,19 +164,17 @@ namespace mstd{
       }
       return x_set;
     }
-    template<bool respect_sizes = true> Set& merge_sets(const Key& x, Set& y_set) { return merge_sets<respect_sizes>(set_of(x), y_set); }
-    template<bool respect_sizes = true> Set& merge_sets(Set& x_set, const Key& y) { return merge_sets<respect_sizes>(x_set, set_of(y)); }
-    template<bool respect_sizes = true> Set& merge_sets(const Key& x, const Key& y) { return merge_sets<respect_sizes>(set_of(x), set_of(y)); }
+    template<bool respect_sizes = true> Set& merge_sets(const Key& x, Set& y_set) { return merge_sets<respect_sizes>(_set_of(x), y_set); }
+    template<bool respect_sizes = true> Set& merge_sets(Set& x_set, const Key& y) { return merge_sets<respect_sizes>(x_set, _set_of(y)); }
+    template<bool respect_sizes = true> Set& merge_sets(const Key& x, const Key& y) { return merge_sets<respect_sizes>(_set_of(x), _set_of(y)); }
 
     // merge y onto x (y's representative will be lost (set to x's representative))
     Set& merge_sets_keep_order(auto& x, auto& y) { return merge_sets<false>(x, y); }
 
-    Set& set_of(const Key& x) { return set_of(x, at(x)); }
-
     std::pair<Set*,Set*> lookup(const Key& x) {
       const auto iter = this->find(x);
       if(iter != this->end()) {
-        return {&(iter->second), &set_of(x, iter->second)};
+        return {&(iter->second), &_set_of(x, iter->second)};
       } else return {nullptr, nullptr};
     }
 
@@ -183,13 +186,13 @@ namespace mstd{
     // erase a Set s from the union-find structure
     // NOTE: this is only possible if s is a leaf-set
     void erase_element(auto& x) {
-      Set& x_set = set_of(x);
+      Set& x_set = _set_of(x);
       const Key& x_rep = representative(x_set);
       
       // if x has a representative that is not x, then we need to shrink the representative's set
       assert((x_set.size() == 1) && "trying to erase a non-leaf set from a disjoint-set forest");
       if(x_rep != x) 
-        set_of(x_rep).grow(-1);
+        _set_of(x_rep).grow(-1);
 
       Parent::erase(x);
     }
@@ -202,7 +205,7 @@ namespace mstd{
       const Key& x_rep = representative(x_set);
      
       if(x_rep != x) {
-        set_of(x_rep).grow(-x_set.size());
+        _set_of(x_rep).grow(-x_set.size());
         x_set.representative = x;
       }
     }
@@ -224,7 +227,7 @@ namespace mstd{
     bool is_root(const Key& x) const { return at(x).representative == x; }
 
     // return true iff the given items are in the same set
-    bool in_same_set(const Key& x, const Key& y) { return set_of(x) == set_of(y); }
+    bool in_same_set(const Key& x, const Key& y) { return _set_of(x) == _set_of(y); }
 
     // return true iff the given items are in different sets
     bool in_different_sets(const Key& x, const Key& y) { return !in_same_set(x, y); }

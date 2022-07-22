@@ -49,18 +49,37 @@ namespace PT {
     }
   };
 
-  template<NodeMapType CharacterStates>
-  using CharacterSetOf = std::conditional_t<mstd::ContainerType<mstd::mapped_type_of_t<CharacterStates>>,
-        mstd::mapped_type_of_t<CharacterStates>, mstd::singleton_set<mstd::optional_by_invalid<mstd::mapped_type_of_t<CharacterStates>>>>;
-  template<NodeMapType CharacterStates>
-  using CharacterOf = mstd::value_type_of_t<CharacterSetOf<CharacterStates>>;
+  template<class T>
+  struct _CharacterOf { using type = T; };
+  template<mstd::ContainerType C>
+  struct _CharacterOf<C> { using type = mstd::value_type_of_t<C>; };
+  template<class T>
+  using CharacterOf = typename _CharacterOf<T>::type;
 
-  template<PhylogenyType Phylo, NodeMapType CharacterStates>
+  template<class T>
+  struct _CharacterSetRefOf {};
+  template<NodeMapType GetCharacterState>
+  struct _CharacterSetRefOf<GetCharacterState> {
+    using type = mstd::mapped_type_of_t<GetCharacterState>&;
+    using const_type = const mstd::mapped_type_of_t<GetCharacterState>&;
+  };
+  template<NodeFunctionType GetCharacterState>
+  struct _CharacterSetRefOf<GetCharacterState> {
+    using type = std::invoke_result_t<GetCharacterState, NodeDesc>;
+    using const_type = std::invoke_result_t<const GetCharacterState, NodeDesc>;
+  };
+  template<class GetCharacterState>
+  using CharacterSetRefOf = typename _CharacterSetRefOf<GetCharacterState>::type;
+  template<class GetCharacterState>
+  using CharacterSetConstRefOf = typename _CharacterSetRefOf<GetCharacterState>::const_type;
+
+
+  template<PhylogenyType Phylo, class GetCharacterState>
   struct Parsimony_HW_DP {
     using PlainPhylo = std::remove_cvref_t<Phylo>;
-    using CharMapItem = mstd::mapped_type_of_t<CharacterStates>;
-    using CharSet = CharacterSetOf<CharacterStates>;
-    using Char = CharacterOf<CharacterStates>;
+    using CharSetRef = CharacterSetRefOf<GetCharacterState>;
+    using CharSetConstRef = CharacterSetConstRefOf<GetCharacterState>;
+    using Char = CharacterOf<std::remove_cvref_t<CharSetRef>>;
     using Bag = HW_DP_Bag<Char>;
     using Index = typename Bag::Index;
     using ExtIndex = size_t;
@@ -70,7 +89,7 @@ namespace PT {
 
     Phylo N;
     Extension ext;
-    CharacterStates cs;
+    GetCharacterState cs;
     size_t num_states;
 
 
@@ -93,9 +112,14 @@ namespace PT {
 
     void create_all_bags() {
       const auto sw_nodes = ext.template sw_nodes_map<PlainPhylo>();
-      for(const NodeDesc u: ext)
+      for(const NodeDesc u: ext) {
         append(dp_table, u, sw_nodes.at(u));
+        std::cout << "created bag for "<<u<<": \t"<<dp_table.at(u).index_to_node<<"\n";
+      }
     }
+
+    bool has_states(const NodeDesc u) const { return mstd::test(cs, u); }
+    CharSetConstRef states_of(const NodeDesc u) const { return mstd::lookup(cs, u); }
 
     template<class States>
     void for_each_state(const States& states, auto&& f) const { 
@@ -104,9 +128,8 @@ namespace PT {
       } else f(states);
     }
     void for_each_state_of(const NodeDesc u, auto&& f) const { 
-      const auto iter = cs.find(u);
-      if(iter != cs.end()){
-        for_each_state(iter->second, f);
+      if(has_states(u)) {
+        for_each_state(states_of(u), f);
       } else for(size_t i = 0; i != num_states; ++i) f(i);
     }
 
@@ -114,7 +137,7 @@ namespace PT {
 
     size_t score_for(const ExtIndex i, const Index& index) const {
       const NodeDesc u = ext.at(i);
-      assert(test(index, u));
+      std::cout << "ext["<<i<<"] = "<<u<<" - checking index "<<index<<"\n";
       auto& bag = dp_table[u];
       auto [iter, success] = append(bag.costs, index);
       size_t& cost = iter->second;
@@ -129,6 +152,7 @@ namespace PT {
           Index sub_index;
           sub_index.reserve(prev_bag.size());
           for(const NodeDesc x: prev_bag.index_to_node) {
+            std::cout << "node "<<x<<" in bag "<<prev_bag.index_to_node<<"\n";
             if(x != u) {
               assert(test(bag.node_to_index, x));
               const size_t x_index = bag.node_to_index.at(x);
@@ -155,9 +179,12 @@ namespace PT {
         // if u is a leaf, then count for all nodes in the index how often their character appears and derive the cost from the max among them
         const auto hist = make_histogram(index);
         auto max = hist.begin();
-        auto u_iter = cs.find(u);
-        if(u_iter != cs.end()) {
-          for_each_state(u_iter->second, [&](const Char& c){const auto h_it = hist.find(c); assert(h_it != hist.end()); if(h_it->second > max->second) max = h_it; });
+        if(has_states(u)) {
+          for_each_state(states_of(u), [&](const Char& c){
+              const auto h_it = hist.find(c);
+              assert(h_it != hist.end());
+              if(h_it->second > max->second) max = h_it;
+            });
         } else max = std::ranges::max_element(hist, [](const auto& lhs, const auto& rhs){ return lhs.second < rhs.second; });
         cost = index.size() - max->second;
       }
@@ -170,7 +197,7 @@ namespace PT {
   };
 
 
-  template<PhylogenyType _Phylo, NodeMapType _CharacterStates>
+  template<PhylogenyType _Phylo, class _CharacterStates>
   auto make_parsimony_HW_DP(_Phylo&& N, const Extension& ext, _CharacterStates&& cs, const size_t num_states) {
     // if phylo/character_states are passed-in by ralue-reference, then we will store our own 'copy'
     constexpr bool own_phylo = std::is_rvalue_reference_v<_Phylo&&>;

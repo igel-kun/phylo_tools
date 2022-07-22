@@ -26,9 +26,11 @@ namespace PT {
     using EdgeData = _EdgeData;
     using Edge = PT::Edge<_EdgeData>;
     static constexpr bool has_data = true;
-
+  
+  protected:
 #warning "TODO: check if shared_ptr performs"
     std::shared_ptr<EdgeData> data_ptr = nullptr;
+  public:
     
     Adjacency(const Adjacency&) = default;
     Adjacency(Adjacency&& other) = default;

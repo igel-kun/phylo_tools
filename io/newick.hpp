@@ -249,7 +249,7 @@ namespace PT{
   };
 
   using NodeFromString = std::function<NodeDesc(const std::string_view)>;
-  template<PhylogenyType Phylo>
+  template<StrictPhylogenyType Phylo>
   using AdjacencyFromString = std::function<typename Phylo::Adjacency(const NodeDesc d, const std::string_view)>;
 
   template<class F>
@@ -263,18 +263,21 @@ namespace PT{
 
     NodeDesc operator()(std::string_view s) const {
       // if the network's nodes have data, then s is first passed into the node-creation (which may modify s)
-      const NodeDesc result = Phylo::create_node(s);
+      NodeDesc result;
+      if constexpr (Phylo::has_node_data && std::is_constructible_v<typename Phylo::NodeData, std::string_view>)
+        result = Phylo::create_node(s);
+      else result = Phylo::create_node();
       // if the network's nodes have labels, then whatever remains of s is assigned as label
       if constexpr (Phylo::has_node_labels) Phylo::node_of(result).label() = s;
       return result;
     }
   };
-  template<PhylogenyType Phylo>
+  template<StrictPhylogenyType Phylo>
   struct DefaultAdjCreation {
     using Adjacency = typename Phylo::Adjacency;
 
     auto operator()(const NodeDesc d, std::string_view s) const {
-      if constexpr (Phylo::has_edge_data) {
+      if constexpr (Phylo::has_edge_data && std::is_constructible_v<typename Phylo::EdgeData, std::string_view>) {
         return Adjacency(d, s);
       } else return d;
     }

@@ -134,11 +134,16 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   // on arithmetic types just adds the second to the first
   template<ArithmeticType P, ArithmeticType Q>
-  auto append(P& p, Q&& q) { return p += std::forward<Q>(q); }
+  auto append(P& p, Q&& q) { p += std::forward<Q>(q); return std::pair{&p, true}; }
 
   // on callables, append will call the function and return the result
   template<class T, std::invocable<T&&> F>
-  auto append(F&& f, T&& t) { return std::forward<F>(f)(std::forward<T>(t)); }
+  auto append(F&& f, T&& t) {
+    using F_Result = decltype(std::forward<F>(f)(std::forward<T>(t)));
+    if constexpr (std::is_void_v<F_Result>)
+      return std::forward<F>(f)(std::forward<T>(t));
+    else return std::pair<F_Result,bool>{std::forward<F>(f)(std::forward<T>(t)), true};
+  }
 
   // append with 2 containers means to add the second to the end of the first
   template<ContainerType C1, IterableTypeWithSameIterators C2> requires (ConvertibleValueTypes<C1,C2> && !VectorOrStringType<C1>)
@@ -205,6 +210,14 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<class S> requires (ContainerType<S> && SettableType<S>)
   bool set_val(S& s, const auto& val) { return s.set(val); }
 #warning "TODO: replace append into sets by set_val unless we need the iterator"
+
+
+  template<class Index, class C> requires ContainerType<C>
+  decltype(auto) lookup(C&& c, Index&& index) { return c.at(index); }
+  template<class Index, class C> requires (std::invocable<C, Index> && !ContainerType<C>)
+  decltype(auto) lookup(C&& c, Index&& index) { return c(index); }
+
+
   // test if something is in the set
   template<SetType S>
   bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
@@ -214,6 +227,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool test(const V& vec, const auto& key) { return mstd::find(vec, key) != std::end(vec); }
   template<class T>
   bool test(const T& x, const T& y) { return x == y; }
+  template<class T, std::invocable<T> F>
+  decltype(auto) test(const F& f, const T& x) { return f(x); }
 
   // I would write an operator= to assign std::unordered_set<uint32_t> from iterable_bitset, but C++ forbids operator= as free function... WHY?!?!
 #warning "TODO: this can be done by writing a manual conversion to std::unordered_set<uint32_t>"
@@ -473,14 +488,11 @@ namespace std {
     return container;
   }
 
-}
 
-
-
-namespace std {
   template<class... Args> bool test(Args&&... args) { return mstd::test(std::forward<Args>(args)...); }
   template<class... Args> decltype(auto) append(Args&&... args) { return mstd::append(std::forward<Args>(args)...); }
   template<class... Args> decltype(auto) erase(Args&&... args) { return mstd::erase(std::forward<Args>(args)...); }
+  template<class... Args> decltype(auto) lookup(Args&&... args) { return mstd::lookup(std::forward<Args>(args)...); }
 }
 
 

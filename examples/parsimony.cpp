@@ -13,10 +13,9 @@
 
 using namespace PT;
 
-using MyNetwork = DefaultLabeledNetwork<>;
+using MyNetwork = DefaultLabeledNetwork<uint8_t>;
 using MyEdge = typename MyNetwork::Edge;
 using SWIter = mstd::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
-using CharacterStates = NodeMap<uint8_t>;
 
 OptionMap options;
 
@@ -78,13 +77,11 @@ MyNetwork read_network(std::ifstream&& in) {
 
 
 
-size_t get_parsimony_score(const MyNetwork& N, const Extension& ex, CharacterStates& cs, const size_t num_states) {
+size_t get_parsimony_score(const MyNetwork& N, const Extension& ex, const size_t num_states) {
   // for educational purposes, each Node of the extension tree will store the description of the corresponding node in the network
   std::cout << "extension: " << ex << '\n';
-  std::cout << "using character-state map "<<cs<<'\n';
-  const auto solution = make_parsimony_HW_DP(N, ex, cs, num_states);
+  const auto solution = make_parsimony_HW_DP(N, ex, [](const NodeDesc u){ return node_of<MyNetwork>(u).data(); }, num_states);
   assert(&N == &(solution.N)); // make sure it didn't make its own copy of N
-  std::cout << "extended to character-state map "<<cs<<'\n';
   return solution.score();
 }
 
@@ -100,19 +97,17 @@ int main(const int argc, const char** argv) {
     std::cout << "N: " << std::endl << N << std::endl;
 
   const size_t num_states = parse_num_states();
-  CharacterStates cs;
   std::cout << "putting random character-states...\n";
-  for(const NodeDesc x: N.leaves()) cs.emplace(x, rand() % num_states);
+  for(const NodeDesc x: N.leaves()) node_of<MyNetwork>(x).data() = rand() % num_states;
 
 
 //  if(mstd::test(options, "-pp") sw_preprocess(N);
 
   std::cout << "\n ==== computing silly post-order extension ===\n";  
   Extension ex;
-  CharacterStates silly_cs{cs};
   ex.reserve(N.num_nodes());
   for(const auto& x: N.nodes_postorder()) ex.push_back(x);
-  const size_t hw_score = get_parsimony_score(N, ex, silly_cs, num_states);
+  const size_t hw_score = get_parsimony_score(N, ex, num_states);
 
   std::cout << "\n ==== computing optimal extension ===\n";
   Extension ex_opt;
@@ -126,7 +121,7 @@ int main(const int argc, const char** argv) {
     compute_min_sw_extension<false>(N, ex_opt);
   }
   std::cout << "computed "<<ex_opt << "\n";  
-  const size_t hw_score2 = get_parsimony_score(N, ex, cs, num_states);
+  const size_t hw_score2 = get_parsimony_score(N, ex, num_states);
   std::cout << "HW score (silly extension): "<<hw_score <<'\n';
   std::cout << "HW score (optimal extension): "<<hw_score2 <<'\n';
 

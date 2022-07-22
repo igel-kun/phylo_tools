@@ -27,18 +27,17 @@ namespace PT{
     using Parent = _DPEntryLowMem<Network>;
     using Edge = typename Network::Edge;
     using Parent::ex;
+    using DynamicScanwidth = typename Extension::DynamicScanwidth<Network>;
 
-    mstd::DisjointSetForest<NodeDesc> weak_components;
-    NodeMap<sw_t> sw_values;
+    DynamicScanwidth ds; 
     sw_t scanwidth = 0;
 
     sw_t get_scanwidth() const { return scanwidth; }
     // update entry with the next node u
     void update(const NodeDesc u) {
       Parent::update(u);
-      const auto sw_u = ex.template update_sw<Network>(u, weak_components, sw_values);
-      append(sw_values, u, sw_u);
-      scanwidth = std::max(scanwidth, sw_u);
+      ds.update_sw(u);
+      scanwidth = std::max(scanwidth, ds.out.at(u));
     }
   };
 

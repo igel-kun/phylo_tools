@@ -261,8 +261,8 @@ namespace PT{
 
     template<class LabelInit, class... Args>
     Node(const std::piecewise_construct_t, LabelInit&& label_init, Args&&... args):
-      Parent(std::forward<Args>(args)...),
-      _label(label_init)
+      Parent{std::forward<Args>(args)...},
+      _label{std::make_from_tuple<LabelType>(label_init)}
     {}
 
     LabelType& label() & { return _label; }
