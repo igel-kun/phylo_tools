@@ -52,7 +52,7 @@ endif()
 
 # suppress clangs silly "unused parameter" warnings...
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wno-unknown-warning")
+  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wno-unknown-warning-option")
 endif()
 
 
