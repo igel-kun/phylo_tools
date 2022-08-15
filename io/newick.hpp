@@ -118,7 +118,7 @@ namespace PT{
         root = read_subtree();
       }
       parsed = true;
-      std::cout << "done parsing, root is "<<root<<"\n";
+      DEBUG3(std::cout << "done parsing, root is "<<root<<"\n");
       return root;
     }
 
@@ -212,7 +212,6 @@ namespace PT{
       if constexpr (!allow_non_binary)
         if(children_seen.size() == 3)
           throw MalformedNewick(newick_string, back, "found non-binary node, which has been explicitly disallowed");
-
     }
 
     // a branch is a subtree + a length
