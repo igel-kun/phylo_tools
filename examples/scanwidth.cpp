@@ -54,14 +54,14 @@ void parse_options(const int argc, const char** argv) {
 
 unsigned parse_method() {
   try{
-    const unsigned method = std::stoi(options["-m"][0]);
+    const unsigned method = std::stoi(options.at("-m").at(0));
     if(method > 4){
-      std::cout << method << " is not a vlid method, check help screen for valid methods" <<std::endl;
+      std::cerr << method << " is not a vlid method, check help screen for valid methods" <<std::endl;
       exit(1);
     } else return method;
   } catch (const std::invalid_argument& ia) {
     // -m with non-integer argument
-    std::cout << "-m expects an integer argument from 0 to 4" <<std::endl;
+    std::cerr << "-m expects an integer argument from 0 to 4" <<std::endl;
     exit(1);
   } catch (...) {
     // default method is 3
@@ -89,7 +89,7 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   std::cout << "extension: " << ex << std::endl;
 
   // compute scanwidth of ex
-  const auto sw = ex.sw_map<MyNetwork>();
+  const auto sw = ex.get_sw_map<MyNetwork>();
 
   std::cout << "sw: "<< sw << " --- (max: "<<*(mstd::max_element(mstd::seconds(sw)))<<")"<<std::endl;
 
@@ -97,13 +97,13 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   const GammaTree Gamma(ex, [](const NodeDesc u){ return u; });
   std::cout << "extension tree:\n" << ExtendedDisplay(Gamma) << std::endl;
   
-  const auto gamma_nodes = Gamma.sw_nodes_map(Gamma_to_net);
+  const auto gamma_nodes = Gamma.get_sw_nodes_map(Gamma_to_net);
   std::cout << "scanwidth node-map: " << gamma_nodes << std::endl;
 
-  const auto gamma_edges = Gamma.sw_edges_map(Gamma_to_net);
+  const auto gamma_edges = Gamma.get_sw_edges_map(Gamma_to_net);
   std::cout << "scanwidth edge-map: " << gamma_edges << std::endl;
 
-  const auto gamma_sw = Gamma.sw_map(Gamma_to_net);
+  const auto gamma_sw = Gamma.get_sw_map(Gamma_to_net);
   std::cout << "sw map: " << gamma_sw << std::endl;
 
   std::cout << "(sw = "<< *mstd::max_element(mstd::seconds(gamma_sw))<<")"<<std::endl;
@@ -122,32 +122,64 @@ int main(const int argc, const char** argv) {
 
 //  if(mstd::test(options, "-pp") sw_preprocess(N);
 
-  std::cout << "\n ==== computing silly post-order extension ===\n";  
+  size_t count = 0;
+  using BCC_Cuts = BCCCutIterFactory<MyNetwork>;
+  BCC_Cuts cuts(N);
+  std::cout << "made new cut-iter factory\n";
+  auto bcc_iter = cuts.begin();
+  std::cout << "made new cut-iter\n";
+  if(bcc_iter.is_valid()) std::cout << "iter is valid\n";
+  while(bcc_iter.is_valid()){
+    std::cout << "component #"<<++count<<"\n";
+    std::cout << *bcc_iter << "\n";
+    std::cout << "infos["<<*bcc_iter<<"] = " << bcc_iter.get_predicate().chain_info.at(*bcc_iter) << "\n";
+    ++bcc_iter;
+  }
+
+  using Component = CompatibleNetwork<MyNetwork, NodeDesc, void, void>;
+  // WARNING: if we const the bc_components, then we cannot fill the old_to_new translation and the data extracter cannot change its state during extraction
+  const auto bc_components = get_biconnected_components<Component>(N, [](const NodeDesc u){ return u; });
+  auto iter = bc_components.begin();
+  using CompMaker = typename decltype(iter)::Transformation;
+  static_assert(PhylogenyType<typename CompMaker::Component>);
+  static_assert(PhylogenyType<decltype(*iter)>);
+  std::cout << "================ first bcc ===============\n" << ExtendedDisplay(*iter)<<"\n";
+  std::cout << "================ all bccs ================\n";
+  for(const auto& bcc: bc_components){
+    std::cout << "found biconnected component with "<<bcc.num_nodes()<<" nodes & "<<bcc.num_edges()<<" edges --> "<<bcc.num_edges()+1-bcc.num_nodes()<<" reticulations):\n" << ExtendedDisplay(bcc) <<"\n";
+  }
+
+  std::cout << "\n================ done listing BCCs =================\n";
+
   Extension ex;
   ex.reserve(N.num_nodes());
-  for(const auto& x: N.nodes_postorder()) ex.push_back(x);
-  std::cout << ex << "\n";
-
-
-  std::cout << "\n ==== computing optimal extension ===\n";
-  Extension ex_opt;
-  ex_opt.reserve(N.num_nodes());
-  if(mstd::test(options, "-lm")){
-    std::cout << "using low-memory version...\n";
-    compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex_opt.push_back(u); });
-    //compute_min_sw_extension<true>(N, ex_opt); // this is equivalent
-  } else {
-    std::cout << "using faster, more memory hungry version...\n";
-    compute_min_sw_extension<false>(N, ex_opt);
+  switch(parse_method()) {
+  case 0:
+  case 1:
+  case 2:
+    throw std::logic_error("unimplemented");
+  case 3:
+    std::cout << "\n ==== computing optimal extension ===\n";
+    if(mstd::test(options, "-lm")){
+      std::cout << "using low-memory version...\n";
+      compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex.push_back(u); });
+      //compute_min_sw_extension<true>(N, ex); // this is equivalent
+    } else {
+      std::cout << "using faster, more memory hungry version...\n";
+      compute_min_sw_extension<false>(N, ex);
+    }
+    break;
+  case 4:
+    throw std::logic_error("unimplemented");
+  case 5:
+    std::cout << "\n ==== computing silly post-order extension ===\n";  
+    for(const auto& x: N.nodes_postorder()) ex.push_back(x);
+    break;
+  default:
+    throw std::logic_error("Something went wrong with the scanwidth-method selection. This should not happen!");
   }
-  std::cout << "computed "<<ex_opt << "\n";
-  
-  std::cout << "\n\nsilly extension:\n";
+  std::cout << ex << "\n";
   print_extension(N, ex);
-
-  std::cout << "\n\noptimal extension:\n";
-  print_extension(N, ex_opt);
-
   std::cout << "The End\n";
 //  if(contains(options, "-e")) sw_print_extension();
 //  if(contains(options, "-et")) sw_print_extension_tree();

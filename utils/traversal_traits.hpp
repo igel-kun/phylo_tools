@@ -59,16 +59,16 @@ namespace PT {
            mstd::IterableType _ItemContainer,
            OptionalNodeSetType _SeenSet,
            class _Forbidden>
-  struct _TraversalTraits:
+  struct TraversalTraits:
     public mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
     public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
   {
     using Parent = mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>;
     using Parent::Parent;
 
-    // NOTE: this forwarding constructor is necessary to construct _TraversalTraits from optional_tuples
+    // NOTE: this forwarding constructor is necessary to construct TraversalTraits from optional_tuples
     template<class... Args>
-    _TraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
+    TraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
     static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
     static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
@@ -102,8 +102,8 @@ namespace PT {
            OptionalNodeSetType _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false,
            class _Forbidden = void>
-  class NodeTraversalTraits: public _TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _SeenSet, _Forbidden> {
-    using Parent = _TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _SeenSet, _Forbidden>;
+  class NodeTraversalTraits: public TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _SeenSet, _Forbidden> {
+    using Parent = TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _SeenSet, _Forbidden>;
     using IterTraits = mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, reverse>>>;
   public:
     using typename Parent::Network;
@@ -115,6 +115,7 @@ namespace PT {
     using const_pointer   = mstd::pointer_from_reference<const_reference>;
     using ItemContainerRef = ItemContainer&;
     using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
+    using Parent::Parent;
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
@@ -137,8 +138,8 @@ namespace PT {
            OptionalNodeSetType _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false,
            class _Forbidden = void>
-  class EdgeTraversalTraits: public _TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _SeenSet, _Forbidden> {
-    using Parent = _TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _SeenSet, _Forbidden>;
+  class EdgeTraversalTraits: public TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _SeenSet, _Forbidden> {
+    using Parent = TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _SeenSet, _Forbidden>;
     using EdgeIter = mstd::iterator_of_t<NextEdgeContainer<_Network, reverse>>;
     using EdgeIterTraits = mstd::iterator_traits<EdgeIter>;
   public:

@@ -68,12 +68,14 @@ namespace mstd {
     template<class T>
     bool operator==(const T& other) const { return is_valid() ? Iterator::operator==(other.it) : !(other.is_valid()); }
 
-    const Iterator& get_iter() const { return static_cast<const Iterator&>(*this); }
-
     bool is_valid() const { return end_it != get_iter(); }
     bool is_invalid() const { return !is_valid(); }
     operator bool() const { return is_valid(); }
     operator bool() { return is_valid(); }
+
+    Iterator& get_iter() & { return static_cast<Iterator&>(*this); }
+    Iterator&& get_iter() && { return static_cast<Iterator&&>(*this); }
+    const Iterator& get_iter() const & { return static_cast<const Iterator&>(*this); }
 
     EndIterator get_end() const & { return end_it; }
     EndIterator get_end() & { return end_it; }
@@ -91,6 +93,9 @@ namespace mstd {
     template<class... Args>
     _auto_iter(Args&&... args): Iterator(std::forward<Args>(args)...) {}
 
+    Iterator& get_iter() & { return *this; }
+    const Iterator& get_iter() const &{ return *this; }
+    Iterator&& get_iter() && { return *this; }
     static EndIterator get_end() { return GenericEndIterator(); }
   };
 

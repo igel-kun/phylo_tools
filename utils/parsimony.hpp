@@ -107,6 +107,7 @@ namespace PT {
 
   protected:
     void create_all_bags() {
+      std::cout << "\n\n============== Hardwired Parsimony =====================\n"<<ExtendedDisplay(N) << "\n";
       const auto sw_nodes = ext.template get_sw_nodes_map<PlainPhylo>(highest_children_of);
       for(const NodeDesc u: ext) {
         append(dp_table, u, sw_nodes.at(u));
@@ -153,21 +154,25 @@ namespace PT {
         // step 2: add u with all possible character states
         size_t sub_cost = std::numeric_limits<size_t>::max();
         for_each_state_of(u, [&](const Char state){
-            for(const NodeDesc v: highest_children_of.at(u)) {
-              const auto& v_bag = dp_table.at(v);
-              // step 1: translate the index for v's bag, leaving a spot for u
-              Index sub_index = prepare_index(index, u_bag, v_bag);
-              const size_t u_index = v_bag.node_to_index.at(u);
+            const auto hc_iter = highest_children_of.find(u);
+            size_t children_cost = 0;
+            if(hc_iter != highest_children_of.end()) {
+              for(const NodeDesc v: highest_children_of.at(u)) {
+                const auto& v_bag = dp_table.at(v);
+                // step 1: translate the index for v's bag, leaving a spot for u
+                Index sub_index = prepare_index(index, u_bag, v_bag);
+                const size_t u_index = v_bag.node_to_index.at(u);
 
-              std::cout << "setting state "<<state<<" for "<<u<<":\n";
-              sub_index[u_index] = state;
-              std::cout << "recursive call for "<< v <<" and index "<<sub_index<<"\n";
-              size_t new_cost = score_for(v, sub_index);
-              // step 3: add the cost between u and its parents, depending on u's new state
-              new_cost += hist.cost_of_state(state);
-              sub_cost = std::min(sub_cost, new_cost);
+                std::cout << "setting state "<<state<<" for "<<u<<":\n";
+                sub_index[u_index] = state;
+                std::cout << "recursive call for "<< v <<" and index "<<sub_index<<"\n";
+                children_cost += score_for(v, sub_index);
+              }
             }
-          });
+            // step 3: add the cost between u and its parents, depending on u's new state
+            const size_t parents_cost = hist.cost_of_state(state);
+            sub_cost = std::min(sub_cost, children_cost + parents_cost);
+        });
         cost = sub_cost;
       }
       std::cout << "\tfound that cost["<<u<<", "<<index<<"] = "<<cost<<"\n";

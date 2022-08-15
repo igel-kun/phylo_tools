@@ -10,7 +10,9 @@ namespace mstd {
   template<class T> constexpr bool is_really_arithmetic_v = std::is_arithmetic_v<T> || std::is_pointer_v<T>;
   // anything that can be converted from and to int is considered "basically arithmetic"
   template<class T> constexpr bool is_basically_arithmetic_v = std::is_convertible_v<int, std::remove_cvref_t<T>> && std::is_convertible_v<std::remove_cvref_t<T>, int>;
-
+  // std::weakly_incrementable has a whole sack full of other iterator-related requirements like default-constructibility and difference_type...
+  template<class T> concept really_pre_incrementable = requires(T t){++t;};
+  template<class T> concept really_post_incrementable = requires(T t){t++;};
 
 
   // ever needed to get an iterator if T was non-const and a const_iterator if T was const? Try this:
@@ -140,7 +142,7 @@ namespace mstd {
 
   // a map is something mapping key_type to value_type with operator[]
 	template<class T>
-	concept MapType = requires(T a, typename std::remove_reference_t<T>::key_type key) {
+	concept MapType = requires(std::remove_cvref_t<T> a, typename std::remove_reference_t<T>::key_type key) {
 		requires ContainerType<T>;
 		{ a[key] } -> std::same_as<typename std::remove_reference_t<T>::mapped_type&>;
 	};

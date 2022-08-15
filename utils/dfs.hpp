@@ -146,6 +146,11 @@ namespace PT{
         if(!is_seen(root)) dive(root);
       } else dive(root);
     }
+    template<StrictPhylogenyType Phylo, class... Args>
+    DFSIterator(const Phylo& N, Args&&... args):
+      DFSIterator(N.root(), std::forward<Args>(args)...)
+    {}
+
 
     DFSIterator& operator++()
     {
@@ -387,6 +392,12 @@ namespace PT{
       roots(std::forward<RootInit>(_roots))
     {}
 
+    template<class... Args>
+    TraversalHelper(const Network& N, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      roots(N.roots())
+    {}
+
     // if we are traversing nodes, then empty() means that roots is empty
     // if we are traversing edges, then empty() means that there are no edges; to determine this, we have to check if all roots are leaves
     bool empty() const {
@@ -441,6 +452,11 @@ namespace PT{
       Parent(std::forward<Args>(args)...),
       root(front(_root))
     {}
+    template<class... Args>
+    TraversalHelper(const Network& N, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      root(N.root())
+    {}
 
     bool empty() const {
       if constexpr (!is_node_traversal(o))
@@ -454,8 +470,10 @@ namespace PT{
     // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
     auto begin() && { return OwningIter(root, static_cast<Parent&&>(*this)); }
     // if called with one or more arguments, begin() constructs a new iterator using these arguments
-    template<class... Args> requires (sizeof...(Args) != 0)
-    auto begin(Args&&... args) { return Iter(root, std::forward<Args>(args)...); }
+    template<class... Args>
+    auto begin(const owning_tag, Args&&... args) { return OwningIter(root, std::forward<Args>(args)...); }
+    template<class... Args>
+    auto begin(const non_owning_tag, Args&&... args) { return Iter(root, std::forward<Args>(args)...); }
 
     static constexpr auto end() { return mstd::GenericEndIterator(); }
   };
@@ -487,7 +505,7 @@ namespace PT{
   //      (b) call begin(bla, ...) instead of begin()
   template<TraversalType o,
            PhylogenyType Network,
-           class Roots,
+           class Roots = typename Network::RootContainer,
            OptionalNodeSetType SeenSet = typename Network::DefaultSeen,
            class Forbidden = void>
   struct Traversal:

@@ -17,7 +17,7 @@ namespace PT{
     template<class T> requires std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<Adj>>
     auto operator()(T&& adj) const {
       if constexpr(reverse)
-        return Edge{reverse_edge_t(), u, std::forward<T>(adj)};
+        return Edge{reverse_edge_tag(), u, std::forward<T>(adj)};
       else return Edge{u, std::forward<T>(adj)};
     }
   };

@@ -3,6 +3,7 @@
 
 #include<cassert>
 #include<climits>
+#include<memory>
 #include<sstream>
 #include<deque>
 #include<vector> // appending to vectors
@@ -496,6 +497,31 @@ namespace mstd {
   concept CompatibleValueTypes = std::is_same_v<value_type_of_t<T>, value_type_of_t<Q>>;
   template<class T, class Q>
   concept ConvertibleValueTypes = std::convertible_to<value_type_of_t<Q>, value_type_of_t<T>>;
+
+  // Often times I want the template parameter to decide whether an object owns something or not.
+  // In previous versions, I just passed either a type (like 'NodeTranslation') or a reference ('NodeTranslation&') to distinguish the two.
+  // However, this may give problems with costness, so we might actually want to use owning-/non-owning pointers instead!
+  // Then, however, we get heap-allocations :/
+  template<class T>
+  using AutoOwningPtr = std::conditional_t<std::is_reference_v<T>,
+                                            std::add_pointer_t<std::remove_reference_t<T>>,
+                                            std::unique_ptr<std::remove_reference_t<T>>>;
+
+  // references cannot be declared mutable
+  template<class T>
+  struct mutableT {
+    using TRef = T&;
+    mutable T value;
+    operator TRef() const { return value; }
+  };
+  template<class T> requires std::is_reference_v<T>
+  struct mutableT<T> {
+    T value;
+    operator T() const { return value; }
+  };
+
+
+
 
   // functions returning void are treated differently from functions returning anything, even if that anything is then ignored; we unify the two here
   template<class T, class Else> struct _VoidOr { using type = T; };

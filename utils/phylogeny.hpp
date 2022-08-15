@@ -754,25 +754,43 @@ namespace PT {
       delete_node(v);
     }
 
-    template<class LastRites>
-    void remove_node(const auto& v, const LastRites& goodbye) {
+    template<class LastRites = mstd::IgnoreFunction<void>>
+    void remove_node(const auto& v, LastRites&& goodbye = LastRites()) {
       goodbye(v);
       remove_node(v);
     }
 
     // remove the subtree rooted at u
     // NOTE: LastRites can be used to say goodbye to your node(s) (remove it from other containers or whatever)
-    template<class... Args>
-    void remove_subtree(const NodeDesc u, Args&&... args) {
+    template<class LastRites = mstd::IgnoreFunction<void>>
+    void remove_subtree(const NodeDesc u, LastRites&& goodbye) {
       const auto& C = children(u);
-      while(!C.empty()) remove_subtree(back(C), std::forward<Args>(args)...);
-      remove_node(u, std::forward<Args>(args)...);
+      while(!C.empty()) remove_subtree(mstd::back(C), goodbye);
+      remove_node(u, goodbye);
     }
-    
-    template<class... Args>
-    void clear(Args&&... args) {
-      for(const NodeDesc r: _roots) remove_subtree(r, std::forward<Args>(args)...);
-      _roots.clear();
+  protected:
+    template<class LastRites>
+    void _clear(LastRites&& goodbye) {
+      for(const NodeDesc v: nodes_postorder()) {
+        goodbye(v);
+        Parent::delete_node(v);
+      }
+    }
+  public:
+    template<class LastRites = mstd::IgnoreFunction<void>>
+    void clear(LastRites&& goodbye = LastRites()) {
+      if(!_roots.empty()) {
+        if constexpr (!Parent::has_unique_root) {
+          if(_roots.size() > 1) {
+            for(const NodeDesc r: _roots) {
+              remove_subtree(r, goodbye);
+            }
+          } else _clear(goodbye);
+        } else _clear(goodbye);
+        Parent::clear();
+      }
+      assert(edgeless());
+      assert(empty());
     }
 
     template<class... Args>
@@ -1091,7 +1109,7 @@ namespace PT {
 
     // "copy" construction with root(s)
     template<PhylogenyType Phylo, NodeIterableType RContainer, class... EmplacerArgs>
-    Phylogeny(const policy_copy_t, Phylo&& N, const RContainer& in_roots, EmplacerArgs&&... args) {
+    Phylogeny(const policy_copy_tag, Phylo&& N, const RContainer& in_roots, EmplacerArgs&&... args) {
       std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using roots "<<in_roots<<"\n";
       if(!in_roots.empty()) {
         auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
@@ -1109,7 +1127,7 @@ namespace PT {
     
     // "copy" construction with single root
     template<PhylogenyType Phylo, class... EmplacerArgs>
-    Phylogeny(const policy_copy_t, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args) {
+    Phylogeny(const policy_copy_tag, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args) {
       DEBUG3(std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using root "<<in_root<<"\n");
       //auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
       auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
@@ -1125,21 +1143,21 @@ namespace PT {
     // "copy" construction without root (using all roots of in_tree)
     template<PhylogenyType Phylo, class First, class... Args>
       requires (!NodeIterableType<First> && !std::remove_reference_t<Phylo>::has_unique_root)
-    Phylogeny(const policy_copy_t, Phylo&& N, First&& first, Args&&... args):
-      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), N.roots(), std::forward<First>(first), std::forward<Args>(args)...)
+    Phylogeny(const policy_copy_tag, Phylo&& N, First&& first, Args&&... args):
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), N.roots(), std::forward<First>(first), std::forward<Args>(args)...)
     {}
     template<PhylogenyType Phylo, class First, class... Args>
       requires (!NodeIterableType<First> && std::remove_reference_t<Phylo>::has_unique_root)
-    Phylogeny(const policy_copy_t, Phylo&& N, First&& first, Args&&... args):
-      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), mstd::front(N.roots()), std::forward<First>(first), std::forward<Args>(args)...)
+    Phylogeny(const policy_copy_tag, Phylo&& N, First&& first, Args&&... args):
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), mstd::front(N.roots()), std::forward<First>(first), std::forward<Args>(args)...)
     {}
     template<PhylogenyType Phylo> requires (!std::remove_reference_t<Phylo>::has_unique_root)
-    Phylogeny(const policy_copy_t, Phylo&& N):
-      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), N.roots())
+    Phylogeny(const policy_copy_tag, Phylo&& N):
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), N.roots())
     {}
     template<PhylogenyType Phylo> requires (std::remove_reference_t<Phylo>::has_unique_root)
-    Phylogeny(const policy_copy_t, Phylo&& N):
-      Phylogeny(policy_copy_t{}, std::forward<Phylo>(N), mstd::front(N.roots()))
+    Phylogeny(const policy_copy_tag, Phylo&& N):
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), mstd::front(N.roots()))
     {}
 
 
@@ -1148,23 +1166,23 @@ namespace PT {
     // NOTE: This will go horribly wrong if the sub-network below in_root has incoming arcs from outside the subnetwork!
     //       It is the user's responsibility to make sure this is not the case.
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_t, Phylo&& in_tree, const RContainer& in_roots) {
+    Phylogeny(const policy_move_tag, Phylo&& in_tree, const RContainer& in_roots) {
       place_below_by_move<true, true>(std::move(in_tree), in_roots, NoNode);
     }
     // "move" construction with single root
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_t, Phylo&& in_tree, const NodeDesc in_root) {
+    Phylogeny(const policy_move_tag, Phylo&& in_tree, const NodeDesc in_root) {
       place_below_by_move(std::move(in_tree), in_root, NoNode);
       // remember to manually remove the in_root from in_tree's root storage
       mstd::erase(in_tree._roots, in_root);
     }
     // "move" construction making a copy of in_root instead of moving it
     template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_children_t, Phylo&& in_tree, const NodeDesc in_root) {
+    Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const NodeDesc in_root) {
       place_below_by_move_children(std::move(in_tree), in_root, NoNode);
     }
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_children_t, Phylo&& in_tree, const RContainer in_roots) {
+    Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const RContainer in_roots) {
 #warning "TODO: write me"
       std::cerr << "unimplemented\n";
       exit(1);
@@ -1172,17 +1190,17 @@ namespace PT {
 
     template<StrictPhylogenyType Phylo, class... Args>
     explicit Phylogeny(const Phylo& in_tree, Args&&... args):
-      Phylogeny(policy_copy_t(), in_tree, std::forward<Args>(args)...)
+      Phylogeny(policy_copy_tag(), in_tree, std::forward<Args>(args)...)
     {}
     // copy-constructing for the same type is not explicit
     Phylogeny(const Phylogeny& in_tree):
-      Phylogeny(policy_copy_t(), in_tree)
+      Phylogeny(policy_copy_tag(), in_tree)
     {}
 
     template<StrictPhylogenyType Phylo, class... Args>
       requires (std::is_same_v<Node, typename Phylo::Node> && !((sizeof...(Args) == 0) && std::is_same_v<Phylo, Phylogeny>))
     explicit Phylogeny(Phylo&& in_tree, Args&&... args):
-      Phylogeny(policy_move_t(), std::move(in_tree), std::forward<Args>(args)...)
+      Phylogeny(policy_move_tag(), std::move(in_tree), std::forward<Args>(args)...)
     {}
     // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
     // NOTE: we have to make sure to remove the other phylogeny's roots, otherwise its destructor will destruct the roots as well
@@ -1192,8 +1210,7 @@ namespace PT {
 
     // assigning from a Phylogeny-rval-ref is just stealing their stuff - the ProtoPhylogeny knows how to do this
     void assign_from(Phylogeny&& other) {
-      if(!_roots.empty())
-        delete_all_nodes();
+      if(!_roots.empty()) clear();
       Parent::operator=(std::move(other));
       assert(other.roots().empty()); // make sure other has no more roots now cause they would be free'd
     }
@@ -1229,24 +1246,7 @@ namespace PT {
 
 
     // =============== destruction ==================
-  protected:
-    // free all memory occupied by our nodes
-    // NOTE: BE AWARE: this does not touch _roots, _num_nodes or _num_edges; you'll have to do that manually
-    void delete_all_nodes() {
-      NodeVec all_nodes;
-      all_nodes.reserve(_num_nodes);
-      mstd::append(all_nodes, nodes());
-      for(const NodeDesc u: all_nodes)
-        Parent::delete_node(u);
-    }
-
   public:
-    // clear the phylogeny
-    void clear() {
-      delete_all_nodes();
-      Parent::clear();
-    }
-
 
     // =================== i/o ======================
 
@@ -1369,8 +1369,8 @@ namespace PT {
                                                  my_to_string,
                                                  mstd::IgnoreFunction<std::string>>;
 
-  template<int flags = DISPLAY_DATA, class NodeDataToString = DefaultDataToString<flags>>
-  std::string ExtendedDisplay(const auto& N, NodeDataToString nd_to_string = NodeDataToString()) {
+  template<int flags = DISPLAY_DATA, class NodeDataToString = DefaultDataToString<flags>, StrictPhylogenyType Phylo>
+  std::string ExtendedDisplay(const Phylo& N, NodeDataToString nd_to_string = NodeDataToString()) {
     if(!N.empty()) {
       std::ostringstream out;
       N.print_subtree(out, nd_to_string);

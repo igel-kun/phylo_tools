@@ -27,9 +27,13 @@ namespace PT {
     EdgeEmplacementHelper(TargetPhylo& _N): N(_N) {}
     EdgeEmplacementHelper(TargetPhylo& _N, const StrictTranslation& _old_to_new): N(_N), old_to_new(_old_to_new) {}
     EdgeEmplacementHelper(TargetPhylo& _N, StrictTranslation& _old_to_new): N(_N), old_to_new(_old_to_new) {}
-    EdgeEmplacementHelper(TargetPhylo& _N, StrictTranslation&& _old_to_new): N(_N), old_to_new(std::move(_old_to_new)) {}
-    EdgeEmplacementHelper(const EdgeEmplacementHelper&) = default;
+    EdgeEmplacementHelper(TargetPhylo& _N, StrictTranslation&& _old_to_new): N(_N), old_to_new(static_cast<OldToNewTranslation&&>(_old_to_new)) {}
+
+    // the emplacement helper can only be copied if given a new TargetPhylo, but moving is OK
+    EdgeEmplacementHelper(const EdgeEmplacementHelper&) = delete;
     EdgeEmplacementHelper(EdgeEmplacementHelper&&) = default;
+    EdgeEmplacementHelper(const EdgeEmplacementHelper& other, TargetPhylo& _N): N(_N), old_to_new(other.old_to_new) {}
+    EdgeEmplacementHelper(EdgeEmplacementHelper&& other, TargetPhylo& _N): N(_N), old_to_new(static_cast<OldToNewTranslation&&>(other.old_to_new)) {}
 
   protected:
     inline NodeSet& root_candidates() {
@@ -129,6 +133,7 @@ namespace PT {
     using StrictExtracter = std::remove_reference_t<Extracter>;
     using SourcePhylo = typename Helper::SourcePhylo;
     using TargetPhylo = typename Helper::TargetPhylo;
+    using OldToNewTranslation = typename Helper::OldToNewTranslation;
     static constexpr bool track_roots = Helper::track_roots;
     static constexpr bool extract_labels = !StrictExtracter::ignoring_node_labels;
     static constexpr bool extract_node_data = !StrictExtracter::ignoring_node_data;
@@ -137,6 +142,7 @@ namespace PT {
     Helper helper;
     Extracter data_extracter;
 
+    // passing both Helper and Extracter (note that Extracter might be a reference!)
     EdgeEmplacer(const Helper& _helper, const StrictExtracter& _data_extracter): helper(_helper), data_extracter(_data_extracter) {}
     EdgeEmplacer(const Helper& _helper, StrictExtracter& _data_extracter): helper(_helper), data_extracter(_data_extracter) {}
     EdgeEmplacer(const Helper& _helper, StrictExtracter&& _data_extracter): helper(_helper), data_extracter(std::move(_data_extracter)) {}
@@ -144,20 +150,46 @@ namespace PT {
     EdgeEmplacer(Helper&& _helper, StrictExtracter& _data_extracter): helper(std::move(_helper)), data_extracter(_data_extracter) {}
     EdgeEmplacer(Helper&& _helper, StrictExtracter&& _data_extracter): helper(std::move(_helper)), data_extracter(std::move(_data_extracter)) {}
 
-    template<class... Args>
+    // passing Extracter and constructing Helper
+    template<class... Args> requires (sizeof...(Args) > 0)
     EdgeEmplacer(const StrictExtracter& _data_extracter, Args&&... helper_args):
       helper(std::forward<Args>(helper_args)...), data_extracter(_data_extracter) {}
-    template<class... Args>
+    template<class... Args> requires (sizeof...(Args) > 0)
     EdgeEmplacer(StrictExtracter& _data_extracter, Args&&... helper_args):
       helper(std::forward<Args>(helper_args)...), data_extracter(_data_extracter) {}
-    template<class... Args>
+    template<class... Args> requires (sizeof...(Args) > 0)
     EdgeEmplacer(StrictExtracter&& _data_extracter, Args&&... helper_args):
       helper(std::forward<Args>(helper_args)...), data_extracter(std::move(_data_extracter)) {}
 
+    // piecewise constructing Helper and Extracter
     template<class HelperInit, class ExtracterInit>
     EdgeEmplacer(const std::piecewise_construct_t, HelperInit&& _helper, ExtracterInit&& _extracter):
       helper(std::make_from_tuple<Helper>(std::forward<HelperInit>(_helper))),
       data_extracter(std::make_from_tuple<Extracter>(std::forward<ExtracterInit>(_extracter))) {}
+
+    // constructing Helper and Extracter
+    template<PhylogenyType Phylo, NodeTranslationType OldToNew, class... Args>
+      requires std::is_constructible_v<Helper, Phylo&&, OldToNew&&>
+    EdgeEmplacer(Phylo&& N, OldToNew&& old_to_new, Args&&... extracter_args):
+      helper(std::forward<Phylo>(N), std::forward<OldToNew>(old_to_new)), data_extracter(std::forward<Args>(extracter_args)...) {}
+    template<PhylogenyType Phylo, class First, class... Args>
+      requires (std::is_constructible_v<Helper, Phylo&&> && !NodeTranslationType<First>)
+    EdgeEmplacer(Phylo&& N, First&& first, Args&&... extracter_args):
+      helper(std::forward<Phylo>(N)), data_extracter(std::forward<First>(first), std::forward<Args>(extracter_args)...) {}
+    template<PhylogenyType Phylo>
+      requires (std::is_constructible_v<Helper, Phylo&&> && std::is_default_constructible_v<Extracter>)
+    EdgeEmplacer(Phylo&& N):
+      helper(std::forward<Phylo>(N)), data_extracter() {}
+
+    // copy and move construction
+    template<PhylogenyType Phylo>
+      requires std::is_constructible_v<Helper, const Helper&, Phylo&&>
+    EdgeEmplacer(const EdgeEmplacer& other, Phylo&& N):
+      helper(other.helper, std::forward<Phylo>(N)), data_extracter(other.data_extracter) {}
+    template<PhylogenyType Phylo>
+      requires std::is_constructible_v<Helper, Helper&&, Phylo&&>
+    EdgeEmplacer(EdgeEmplacer&& other, Phylo&& N):
+      helper(std::move(other).helper, std::forward<Phylo>(N)), data_extracter(std::move(other).data_extracter) {}
 
 
 

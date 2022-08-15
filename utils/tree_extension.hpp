@@ -38,11 +38,11 @@ namespace PT{
       // we can use a disjoint set forest with no-rank union to find the current highest node of the weakly-connected component of a node
       mstd::DisjointSetForest<NodeDesc> highest;
 
-      DEBUG3(std::cout << "constructing extension tree from "<<ex<<std::endl);
+      DEBUG4(std::cout << "constructing extension tree from "<<ex<<std::endl);
       for(const auto& u: ex){
         // step 1: add a new set to the DSF with only u
         highest.add_new_set({u});
-        DEBUG3(std::cout << "highest ancestors of node "<<u<<": "<<highest<<std::endl);
+        DEBUG4(std::cout << "highest ancestors of node "<<u<<": "<<highest<<std::endl);
         // step 2: establish u as the parent in Gamma of all highest nodes in all weakly connected components (in G[ex[1..u]]) of its children in N
         NodeSet new_children; // NOTE: many children of u in the network may have the same "highest current ancestor" in the tree; use a set to avoid dupes
         for(const NodeDesc v: Network::children(u)){
@@ -52,7 +52,7 @@ namespace PT{
             throw(std::logic_error("trying to compute extension tree on a non-extension"));
           }
         }
-        DEBUG3(std::cout << "new children of "<<u<<": "<<new_children<<"\n");
+        DEBUG4(std::cout << "new children of "<<u<<": "<<new_children<<"\n");
         // step 3: register u as the new hightest node in the weakly connected components of its new children 
         // step 4: add edges u->v to the edgelist
         for(const NodeDesc v: new_children){

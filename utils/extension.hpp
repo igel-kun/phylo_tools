@@ -73,6 +73,7 @@ namespace PT{
         weak_components.add_new_set(u, u);
         // step 1: merge all weak components of chilldren of u
         try{
+          DEBUG5(std::cout << "working children "<<u_node.children()<<" of "<<u<<"\n");
           for(const auto& v: u_node.children()) {
             if(weak_components.in_different_sets(u, v)) {
               // if v is in a different weak component than u, then merge the components and increase sw(u) by sw(v)

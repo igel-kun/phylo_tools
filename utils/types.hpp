@@ -239,7 +239,9 @@ namespace PT {
   template<class P>
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
   template<class P>
-  concept OptionalPhylogenyType = (std::is_void_v<std::remove_reference_t<P>> || PhylogenyType<P>);
+  concept StrictOptionalPhylogenyType = (std::is_void_v<P> || StrictPhylogenyType<P>);
+  template<class P>
+  concept OptionalPhylogenyType = StrictOptionalPhylogenyType<std::remove_reference_t<P>>;
 
   template<class P>
   concept StrictTreeType = (StrictPhylogenyType<P> && P::is_declared_tree);

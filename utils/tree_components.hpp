@@ -80,7 +80,7 @@ namespace PT{
         // if x != rt then we suppose that rt already exists in the set forest
         auto& rt_set = comp_root.set_of(rt);
         // then, we can just add x to this set and update the visible leaf
-        std::cout << "updating comp root of "<<x<<" ("<<x_set<<") to "<<rt_set.get_representative()<<" ("<<rt_set<<") with visible leaf "<<vis_leaf<<"\n";
+        DEBUG4(std::cout << "updating comp root of "<<x<<" ("<<x_set<<") to "<<rt_set.get_representative()<<" ("<<rt_set<<") with visible leaf "<<vis_leaf<<"\n");
         // if x was already represented in the disjoint set forest, then merge it onto rt
         if(vis_leaf != NoNode) {
           x_set.payload = rt_set.payload = vis_leaf;
@@ -90,12 +90,12 @@ namespace PT{
         comp_root.merge_sets_keep_order(rt_set, x_set);
       } else {
         if(!success) {
-          std::cout << "splitting off "<<x_set<<"\n";
+          DEBUG4(std::cout << "splitting off "<<x_set<<"\n");
           comp_root.split_element(x);
           if(vis_leaf) x_set.payload = vis_leaf;
         }
       }
-      std::cout << "comp root entries now "<<x<<": "<<x_set<<", "<<x_set.get_representative()<<": "<< comp_root.set_of(x) <<"\n";
+      DEBUG4(std::cout << "comp root entries now "<<x<<": "<<x_set<<", "<<x_set.get_representative()<<": "<< comp_root.set_of(x) <<"\n");
     }
  
     NodeDesc visible_leaf_of(const NodeDesc u) const {
@@ -122,7 +122,7 @@ namespace PT{
     // NOTE: if recursive is true, we will call ourselves recursively for all reticulation parents
     template<bool recursive = true, bool set_this_root = !recursive, bool quit_early = set_this_root, class Callback = mstd::IgnoreFunction<void>>
     NodeDesc component_root_consensus_among_parents(const NodeDesc v, Callback&& callback = Callback()) {
-      std::cout << "computing consensus for nodes above "<<v<<"\n";
+      DEBUG4(std::cout << "computing consensus for nodes above "<<v<<"\n");
       NodeDesc consensus = v;
       for(const NodeDesc u: N.parents(v)) {
         // step 0: get the component root of u, if it has one
@@ -160,7 +160,6 @@ namespace PT{
       // create an edge-emplacer for the result DAG; we won't have to track roots since they will be the same as the roots of N
       // NOTE: the lambda tells the emplacer that the node data of the node corresponding to u will be u itself
       //       (thus, each new node has, as its data, the NodeDesc of its corresponding original node)
-      std::cout << "making emplacer...\n";
       auto emplacer = EdgeEmplacers<false>::make_emplacer(comp_DAG, N_to_comp_DAG, [](const NodeDesc u){ return u;});
       
       NodeVec non_trivial_roots;
@@ -170,16 +169,14 @@ namespace PT{
       emplacer.mark_root(N.root());
       //std::cout << "setting comp data of "<<N.root()<<"\n";
       //set_comp_root(N.root());
-      std::cout << "computing component roots\n";
+      DEBUG4(std::cout << "computing component roots\n)";
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
-      std::cout << "1st pass over component roots\n";
-      std::cout << comp_root<<"\n";
-      std::cout << "emplacer translation @"<< &(emplacer.helper.old_to_new)<<" our translation @"<<&N_to_comp_DAG<<"\n";
+      DEBUG4(std::cout << "1st pass over component roots\n" << comp_root<<"\nemplacer translation @"<< &(emplacer.helper.old_to_new)<<" our translation @"<<&N_to_comp_DAG<<"\n");
 
       // construct visibility also from the trivial roots (the leaves), but don't add their edges to the component DAG
       // NOTE: by going through the roots in reverse order, we make sure to spread visible leaves upwards
-      std::cout << "2nd pass over component roots\n";
+      DEBUG4(std::cout << "2nd pass over component roots\n");
       for(auto iter = trivial_roots.rbegin(); iter != trivial_roots.rend(); ++iter)
         install_trivial_root(*iter);
       for(auto iter = non_trivial_roots.rbegin(); iter != non_trivial_roots.rend(); ++iter)
@@ -251,9 +248,9 @@ namespace PT{
       assert(upper_root != NoNode);
       assert(lower_root != NoNode);
       assert(upper_root != lower_root);
-      std::cout << "component-DAG:\n";
+      DEBUG4(std::cout << "component-DAG:\n");
       comp_DAG.print_subtree_with_data();
-      std::cout << "translate: " << N_to_comp_DAG << "\n";
+      DEBUG4(std::cout << "translate: " << N_to_comp_DAG << "\n");
       const auto lower_root_in_cDAG_iter = N_to_comp_DAG.find(lower_root);
       if(lower_root_in_cDAG_iter != N_to_comp_DAG.end()) {
         const NodeDesc lower_root_in_cDAG = lower_root_in_cDAG_iter->second;
@@ -277,7 +274,7 @@ namespace PT{
         comp_DAG.contract_up(lower_root_in_cDAG);
         N_to_comp_DAG.erase(lower_root_in_cDAG_iter);
       }
-      std::cout << "\tREACT: updating component roots...\n";
+      DEBUG4(std::cout << "\tREACT: updating component roots...\n");
       set_comp_root(lower_root, upper_root);
     }
 
@@ -291,12 +288,12 @@ namespace PT{
     template<bool v_may_become_comp_root = false>
     void react_to_edge_deletion(const NodeDesc u, const NodeDesc v) {
       static_assert(!v_may_become_comp_root && "unimplemented");
-      std::cout << N << "\n";
-      std::cout << "\tREACT: reacting to the deletion of "<<u<<" -> "<<v<<"\n";
+      DEBUG4(std::cout << N << "\n");
+      DEBUG4(std::cout << "\tREACT: reacting to the deletion of "<<u<<" -> "<<v<<"\n");
       const NodeDesc u_rt = comp_root_of(u);
       assert(u_rt != NoNode);
       NodeDesc rt_below_v = get_tree_comp_below(v);
-      std::cout << "\tREACT: comp-root of "<< u <<" is "<<u_rt<<" and the comp-root below "<<v<<" is "<<rt_below_v<<"\n";
+      DEBUG4(std::cout << "\tREACT: comp-root of "<< u <<" is "<<u_rt<<" and the comp-root below "<<v<<" is "<<rt_below_v<<"\n");
       
       assert(N.out_degree(v) <= 1);
       if(rt_below_v == v) { // v is no longer a reticulation, which means that v is now suppressible or a leaf; in the latter case nothing has to be done
@@ -304,10 +301,10 @@ namespace PT{
         const auto& v_children = N.children(v);
         if(!v_children.empty()) {
           assert(v_children.size() == 1);
-          std::cout << "\tREACT: "<< v <<" is now suppressible\n";
+          DEBUG4(std::cout << "\tREACT: "<< v <<" is now suppressible\n");
           // if v is suppressible, we still might have to remove the edge between rt_u and the component root below v in the component DAG
           const NodeDesc v_child = mstd::front(v_children);
-          std::cout << "\tREACT: "<< v_child <<"'s comp root is "<< comp_root_of(v_child) << "\n";
+          DEBUG4(std::cout << "\tREACT: "<< v_child <<"'s comp root is "<< comp_root_of(v_child) << "\n");
           const NodeDesc v_parent = N.parent(v);
           if(!N.is_reti(v_child)) {
             // if v's child is not a reticulation, it must be a (possibly trivial) component root (remember that v was a reticulation before removing uv)
@@ -316,7 +313,7 @@ namespace PT{
             if(!N.is_reti(v_parent)) {
               // since v_parent is not a reticulation, it must have a component root
               const NodeDesc v_parent_rt = comp_root_of(v_parent);
-              std::cout << "\tREACT: merging tree-components of "<<v_parent_rt<<" and "<<v_child<<"\n";
+              DEBUG4(std::cout << "\tREACT: merging tree-components of "<<v_parent_rt<<" and "<<v_child<<"\n");
               merge_tree_components(v_parent_rt, v_child, comp_root_of(u));
               set_comp_root(v, v_parent_rt);
 
@@ -333,14 +330,13 @@ namespace PT{
                     else mstd::append(retis_below, y);
                   }
               }
-              std::cout << "retis below: "<<retis_below<<"\n";
+              DEBUG4(std::cout << "retis below: "<<retis_below<<"\n");
               for(NodeDesc x: retis_below) {
                 while((N.out_degree(x) == 1) && (comp_root_of(x) == NoNode) && (component_root_consensus_among_parents<false>(x) != NoNode))
                   x = N.child(x);
               }
 
-              std::cout << "cDAG after component update:\n";
-              comp_DAG.print_subtree_with_data();
+              DEBUG4(std::cout << "cDAG after component update:\n";comp_DAG.print_subtree_with_data();)
             } else {
               if constexpr (v_may_become_comp_root) {
                 assert(false && "unimplemented");
@@ -361,7 +357,7 @@ namespace PT{
           }
         }
       } else { // v is a reticulation
-        std::cout << "\tREACT: "<< v <<" is a reticulation above the comp-root "<<rt_below_v<<"\n";
+        DEBUG4(std::cout << "\tREACT: "<< v <<" is a reticulation above the comp-root "<<rt_below_v<<"\n");
         assert(rt_below_v != NoNode);
 
         if(!N.is_leaf(rt_below_v)) {

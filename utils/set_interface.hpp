@@ -67,7 +67,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<ContainerType C, FindableType<C> Key>
   auto find(C&& c, const Key& key) {
     if constexpr (VectorType<C>){
-      std::cout << "finding "<<key<<" in "<<c<<"\n";
       return std::find(begin(c), end(c), key);
     } else return c.find(key);
   }

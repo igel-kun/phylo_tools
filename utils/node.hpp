@@ -52,6 +52,8 @@ namespace PT{
 
     using SuccContainer = StorageClass<SuccStorage, Adjacency>;
     using PredContainer = StorageClass<PredStorage, Adjacency>;
+    using ChildContainer = SuccContainer;
+    using ParentContainer = PredContainer;
     using LabelType = void;
 
   protected:
@@ -199,7 +201,7 @@ namespace PT{
     Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), mstd::front(_successors) }; }
     InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(get_desc(), _predecessors); }
     ConstInEdgeContainer in_edges() const {return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
-    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_t(), get_desc(), mstd::front(_predecessors) }; }
+    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_tag(), get_desc(), mstd::front(_predecessors) }; }
 
     // lookup a parent/child
     const Adjacency* find_predecessor(const NodeDesc v) const { return_pointer_lookup(_predecessors, v); }

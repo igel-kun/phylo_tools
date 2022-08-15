@@ -189,7 +189,7 @@ namespace PT{
   //NOTE: most efficient, but the caller has to make sure that they really are sorted (this is not verified by the algorithm)
   //NOTE: this also permits the user to instanciate the whole class with a sparse NodeInfoMap (does not store order_numbers)
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = SparseInducedSubtreeInfoMap>
-  auto get_induced_edges(const policy_noop_t, const Tree& supertree, const LeafList& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
+  auto get_induced_edges(const policy_noop_tag, const Tree& supertree, const LeafList& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
 #ifndef NDEBUG
     { // check if leaves are sorted only in debug mode
       NodeInfoMap tmp;
@@ -205,11 +205,11 @@ namespace PT{
   // policy_copy - make a copy of the leaves (into a vector) and sort them
   //NOTE: slowest version, but the caller might not have a choice (f.ex. if only an assorted const container is available)
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap>
-  auto get_induced_edges(const policy_copy_t, const Tree& supertree, const LeafList& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
+  auto get_induced_edges(const policy_copy_tag, const Tree& supertree, const LeafList& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
     NodeVec leaves_local; // we could call the range constructor, but (depending on LeafList), it may be expensive to determine distance(begin(), end())
     leaves_local.reserve(leaves.size());
     leaves_local.insert(leaves_local.end(), leaves.begin(), leaves.end());
-    return get_induced_edges(policy_inplace_t(), supertree, std::move(leaves_local), std::forward<NodeInfoMap>(node_infos));
+    return get_induced_edges(policy_inplace_tag(), supertree, std::move(leaves_local), std::forward<NodeInfoMap>(node_infos));
   }
 
   // policy_inplace - sort the leaves in-place
@@ -217,7 +217,7 @@ namespace PT{
   //NOTE: on some containers, sort is more efficient than on others...
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap>
     requires (!mstd::is_const_ref<LeafList>)
-  auto get_induced_edges(const policy_inplace_t, const Tree& supertree, LeafList&& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
+  auto get_induced_edges(const policy_inplace_tag, const Tree& supertree, LeafList&& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
     get_induced_subtree_infos(supertree, node_infos);
     sort_by_order_number(leaves, node_infos);
     return _induced_subtree_edges<Tree, LeafList, NodeInfoMap>(supertree, std::forward<LeafList>(leaves), std::forward<NodeInfoMap>(node_infos)).get_edges();
@@ -228,9 +228,9 @@ namespace PT{
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap = SparseInducedSubtreeInfoMap>
   auto get_induced_edges(const Tree& supertree, LeafList&& leaves, NodeInfoMap&& node_infos = NodeInfoMap()) {
     if constexpr (mstd::is_const_ref<LeafList>)
-      return get_induced_edges(policy_copy_t(), supertree, leaves, std::forward<NodeInfoMap>(node_infos));
+      return get_induced_edges(policy_copy_tag(), supertree, leaves, std::forward<NodeInfoMap>(node_infos));
     else
-      return get_induced_edges(policy_inplace_t(), supertree, leaves, std::forward<NodeInfoMap>(node_infos));
+      return get_induced_edges(policy_inplace_tag(), supertree, leaves, std::forward<NodeInfoMap>(node_infos));
   }
 
 }

@@ -129,6 +129,8 @@ namespace PT{
         STAT(std::cout << "STAT: " <<N.num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
         // the last extension should be the one we are looking for
         const auto& ex = last_iter->second.ex;
+        std::cout << "\n\nfound extension "<<ex<<" for\n"<<N<<"\n";
+        assert(ex.size() == N.num_nodes());
         size_t num_nodes = ex.size();
         if constexpr (!include_root) --num_nodes;
         for(size_t i = 0; i != num_nodes; ++i)
@@ -147,9 +149,9 @@ namespace PT{
     using DPType = ScanwidthDP<low_memory_version, const Component>;
     
     DEBUG4(std::cout << "getting biconnected component factory\n");
-    const auto bc_components = get_biconnected_components<Network, Component>(N, [](const NodeDesc u){ return u; });
+    const auto bc_components = get_biconnected_components<Component>(N, [](const NodeDesc u){ return u; });
     for(const auto& bcc: bc_components){
-      DEBUG5(std::cout << "found biconnected component:\n"; std::cout << bcc <<"\n";)
+      DEBUG5(std::cout << "found biconnected comp ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n";)
       if(bcc.num_edges() != 1){
         DPType dp(bcc);
         dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ mstd::append(_register_node, node_of<Component>(u).data()); });

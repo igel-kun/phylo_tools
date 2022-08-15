@@ -37,12 +37,13 @@ void parse_options(const int argc, const char** argv) {
       \t-e\tprint an optimal extension\n\
       \t-et\tprint an optimal extension tree (corresponds to the extension)\n\
       \t-lm\tuse low-memory data structures for computing scanwidth (uses 25% of the space at the cost of factor |V(N)| running time)\n\
-      \t-m x\tmethod to use to compute scanwidth [default: x = 3]:\n\
+      \t-m x\tmethod to use to compute scanwidth [default: x = 5]:\n\
       \t\t\tx = 0: brute force all permutations,\n\
       \t\t\tx = 1: dynamic programming on all vertices,\n\
       \t\t\tx = 2: brute force on raising vertices only,\n\
       \t\t\tx = 3: dynamic programming on raising vertices only,\n\
-      \t\t\tx = 4: heuristic\n");
+      \t\t\tx = 4: heuristic\n\
+      \t\t\tx = 5: silly post-order traversal\n");
 
   parse_options(argc, argv, description, help_message, options);
 
@@ -55,8 +56,8 @@ void parse_options(const int argc, const char** argv) {
 
 size_t parse_method() {
   if(test(options, "-m"))
-    return ConstraintIntParser{options["-m"], 0, 4}.parse_next_argument();
-  else return 3;
+    return ConstraintIntParser{options["-m"], 0, 5}.parse_next_argument();
+  else return 5;
 }
 
 size_t parse_num_states() {
@@ -100,30 +101,37 @@ int main(const int argc, const char** argv) {
   if(mstd::test(options, "-v"))
     std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
 
-  std::cout << "\n ==== computing silly post-order extension ===\n";  
   Extension ex;
   ex.reserve(N.num_nodes());
-  for(const auto& x: N.nodes_postorder()) ex.push_back(x);
-  const size_t hw_score = get_parsimony_score(N, ex, num_states);
-
-  std::cout << "\n ==== computing optimal extension ===\n";
-  Extension ex_opt;
-  ex_opt.reserve(N.num_nodes());
-  if(mstd::test(options, "-lm")){
-    std::cout << "using low-memory version...\n";
-    compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex_opt.push_back(u); });
-    //compute_min_sw_extension<true>(N, ex_opt); // this is equivalent
-  } else {
-    std::cout << "using faster, more memory hungry version...\n";
-    compute_min_sw_extension<false>(N, ex_opt);
+  
+  switch(parse_method()) {
+  case 0:
+  case 1:
+  case 2:
+    throw std::logic_error("unimplemented");
+  case 3:
+    std::cout << "\n ==== computing optimal extension ===\n";
+    if(mstd::test(options, "-lm")){
+      std::cout << "using low-memory version...\n";
+      compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex.push_back(u); });
+      //compute_min_sw_extension<true>(N, ex); // this is equivalent
+    } else {
+      std::cout << "using faster, more memory hungry version...\n";
+      compute_min_sw_extension<false>(N, ex);
+    }
+    break;
+  case 4:
+    throw std::logic_error("unimplemented");
+  case 5:
+    std::cout << "\n ==== computing silly post-order extension ===\n";  
+    for(const auto& x: N.nodes_postorder()) ex.push_back(x);
+    break;
+  default:
+    throw std::logic_error("Something went wrong with the scanwidth-method selection. This should not happen!");
   }
-  std::cout << "computed "<<ex_opt << "\n";  
-  const size_t hw_score2 = get_parsimony_score(N, ex, num_states);
-  std::cout << "HW score (silly extension): "<<hw_score <<'\n';
-  std::cout << "HW score (optimal extension): "<<hw_score2 <<'\n';
-
-  assert(hw_score == hw_score2);
-
+  std::cout << "computed extension: "<<ex << "\n";  
+  const size_t hw_score = get_parsimony_score(N, ex, num_states);
+  std::cout << "HW score: "<<hw_score <<'\n';
 }
 
 

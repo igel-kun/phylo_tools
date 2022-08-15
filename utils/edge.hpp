@@ -14,7 +14,7 @@ namespace PT{
     using Parent::Parent;
     static constexpr bool has_data = Adjacency::has_data;
 
-    ProtoEdge(const reverse_edge_t, const NodeDesc u, const Adjacency& v):
+    ProtoEdge(const reverse_edge_tag, const NodeDesc u, const Adjacency& v):
       Parent(v.get_desc(), Adjacency{u, v})
     {}
 

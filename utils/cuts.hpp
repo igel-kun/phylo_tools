@@ -1,252 +1,281 @@
 
 #pragma once
 
+// the bridge- and biconnected-component finders are based on chain decompositions
+// (see https://arxiv.org/pdf/1209.0700.pdf
+// NOTE: we will assume that the input network is single-rooted in order to make things a bit more efficient
+//       for example, this lets us assume that no node has 2 incoming bridges
+
 #include "linear_interval.hpp"
-#include "union_find.hpp"
 #include "types.hpp"
 #include "set_interface.hpp"
-
-// this is my own bridge finder
-// NOTE: most bridge finders out there work only on undirected graphs, so I modified Tarjan's ideas slightly...
-// NOTE: we'll find so-called "vertical cut nodes", that is, nodes u that have a child v such that all descendants of v only have neighbors below u
-// NOTE: to this end, each node v communicates the smallest and highest preorder number of any of its neighbors to its parent u in the preorder spanning tree
+#include "traversal_traits.hpp"
 
 namespace PT{
 
-  enum CutObject { CO_vertical_cut_node = 0, CO_bridge = 1, CO_BCC = 2 };
+  enum class CutObject { cut_node, bridge, bcc};
 
-  struct CutInfo {
-    using IntervalAndNode = std::pair<mstd::linear_interval<>, NodeDesc>;
+  struct ChainInfo {
+    // each node knows...
+    // ... its DFS-parent...
+    NodeDesc DFS_parent = NoNode;
+    // ... its DFS-number...
+    size_t DFS_number = 0;
+    // ... whether it is visited...
+    bool visited = false;
+    // ... if it's the start of said chain...
+    bool start_of_cyclic_chain = false;
+    // ... is incident with a bridge ...
+    bool incident_with_bridge = false;
+    // ... if the node has an incoming bridge (if the network has a unique root, such a bridge is unique)
+    bool has_incoming_bridge = false;
 
-    uint32_t DFS_descendants; // number of non-strict (!) descendants in the DFS subtree (always >= 1)
-    uint32_t disc_time;
-    mstd::linear_interval<> neighbors; // smallest and highest preprder number of any neighbor of any non-strict descendant
-    bool up_to_date = false; // TODO: find a better way to track bottom-up updates!
-
-    CutInfo(const uint32_t _disc_time):
-      DFS_descendants(1), disc_time(_disc_time), neighbors(_disc_time)
-    {
-      DEBUG5(std::cout << "CUT: making new info entry: " << *this << "\n");
+    friend std::ostream& operator<<(std::ostream& os, const ChainInfo& info) {
+      return os << "(DFS#: "<<info.DFS_number
+                << "\tcyc-chain-start: "<< info.start_of_cyclic_chain
+                << "\thas bridge: "<< info.incident_with_bridge
+                << "\tvisited: "<< info.visited 
+                << "\tDFS-parent: "<< info.DFS_parent
+                << ")\n";
     }
+
+    bool is_leaf_or_cut_node() const { return start_of_cyclic_chain || incident_with_bridge; }
+    bool is_leaf_or_cut_node_or_root() const { return is_leaf_or_cut_node() || (DFS_parent == NoNode); }
+  };
+
+  // in order to tell biconnected components apart, we'll also store the root r of each chain (except in r itself)
+  // (for any cut node u, we will enumerate the BCCs with root u before the at most one BCC containing u in which u is not the root)
+  struct ChainInfoBCC: public ChainInfo {
+    bool DFS_parent_is_chain_root = false;
+    
+    bool is_first_edge_in_nontrivial_bcc_from(const NodeDesc u) const {
+      return DFS_parent_is_chain_root && (ChainInfo::DFS_parent == u);
+    }
+    bool is_first_edge_in_bcc_from(const NodeDesc u) const {
+      return (ChainInfo::DFS_parent == u) && (DFS_parent_is_chain_root || ChainInfo::has_incoming_bridge);
+    }
+
+  };
+
+  // the main data structure is the chain decomposition
+  // it can answer whether a node is a cut node and whether an arc is a bridge
+  // if output_root == true, then it will pretend that the root is a cut node
+  template<StrictPhylogenyType Network, CutObject cut_object, bool output_root = (cut_object == CutObject::bcc)>
+  struct ChainDecomposition {
+    using InfoStruct = std::conditional_t<cut_object == CutObject::bcc, ChainInfoBCC, ChainInfo>;
+    NodeMap<InfoStruct> chain_info;
+
+    // register the fact that the edge to the DFS-parent is a bridge
+    void mark_edge_to_DFS_parent_as_bridge(ChainInfo& u_info) {
+      auto& p_info = chain_info.at(u_info.DFS_parent);
+      u_info.incident_with_bridge = true;
+      p_info.incident_with_bridge = true;
+      // NOTE: if the edge to u's DFS-parent p is indeed a bridge, then we know that it is oriented from p to u
+      u_info.has_incoming_bridge = true;
+    }
+
+    NodeDesc treat_forwardedge(const NodeDesc u, NodeDesc v) {
+      InfoStruct* v_info;
+      assert(u != v);
+      while(v != NoNode) {
+        v_info = &(chain_info.at(v));
+        if(!v_info->visited) {
+          v_info->visited = true;
+          v = v_info->DFS_parent;
+          if constexpr (cut_object == CutObject::bcc) {
+            if(u == v) {
+              // NOTE: we're using the v_info of the previous v here since it has not been updated yet
+              assert(v_info->DFS_parent == u);
+              std::cout << "marking that "<<u<<" is a chain-root\n";
+              v_info->DFS_parent_is_chain_root = true;
+              return v;
+            }
+          }
+        } else return v;
+      }
+      return v;
+    }
+
+    // treat a newly encountered edge uv (directed either u-->v or v-->u in the network)
+    // return whether uv is a backedge
+    bool treat_edge(const NodeDesc u, const NodeDesc v, ChainInfo& u_info) {
+      if(v != u_info.DFS_parent) {
+        std::cout << "treating edge "<<u<<" -> "<<v<<"\n";
+        auto& v_info = chain_info.at(v);
+        if(u != v_info.DFS_parent) {
+          // if none of u and v is the DFS-parent of the other, then uv is a backedge or a forwardedge
+          if(u_info.DFS_number < v_info.DFS_number) {
+            u_info.visited = true;
+            const NodeDesc chain_end = treat_forwardedge(u, v);
+            // if the chain is a cycle, then mark u as the start of a cyclic chain
+            if(chain_end == u) u_info.start_of_cyclic_chain = true;
+          } else return true;
+        }
+      }
+      return false;
+    }
+
+    void analyse_network(const NodeVec& dfs_nodes) {
+      for(const NodeDesc u: dfs_nodes) {
+        auto& u_info = chain_info.at(u);
+        const bool u_was_visited = u_info.visited;
+        bool u_has_backedge = false;
+        for(const NodeDesc v: Network::children(u)) u_has_backedge |= treat_edge(u, v, u_info);
+        for(const NodeDesc v: Network::parents(u)) u_has_backedge |= treat_edge(u, v, u_info);
+        // if u was unvisited before, then there is no backedge spanning over it
+        // further, if u has no backedges incident with it, then the edge between u and its DFS-parent is a bridge
+        if(!u_was_visited && !u_has_backedge && (u_info.DFS_parent != NoNode)) {
+          std::cout << "marking "<<u<<" & "<<u_info.DFS_parent<<" as incident with bridge\n";
+          mark_edge_to_DFS_parent_as_bridge(u_info);
+        } else std::cout << "not marking "<<u<<" incident with bridge; reasons: "<< u_was_visited << u_has_backedge << (u_info.DFS_parent == NoNode)<<"\n";
+      }
+    }
+    
+    void construct_DFS_tree(const NodeDesc u, const NodeDesc parent, NodeVec& dfs_nodes, bool parent_edge_incoming = true) {
+      const auto [iter, success] = append(chain_info, u);
+      auto& u_info = iter->second;
+      if(success) {
+        u_info.DFS_parent = parent;
+        u_info.DFS_number = dfs_nodes.size();
+        dfs_nodes.push_back(u);
+
+        for(const NodeDesc v: Network::children(u)) construct_DFS_tree(v, u, dfs_nodes, true);
+        for(const NodeDesc v: Network::parents(u)) construct_DFS_tree(v, u, dfs_nodes, false);
+      }
+    }
+
+    void analyse_network(const Network& N) {
+      NodeVec dfs_nodes;
+      dfs_nodes.reserve(N.num_nodes());
+      construct_DFS_tree(N.root(), NoNode, dfs_nodes);
+      analyse_network(dfs_nodes);
+      std::cout << "analysis complete, chain info is:\n"<<chain_info<<"\n";
+    }
+
+    //ChainDecomposition() = default;
+    ChainDecomposition() = delete;
+    ChainDecomposition(const Network& N) { analyse_network(N); }
+
+    // return whether u is a cut-node
+    bool is_cut_node(const NodeDesc x) const {
+      assert(!chain_info.empty());
+      assert(chain_info.contains(x));
+      if(!Network::is_leaf(x)){
+        if constexpr (output_root)
+          return chain_info.at(x).is_leaf_or_cut_node_or_root();
+        else return chain_info.at(x).is_leaf_or_cut_node();
+      } else return false;
+    }
+    bool operator()(const NodeDesc x) const {
+      std::cout << "checking if "<<x<<" is a cut-node... "<<is_cut_node(x)<<"\n";
+      return is_cut_node(x);
+    }
+    // return whether xy is a bridge
+    bool is_bridge(const NodeDesc x, const NodeDesc y) const {
+      static_assert(Network::has_unique_root);
+      return chain_info.at(y).has_incoming_bridge;
+    }
+    bool operator()(const NodeDesc x, const NodeDesc y) const { return is_bridge(x, y); }
+    template<EdgeType E>
+    bool operator()(const E& e) const { return is_bridge(e.tail(), e.head()); }
+
+    // for a child v of u, return whether v is in a biconnected component rooted at u
+    // NOTE: this only works if we're storing information for BCCs
+    bool is_first_edge_in_bcc(const NodeDesc u, const NodeDesc v) const {
+      static_assert(cut_object == CutObject::bcc);
+      return chain_info.at(v).is_first_edge_in_bcc_from(u);
+    }
+    bool is_first_edge_in_nontrivial_bcc(const NodeDesc u, const NodeDesc v) const {
+      static_assert(cut_object == CutObject::bcc);
+      return chain_info.at(v).is_first_edge_in_nontrivial_bcc_from(u);
+    }
+
+  };
+
+  template<CutObject cut_object>
+  static constexpr TraversalType default_tt_for_cut_object = (cut_object == CutObject::bridge) ? all_edge_tail_postorder : postorder;
+
+  template<class Iter, class ChainDecomp = std::remove_cvref_t<typename Iter::Predicate>>
+  struct WithChains {
+    ChainDecomp chains;
+    decltype(auto) operator()(const auto& it) const {
+      std::cout << "making new iter of type\n"<<mstd::type_name<Iter>()<<"\nfrom iter of type\n"<<mstd::type_name<decltype(it)>()<<"\n";
+      return Iter{it, chains};
+    }
+  };
+
+  // NOTE: we'll store the ChainDecomposition in the IteratorFactory, so if the factory runs out of scope, don't access the iterator anymore!
+  template<StrictPhylogenyType Network,
+           TraversalType tt,
+           class ChainDecomp,
+           template<StrictPhylogenyType, TraversalType, class> class _CutIt>
+  struct _CutIterFactory: public mstd::IterFactoryWithBeginEnd<
+                          typename _CutIt<Network, tt, ChainDecomp>::Iterator,
+                          WithChains<_CutIt<Network, tt, ChainDecomp>>>
+  {
+    using Parent = mstd::IterFactoryWithBeginEnd<typename _CutIt<Network, tt, ChainDecomp>::Iterator, WithChains<_CutIt<Network, tt, ChainDecomp>>>;
+    _CutIterFactory(const Network& N):
+      Parent(std::piecewise_construct, std::forward_as_tuple(N), std::forward_as_tuple(N))
+    {}
+  };
  
-    // the DFS interval of v is [disc_time : disc_time + DFS_descendants]
-    mstd::linear_interval<> get_DFS_interval() const { return { disc_time, disc_time + DFS_descendants - 1 }; }
-    uint32_t first_outside_subtree() const { return disc_time + DFS_descendants; }
-    void update_lowest_neighbor(const uint32_t u) { neighbors.update_lo(u); }
-    void update_highest_neighbor(const uint32_t u) { neighbors.update_hi(u); }
-    void update_neighbors(const uint32_t x) { neighbors.update(x); }
-    void update_from_child(const CutInfo& other) { neighbors.merge(other.neighbors); }
 
-    // return true if the given CutInfo has a descendant that "sees" someone outside our DFS-subtree
-    bool child_has_outside_neighbor(const mstd::linear_interval<>& child_neighbors) const {
-      return (child_neighbors[0] < disc_time) || (child_neighbors[1] >= first_outside_subtree());
-    }
-    bool child_has_outside_neighbor(const CutInfo& child) const {
-      return child_has_outside_neighbor(child.neighbors);
-    }
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>,
+           class ChainDecomp = ChainDecomposition<Network, CutObject::cut_node>>
+  using CutNodeIter = mstd::filtered_iterator<typename NodeTraversal<tt, Network, NodeDesc>::OwningIter, ChainDecomp>;
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>,
+           class ChainDecomp = ChainDecomposition<Network, CutObject::cut_node>>
+  using CutNodeIterFactory = _CutIterFactory<Network, tt, ChainDecomp, CutNodeIter>;
 
-    // return true if we ourselves have a descendant that "sees" someone outside our DFS-subtree
-    bool has_outside_neighbor() const {
-      DEBUG5(std::cout << "CUT: infos: "<<*this << "\n");
-      return child_has_outside_neighbor(*this);
-    }
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::bridge>,
+           class ChainDecomp = ChainDecomposition<Network, CutObject::bridge>>
+  using BridgeIter = mstd::filtered_iterator<typename AllEdgesTraversal<tt, Network, NodeDesc>::OwningIter, ChainDecomp>;
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::bridge>,
+           class ChainDecomp = ChainDecomposition<Network, CutObject::bridge>>
+  using BridgeIterFactory = _CutIterFactory<Network, tt, ChainDecomp, BridgeIter>;
 
-    template<PhylogenyType Network, class... Args>
-    bool compute_mark(Args&&... args) const { return get_mark<Network>(); }
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::bcc>,
+           class ChainDecomp = ChainDecomposition<Network, CutObject::bcc>>
+  using BCCCutIter = mstd::filtered_iterator<typename NodeTraversal<tt, Network, NodeDesc>::OwningIter, ChainDecomp>;
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::bcc>,
+           class ChainDecomp = ChainDecomposition<Network, CutObject::bcc>>
+  using BCCCutIterFactory = _CutIterFactory<Network, tt, ChainDecomp, BCCCutIter>;
 
-    bool get_mark() const { return !has_outside_neighbor(); }
+/*
+  // this is a base for iterators listing cut-nodes or -edges (aka bridges)
+  template<StrictPhylogenyType Network,
+           CutObject cut_object,
+           TraversalType tt = default_tt_for_cut_object<cut_object>,
+           class ChainDecomp = ChainDecomposition<Network, cut_object>>
+  class CutIter: public TraversalForCutObject<Network, cut_object> {
+  //protected:
+  public:
+    static_assert((cut_object != CutObject::bridge) == is_node_traversal(tt));
+    using DFSTraversal = TraversalForCutObject<Network, cut_object>;
+    using Traits = TraversalTraits<DFSTraversal>;
+    using DFSIter = typename DFSTraversal::OwningIter;
 
-    // NOTE: to decide if a node u is a cut-node, we will have to consider the neighbors seen in the DFS-subtrees of the children of u (in the DFS-tree):
-    //       if the DFS-subtree of child x has a neighbor outside the DFS-subtree of u, then u does not cut x from the rest
-    //       if the DFS-subtree of child y has a neighbor in the DFS-subtree of x, then u also does not cut y
-    //       Thus, we have to 'merge' children of u using a union-find data structure in order to decide if u is a cut-node or not
-    template<NodeType Node>
-    static constexpr void for_each_cut_children(const Node& u_node, const auto& node_infos, auto&& child_cut_callback) {
-      const NodeDesc u = u_node.get_desc();
-      const auto& u_info = node_infos.at(u);
-      const auto& u_children = u_node.children();
-      // our main data-structure is a vector of nodes with their neighbor interval; we will sort this by interval and then progressively merge
-      std::vector<IntervalAndNode> tmp;
-      tmp.reserve(u_children.size());
-      mstd::DisjointSetForest<NodeDesc> child_partition;
-      // step 2.1: add all intervals and nodes to tmp - NOTE: keep in mind that DFS-intervals are DISJOINT!
-      for(const NodeDesc v: u_children) {
-        tmp.emplace_back(node_infos.at(v).get_DFS_interval(), v);
-        child_partition.add_new_set(v);
-      }
-      assert(!tmp.empty()); // the following steps fail if tmp is empty, but leaves will never be cut-nodes so that's OK
-      // step 2.2: sort by interval (first by start, then by end)
-      std::sort(tmp.begin(), tmp.end(), std::greater<IntervalAndNode>());
-      DEBUG4(std::cout << "\tnode "<<u<<" with info "<<u_info<<"\n");
-      DEBUG4(std::cout << "\tsorted children "<<tmp<<"\n");
-      
-      // step 2.3: now, "merge" each node v whose DFS subtree has a neighbor in the DFS subtree of another node x into that node x
-      for(auto& [interval, v]: tmp) {
-        const auto& v_info = node_infos.at(v);
-        // step 2.3.1: find the nodes x & y whose DFS interval includes the smallest & highest neighbor of v's DFS subtree, respectively
-        for(const auto i: v_info.neighbors) {
-          const auto i_iter = std::partition_point(tmp.begin(), tmp.end(), [i](const auto& ele){ return ele.first.low() > i; });
-          if((i_iter != tmp.end()) && i_iter->first.contains(i))
-            child_partition.merge_sets(i_iter->second, v);
-        }
-      }
-      // step 2.4: remove from tmp all nodes v s.t. either
-      // (a) v's DFS tree has a neighbor outside u's DFS tree or
-      // (b) v has been merged into another node in 2.3
-      for(const auto& [interval, v]: tmp)
-        if(!u_info.child_has_outside_neighbor(node_infos.at(v)) && child_partition.is_root(v))
-          if(child_cut_callback(v)) return;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const CutInfo& b) {
-      return os << "(disc: "<<b.disc_time<<" desc: "<<b.DFS_descendants<<" NH: "<<b.neighbors<<')';
-    }
-  };
-
-  struct CutNodeInfo: public CutInfo {
-    using CutInfo::CutInfo;
-
-    char cut_node_mark = -1;
-
-    template<NodeType Node>
-    bool compute_mark(const Node& u_node, const auto& node_infos) {
-      assert(cut_node_mark == -1);
-      if(!u_node.is_leaf()) {
-        if(u_node.is_root()) { // if u's in-degree is 0, we need to see at least 2 cut-node children for u to be a cut-node
-          CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ ++cut_node_mark; return cut_node_mark; });
-        } else {
-          CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ return (cut_node_mark = 1); });
-        }
-        if(cut_node_mark == -1) cut_node_mark = 0;
-      } else cut_node_mark = 0;
-      return cut_node_mark;
-    }
-
-    bool get_mark() const { assert(cut_node_mark != -1); return cut_node_mark; }
-
-    friend std::ostream& operator<<(std::ostream& os, const CutNodeInfo& b) {
-      return os << "(disc: "<<b.disc_time<<" desc: "<<b.DFS_descendants<<" NH: "<<b.neighbors<< (b.cut_node_mark ? " *)" : ")");
-    }
-  };
-
-  struct BCCInfo: public CutNodeInfo {
-    using Parent = CutNodeInfo;
-    using Parent::Parent;
-    using Parent::cut_node_mark;
-
-    NodeVec cut_children;
-
-    template<NodeType Node>
-    bool compute_mark(const Node& u_node, const auto& node_infos) {
-      if(!u_node.is_leaf()) {
-        // use the callback to put all cut-children of u into our cut_children vector
-        CutInfo::for_each_cut_children(u_node, node_infos, [&](const NodeDesc v){ mstd::append(cut_children, v); return false; });
-        cut_node_mark = !cut_children.empty();
-      } else cut_node_mark = 0;
-      return cut_node_mark;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const BCCInfo& b) {
-      return os << "(disc: "<<b.disc_time<<" desc: "<<b.DFS_descendants<<" NH: "<<b.neighbors<< " cut-children: "<<b.cut_children<<")";
-    }
-  };
-
-  template<CutObject i> struct _choose_info_struct {};
-  template<> struct _choose_info_struct<CO_bridge> { using type = CutInfo; };
-  template<> struct _choose_info_struct<CO_vertical_cut_node> { using type = CutNodeInfo; };
-  template<> struct _choose_info_struct<CO_BCC> { using type = BCCInfo; };
-  template<CutObject i> using choose_info_struct = typename _choose_info_struct<i>::type;
-
-
-  // this is a base for iterators listing vertical cut-nodes or -edges (aka bridges)
-  template<PhylogenyType Network, CutObject cut_object, mstd::HasIterTraits _Traits>
-  class CutIter: public _Traits {
-  protected:
-    using Traits = _Traits;
-    using InfoStruct = choose_info_struct<cut_object>;
-    using InfoMap = NodeMap<InfoStruct>;
-    using NodeTraversal = Traversal<postorder, Network, NodeDesc>;
-    using EdgeTraversal = Traversal<all_edge_tail_postorder, Network, NodeDesc>;
-    using POTraversal = std::conditional_t<cut_object == CO_bridge, EdgeTraversal, NodeTraversal>;
-    using DFSIter = typename POTraversal::OwningIter;
-
-    NodeDesc root;
-    InfoMap node_infos;
-    DFSIter iter;
-
-    // the first DFS sets up preorder numbers and numbers of descendants in the node_infos
-    // NOTE: we use node_infos to indicate which nodes we have already visited
-    mstd::emplace_result<InfoMap> setup_DFS(const NodeDesc u, uint32_t& time) {
-      const auto emp_res = node_infos.emplace(u, time);
-      if(emp_res.second){
-        ++time;
-        auto& u_info = emp_res.first->second;
-        for(const NodeDesc v: node_of<Network>(u).children()) {
-          const auto [v_iter, success] = setup_DFS(v, time);
-          auto& v_info = v_iter->second;
-          DEBUG5(std::cout << "CUT: first DFS for edge "<<u<<" "<<u_info<<" -----> "<<v<<" "<<v_info<<"\n");
-          if(!success) {
-            u_info.update_lowest_neighbor(v_info.disc_time);
-            v_info.update_neighbors(u_info.disc_time);
-            DEBUG5(std::cout << "CUT: 1st: updated infos for "<< v <<": "<<v_info<<'\n');
-          } else u_info.DFS_descendants += v_info.DFS_descendants;
-          DEBUG5(std::cout << "CUT: 1st: updated infos for "<< u <<": "<<u_info<<'\n');
-        }
-      }
-      return emp_res;
-    }
-
-    // the second DFS updates the lowest and highest seen neighbors upwards
-    InfoStruct& second_DFS(const NodeDesc u, const size_t time_limit = 0) {
-      InfoStruct& u_info = node_infos.at(u);
-      if(u_info.disc_time >=  time_limit) {
-        for(const NodeDesc v: children_of<Network>(u)) {
-          const auto& v_info = second_DFS(v, u_info.disc_time);
-          u_info.update_from_child(v_info);
-          DEBUG5(std::cout << "CUT: 2nd: updated infos for "<< u <<": "<<u_info<<'\n');
-        }
-      }
-      return u_info;
-    }
-
-    // return true if we want to yield iter->second as next cut node (or iter has reached the end)
-    bool is_yieldable() {
-      if(iter.is_valid()){
-        const auto& u = *iter;
-        if constexpr (cut_object != CO_bridge) node_infos.at(u).compute_mark(node_of<Network>(u), node_infos);
-        return operator()(u);
-      } else return true;
-    }
-
-    void advance() {
-      if(iter.is_valid()) {
-        do ++iter; while(!is_yieldable());
-      }
-    }
-
-
+    ChainDecomp chains;
+    mstd::filtered_iterator<DFSIter, const ChainDecomp&> iter; // ChainDecompositions are designed to be used as node- or edge- predicates
 
   public:
-    CutIter(const NodeDesc _root):
-      root(_root), iter(POTraversal(_root).begin())
-    {
-      if((_root != NoNode) && iter.is_valid()) {
-        uint32_t time = 0;
-        setup_DFS(root, time);
-        second_DFS(root);
-        // the first node of iter is a leaf (iter is postorder) which is never a cut-node, so we can savely advance() to the first cut-node
-        if(!is_yieldable()) advance();
-      }
-    }
+    CutIter(const NodeDesc _root): chains{}, iter{POTraversal(_root).begin(), chains} {}
     CutIter(const Network& N): CutIter(N.root()) {}
+    CutIter(const CutIter& other): chains{other.chains}, iter{other.iter, chains} {}
+    CutIter(CutIter&& other): chains{std::move(other.chains)}, iter{std::move(other.iter), chains} {}
 
-    CutIter& operator++() { advance(); return *this; }
+    CutIter& operator++() { ++iter; return *this; }
     CutIter  operator++(int) { CutIter result = *this; ++(*this); return result; }
 
-    CutIter(const CutIter&) = default;
-    CutIter& operator=(const CutIter&) = default;
-    CutIter(CutIter&&) = default;
-    CutIter& operator=(CutIter&&) = default;
+    // for copy/move assignment, take care only to copy/move the iterator part (not the predicate part) of the filtered_iterator
+    CutIter& operator=(const CutIter& other) { if(this != &other) { chains = other.chains; iter = static_cast<const DFSIter&>(other.iter); } return *this; }
+    CutIter& operator=(CutIter&& other) { if(this != &other) { chains = std::move(other.chains); iter = static_cast<DFSIter&&>(other.iter); } return *this;}
 
     bool operator==(const CutIter& other) const { return iter == other.iter; }
 
@@ -258,23 +287,33 @@ namespace PT{
 
     // NOTE: this can be used as predicate, deciding whether a node is a vertical cut-node or an edge is a bridge
     // NOTE: if you want to use this as a Node predicate, be sure to pass over all nodes BEFOREHAND in order to fill the cache!
-    bool is_cut_node(const NodeDesc u) const { return node_infos.at(u).get_mark(); }
+    bool is_cut_node(const NodeDesc u) const { return chains.is_cut_node(); }
     bool operator()(const NodeDesc u) const { return is_cut_node(u); }
-    template<EdgeType E> bool is_bridge(const E& uv) const { return node_infos.at(uv.head()).get_mark(); }
+    template<EdgeType E> bool is_bridge(const E& uv) const { return chains.is_bridge(uv); }
     template<EdgeType E> bool operator()(const E& uv) const { return is_bridge(uv); }
+
   };
 
+  template<PhylogenyType Network, TraversalType tt = default_tt_for_cut_object<cut_node>>
+  using CutNodeIter = CutIter<Network, CutObject::cut_node, tt>
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<cut_node>>
+  using CutNodeIterFactory = mstd::IterFactory<CutNodeIter<Network, tt>>;
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<bridge>>
+  using BridgeIter = CutIter<Network, CutObject::bridge, tt>;
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<bridge>>
+  using BridgeIterFactory = mstd::IterFactory<BridgeIter<Network, tt>>;
 
-  template<PhylogenyType Network>
-  using CutNodeIter = CutIter<Network, CO_vertical_cut_node, mstd::iter_traits_from_reference<NodeDesc>>;
-  template<StrictPhylogenyType Network> using CutNodeIterFactory = mstd::IterFactory<CutNodeIter<Network>>;
-  template<StrictPhylogenyType Network> auto get_cut_nodes(const NodeDesc rt) { return CutNodeIterFactory<Network>(rt); }
-  template<StrictPhylogenyType Network> auto get_cut_nodes(const Network& N) { return CutNodeIterFactory<Network>(N.root()); }
+*/
 
-  template<PhylogenyType Network>
-  using BridgeIter = CutIter<Network, CO_bridge, mstd::iterator_traits<Traversal<all_edge_tail_postorder, Network, NodeDesc>>>;
-  template<StrictPhylogenyType Network> using BridgeIterFactory = mstd::IterFactory<BridgeIter<Network>>;
-  template<StrictPhylogenyType Network> auto get_bridges(const NodeDesc rt) { return BridgeIterFactory<Network>(rt); }
-  template<StrictPhylogenyType Network> auto get_bridges(const Network& N) { return BridgeIterFactory<Network>(N.root()); }
+
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>>
+  auto get_cut_nodes(const NodeDesc rt) { return CutNodeIterFactory<Network, tt>(rt); }
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>>
+  auto get_cut_nodes(const Network& N) { return CutNodeIterFactory<Network, tt>(N.root()); }
+
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::bridge>>
+  auto get_bridges(const NodeDesc rt) { return BridgeIterFactory<Network, tt>(rt); }
+  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::bridge>>
+  auto get_bridges(const Network& N) { return BridgeIterFactory<Network, tt>(N.root()); }
 
 }// namespace

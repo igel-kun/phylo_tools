@@ -24,6 +24,20 @@
 
 #warning TODO: sanitize namespaces using a subnamespace "details"
 
+// we reuire gcc-11.3 here since that version fixes some bugs in gcc that we'll be hit with :/
+#ifdef __GNUC__
+#  include <features.h>
+#  if __GNUC_PREREQ(11,3)
+//      If  gcc_version >= 4.0
+#  else
+//static_assert(__GNUC_PREREQ(11,3));
+//       Else
+#  endif
+#else
+//    If not gcc
+#endif
+
+
 #define NUM_BYTES_IN_INT (sizeof(unsigned int))
 #define NUM_BITS_IN_INT (CHAR_BIT * NUM_BYTES_IN_INT)
 #define NUM_BYTES_IN_LONG (sizeof(unsigned long))
