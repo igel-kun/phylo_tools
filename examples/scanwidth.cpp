@@ -146,7 +146,8 @@ int main(const int argc, const char** argv) {
   std::cout << "================ first bcc ===============\n" << ExtendedDisplay(*iter)<<"\n";
   std::cout << "================ all bccs ================\n";
   for(const auto& bcc: bc_components){
-    std::cout << "found biconnected component with "<<bcc.num_nodes()<<" nodes & "<<bcc.num_edges()<<" edges --> "<<bcc.num_edges()+1-bcc.num_nodes()<<" reticulations):\n" << ExtendedDisplay(bcc) <<"\n";
+    std::cout << "found biconnected component with "<<bcc.num_nodes()<<" nodes & "
+      <<bcc.num_edges()<<" edges --> "<<bcc.num_edges()+1-bcc.num_nodes()<<" reticulations):\n" << ExtendedDisplay(bcc) <<"\n";
   }
 
   std::cout << "\n================ done listing BCCs =================\n";
