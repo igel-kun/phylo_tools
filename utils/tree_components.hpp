@@ -107,8 +107,9 @@ namespace PT{
       if(_set) {
         assert(_rep_set);
         _set->payload = new_leaf;
-        if(_rep_set != _set)
+        if(_rep_set != _set){
           _rep_set->payload = new_leaf;
+        }
         return true;
       } else return false;
     }

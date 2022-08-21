@@ -559,6 +559,7 @@ namespace PT {
           const NodeDesc host_l = mstd::front(host_matched);
           mstd::append(host_leaves, host_l);
           Host::label(host_l).clear();
+          manager.contain.comp_info.replace_visible_leaf(host_l, NoNode);
           manager.contain.HG_label_match.erase(HG_match_iter);
         }
         mstd::append(to_suppress, l);
@@ -588,10 +589,11 @@ namespace PT {
       host.transfer_child(ptop, except);
 
       const NodeDesc top_root = manager.contain.comp_info.comp_root_of(top);
+      //step 1: set visible leaf of top's comp root to except
+      std::cout << "setting visible leaf of "<<top_root<<" to "<<except<<"\n";
+      manager.contain.comp_info.replace_visible_leaf(top_root, except);      
+
       for(const NodeDesc u: host_leaves) {
-        //step 1: set visible leaf of top's comp root to except
-        //NOTE: by construction, everyone who is stable on u will also be stable on except
-        manager.contain.comp_info.replace_visible_leaf(u, except);      
         // step 2: clear everything between top and host_leaves
         const NodeDesc u_root = manager.contain.comp_info.comp_root_of(u);
         if(u_root != top_root) {
@@ -637,7 +639,6 @@ namespace PT {
           manager.clean_orphan_later(l);
       }
 
-      
       std::cout << "\tMATCH: done pruning host; orphan-queue "<<manager.remove_orphans.node_queue<<"\n";
       manager.remove_orphans.apply();
       std::cout << "\tMATCH: pruned host:\n"<<host<<"\n";

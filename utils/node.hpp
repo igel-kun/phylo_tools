@@ -401,10 +401,10 @@ namespace PT{
         const auto vu_iter = mstd::find(v_parents, u_node.get_desc());
         assert(vu_iter != v_parents.end());
         v_parents.erase(vu_iter);
-        DEBUG3(std::cout << "NodeAccess: removed edge "<<u<<" -> "<<v<<"\n");
+        DEBUG5(std::cout << "NodeAccess: removed edge "<<u<<" -> "<<v<<"\n");
         return true;
       } else {
-        DEBUG3(std::cout << "NodeAccess: DID NOT REMOVE EDGE "<<u<<" -> "<<v<<"\n");
+        DEBUG5(std::cout << "NodeAccess: DID NOT REMOVE EDGE "<<u<<" -> "<<v<<"\n");
         return false;
       }
     }
