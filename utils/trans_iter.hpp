@@ -13,13 +13,14 @@ namespace mstd {
   template<class _Iter, class _Transformation, bool pass_iterator = false>
     requires (std::is_invocable_v<_Transformation, std::conditional_t<pass_iterator, _Iter, reference_of_t<_Iter>>>)
   class proto_transforming_iterator: public InheritableIter<_Iter> {
-    using Parent = _Iter;
+    using Parent = InheritableIter<_Iter>;
     
     mstd::mutableT<_Transformation> trans;
     
     decltype(auto) deref() const {
-      const Parent* p = static_cast<const Parent*>(this);
-		  if constexpr (pass_iterator) return *p; else return **p;
+      const InheritableIter<_Iter>& intermediate = static_cast<const InheritableIter<_Iter>&>(*this);
+      const _Iter& p = static_cast<const _Iter&>(intermediate);
+		  if constexpr (pass_iterator) return p; else return *p;
     }
 
     void increment_trans() {
@@ -30,7 +31,7 @@ namespace mstd {
     using Transformation = _Transformation;
     using Iterator = _Iter;
     using UnderlyingIterator = _Iter;
-    using ParentDeref = typename std::iterator_traits<Parent>::reference;
+    using ParentDeref = typename std::iterator_traits<_Iter>::reference;
     using TransInput = std::conditional_t<pass_iterator, proto_transforming_iterator, ParentDeref>;
     // this will not compile if pass_iter == true, since proto_transforming_iterator is not fully defined yet
     //static_assert(std::is_invocable_v<Transformation, TransInput>); 
@@ -72,10 +73,10 @@ namespace mstd {
     // we have operator= and operator== for our iterator type (Iter) setting only the iterator, but not the transformation function
     proto_transforming_iterator& operator=(const proto_transforming_iterator&) = default;
     proto_transforming_iterator& operator=(proto_transforming_iterator&&) = default;
-    proto_transforming_iterator& operator=(const Iterator& other) { Parent::operator=(other); }
-    proto_transforming_iterator& operator=(Iterator&& other) { Parent::operator=(std::move(other)); }
+    proto_transforming_iterator& operator=(const Iterator& other) { static_cast<Parent&>(*this) = other; }
+    proto_transforming_iterator& operator=(Iterator&& other) { static_cast<Parent&>(*this) = std::move(other); }
 
-    proto_transforming_iterator& operator++() { Parent::operator++(); increment_trans(); return *this; }
+    proto_transforming_iterator& operator++() { ++(static_cast<Parent&>(*this)); increment_trans(); return *this; }
     proto_transforming_iterator operator++(int) { proto_transforming_iterator result(*this); ++(*this); return result; }
 
     decltype(auto) operator*() & { return trans.value(deref()); }

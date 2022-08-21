@@ -212,7 +212,7 @@ namespace PT {
           assert(Host::out_degree(bridge.tail()) > 1);
           // NOTE: keep sub_root in the host (the root of subhost will be a copy of sub_root)
           std::cout << "creating host network\n";
-          Host subhost(policy_move_children_t{}, std::move(host), sub_root);
+          Host subhost(policy_move_children_tag{}, std::move(host), sub_root);
           std::cout << "subhost is:\n" << subhost<<"\n";
 
           // step 1.5: move all label-matches of the subhost into sub_match
@@ -239,7 +239,7 @@ namespace PT {
           // step 2: split off the guest part induced by the labels in the subhost
           // NOTE: keep guestLCA in the host (the root of subguest will be a copy of guestLCA)
           std::cout << "creating guest tree by moving everything below "<<guestLCA<<"\n";
-          Guest subguest(policy_move_children_t{}, std::move(guest), guestLCA);
+          Guest subguest(policy_move_children_tag{}, std::move(guest), guestLCA);
           std::cout << "subguest is:\n" << subguest<<"\n";
 
           // step 3: check if subhost contains subguest

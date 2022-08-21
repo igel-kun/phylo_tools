@@ -239,6 +239,9 @@ namespace PT{
         if(!is_seen(_root))
           Parent::advance();
     }
+    template<class... Args>
+    DFSEdgeIterator(const _Network& N, Args&&... args):
+      DFSEdgeIterator(N.root(), std::forward<Args>(args)...) {}
   };
 
   template<TraversalType o,

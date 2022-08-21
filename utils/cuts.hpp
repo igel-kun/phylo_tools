@@ -144,17 +144,23 @@ namespace PT{
       }
     }
 
-    void analyse_network(const Network& N) {
-      NodeVec dfs_nodes;
-      dfs_nodes.reserve(N.num_nodes());
-      construct_DFS_tree(N.root(), NoNode, dfs_nodes);
+    void analyse_network(NodeVec& dfs_nodes, const NodeDesc u) {
+      construct_DFS_tree(u, NoNode, dfs_nodes);
       analyse_network(dfs_nodes);
       std::cout << "analysis complete, chain info is:\n"<<chain_info<<"\n";
     }
 
     //ChainDecomposition() = default;
     ChainDecomposition() = delete;
-    ChainDecomposition(const Network& N) { analyse_network(N); }
+    ChainDecomposition(const Network& N):
+      ChainDecomposition(N.root(), N.num_nodes()) {}
+
+    ChainDecomposition(const NodeDesc u, const size_t num_nodes = 0) {
+      NodeVec dfs_nodes;
+      dfs_nodes.reserve(num_nodes);
+      analyse_network(dfs_nodes, u);
+    }
+
 
     // return whether u is a cut-node
     bool is_cut_node(const NodeDesc x) const {
@@ -198,9 +204,12 @@ namespace PT{
   template<class Iter, class ChainDecomp = std::remove_cvref_t<typename Iter::Predicate>>
   struct WithChains {
     ChainDecomp chains;
+
     decltype(auto) operator()(const auto& it) const {
       std::cout << "making new iter of type\n"<<mstd::type_name<Iter>()<<"\nfrom iter of type\n"<<mstd::type_name<decltype(it)>()<<"\n";
-      return Iter{it, chains};
+      if constexpr (std::is_same_v<std::remove_cvref_t<decltype(it)>, mstd::GenericEndIterator>)
+        return it;
+      else return Iter{it, chains};
     }
   };
 
@@ -214,8 +223,11 @@ namespace PT{
                           WithChains<_CutIt<Network, tt, ChainDecomp>>>
   {
     using Parent = mstd::IterFactoryWithBeginEnd<typename _CutIt<Network, tt, ChainDecomp>::Iterator, WithChains<_CutIt<Network, tt, ChainDecomp>>>;
-    _CutIterFactory(const Network& N):
+    _CutIterFactory(const Network& N): // construct the DFSIterator and the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(N), std::forward_as_tuple(N))
+    {}
+    _CutIterFactory(const Network& N, const NodeDesc u): // construct the DFSIterator with the given node u & the WithChains object with the network N
+      Parent(std::piecewise_construct, std::forward_as_tuple(u), std::forward_as_tuple(N))
     {}
   };
  
@@ -247,73 +259,14 @@ namespace PT{
            class ChainDecomp = ChainDecomposition<Network, CutObject::bcc>>
   using BCCCutIterFactory = _CutIterFactory<Network, tt, ChainDecomp, BCCCutIter>;
 
-/*
-  // this is a base for iterators listing cut-nodes or -edges (aka bridges)
-  template<StrictPhylogenyType Network,
-           CutObject cut_object,
-           TraversalType tt = default_tt_for_cut_object<cut_object>,
-           class ChainDecomp = ChainDecomposition<Network, cut_object>>
-  class CutIter: public TraversalForCutObject<Network, cut_object> {
-  //protected:
-  public:
-    static_assert((cut_object != CutObject::bridge) == is_node_traversal(tt));
-    using DFSTraversal = TraversalForCutObject<Network, cut_object>;
-    using Traits = TraversalTraits<DFSTraversal>;
-    using DFSIter = typename DFSTraversal::OwningIter;
-
-    ChainDecomp chains;
-    mstd::filtered_iterator<DFSIter, const ChainDecomp&> iter; // ChainDecompositions are designed to be used as node- or edge- predicates
-
-  public:
-    CutIter(const NodeDesc _root): chains{}, iter{POTraversal(_root).begin(), chains} {}
-    CutIter(const Network& N): CutIter(N.root()) {}
-    CutIter(const CutIter& other): chains{other.chains}, iter{other.iter, chains} {}
-    CutIter(CutIter&& other): chains{std::move(other.chains)}, iter{std::move(other.iter), chains} {}
-
-    CutIter& operator++() { ++iter; return *this; }
-    CutIter  operator++(int) { CutIter result = *this; ++(*this); return result; }
-
-    // for copy/move assignment, take care only to copy/move the iterator part (not the predicate part) of the filtered_iterator
-    CutIter& operator=(const CutIter& other) { if(this != &other) { chains = other.chains; iter = static_cast<const DFSIter&>(other.iter); } return *this; }
-    CutIter& operator=(CutIter&& other) { if(this != &other) { chains = std::move(other.chains); iter = static_cast<DFSIter&&>(other.iter); } return *this;}
-
-    bool operator==(const CutIter& other) const { return iter == other.iter; }
-
-    template<class Iter = DFSIter, class Ref = typename Iter::reference>
-    Ref operator*() const { return *iter; }
-    typename DFSIter::pointer operator->() const { return operator*(); }
-
-    bool is_valid() const { return iter.is_valid(); }
-
-    // NOTE: this can be used as predicate, deciding whether a node is a vertical cut-node or an edge is a bridge
-    // NOTE: if you want to use this as a Node predicate, be sure to pass over all nodes BEFOREHAND in order to fill the cache!
-    bool is_cut_node(const NodeDesc u) const { return chains.is_cut_node(); }
-    bool operator()(const NodeDesc u) const { return is_cut_node(u); }
-    template<EdgeType E> bool is_bridge(const E& uv) const { return chains.is_bridge(uv); }
-    template<EdgeType E> bool operator()(const E& uv) const { return is_bridge(uv); }
-
-  };
-
-  template<PhylogenyType Network, TraversalType tt = default_tt_for_cut_object<cut_node>>
-  using CutNodeIter = CutIter<Network, CutObject::cut_node, tt>
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<cut_node>>
-  using CutNodeIterFactory = mstd::IterFactory<CutNodeIter<Network, tt>>;
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<bridge>>
-  using BridgeIter = CutIter<Network, CutObject::bridge, tt>;
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<bridge>>
-  using BridgeIterFactory = mstd::IterFactory<BridgeIter<Network, tt>>;
-
-*/
-
-
   template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>>
   auto get_cut_nodes(const NodeDesc rt) { return CutNodeIterFactory<Network, tt>(rt); }
   template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>>
   auto get_cut_nodes(const Network& N) { return CutNodeIterFactory<Network, tt>(N.root()); }
 
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::bridge>>
-  auto get_bridges(const NodeDesc rt) { return BridgeIterFactory<Network, tt>(rt); }
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::bridge>>
-  auto get_bridges(const Network& N) { return BridgeIterFactory<Network, tt>(N.root()); }
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::bridge>,
+           class... Args>
+  auto get_bridges(const Network& N, Args&&... args) { return BridgeIterFactory<Network, tt>(N, std::forward<Args>(args)...); }
 
 }// namespace

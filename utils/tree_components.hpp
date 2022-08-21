@@ -169,7 +169,7 @@ namespace PT{
       emplacer.mark_root(N.root());
       //std::cout << "setting comp data of "<<N.root()<<"\n";
       //set_comp_root(N.root());
-      DEBUG4(std::cout << "computing component roots\n)";
+      DEBUG4(std::cout << "computing component roots\n");
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
       DEBUG4(std::cout << "1st pass over component roots\n" << comp_root<<"\nemplacer translation @"<< &(emplacer.helper.old_to_new)<<" our translation @"<<&N_to_comp_DAG<<"\n");
