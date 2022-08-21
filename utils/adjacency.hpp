@@ -54,6 +54,14 @@ namespace PT {
     Adjacency& operator=(Adjacency&&) = default;
 
     EdgeData& data() const { assert(data_ptr); return *data_ptr; }
+
+    template<class T> requires (!std::is_void_v<T>)
+    friend std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
+      if constexpr (mstd::Printable<T>)
+        return os << a.nd << '[' << *(a.data_ptr) << ']';
+      else
+        return os << a.nd << '[' << '@' << a.data_ptr << ']';
+    }
   };
 
   template<>
@@ -75,6 +83,9 @@ namespace PT {
 
     Adjacency& operator=(const Adjacency&) = default;
     Adjacency& operator=(Adjacency&&) = default;
+
+    friend std::ostream& operator<<(std::ostream& os, const Adjacency<void>& a) { return os << static_cast<NodeDesc>(a); }
+
   };
 
   // NOTE: an AdjAdapter can be used to merge edge-data when contracting edges
@@ -82,18 +93,6 @@ namespace PT {
   //       then the data of uv is "merged with" the data of vw via an AdjAdapter
   template<class T, class Adj, class Phylo>
   concept AdjAdapterType = std::invocable<T, const Adj&, typename Phylo::Adjacency&>;
-
-
-  template<mstd::Printable T>
-  std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
-    return os << a.nd << '[' << *(a.data_ptr) << ']';
-  }
-  template<class T> requires (!mstd::Printable<T>)
-  std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
-    if constexpr(Adjacency<T>::has_data) {
-      return os << a.nd << '[' << '@' << a.data_ptr << ']';
-    } else return os << static_cast<NodeDesc>(a);
-  }
 
 }
 

@@ -259,10 +259,10 @@ namespace PT{
            class ChainDecomp = ChainDecomposition<Network, CutObject::bcc>>
   using BCCCutIterFactory = _CutIterFactory<Network, tt, ChainDecomp, BCCCutIter>;
 
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>>
-  auto get_cut_nodes(const NodeDesc rt) { return CutNodeIterFactory<Network, tt>(rt); }
-  template<StrictPhylogenyType Network, TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>>
-  auto get_cut_nodes(const Network& N) { return CutNodeIterFactory<Network, tt>(N.root()); }
+  template<StrictPhylogenyType Network,
+           TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>,
+           class... Args>
+  auto get_cut_nodes(const Network& N, Args&&... args) { return CutNodeIterFactory<Network, tt>(N, std::forward<Args>(args)...); }
 
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::bridge>,
