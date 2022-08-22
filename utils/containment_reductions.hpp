@@ -119,6 +119,9 @@ namespace PT {
         } else {
           // NOTE: it might be that u_child is already a child of u_parent, so u_parent and u_child might become orphans
           if(host.contract_up_unique(u, u_parent)) {
+            // NOTE: if we just removed a "double-edge", we'll have to inform the tree-component infos about this
+            //  in particular, the child of u_child may now have a different component-root, so update that
+            manager.contain.comp_info.react_to_edge_deletion(u_parent, u_child);
             if(Host::out_degree(u_parent) <= 1)
               add(u_parent);
             if(Host::in_degree(u_child) == 1)

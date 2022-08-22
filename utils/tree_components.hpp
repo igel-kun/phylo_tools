@@ -60,9 +60,9 @@ namespace PT{
     
     const auto& get_comp_root() const { return comp_root; }
 
-    // replace a component root by a leaf
-    // NOTE: this is useful when a reticulation between a non-trivial comp root 'old_rt' and a trivial comp root 'new_rt' is destroyed
-    //       since we cannot rename the trivial comp root, we have to replace the old comp root with the new comp root in the data structures
+    // make new_rt the new component root
+    // NOTE: this is useful when a reticulation between a comp root 'old_rt' and a comp root 'new_rt' is destroyed
+    //       since we cannot rename component roots, we have to replace the old comp root with the new comp root in the data structures
     void replace_comp_root(const NodeDesc old_rt, const NodeDesc new_rt) {
       comp_root.make_representative(new_rt);
     }
