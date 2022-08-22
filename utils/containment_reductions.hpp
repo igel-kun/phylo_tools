@@ -615,7 +615,7 @@ namespace PT {
       assert(guest_matched.size() == 1);
       const NodeDesc host_x = mstd::front(host_matched);
       const NodeDesc guest_y = mstd::front(guest_matched);
-      const auto& host = manager.contain.host;
+      auto& host = manager.contain.host;
 
       std::cout << "\tMATCH: marking "<<guest_v<<" (guest) & "<<host_u<<" (host) with label "<<vlabel<<"\n";
       
@@ -635,8 +635,13 @@ namespace PT {
         clear_host_between(host_u, host_leaves, host_x);
         manager.contain.comp_info.react_to_leaf_regraft(host_x);
       } else {
-        for(const NodeDesc l: host_leaves)
-          manager.clean_orphan_later(l);
+        host.transfer_above_root(host_x, host_u);
+        manager.contain.comp_info.react_to_leaf_regraft(host_x);
+        host.remove_subtree(host_u);
+        // clear queues
+        manager.clear_queues();
+        // clear label matching except for xy_label_iter
+        mstd::clear_except(manager.contain.HG_label_match, xy_label_iter);
       }
 
       std::cout << "\tMATCH: done pruning host; orphan-queue "<<manager.remove_orphans.node_queue<<"\n";
@@ -1012,7 +1017,7 @@ namespace PT {
     }
 
     void remove_edge_in_host(const NodeDesc u, const NodeDesc v) {
-      assert(Host::in_degree(u) == 1);
+      assert(Host::in_degree(u) < 2);
 
       if(Host::in_degree(v) > 1) {
         assert(Host::out_degree(v) <= 1);
@@ -1162,6 +1167,13 @@ namespace PT {
       mstd::erase(remove_orphans.node_queue, u);
       mstd::erase(cherry_rule.node_queue, u);
       mstd::erase(extended_cherries.node_queue, u);
+    }
+    void clear_queues() {
+      reti_merge.node_queue.clear();
+      triangle_rule.node_queue.clear();
+      remove_orphans.node_queue.clear();
+      cherry_rule.node_queue.clear();
+      extended_cherries.node_queue.clear();
     }
 
     void apply() {

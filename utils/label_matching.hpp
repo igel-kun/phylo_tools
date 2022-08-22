@@ -114,6 +114,17 @@ namespace PT {
         Parent::try_emplace(std::move(label), other_pair_to_our_pair(node_sets));
       return *this;
     }
+
+    template<class LT, class P, class Q> requires (std::is_constructible_v<LabelType, LT&&>)
+    auto emplace_match(LT&& label_init, P&& first_init, Q&& second_init) {
+      auto result = Parent::try_emplace(label_init);
+      if(result.second) {
+        auto& list_pair = result.first->second;
+        mstd::append(list_pair.first, std::forward<P>(first_init));
+        mstd::append(list_pair.second, std::forward<Q>(second_init));
+      }
+      return result;
+    }
   };
 
   template<PhylogenyType NetA,

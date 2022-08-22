@@ -64,7 +64,6 @@ namespace PT{
     // NOTE: this is useful when a reticulation between a non-trivial comp root 'old_rt' and a trivial comp root 'new_rt' is destroyed
     //       since we cannot rename the trivial comp root, we have to replace the old comp root with the new comp root in the data structures
     void replace_comp_root(const NodeDesc old_rt, const NodeDesc new_rt) {
-      assert(N.is_leaf(new_rt));
       comp_root.make_representative(new_rt);
     }
 
@@ -381,13 +380,18 @@ namespace PT{
 
     // update comp-root and visibility above a leaf l after it has been regrafted
     void react_to_leaf_regraft(const NodeDesc l) {
-      assert(N.in_degree(l) == 1);
       assert(!N.label(l).empty());
-      const NodeDesc pl = N.parent(l);
-      if(N.in_degree(pl) > 1) {
+      if(!N.is_root(l)){
+        assert(N.in_degree(l) == 1);
+        const NodeDesc pl = N.parent(l);
+        if(N.in_degree(pl) > 1) {
+          set_comp_root(l, l, l);
+        } else {
+          set_comp_root(l, comp_root_of(pl), l);
+        }
+      } else { // if the new leaf is the root, then it is its own component root and we will clear the component DAG
         set_comp_root(l, l, l);
-      } else {
-        set_comp_root(l, comp_root_of(pl), l);
+        comp_DAG.clear();
       }
     }
 

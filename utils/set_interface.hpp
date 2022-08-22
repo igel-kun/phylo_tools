@@ -410,13 +410,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     s.insert(std::move(node));
   }
 
-  template<SingletonSetType S, class Val = value_type_of_t<S>>
-  void replace(S& s, const auto& _old_it, Val&& _new) {
-    assert(_old_it == s.begin());
-    s.clear();
-    s.emplace_back(std::forward<Val>(_new));
-  }
-
   template<MapType M, class Key = key_type_of_t<M>>
   void replace(M& m, const auto& _old_it, Key&& _new) {
     auto node = m.extract(_old_it);
@@ -427,9 +420,9 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   void replace(std::vector<T,A>& c, const typename std::vector<T,A>::iterator& _old_it, T&& _new) {
     *_old_it = std::forward<T>(_new);
   }
-  template<class T>
-  void replace(singleton_set<T>& c, const typename singleton_set<T>::iterator& _old_it, T&& _new) {
-    *_old_it = std::forward<T>(_new);
+  template<Optional T, class Q>
+  void replace(singleton_set<T>& c, const typename singleton_set<T>::iterator& _old_it, Q&& _new) {
+    *_old_it = std::forward<Q>(_new);
   }
 
   template<ContainerType C, class Val = value_type_of_t<C>>
@@ -445,14 +438,28 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   iterator_of_t<const C> max_element(const C& c) { return std::ranges::max_element(c); }
 
 
+  template<ContainerType C, class Iter>
+  value_type_of_t<C> extract(C& c, const Iter& iter) {
+  }
+
   // clear a container except for 1 item
   template<ContainerType C, class Iter>
   void clear_except(C& c, const Iter& except_iter) {
     if(except_iter != end(c)) {
       if(c.size() > 1) {
-        auto tmp = std::move(*except_iter);
-        c.clear();
-        append(c, std::move(tmp));
+        if constexpr (MapType<C>) {
+          auto node = c.extract(except_iter);
+          c.clear();
+          c.try_emplace(std::move(node.key()), std::move(node.mapped()));
+        } else if constexpr (SetType<C> && !SingletonSetType<C>) {
+          auto tmp = std::move(c.extract(except_iter).value());
+          c.clear();
+          append(c, std::move(tmp));
+        } else {
+          auto tmp = std::move(*except_iter);
+          c.clear();
+          append(c, std::move(tmp));
+        }
       } else {
         assert(except_iter == begin(c));
       }

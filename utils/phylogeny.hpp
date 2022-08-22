@@ -186,6 +186,7 @@ namespace PT {
     using Parent::child;
     using Parent::in_degree;
     using Parent::out_degree;
+    using Parent::degree;
     using Parent::in_edges;
     using Parent::out_edges;
 		using Parent::num_edges;
@@ -268,16 +269,17 @@ namespace PT {
     // add an edge between two nodes of the tree/network
     // NOTE: the nodes are assumed to have been added by add_root(), add_child(), or add_parent() (of another node) before!
 	  // NOTE: Edge data can be passed either in the Adjacency v or with additional args (the latter takes preference)
+    // NOTE: don't add edges incoming to any root! Use add_parent or transfer_above_root for this
     template<AdjacencyType Adj, class... Args>
-    std::pair<Adjacency, bool> add_edge(const NodeDesc u, Adj&& v, Args&&... args) {
+    std::pair<const Adjacency&, bool> add_edge(const NodeDesc u, Adj&& v, Args&&... args) {
+      assert(!test(_roots, v));
       const auto [iter, success] = Parent::add_child(u, std::forward<Adj>(v), std::forward<Args>(args)...);
-      std::pair<Adjacency, bool> result = {NoNode, success};
       if(success) {
         const bool res = Parent::add_parent(v, u, *iter).second;
         assert(res && "u is a predecessor of v, but v is not a successor of u. This should never happen!");
 				count_edge();
       }
-      return result;
+      return {*iter, success};
     }
     template<AdjacencyType Adj, DataExtracterType DataMaker>
     std::pair<Adjacency, bool> add_edge(const NodeDesc u, Adj&& v, DataMaker&& data_maker) {
@@ -369,10 +371,11 @@ namespace PT {
 
     template<AdjacencyType Adj, class... Args>
     bool add_parent(Adj&& v, const NodeDesc u, Args&&... args) {
+      assert(degree(u) == 0);
       const auto result = add_edge(u, std::forward<Adj>(v), std::forward<Args>(args)...);
       if(result.second) {
 				count_node();
-        erase(_roots, v);
+        mstd::erase(_roots, v);
         mstd::append(_roots, u);
       }
       return result;
@@ -386,6 +389,7 @@ namespace PT {
     };
 
     NodeDesc add_root(const NodeDesc new_root) {
+      assert(degree(new_root) == 0);
       DEBUG5(std::cout << "adding "<<new_root<<" to roots\n");
       const bool result = mark_root(new_root);
       assert(result);
@@ -401,6 +405,25 @@ namespace PT {
     }
 
 
+    // split a node off the network and install it as new root above r
+    // NOTE: all edges incoming to x are going to be deleted
+    // NOTE: all edges outgoing from x are kept
+    template<class... Args>
+    void transfer_above_root(const NodeDesc x, const NodeDesc r, Args&&... args) {
+      // step 1: remove all incoming edges of x
+      auto& x_parents = parents(x);
+      while(!x_parents.empty())
+        remove_edge_no_cleanup(mstd::front(x_parents), x);
+
+      const auto [iter, success] = Parent::add_child(x, r, std::forward<Args>(args)...);
+      assert(success);
+      const bool res = Parent::add_parent(r, x, *iter).second;
+      assert(res && "u is a predecessor of v, but v is not a successor of u. This should never happen!");
+      count_edge();
+      mstd::erase(_roots, r);
+      mstd::append(_roots, x);
+    }
+    void transfer_above_root(const NodeDesc x) { transfer_above_root(x, root()); }
 
     // transfer a child w of source to target
     // NOTE: this will not create loops
@@ -763,7 +786,7 @@ namespace PT {
     // remove the subtree rooted at u
     // NOTE: LastRites can be used to say goodbye to your node(s) (remove it from other containers or whatever)
     template<class LastRites = mstd::IgnoreFunction<void>>
-    void remove_subtree(const NodeDesc u, LastRites&& goodbye) {
+    void remove_subtree(const NodeDesc u, LastRites&& goodbye = LastRites()) {
       const auto& C = children(u);
       while(!C.empty()) remove_subtree(mstd::back(C), goodbye);
       remove_node(u, goodbye);
