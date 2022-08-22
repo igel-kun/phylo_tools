@@ -877,8 +877,11 @@ namespace PT {
         }
       }
       // if we found no parent that is in or below P, then host cannot display guest
-      if(no_parents_below_P)
+      if(no_parents_below_P) {
         manager.contain.failed = true;
+        // in order to fail early, we'll clear to_remove as to avoid treating the edges therein unnecessarily
+        to_remove.clear();
+      }
       return result;
     }
 
@@ -906,7 +909,7 @@ namespace PT {
         for(const auto [s, t]: to_remove)
           manager.remove_edge_in_host(s, t);
         return true;
-      } else return false;
+      } else return manager.contain.failed;
     }
 
     bool extended_cherry_reduction_from(const mstd::iterator_of_t<LabelMatching>& uv_label_iter) {
@@ -937,6 +940,7 @@ namespace PT {
         }
         // step 1:  move up from u to emplace the set P of unstable nodes above u
         unstable_above<true>(u, u, NoNode, &cherry_leaves);
+        // step 2: move up from the nodes in host that are label-matched to siblings x of u
         bool result = false;
         for(const NodeDesc x: cherry_leaves){
           std::cout << "next leaf: "<<x<<" ["<<Host::label(x)<<"]\n";
@@ -944,6 +948,7 @@ namespace PT {
           unstable_above(x, x);
           std::cout << "after marking:\n";
           std::cout << *this;
+          std::cout << "now climbing from "<<x<<"\n";
           result |= climb_and_remove_edges(x);
           std::cout << "result is now "<<result<<"\n";
         } // for all 'siblings' x of u
