@@ -139,12 +139,13 @@ namespace PT{
     template<class... Args>
     DFSIterator(const NodeDesc _root, Args&&... args):
       Traits(std::forward<Args>(args)...), root(_root)
-    { 
-      assert(_root != NoNode);
+    {
       DEBUG6(std::cout << "DFS: making new non-end DFS iterator (type "<< static_cast<int>(o) <<") starting at "<<_root<<" (tracking? "<<track_nodes<<"), root is seen? "<<is_seen(root)<<"\n");
-      if constexpr (track_nodes) {
-        if(!is_seen(root)) dive(root);
-      } else dive(root);
+      if(root != NoNode) {
+        if constexpr (track_nodes) {
+          if(!is_seen(root)) dive(root);
+        } else dive(root);
+      }
     }
     template<StrictPhylogenyType Phylo, class... Args>
     DFSIterator(const Phylo& N, Args&&... args):
@@ -453,7 +454,7 @@ namespace PT{
     template<class... Args>
     TraversalHelper(const NodeSingleton& _root, Args&&... args):
       Parent(std::forward<Args>(args)...),
-      root(front(_root))
+      root(_root.empty() ? NoNode : front(_root))
     {}
     template<class... Args>
     TraversalHelper(const Network& N, Args&&... args):
@@ -537,6 +538,8 @@ namespace PT{
 
     template<mstd::ContainerType Container>
     Container& append_to(Container& c) { append(c, *this); return c; }
+    template<mstd::ContainerType Container>
+    Container to_container() { Container c; append(c, *this); return c; }
   };
 
 

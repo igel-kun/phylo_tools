@@ -14,13 +14,13 @@ namespace PT {
            StrictPhylogenyType _TargetPhylo,
            OptionalPhylogenyType _SourcePhylo = void,
            NodeTranslationType _OldToNewTranslation = NodeTranslation>
+//#warning "TODO: if _SourcePhylo is void, we will surely not need the Translation! Yes, we will, for example if we are given a bunch of edges :("
   struct EdgeEmplacementHelper: mstd::optional_tuple<std::conditional_t<_track_roots, NodeSet, void>> {
     using SourcePhylo = _SourcePhylo;
     using TargetPhylo = _TargetPhylo;
     using OldToNewTranslation = _OldToNewTranslation;
     using StrictTranslation = std::remove_reference_t<OldToNewTranslation>;
     static constexpr bool track_roots = _track_roots;
-#warning "TODO: if _SourcePhylo is void, we will surely not need the Translation!"
     TargetPhylo& N;
     OldToNewTranslation old_to_new;
 

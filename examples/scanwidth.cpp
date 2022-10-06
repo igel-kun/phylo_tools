@@ -106,7 +106,10 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   const auto gamma_sw = Gamma.get_sw_map(Gamma_to_net);
   std::cout << "sw map: " << gamma_sw << std::endl;
 
-  std::cout << "(sw = "<< *mstd::max_element(mstd::seconds(gamma_sw))<<")"<<std::endl;
+  const size_t N_sw = *mstd::max_element(mstd::seconds(gamma_sw));
+  const size_t reti_count = N.retis().to_container<NodeVec>().size();
+  std::cout << "sw = "<< N_sw <<" retis = "<<reti_count<<"\n";
+  assert(N_sw <= reti_count + 1);
 }
 
 
@@ -181,7 +184,6 @@ int main(const int argc, const char** argv) {
   }
   std::cout << ex << "\n";
   print_extension(N, ex);
-  std::cout << "The End\n";
 //  if(contains(options, "-e")) sw_print_extension();
 //  if(contains(options, "-et")) sw_print_extension_tree();
 }

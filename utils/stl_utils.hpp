@@ -58,29 +58,20 @@ namespace mstd{
 
   // ---------------- conditional invocation ---------------------------
 
-  // if F is invocable with Args... yield the result of this invocation, otherwise yield Else
-  template<class F, class Else, class... Args> struct _invoke_result { using type = Else; };
-  template<class F, class Else, class... Args> requires std::invocable<F, Args...>
-  struct _invoke_result<F, Else, Args...> { using type = std::invoke_result_t<F, Args...>; };
-  template<class F, class Else, class... Args> 
-  using my_invoke_result = typename _invoke_result<F, Else, Args...>::type;
-
 #warning "TODO: unify this using proper type-/value- extraction from parameter packs"
   // apply a function or pass through first argument if Function cannot be invoked with first and other_args
   template<class Function, class FirstArg, class... OtherArgs>
-  my_invoke_result<Function, FirstArg, FirstArg, OtherArgs...>
-    apply_or_pass1(Function&& f, FirstArg&& first, OtherArgs&&... other_args) {
-      if constexpr (std::invocable<Function, FirstArg, OtherArgs...>)
-        return f(std::forward<FirstArg>(first), std::forward<OtherArgs>(other_args)...);
-      else return first;
+  decltype(auto) apply_or_pass1(Function&& f, FirstArg&& first, OtherArgs&&... other_args) {
+    if constexpr (std::invocable<Function, FirstArg, OtherArgs...>)
+      return f(std::forward<FirstArg>(first), std::forward<OtherArgs>(other_args)...);
+    else return std::forward<FirstArg>(first);
   }
   // apply a function or pass through second argument if Function cannot be invoked with first and second and other_args
   template<class Function, class FirstArg, class SecondArg, class... OtherArgs>
-  my_invoke_result<Function, SecondArg, FirstArg, SecondArg, OtherArgs...>
-    apply_or_pass2(Function&& f, FirstArg&& first, SecondArg&& second, OtherArgs&&... other_args) {
-      if constexpr (std::invocable<Function, FirstArg, SecondArg, OtherArgs...>)
-        return f(std::forward<FirstArg>(first), std::forward<SecondArg>(second), std::forward<OtherArgs>(other_args)...);
-      else return second;
+  decltype(auto) apply_or_pass2(Function&& f, FirstArg&& first, SecondArg&& second, OtherArgs&&... other_args) {
+    if constexpr (std::invocable<Function, FirstArg, SecondArg, OtherArgs...>)
+      return f(std::forward<FirstArg>(first), std::forward<SecondArg>(second), std::forward<OtherArgs>(other_args)...);
+    else return std::forward<SecondArg>(second);
   }
 
   // ---------------- copy CV or & qualifiers from a type to the next -------------------

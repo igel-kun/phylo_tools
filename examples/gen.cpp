@@ -16,6 +16,7 @@ void parse_options(const int argc, const char** argv) {
   description["-n"] = {1,1};
   description["-r"] = {1,1};
   description["-l"] = {1,1};
+  description["-s"] = {1,1};
   description["-a"] = {0,0};
   description[""] = {0,1};
   const std::string help_message(std::string(argv[0]) + " [file]\n\
@@ -26,6 +27,7 @@ void parse_options(const int argc, const char** argv) {
       \t-l\tnumber of leaves in the network\n\
       \t-n\tnumber of vertices in the network (this is ignored if -r and -l are present)\n\
       \t-a\tappend to file1 instead of replacing its contents\n\
+      \t-s\trandom seed\n\
       NOTE: if, of -n, -r, and -l, less than 2 are present, the network is assumed to have ~10% reticulations\n\
       NOTE: n = 99 is assumed if none are present\n");
 
@@ -95,6 +97,9 @@ int main(const int argc, const char** argv) {
         std::to_string(num_leaves)+" leaves = "+
         std::to_string(num_nodes)+" nodes in total");
   std::cout << "constructing network with "<<num_nodes<<" vertices: "<<num_tree_nodes<<" tree nodes, "<<num_retis<<" reticulations and "<<num_leaves<<" leaves"<<std::endl;
+
+  if(test(options, "-s"))
+    std::srand(std::stol(options["-s"][0]));
 
   DefaultLabeledNetwork N;
   generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0);

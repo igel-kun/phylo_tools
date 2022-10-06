@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <limits>
 #include <optional>
 
 namespace mstd {
@@ -82,6 +83,15 @@ namespace mstd {
 
   template<class T>
   concept Optional = is_optional_v<std::remove_reference_t<T>>;
+
+  template<bool invert = false>
+  struct optional_value_predicate {
+    template<Optional T>
+    constexpr bool operator()(const T& x) const { return x.has_value() != invert; }
+  };
+
+#warning "TODO: remove me"
+  static_assert(std::is_trivially_copyable_v<optional_by_invalid<int>>);
 }
 
 namespace std {

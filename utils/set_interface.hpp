@@ -60,16 +60,26 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     return true;
   }
   template<class T, SetType S>
-  bool are_disjoint(const singleton_set<T>& x, const S& y) { return x.empty() ? true : test(y,front(x)); }
-  template<class T, SetType S> requires (!std::is_convertible_v<S,singleton_set<value_type_of_t<S>>>)
+  bool are_disjoint(const singleton_set<T>& x, const S& y) { return x.empty() ? true : test(y, front(x)); }
+  template<class T, SetType S> requires (!std::is_convertible_v<S, singleton_set<value_type_of_t<S>>>)
   bool are_disjoint(const S& y, const singleton_set<T>& x) { return are_disjoint(x, y); }
 
   template<ContainerType C, FindableType<C> Key>
   auto find(C&& c, const Key& key) {
-    if constexpr (VectorType<C>){
+    if constexpr (!SetType<C> && !MapType<C>){
       return std::find(begin(c), end(c), key);
     } else return c.find(key);
   }
+  template<ContainerType C, FindableType<C> Key>
+  auto find_reverse(C&& c, const Key& key) {
+    if constexpr (!SetType<C> && !MapType<C>){
+      auto it = std::end(c);
+      while(it != std::begin(c))
+        if(*(--it) == key) return it;
+      return std::end(c);
+    } else return c.find(key);
+  }
+
 
   template<SetType S1, SetType S2 = S1> requires std::is_convertible_v<typename S2::const_iterator, typename S1::const_iterator>
   auto_iter<typename S1::const_iterator> common_element(const S1& x, const S2& y)
@@ -103,21 +113,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       return {end(y), end(y)};
   }
 
-
-  template<IterableType T>
-  constexpr decltype(auto) front(T&& c) { assert(!c.empty()); return *(c.begin()); }
-  template<IterableType T>
-  constexpr decltype(auto) next_to_front(T&& c) { assert(!c.empty()); return *(next(c.begin())); }
-  template<IterableType T>
-  constexpr decltype(auto) back(T&& c) { assert(!c.empty()); return *(c.rbegin()); }
-  template<IterableType T>
-  constexpr decltype(auto) next_to_back(T&& c) { assert(!c.empty()); return *(next(c.rbegin())); }
-
-  template<class T, T _invalid, IterableType Container> requires std::is_same_v<value_type_of_t<Container>, std::remove_cvref_t<T>>
-  constexpr T any_element(Container&& c) {
-    return c.empty() ? _invalid : front(std::forward<Container>(c));
-  }
-
   // std::unordered_set has no rbegin(), so we just alias it to begin()
   template<class Key, class Hash, class KE, class A>
   auto rbegin(const std::unordered_set<Key, Hash, KE, A>& s) { return s.begin(); }
@@ -127,6 +122,34 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   auto rend(const std::unordered_set<Key, Hash, KE, A>& s) { return s.end(); }
   template<class Key, class Hash, class KE, class A>
   auto rbend(std::unordered_set<Key, Hash, KE, A>& s) { return s.end(); }
+
+
+  template<class T> concept HasFront = requires(T x) { x.front(); };
+  template<class T> concept HasBack = requires(T x) { x.back(); };
+
+  template<IterableType T>
+  constexpr decltype(auto) front(T&& c) {
+    assert(!c.empty());
+    if constexpr (HasFront<T>)
+      return c.front();
+    else return *(std::begin(c));
+  }
+  template<IterableType T>
+  constexpr decltype(auto) next_to_front(T&& c) { assert(!c.empty()); return *(std::next(std::begin(c))); }
+  template<IterableType T>
+  constexpr decltype(auto) back(T&& c) {
+    assert(!c.empty());
+    if constexpr (HasBack<T>)
+      return c.back();
+    else return *(mstd::rbegin(c));
+  }
+  template<IterableType T>
+  constexpr decltype(auto) next_to_back(T&& c) { assert(!c.empty()); return *(std::next(mstd::rbegin(c))); }
+
+  template<class T, T _invalid, IterableType Container> requires std::is_same_v<value_type_of_t<Container>, std::remove_cvref_t<T>>
+  constexpr T any_element(Container&& c) {
+    return c.empty() ? _invalid : front(std::forward<Container>(c));
+  }
 
   template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> std::convertible_to<bool>; };
   template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
@@ -208,7 +231,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool set_val(S& s, const auto& val) { return append(s, val).second; }
   template<class S> requires (ContainerType<S> && SettableType<S>)
   bool set_val(S& s, const auto& val) { return s.set(val); }
-#warning "TODO: replace append into sets by set_val unless we need the iterator"
+
+#warning "TODO: add set_val for everything that we can do append on, but discard the iterator; BEFORE: test if this isn't done automatically by the optimizer"
 
 
   template<class Index, class C> requires ContainerType<C>
@@ -236,7 +260,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     else return y;
   }
 
-#warning "TODO: this can be done by writing a manual conversion to std::unordered_set<uint32_t>"
   template<SetType C1, SetType C2> requires std::is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
   C2& copy(const C1& x, C2& y) {
     y.clear();
@@ -272,8 +295,11 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   };
 
 
+  template<ContainerType C>
+  auto erase(C& c, const const_iterator_of_t<C>& iter) { return c.erase(iter); }
+
   template<ContainerType C, class Key>
-    requires std::is_convertible_v<const Key&, value_type_of_t<C>>
+    requires (!std::is_same_v<Key, const_iterator_of_t<C>> && std::is_convertible_v<const Key&, value_type_of_t<C>>)
   auto erase(C& c, const Key& key) {
     if constexpr (std::is_same_v<std::remove_cvref_t<Key>, iterator_of_t<C>>)
       return c.erase(key);
@@ -286,9 +312,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<MapType M, class Key>
     requires std::is_convertible_v<const Key&, key_type_of_t<M>>
   auto erase(M& m, const Key& key) { return erase(m, key); }
-  template<ContainerType C, class Key>
-    requires std::is_convertible_v<const Key&, const_iterator_of_t<C>>
-  auto erase(C& c, const Key& key) { return c.erase(key); }
 
   template<ContainerType C, class Key>
     requires (std::is_invocable_v<Key, mstd::value_type_of_t<C>>)
@@ -345,7 +368,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<ContainerType C>
   void pop(C& c) {
     assert(!c.empty());
-    c.erase(rbegin(c));
+    erase(c, mstd::rbegin(c));
   }
 
   // value-moving pop operations
@@ -389,7 +412,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     assert(!q.empty());
     const auto it = std::begin(q);
     auto v = std::move(*it);
-    q.erase(it);
+    erase(q, it);
     return v;
   }
   template<IterableType Q> requires requires(Q q) { { back(q) } -> std::convertible_to<value_type_of_t<Q>>; }
@@ -397,7 +420,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     assert(!q.empty());
     const auto it = std::prev(std::end(q));
     auto v = std::move(*it);
-    q.erase(it);
+    erase(q, it);
     return v;
   }
 

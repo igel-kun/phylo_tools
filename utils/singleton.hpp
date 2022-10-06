@@ -82,12 +82,14 @@ namespace mstd{
     explicit operator const_reference() const { return front(); }
     explicit operator reference() { return front(); }
     size_t size() const { return non_empty(); }
-    reference       front() { return *storage; }
-    const_reference front() const { return *storage; }
-    iterator       find(const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
-    const_iterator find(const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
-    size_t count(const_reference x) const { return non_empty() ? (x == front()) : 0; }
-    bool contains(const_reference x) const { return count(x); }
+    reference       front() { assert(!empty()); return *storage; }
+    const_reference front() const { assert(!empty()); return *storage; }
+    reference       back() { assert(!empty()); return *storage; }
+    const_reference back() const { assert(!empty()); return *storage; }
+    iterator       find(const const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    const_iterator find(const const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    size_t count(const const_reference x) const { return non_empty() ? (x == front()) : 0; }
+    bool contains(const const_reference x) const { return count(x); }
     void reserve(const size_t) const {} // compatibility with vector
 
     iterator begin() { return empty() ? nullptr : &(front()); }
@@ -95,8 +97,8 @@ namespace mstd{
     iterator end() { return begin() + non_empty(); }
     const_iterator end() const { return begin() + non_empty(); }
 
-    reverse_iterator rbegin() { return end(); }
-    const_reverse_iterator rbegin() const { return end(); }
+    reverse_iterator rbegin() { return reverse_iterator((empty() ? nullptr : &(front())) + 1); }
+    const_reverse_iterator rbegin() const { return const_reverse_iterator((empty() ? nullptr : &(front())) + 1); }
     reverse_iterator rend() { return rbegin() + non_empty(); }
     const_reverse_iterator rend() const { return rbegin() + non_empty(); }
 

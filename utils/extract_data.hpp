@@ -277,6 +277,14 @@ namespace PT {
            OptionalNodeFunctionType ExtractNodeLabel = DefaultExtractData<Ex_node_label, Network>>
   using DataExtracter = _DataExtracter<Network, ExtractNodeData, ExtractEdgeData, ExtractNodeLabel>;
 
+  template<class T>
+  concept StrictDataExtracterType = requires {
+    { T::ignoring_node_labels } -> std::convertible_to<const bool>;
+    { T::ignoring_edge_data } -> std::convertible_to<const bool>;
+    { T::ignoring_node_data } -> std::convertible_to<const bool>;
+  };
+  template<class T> concept DataExtracterType = StrictDataExtracterType<std::remove_reference_t<T>>;
+
 
 
   // NOTE: use make_data_extracter to smartly construct a DataExtracter:

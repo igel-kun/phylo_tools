@@ -588,8 +588,8 @@ namespace PT {
 
       // step 0: install except above top
       const NodeDesc ptop = Host::parent(top);
-      host.transfer_child(except, top);
-      host.transfer_child(ptop, except);
+      host.transfer_child(except, ptop);
+      host.transfer_child(top, ptop, except);
 
       const NodeDesc top_root = manager.contain.comp_info.comp_root_of(top);
       //step 1: set visible leaf of top's comp root to except

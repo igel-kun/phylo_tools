@@ -18,7 +18,6 @@
 #include <vector>
 #include "utils.hpp"
 #include "stl_utils.hpp"
-#include "predicates.hpp"
 #include "filter.hpp"
 #ifdef STATISTICS
 #include <unordered_map>
@@ -43,17 +42,17 @@
 
 namespace mstd{
 
-  template<class Container>
+  template<class Container, bool invert = false>
   struct VacantPredicate {
     const Container& c;
     
     VacantPredicate(const Container& _c): c(_c) {}
 
     template<class Iter>
-    bool value(const Iter& it) { return c.is_vacant(it); }
+    bool value(const Iter& it) { return c.is_vacant(it) != invert; }
   };
   template<class Container>
-  using OccupiedPredicate = pred::NotPredicate<VacantPredicate<Container>>;
+  using OccupiedPredicate = VacantPredicate<Container, true>;
 
   template<IterableType Container, class Iterator = iterator_of_t<Container>>
   using linear_vector_hash_iterator = filtered_iterator<Iterator, VacantPredicate<Container>>;

@@ -65,10 +65,6 @@ namespace PT{
            class KeyEqual = std::equal_to<Key>>
   using HashMap = std::unordered_map<Key, Value, Hash, KeyEqual>;
 
-  template<class Key, class Value>
-  using RawConsecutiveMap = mstd::raw_vector_map<Key, Value>;
-  template<class Key, class Value, class InvalidElement = mstd::default_invalid_t<Value>>
-  using ConsecutiveMap = mstd::vector_map<Key, Value, InvalidElement>;
 
   // node descriptors
 #ifndef NDEBUG
@@ -100,6 +96,17 @@ namespace PT{
     // we have to forward-declare the output here to avoid having operator<< pick up the implicit conversion to uintptr_t and output the address
     friend std::ostream& operator<<(std::ostream& os, const NodeDesc nd);
   };
+
+  constexpr NodeDesc NoNode = NodeDesc{};
+  const std::string NoName = "";
+
+  using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc, NoNode>;
+
+  template<> struct _StorageClass<singleS, NodeDesc>  {
+    using type = mstd::singleton_set<OptionalNodeDesc>;
+  };
+
+  template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 }
 
 namespace std {
@@ -115,12 +122,6 @@ namespace PT {
   using NodeDesc = uintptr_t;
 #endif
 
-  constexpr NodeDesc NoNode = NodeDesc{};
-  const std::string NoName = "";
-
-  using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc, NoNode>;
-
-  template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
   template<class T>
   concept NodeDescType = std::is_convertible_v<std::remove_cvref_t<T>, NodeDesc>;
@@ -154,16 +155,6 @@ namespace PT {
   template<class F> concept OptionalNodePredicateType = NodePredicateType<F> || std::is_void_v<F>;
 
 
-
-  template<class T>
-  concept StrictDataExtracterType = requires {
-    { T::ignoring_node_labels } -> std::convertible_to<const bool>;
-    { T::ignoring_edge_data } -> std::convertible_to<const bool>;
-    { T::ignoring_node_data } -> std::convertible_to<const bool>;
-  };
-  template<class T> concept DataExtracterType = StrictDataExtracterType<std::remove_reference_t<T>>;
-
-
   // degrees
   using Degree = uint_fast32_t;
   using sw_t = Degree;
@@ -171,7 +162,6 @@ namespace PT {
 
   // sets and containers of node descriptors
   using NodeSingleton = StorageClass<singleS, NodeDesc>;
-#warning "TODO: find out why this uses std::optional and not optional_by_invalid!"
 
   using ConsecutiveNodeSet = mstd::ordered_bitset;
   template<class T>
