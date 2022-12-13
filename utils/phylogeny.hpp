@@ -289,14 +289,13 @@ namespace PT {
       else return add_edge(u, std::forward<Adj>(v));
     }
 
-  protected:
-
     // remove an edge, updating edge numbers but not roots
     bool remove_edge_no_cleanup(const NodeDesc u, const NodeDesc v) {
       const int result = Parent::remove_edge(u,v);
       count_edge(-result);
       return result;
     }
+    bool remove_edge_no_cleanup(const Edge& uv) { return remove_edge_no_cleanup(uv.tail(), uv.head()); }
     // remove an edge incoming to a leaf-node, along with said leaf-node
     bool remove_edge_and_child(const NodeDesc u, const NodeDesc v) {
       const bool result = remove_edge_no_cleanup(u, v);
@@ -319,7 +318,6 @@ namespace PT {
       } else return false;
     }
 
-  public:
 
     bool remove_edge(const NodeDesc u, const NodeDesc v) {
       const bool result = remove_edge_no_cleanup(u, v);
@@ -426,12 +424,12 @@ namespace PT {
     }
     void transfer_above_root(const NodeDesc x) { transfer_above_root(x, root()); }
 
-    // transfer a child w of source to target
+    // transfer a child w of source to target, return whether the child was transfered successfully
     // NOTE: this will not create loops
     // NOTE: to check whether child is already a child of target, set 'check_uniqueness' or use a SetType as SuccStorage
     //       if check_uniquenesss == false and the SuccStorage cannot exclude duplicates, then this can lead to double edges!
-    //       if duplicates are excluded, then the existing edge from target to w survives while the other is deleted
-    // NOTE: use the DataExtracter to modify the EdgeData of the newly formed edge
+    //       if duplicates are excluded using one of these methods, then the existing edge from target to w survives while the other is deleted
+    // NOTE: use the DataMaker to modify the EdgeData of the newly formed edge
     //       for example like so: [](const auto& uv, auto& vw) { vw.data() += uv.data(); }
     //       By default the target->... EdgeData is ignored.
     // NOTE: theoretically, it is possible that the target node does not belong to the same phylogeny as the source node,
@@ -794,8 +792,7 @@ namespace PT {
       delete_node(v);
     }
 
-    template<class LastRites = mstd::IgnoreFunction<void>>
-    void remove_node(const auto& v, LastRites&& goodbye = LastRites()) {
+    void remove_node(const auto& v, auto&& goodbye) {
       goodbye(v);
       remove_node(v);
     }
@@ -882,7 +879,7 @@ namespace PT {
       return mstd::make_filtered_factory(nodes_below(std::forward<Args>(args)...).begin(), std::forward<Predicate>(predicate));
     }
     template<class... Args> static auto leaves_below(Args&&... args) { return nodes_with_below(is_leaf, std::forward<Args>(args)...); }
-    template<class... Args> static auto retis_below(Args&&... args) { return nodes_with_below(is_reti, std::forward<Args>(args)...); }
+    template<class... Args> static auto retis_below(Args&&... args)  { return nodes_with_below(is_reti, std::forward<Args>(args)...); }
 
     // --------------- relative reverse node traversals (above) ------------------
     template<TraversalType o = preorder, class... Args>
@@ -907,9 +904,11 @@ namespace PT {
     template<class... Args> auto nodes_preorder(Args&&... args) const  { return nodes<preorder>(std::forward<Args>(args)...); }
     template<class... Args> auto nodes_inorder(Args&&... args) const   { return nodes<inorder>(std::forward<Args>(args)...); }
     template<class... Args> auto nodes_postorder(Args&&... args) const { return nodes<postorder>(std::forward<Args>(args)...); }
-    template<class... Args> auto nodes_with(Args&&... args) const { return nodes_with_below(_roots, std::forward<Args>(args)...); }
     template<class... Args> auto leaves(Args&&... args) const { return leaves_below<const RootContainer&>(_roots, std::forward<Args>(args)...); }
     template<class... Args> auto retis(Args&&... args) const { return retis_below(_roots, std::forward<Args>(args)...); }
+    template<class Predicate, class... Args> auto nodes_with(Predicate&& pred, Args&&... args) const {
+      return nodes_with_below(std::forward<Predicate>(pred), _roots, std::forward<Args>(args)...);
+    }
 
 
     // --------------- relative edge traversals (below) ------------------

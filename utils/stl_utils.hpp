@@ -344,7 +344,7 @@ namespace mstd {
     constexpr ReturnType operator()(Args&&... args) const { if constexpr (!std::is_void_v<ReturnType>) return ReturnType(); };
   };
   // a functional that just returns its argument (and hopefully gets optimized out)
-  template<class T>
+  template<class T = void>
   struct IdentityFunction {
     template<class Q> requires std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<Q>>
     constexpr Q&& operator()(Q&& x) const { return std::forward<Q>(x); };

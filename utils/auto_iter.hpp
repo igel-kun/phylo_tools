@@ -89,9 +89,13 @@ namespace mstd {
     using iterator = Iterator;
     using const_iterator = Iterator;
 
+    _auto_iter() = default;
+    _auto_iter(const _auto_iter& other): Iterator(static_cast<const Iterator&>(other)) {}
+    _auto_iter(_auto_iter&& other): Iterator(static_cast<Iterator&&>(other)) {}
+
     // this is a more thorough form of inheriting Iterator's constructors that also catches copy/move constructing the _auto_iter from an Iterator
-    template<class... Args>
-    _auto_iter(Args&&... args): Iterator(std::forward<Args>(args)...) {}
+    template<class First, class... Args> requires (!std::is_same_v<_auto_iter, std::remove_cvref_t<First>>)
+    _auto_iter(First&& first, Args&&... args): Iterator(std::forward<First>(first), std::forward<Args>(args)...) {}
 
     Iterator& get_iter() & { return *this; }
     const Iterator& get_iter() const &{ return *this; }
@@ -106,8 +110,17 @@ namespace mstd {
     using Parent = _auto_iter<iterator_of_t<T>, EndIterator>;
   public:
     using typename Parent::iterator;
-    using Parent::Parent;
     using Parent::is_valid;
+
+    auto_iter(){}
+    auto_iter(const auto_iter& other): Parent(static_cast<const Parent&>(other)) {}
+    auto_iter(auto_iter&& other): Parent(static_cast<Parent&&>(other)) {}
+
+    // C++ refuses to use the inherited constructor for copy construction, saying
+    // "an inherited constructor is not a candidate for initialization from an expression of the same or derived type"
+    template<class First, class... Args> requires (!std::is_same_v<auto_iter, std::remove_cvref_t<First>>)
+    auto_iter(First&& first, Args&&... args):
+      Parent(std::forward<First>(first), std::forward<Args>(args)...) {}
 
     auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }

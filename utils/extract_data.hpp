@@ -49,7 +49,7 @@ namespace PT {
 
   template<PhylogenyType Phylo>
   struct _DefaultExtractData<Ex_edge_data, Phylo> {
-    // NOTE: we have to be able to tell EdgeDataExtractors from NodeDataExtractors, so we use the following requirement:
+    // NOTE: we have to be able to tell EdgeDataExtractors from NodeDataExtractors
     template<LooseEdgeType Edge>
     auto& operator()(Edge&& uv) const { return uv.data(); }
 
@@ -141,43 +141,46 @@ namespace PT {
     
     _DataExtracter_ed_nl() = default;
 
-    template<class... Args> requires (!custom_edge_data_maker && !custom_node_label_maker)
+    // if the node label maker is not custom, then the edge data maker gets everything
+    template<class... Args> requires (!custom_node_label_maker)
     _DataExtracter_ed_nl(Args&&... args):
       Parent(),
-      ExtractEdgeData(std::forward<Args>(args)...)
+      get_edge_data(std::forward<Args>(args)...)
     {}
 
+    // if the edge data maker is not custom, then the node label maker gets everything
     template<class... Args> requires (!custom_edge_data_maker && custom_node_label_maker)
     _DataExtracter_ed_nl(Args&&... args):
       Parent(std::forward<Args>(args)...),
-      ExtractEdgeData()
-    {}
-
-    template<class First, class... Args> requires (!NodeFunctionType<First> && custom_node_label_maker && custom_edge_data_maker)
-    _DataExtracter_ed_nl(First&& first, Args&&... args):
-      Parent(std::forward<Args>(args)...),
-      ExtractEdgeData(std::forward<First>(first))
+      get_edge_data()
     {}
 
     // NOTE: we wont try to initialize our ExtractEdgeData with a NodeFunctionType
     //       instead, we pass that to the ExtractNodeLabel function and use the rest to initialize our ExtractEdgeData
-    template<NodeFunctionType First, class... Args>
+    template<NodeFunctionType First, class... Args> requires (custom_edge_data_maker && custom_node_label_maker)
     _DataExtracter_ed_nl(First&& first, Args&&... args):
       Parent(std::forward<First>(first)),
-      ExtractEdgeData(std::forward<Args>(args)...)
+      get_edge_data(std::forward<Args>(args)...)
+    {}
+    template<class First, class... Args> requires (!NodeFunctionType<First> && custom_edge_data_maker && custom_node_label_maker)
+    _DataExtracter_ed_nl(First&& first, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      get_edge_data(std::forward<First>(first))
     {}
 
-    template<class First, NodeFunctionType Second>
-    _DataExtracter_ed_nl(First&& first, Second&& second):
-      Parent(std::forward<Second>(second)),
-      ExtractEdgeData(std::forward<First>(first))
-    {}
 
-    template<class... Args>
-    decltype(auto) operator()(const Ex_edge_data, Args&&... args) { return get_edge_data(std::forward<Args>(args)...); }
-    template<class... Args>
-    decltype(auto) operator()(const Ex_edge_data, Args&&... args) const { return get_edge_data(std::forward<Args>(args)...); }
-
+    template<EdgeType Edge>
+    decltype(auto) operator()(const Ex_edge_data, Edge&& uv) {
+      if constexpr (!std::invocable<ExtractEdgeData, Edge&&>){
+        return get_edge_data(uv.tail(), std::forward<Edge>(uv).head());
+      } else return get_edge_data(std::forward<Edge>(uv));
+    }
+    template<EdgeType Edge>
+    decltype(auto) operator()(const Ex_edge_data, Edge&& uv) const {
+      if constexpr (!std::invocable<ExtractEdgeData, Edge&&>){
+        return get_edge_data(uv.tail(), std::forward<Edge>(uv).head());
+      } else return get_edge_data(std::forward<Edge>(uv));
+    }
   };
 
   template<OptionalPhylogenyType Network,
@@ -221,31 +224,31 @@ namespace PT {
     decltype(auto) operator()(const Ex_node_data, const NodeDesc u) const { return get_node_data(u); }
 
     _DataExtracter() = default;
-    _DataExtracter(const _DataExtracter&) = default;
-    _DataExtracter(_DataExtracter&&) = default;
+    //_DataExtracter(const _DataExtracter&) = default;
+    //_DataExtracter(_DataExtracter&&) = default;
 
     template<class... Args> requires (custom_node_data_maker && !custom_node_label_maker && !custom_edge_data_maker)
     _DataExtracter(Args&&... args):
       Parent(),
-      ExtractNodeData(std::forward<Args>(args)...)
+      get_node_data(std::forward<Args>(args)...)
     {}
 
     template<class... Args> requires (!custom_node_data_maker)
     _DataExtracter(Args&&... args):
       Parent(std::forward<Args>(args)...),
-      ExtractNodeData()
+      get_node_data()
     {}
 
     template<class First, class... Args> requires (custom_node_data_maker && (custom_edge_data_maker || custom_node_label_maker))
     _DataExtracter(First&& first, Args&&... args):
       Parent(std::forward<Args>(args)...),
-      ExtractNodeData(std::forward<First>(first))
+      get_node_data(std::forward<First>(first))
     {}
 
     template<NodeFunctionType First, class... Args> requires (sizeof...(Args) >= 2)
     _DataExtracter(First&& first, Args&&... args):
       Parent(std::forward<Args>(args)...),
-      ExtractNodeData(std::forward<First>(first))
+      get_node_data(std::forward<First>(first))
     {}
   };
 

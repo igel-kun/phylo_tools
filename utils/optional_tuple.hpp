@@ -69,10 +69,10 @@ namespace mstd {
     T value;
     static constexpr bool has_value = true;
 
-    optional_item() { }
-
-    optional_item(const optional_item&) = default;
-    optional_item(optional_item&&) = default;
+//    optional_item() { }
+//
+//    optional_item(const optional_item&) = default;
+//    optional_item(optional_item&&) = default;
     
     template<class... Args> requires (!std::is_reference_v<T> || (sizeof...(Args) != 0))
     optional_item(Args&&... args): value(std::forward<Args>(args)...) {}

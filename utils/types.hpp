@@ -158,7 +158,7 @@ namespace PT {
   // degrees
   using Degree = uint_fast32_t;
   using sw_t = Degree;
-  using InOutDegree = std::pair<Degree, Degree>;
+  using Degrees = std::pair<Degree, Degree>;
 
   // sets and containers of node descriptors
   using NodeSingleton = StorageClass<singleS, NodeDesc>;
@@ -229,9 +229,9 @@ namespace PT {
   template<class P>
   concept PhylogenyType = StrictPhylogenyType<std::remove_cvref_t<P>>;
   template<class P>
-  concept StrictOptionalPhylogenyType = (std::is_void_v<P> || StrictPhylogenyType<P>);
+  concept OptionalStrictPhylogenyType = (std::is_void_v<P> || StrictPhylogenyType<P>);
   template<class P>
-  concept OptionalPhylogenyType = StrictOptionalPhylogenyType<std::remove_reference_t<P>>;
+  concept OptionalPhylogenyType = OptionalStrictPhylogenyType<std::remove_reference_t<P>>;
 
   template<class P>
   concept StrictTreeType = (StrictPhylogenyType<P> && P::is_declared_tree);
@@ -248,7 +248,10 @@ namespace PT {
 
 
   template<class T>
+  concept EdgeIterableType = (mstd::IterableType<T> && EdgeType<typename T::value_type>);
+  template<class T>
   concept EdgeContainerType = (mstd::ContainerType<T> && EdgeType<typename T::value_type>);
+
 
   template<class T>
   constexpr bool has_data = std::remove_reference_t<T>::has_data;

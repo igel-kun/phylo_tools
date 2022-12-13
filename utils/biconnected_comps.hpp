@@ -210,7 +210,7 @@ namespace PT{
 
   // deduce parameters from arguments
   // NOTE: if you don't want the biconnected component to have the same type as the Network, then pass a StrictPhylogenyType as first template parameter
-  template<StrictOptionalPhylogenyType _Component = void,
+  template<OptionalStrictPhylogenyType _Component = void,
            bool allow_trivial = true,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            StrictPhylogenyType Network,
@@ -224,7 +224,7 @@ namespace PT{
         std::forward<ExtracterArgs>(ex_args)...);
   }
 
-  template<StrictOptionalPhylogenyType _Component = void,
+  template<OptionalStrictPhylogenyType _Component = void,
            bool allow_trivial = true,
            StrictPhylogenyType Network,
            class First,
@@ -239,7 +239,7 @@ namespace PT{
         std::forward<ExtracterArgs>(ex_args)...);
   }
 
-  template<StrictOptionalPhylogenyType _Component = void, class... Args>
+  template<OptionalStrictPhylogenyType _Component = void, class... Args>
   auto get_nontrivial_biconnected_components(Args&&... args) {
     return get_biconnected_components<_Component, false>(std::forward<Args>(args)...);
   }

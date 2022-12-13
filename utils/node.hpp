@@ -456,6 +456,22 @@ namespace PT{
 
     static Adjacency* find_successor(const NodeDesc u, const NodeDesc v) { return node_of(u).find_successor(v); }
     static Adjacency* find_child(const NodeDesc u, const NodeDesc v) { return node_of(u).find_successor(v); }
+
+    static Edge find_edge(const NodeDesc u, const NodeDesc v) {
+      const auto& v_parents = parents(v);
+      const auto uv_iter = mstd::find(v_parents, u);
+      if(uv_iter != v_parents.end()){
+        return Edge(reverse_edge_tag(), v, *uv_iter);
+      } else return Edge(NoNode, Adjacency());
+    }
+    static Edge find_edge_fwd(const NodeDesc u, const NodeDesc v) {
+      const auto& u_children = children(u);
+      const auto uv_iter = mstd::find(u_children, v);
+      if(uv_iter != u_children.end()){
+        return Edge(u, *uv_iter);
+      } else return Edge(NoNode, Adjacency());
+    }
+
   };
 
 }

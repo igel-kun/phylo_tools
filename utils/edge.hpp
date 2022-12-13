@@ -23,6 +23,7 @@ namespace PT{
     Adjacency&& head() && { return std::move(this->second); }
     NodeDesc tail() const { return this->first; }
     NodePair as_pair() const { return { this->first, this->second }; }
+    bool is_invalid() const { return tail() == NoNode; }
   };
 
   template<class EdgeData = void>

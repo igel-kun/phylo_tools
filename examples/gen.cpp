@@ -79,8 +79,13 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
       if(l_from_nr(num_nodes,  num_retis) != num_leaves)
         throw std::logic_error("there is no binary network with "+std::to_string(num_nodes)+" vertices, "+std::to_string(num_retis)+" reticulations and "+std::to_string(num_leaves)+" leaves");
     }
-  } catch(const std::invalid_argument& err){ std::cerr << "problem converting argument to integer: "<<err.what()<<std::endl;
-  } catch(const std::logic_error& err){ std::cerr << "cannot generate such a network: "<<err.what()<<std::endl; }
+  } catch(const std::invalid_argument& err){
+    std::cerr << "problem converting argument to integer: "<<err.what()<<std::endl;
+    exit(1);
+  } catch(const std::logic_error& err) {
+    std::cerr << "cannot generate such a network: "<<err.what()<<std::endl;
+    exit(1);
+  }
 }
 
 int main(const int argc, const char** argv) {

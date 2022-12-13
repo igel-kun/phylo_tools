@@ -6,9 +6,7 @@
 namespace PT {
 
   struct ProtoAdjacency {
-    NodeDesc nd;
-
-    ProtoAdjacency(const NodeDesc& n): nd{n} {}
+    NodeDesc nd = NoNode;
 
     NodeDesc get_desc() const { return nd; }
     //operator NodeDesc&() { return nd; }  // one should never change the node of an adjacency
@@ -30,16 +28,14 @@ namespace PT {
   protected:
 #warning "TODO: check if shared_ptr performs"
     std::shared_ptr<EdgeData> data_ptr = nullptr;
+    Adjacency() = default;
   public:
     
-    Adjacency(const Adjacency&) = default;
-    Adjacency(Adjacency&& other) = default;
-
     // make an Adjacency from a different Adjacency by (possibly move-) constructing our data from theirs
     template<class EData> requires (!std::is_void_v<EData> && !std::is_same_v<EdgeData, EData>)
-    Adjacency(const Adjacency<EData>& adj): Parent(adj), data_ptr(std::make_shared<EdgeData>(*(adj.data_ptr))) {}
+    Adjacency(const Adjacency<EData>& adj): Parent{adj}, data_ptr(std::make_shared<EdgeData>(*(adj.data_ptr))) {}
     template<class EData> requires (!std::is_void_v<EData> && !std::is_same_v<EdgeData, EData>)
-    Adjacency(Adjacency<EData>&& adj): Parent(adj), data_ptr(std::make_shared<EdgeData>(std::move(*(adj.data_ptr)))) {}
+    Adjacency(Adjacency<EData>&& adj): Parent{adj}, data_ptr(std::make_shared<EdgeData>(std::move(*(adj.data_ptr)))) {}
     // make from an iterator to an adjacency
     template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
     Adjacency(const AdjIter& iter): Adjacency(*iter) {}
@@ -47,11 +43,13 @@ namespace PT {
     template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, Adjacency>)
     Adjacency(const NodeDesc _nd, First&& first, Args&&... args):
       Parent(_nd), data_ptr(std::make_shared<EdgeData>(std::forward<First>(first), std::forward<Args>(args)...)) {}
-    Adjacency(const NodeDesc _nd, const Adjacency& adj): Parent(_nd), data_ptr(adj.data_ptr) {}
-    Adjacency(const NodeDesc _nd): Parent(_nd) {}
+    Adjacency(const NodeDesc _nd, const Adjacency& adj): Parent{_nd}, data_ptr(adj.data_ptr) {}
+    Adjacency(const NodeDesc _nd): Parent{_nd} {}
 
-    Adjacency& operator=(const Adjacency&) = default;
-    Adjacency& operator=(Adjacency&&) = default;
+    //Adjacency(const Adjacency&) = default;
+    //Adjacency(Adjacency&& other) = default;
+    //Adjacency& operator=(const Adjacency&) = default;
+    //Adjacency& operator=(Adjacency&&) = default;
 
     EdgeData& data() const { assert(data_ptr); return *data_ptr; }
 
@@ -62,27 +60,30 @@ namespace PT {
       else
         return os << a.nd << '[' << '@' << a.data_ptr << ']';
     }
+
+    // NodeAccess must be able to construct invalid adjacencies in order to report failure when trying to find an edge given by its endpoints
+    template<StrictNodeType> friend struct NodeAccess;
   };
 
   template<>
   struct Adjacency<void>: public ProtoAdjacency {
     using Parent = ProtoAdjacency;
-    using Parent::Parent;
     using Edge = PT::Edge<void>;
     static constexpr bool has_data = false;
 
-    Adjacency(const Adjacency&) = default;
-    Adjacency(Adjacency&&) = default;
+    Adjacency() = default;
+    //Adjacency(const Adjacency&) = default;
+    //Adjacency(Adjacency&&) = default;
+    //Adjacency& operator=(const Adjacency&) = default;
+    //Adjacency& operator=(Adjacency&&) = default;
 
     // make from an iterator to an adjacency
     template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
     Adjacency(const AdjIter& iter): Adjacency(*iter) {}
 
     template<class... Args>
-    Adjacency(const NodeDesc _nd, Args&&... args): Parent(_nd) {}
+    Adjacency(const NodeDesc _nd, Args&&... args): Parent{_nd} {}
 
-    Adjacency& operator=(const Adjacency&) = default;
-    Adjacency& operator=(Adjacency&&) = default;
 
     friend std::ostream& operator<<(std::ostream& os, const Adjacency<void>& a) { return os << static_cast<NodeDesc>(a); }
 

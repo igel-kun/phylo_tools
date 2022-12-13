@@ -41,6 +41,7 @@ void parse_options(const int argc, const char** argv) {
       \t\t\tx = 2: brute force on raising vertices only,\n\
       \t\t\tx = 3: dynamic programming on raising vertices only,\n\
       \t\t\tx = 4: heuristic\n\
+      \t\t\tx = 5: simple post-order layout\n\
       \t-pp\tuse preprocessing\n");
 
   parse_options(argc, argv, description, help_message, options);
@@ -55,7 +56,7 @@ void parse_options(const int argc, const char** argv) {
 unsigned parse_method() {
   try{
     const unsigned method = std::stoi(options.at("-m").at(0));
-    if(method > 4){
+    if(method > 5){
       std::cerr << method << " is not a vlid method, check help screen for valid methods" <<std::endl;
       exit(1);
     } else return method;
@@ -64,8 +65,8 @@ unsigned parse_method() {
     std::cerr << "-m expects an integer argument from 0 to 4" <<std::endl;
     exit(1);
   } catch (...) {
-    // default method is 3
-    return 3;
+    // default method is 1
+    return 1;
   } 
 }
 
@@ -123,13 +124,14 @@ int main(const int argc, const char** argv) {
   if(mstd::test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
-//  if(mstd::test(options, "-pp") sw_preprocess(N);
+  const bool preprocess = mstd::test(options, "-pp");
 
   size_t count = 0;
   using BCC_Cuts = BCCCutIterFactory<MyNetwork>;
   BCC_Cuts cuts(N);
   std::cout << "made new cut-iter factory\n";
-  auto bcc_iter = cuts.begin();
+  auto bcc_iter = std::move(cuts).begin();
+  //auto bcc_iter = cuts.begin();
   std::cout << "made new cut-iter\n";
   if(bcc_iter.is_valid()) std::cout << "iter is valid\n";
   while(bcc_iter.is_valid()){
@@ -159,20 +161,24 @@ int main(const int argc, const char** argv) {
   ex.reserve(N.num_nodes());
   switch(parse_method()) {
   case 0:
-  case 1:
-  case 2:
     throw std::logic_error("unimplemented");
-  case 3:
+  case 1:
     std::cout << "\n ==== computing optimal extension ===\n";
     if(mstd::test(options, "-lm")){
       std::cout << "using low-memory version...\n";
-      compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex.push_back(u); });
+      if(preprocess)
+        compute_min_sw_extension<true, true>(N, ex);
+      else compute_min_sw_extension<true, false>(N, ex);
       //compute_min_sw_extension<true>(N, ex); // this is equivalent
     } else {
       std::cout << "using faster, more memory hungry version...\n";
-      compute_min_sw_extension<false>(N, ex);
+      if(preprocess)
+        compute_min_sw_extension<false, true>(N, ex);
+      else compute_min_sw_extension<false, false>(N, ex);
     }
     break;
+  case 2:
+  case 3:
   case 4:
     throw std::logic_error("unimplemented");
   case 5:

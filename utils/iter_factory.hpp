@@ -30,6 +30,9 @@ namespace mstd {
     using Parent = ProtoIterFactory<Iterator, EndIter>;
     BeginEndTransformation trans;    
   public:
+    BeginEndTransformation& get_begin_end_transformation() { return trans; }
+    const BeginEndTransformation& get_begin_end_transformation() const { return trans; }
+
     IterFactoryWithBeginEnd() = default;
     // construct from a BeginEndTransformation and args for the auto_iter
     template<class T, class... Args> requires std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<BeginEndTransformation>>

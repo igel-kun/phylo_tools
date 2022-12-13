@@ -246,7 +246,7 @@ namespace PT {
     template<EdgeType Edge, class... MoreArgs>
     NodeDesc emplace_edge(Edge&& uv, MoreArgs&&... args) {
       if constexpr (extract_edge_data)
-        return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)..., data_extracter(std::forward<Edge>(uv)));
+        return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)..., data_extracter(Ex_edge_data{}, std::forward<Edge>(uv)));
       else
         return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)...);
     }

@@ -50,19 +50,29 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<ContainerType C> requires IterBitsetType<C>
   void intersect(C& target, const C& source) { target &= source; }
 
-  template<SetType S1, SetType S2 = S1>
-  bool are_disjoint(const S1& x, const S2& y) {
-    if(x.size() < y.size()){
-      for(const auto& item: x) if(test(y, item)) return false;
+  template<IterableType I, ContainerType C>
+  bool are_disjoint(const I& x, const C& y) {
+    if constexpr (!SetType<C>) {
+        for(const auto& item: y) if(test(x, item)) return false;
+    } else if constexpr (!SetType<I>) {
+        for(const auto& item: x) if(test(y, item)) return false;
     } else {
-      for(const auto& item: y) if(test(x, item)) return false;
+      if(x.size() < y.size()){
+        for(const auto& item: x) if(test(y, item)) return false;
+      } else {
+        for(const auto& item: y) if(test(x, item)) return false;
+      }
     }
     return true;
   }
+  template<ContainerType C, IterableType I> requires (!ContainerType<I>)
+  bool are_disjoint(const C& x, const I& y) { return are_disjoint(y,x); }
+
   template<class T, SetType S>
   bool are_disjoint(const singleton_set<T>& x, const S& y) { return x.empty() ? true : test(y, front(x)); }
   template<class T, SetType S> requires (!std::is_convertible_v<S, singleton_set<value_type_of_t<S>>>)
   bool are_disjoint(const S& y, const singleton_set<T>& x) { return are_disjoint(x, y); }
+
 
   template<ContainerType C, FindableType<C> Key>
   auto find(C&& c, const Key& key) {

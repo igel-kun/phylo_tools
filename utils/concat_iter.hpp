@@ -2,17 +2,29 @@
 #pragma once
 
 #include "stl_utils.hpp"
+#include "iter_factory.hpp"
 
 namespace mstd {
+  // from a container Iterator and a possible factory, get the iterator of the items in the container/factory
+  template<class ContainerIter, class Factory = void>
+  using ItemIterFromContainerAndFactory = iterator_of_t<VoidOr<Factory, value_type_of_t<ContainerIter>>>;
+
   // this is an iterator over multiple iterable objects, passing over each of them in turn, effectively concatenating them
   // NOTE: all iterable objects must admit the same iterator type 'ItemIter'
-  template<class ContainerIter, class ItemIter = iterator_of_t<value_type_of_t<ContainerIter>>>
+  // NOTE: if your container does not contain iteratables, you can use the last template argument to pass an iterator factory
+  //       that will build an iterable from the value_type of your container
+  //       WARNING: the IterFactory will only be build temporarily and a single iterator will be taken from it before being destroyed!
+  template<class ContainerIter,
+           class Factory = void,
+           class ItemIter = ItemIterFromContainerAndFactory<ContainerIter, Factory>>
   class _concatenating_iterator: public auto_iter<ContainerIter> {
     using Parent = auto_iter<ContainerIter>;
     using Container = value_type_of_t<ContainerIter>;
+    using ContainerRef = VoidOr<Factory, reference_of_t<ContainerIter>>;
+    using ContainerConstRef = VoidOr<Factory, const_reference_of_t<ContainerIter>>;
 
-    Container& get_container() { return Parent::operator*(); }
-    const Container& get_container() const { return Parent::operator*(); }
+    ContainerRef get_container() { return Parent::operator*(); }
+    ContainerConstRef get_container() const { return Parent::operator*(); }
 
     ItemIter it;
   public:
@@ -63,10 +75,15 @@ namespace mstd {
   };
 
   // if the first template argument is iterable, then derive the iterator type from it
-  template<class T, class ItemIter = iterator_of_t<value_type_of_t<T>>>
-  using concatenating_iterator = _concatenating_iterator<iterator_of_t<T>, ItemIter>;
+  template<class T,
+           class Factory = void,
+           class ItemIter = ItemIterFromContainerAndFactory<iterator_of_t<T>, Factory>>
+  using concatenating_iterator = _concatenating_iterator<iterator_of_t<T>, Factory, ItemIter>;
 
   // factories
-  template<class T, class ItemIter = iterator_of_t<value_type_of_t<T>>, class BeginEndTransformation = void>
-  using ConcatenatingIterFactory = IterFactory<concatenating_iterator<T, ItemIter>, BeginEndTransformation>;
+  template<class T,
+           class Factory = void,
+           class ItemIter = ItemIterFromContainerAndFactory<iterator_of_t<T>, Factory>,
+           class BeginEndTransformation = void>
+  using ConcatenatingIterFactory = IterFactory<concatenating_iterator<T, Factory, ItemIter>, BeginEndTransformation>;
 }
