@@ -48,7 +48,7 @@ namespace PT {
 
     template<class T>
     bool remove_shortcuts(T&& arg) {
-      std::cout<<"removing shortcuts from:\n"<<N<<"\n";
+      DEBUG4(std::cout<<"removing shortcuts from:\n"<<N<<"\n");
       
       // step 1: collect all shortcuts
       const auto shorts = detect_shortcuts<NodeMap<NodeDesc>, true, Network>(std::forward<T>(arg));
@@ -56,9 +56,9 @@ namespace PT {
 
       // step 2: remove each shortcut; to this end, construct ONE of the paths this edge is cutting short by using preorder numbers
       for(const auto [u, v]: shortcuts) {
-        std::cout << "removing shortcut "<<u<<"->"<<v<<"\n";
+        DEBUG4(std::cout << "removing shortcut "<<u<<"->"<<v<<"\n");
         const NetEdgeVec<Network> uv_path = shorts.template get_path<NetEdgeVec<Network>>(u, v);
-        std::cout << "using path "<<uv_path<<"\n";
+        DEBUG4(std::cout << "using path "<<uv_path<<"\n");
         remove_shortcut(uv_path);
       }
       return !shortcuts.empty();
@@ -93,10 +93,10 @@ namespace PT {
       };
       
       while(x != path_start) {
-        std::cout << "climbing to "<<x<<"\n";
+        DEBUG4(std::cout << "climbing to "<<x<<"\n");
         assert(Network::in_degree(x) == 1);
         x = something_with_edge_weights(x, contracter);
-        std::cout << "next stop: "<<x<<"\n";
+        DEBUG4(std::cout << "next stop: "<<x<<"\n");
       }
       return result;
     }
@@ -106,7 +106,7 @@ namespace PT {
       using Edge = typename Network::Edge;
       using Adjacency = typename Network::Adjacency;
       using Weight = std::remove_cvref_t<std::invoke_result_t<EdgeWeightExtract, Edge>>;
-      std::cout << "treating path-end "<<last_on_path<<"\n";
+      DEBUG4(std::cout << "treating path-end "<<last_on_path<<"\n");
       // step 1: write down the edge weights of the path in a vector
       std::vector<Weight> weights;
       if constexpr (std::is_invocable_v<EdgeWeightExtract, Adjacency>) {
@@ -135,7 +135,7 @@ namespace PT {
       // step 2: apply slopw-reduction to the weight-vector
       SlopeReduction::apply(weights);
       assert(weights.size() >= 1);
-      std::cout << "weights after slope reduction: "<<weights<<'\n';
+      DEBUG3(std::cout << "weights after slope reduction: "<<weights<<'\n');
       
       // use weight-0 as 'stop-token' in case everything has been removed from the weight-sequence
       append(weights, 0);
@@ -150,12 +150,12 @@ namespace PT {
     bool treat_path_ends(const NodeSet& path_ends) {
       using Edge = typename Network::Edge;
       bool result = false;
-      std::cout << N << "\ninput: "<<path_ends<<"\n";
+      DEBUG4(std::cout << N << "\ninput: "<<path_ends<<"\n");
       for(const NodeDesc path_end: path_ends) {
         DEBUG4(std::cout << "treating path end "<<path_end<<" with degrees "<<Network::degrees(path_end)<<"\n");
         if((Network::in_degree(path_end) > 1) || (Network::out_degree(path_end) > 1)) {
           for(const auto& last_on_path: Network::parents(path_end)){
-            std::cout << "treating parent "<<last_on_path<<" of "<<path_end<<"\n";
+            DEBUG4(std::cout << "treating parent "<<last_on_path<<" of "<<path_end<<"\n");
             if(Network::is_suppressible(last_on_path))
               result |= treat_path_end(Edge{reverse_edge_tag(), path_end, last_on_path});
           }
@@ -227,7 +227,7 @@ namespace PT {
     }
 
     bool remove_trivial_nodes() {
-      std::cout<<"contracting trivial nodes\n";
+      DEBUG4(std::cout<<"contracting trivial nodes\n");
       //NOTE: we cannot modify the network while iterating over its nodes, so we cache the trivial nodes in a vector
       // step 0: collect leaves and endpoints of paths with at least 2 edges
       NodeVec leaves;

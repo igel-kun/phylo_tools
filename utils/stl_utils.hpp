@@ -350,6 +350,9 @@ namespace mstd {
   template<typename F>
   inline auto deferred_call(F&& f) { return deferred_call_t<F>(std::forward<F>(f)); }
 
+//NOTE: GCCs optimizations will break the IdentityFunction for reasons beyond my understanding
+#pragma GCC push_options
+#pragma GCC optimize ("O2")
   // a functional that ignores everything (and hopefully gets optimized out)
   template<class ReturnType = void>
   struct IgnoreFunction {
@@ -367,6 +370,7 @@ namespace mstd {
     template<class Arg>
     constexpr Arg&& operator()(Arg&& x) const { return std::forward<Arg>(x); };
   };
+#pragma GCC pop_options
 
 
   // --------------------- MODIFIED DATA STRUCTURES ------------------------

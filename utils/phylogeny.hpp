@@ -447,7 +447,7 @@ namespace PT {
       assert(w_iter != children(source).end());
       const NodeDesc w = *w_iter;
       assert(w != target);
-      std::cout << "transferring child "<< w << " from "<<source<<" to "<<target<<"\n";
+      DEBUG5(std::cout << "transferring child "<< w << " from "<<source<<" to "<<target<<"\n");
 
       auto& w_parents = parents(w);
       children(source).erase(w_iter);
@@ -1312,7 +1312,10 @@ namespace PT {
       const Node& u_node = node_of(u);
       const bool u_reti = u_node.is_reti();
 
-      std::string u_name = config::locale.char_no_branch_hori + std::to_string(name(u));
+      std::string u_name = config::locale.char_no_branch_hori;
+      const size_t old_len = u_name.size();
+      u_name += std::to_string(name(u));
+
       if constexpr (Node::has_label){
         const std::string u_label = std::to_string(u_node.label());
         if(!u_label.empty())
@@ -1323,10 +1326,10 @@ namespace PT {
         if(!u_data.empty())
           u_name += '(' + u_data + ')';
       }
-      if(u_name.empty()) {
+      if(u_name.size() == old_len) {
         if(u_reti)
-          u_name = std::string('(' + std::to_string(u) + ')');
-        else if(!is_leaf(u)) u_name = config::locale.char_branch_low;
+          u_name += std::string('(' + std::to_string(u) + ')');
+        else if(out_degree(u) > 1) u_name += config::locale.char_branch_low;
       }
       if(u_reti) u_name += config::locale.char_reti;
       os << u_name;

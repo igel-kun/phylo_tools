@@ -43,6 +43,7 @@ namespace PT {
 
   template<StrictPhylogenyType Network, class EdgeWeightExtracter = void>
   struct WeightedDegrees {
+
     Degrees operator()(const NodeDesc u) const {
       Degrees result{0,0};
       EdgeWeightExtracter extract;
@@ -94,7 +95,7 @@ namespace PT {
     //       if you pass any iterable, then we will append each node's NodeData to it in order
     template<bool include_root = false, class RegisterNode>
     void compute_min_sw_extension_no_bridges(RegisterNode&& _register_node) {
-      DEBUG4(std::cout << "computing scanwidth of block:\n"<<N<<" (low mem: "<< low_memory_version <<")\n";);
+      DEBUG4(std::cout << "computing scanwidth of block:\n"<<ExtendedDisplay(N)<<" (low mem: "<< low_memory_version <<")\n");
 
       // this is the main dynamic programming table - it could grow exponentially large...
       // the table maps a set X of nodes to any extension with smallest sw for the graph where all nodes but X are contracted onto the root
@@ -144,6 +145,7 @@ namespace PT {
               // compute the new scanwidth
               const sw_t sw = entry.get_scanwidth();
               if(sw < best_sw){
+                DEBUG4(std::cout << "storing best extension "<<entry.ex << ":\t sw = "<<sw<<"\n");
                 best_sw = sw;
                 best_entry = std::move(entry); // move assignment
               }

@@ -115,24 +115,7 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   assert(N_sw <= reti_count + 1);
 }
 
-
-
-int main(const int argc, const char** argv) {
-  std::cout << "parsing options...\n";
-  parse_options(argc, argv);
-
-  std::cout << "reading network...\n";
-  MyNetwork N(read_network(std::ifstream(options[""][0])));
-  if(mstd::test(options, "-v"))
-    std::cout << "N: " << std::endl << N << std::endl;
-
-  if(N.has_cycle()) {
-    std::cerr << "input not a network (has a directed cycle)!\n";
-    exit(1);
-  }
-
-  const bool preprocess = mstd::test(options, "-pp");
-
+void list_bccs(const MyNetwork& N) {
   size_t count = 0;
   using BCC_Cuts = BCCCutIterFactory<MyNetwork>;
   std::cout << "making cut-iter factory to list BCCs...\n";
@@ -163,6 +146,25 @@ int main(const int argc, const char** argv) {
   }
 
   std::cout << "\n================ done listing BCCs =================\n";
+}
+
+
+int main(const int argc, const char** argv) {
+  std::cout << "parsing options...\n";
+  parse_options(argc, argv);
+
+  std::cout << "reading network...\n";
+  MyNetwork N(read_network(std::ifstream(options[""][0])));
+  if(mstd::test(options, "-v"))
+    std::cout << "N: " << std::endl << N << std::endl;
+
+  if(N.has_cycle()) {
+    std::cerr << "input not a network (has a directed cycle)!\n";
+    exit(1);
+  }
+	//list_bccs(N);
+
+  const bool preprocess = mstd::test(options, "-pp");
 
   Extension ex;
   ex.reserve(N.num_nodes());

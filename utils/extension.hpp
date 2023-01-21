@@ -76,6 +76,7 @@ namespace PT{
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         const auto& u_node = node_of<Net>(u);
         auto [sw_u, outdeg] = network_degrees(u);
+        DEBUG5(std::cout << "received modified degrees of "<<u<<": "<<sw_u<< " & "<<outdeg<<"\n");
         weak_components.add_new_set(u, u);
         // step 1: merge all weak components of chilldren of u
         try{
@@ -111,6 +112,7 @@ namespace PT{
     template<StrictPhylogenyType Net, class NetDeg, class Out, class... Args>
     void sw_map_meta(NetDeg&& network_degrees, Out& out, Args&&... args) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
+      DEBUG3(std::cout << "degree-extracter is "<<mstd::type_name<NetDeg>()<<"\n");
       DynamicScanwidth<Net, Out&, NetDeg>{out, std::forward<NetDeg>(network_degrees)}.update_all(*this, std::forward<Args>(args)...);
     }
 

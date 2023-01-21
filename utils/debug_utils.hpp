@@ -11,6 +11,7 @@
   #define debuglevel 0
 #endif
 
+#define DEBUG0(x) x
 
 #if debuglevel > 0
 #define DEBUG1(x) x

@@ -88,7 +88,6 @@ namespace PT {
 
 
     friend std::ostream& operator<<(std::ostream& os, const Adjacency<void>& a) { return os << static_cast<NodeDesc>(a); }
-
   };
 
   // NOTE: an AdjAdapter can be used to merge edge-data when contracting edges

@@ -86,7 +86,7 @@ namespace PT{
             if(u == v) {
               // NOTE: we're using the v_info of the previous v here since it has not been updated yet
               assert(v_info->DFS_parent == u);
-              std::cout << "marking that "<<u<<" is a chain-root\n";
+              DEBUG4(std::cout << "marking that "<<u<<" is a chain-root\n");
               v_info->DFS_parent_is_chain_root = true;
               return v;
             }
@@ -100,7 +100,7 @@ namespace PT{
     // return whether uv is a backedge
     bool treat_edge(const NodeDesc u, const NodeDesc v, ChainInfo& u_info) {
       if(v != u_info.DFS_parent) {
-        std::cout << "treating edge "<<u<<" -> "<<v<<"\n";
+        DEBUG4(std::cout << "treating edge "<<u<<" -> "<<v<<"\n");
         auto& v_info = chain_info.at(v);
         if(u != v_info.DFS_parent) {
           // if none of u and v is the DFS-parent of the other, then uv is a backedge or a forwardedge
@@ -125,9 +125,11 @@ namespace PT{
         // if u was unvisited before, then there is no backedge spanning over it
         // further, if u has no backedges incident with it, then the edge between u and its DFS-parent is a bridge
         if(!u_was_visited && !u_has_backedge && (u_info.DFS_parent != NoNode)) {
-          std::cout << "marking "<<u<<" & "<<u_info.DFS_parent<<" as incident with bridge\n";
+          DEBUG4(std::cout << "marking "<<u<<" & "<<u_info.DFS_parent<<" as incident with bridge\n");
           mark_edge_to_DFS_parent_as_bridge(u_info);
-        } else std::cout << "not marking "<<u<<" incident with bridge; reasons: "<< u_was_visited << u_has_backedge << (u_info.DFS_parent == NoNode)<<"\n";
+        } else {
+          DEBUG4(std::cout << "not marking "<<u<<" incident with bridge; reasons: "<< u_was_visited << u_has_backedge << (u_info.DFS_parent == NoNode)<<"\n");
+        }
       }
     }
     
@@ -147,7 +149,7 @@ namespace PT{
     void analyse_network(NodeVec& dfs_nodes, const NodeDesc u) {
       construct_DFS_tree(u, NoNode, dfs_nodes);
       analyse_network(dfs_nodes);
-      std::cout << "analysis complete, chain info is:\n"<<chain_info<<"\n";
+      DEBUG3(std::cout << "analysis complete, chain info is:\n"<<chain_info<<"\n");
     }
 
     //ChainDecomposition() = default;
@@ -174,7 +176,7 @@ namespace PT{
       } else return false;
     }
     bool operator()(const NodeDesc x) const {
-      std::cout << "checking if "<<x<<" is a cut-node... "<<is_cut_node(x)<<"\n";
+      DEBUG4(std::cout << "checking if "<<x<<" is a cut-node... "<<is_cut_node(x)<<"\n");
       return is_cut_node(x);
     }
     // return whether xy is a bridge
@@ -207,7 +209,7 @@ namespace PT{
     ChainDecomp chains;
 
     decltype(auto) operator()(const auto& it) const {
-      std::cout << "making new iter of type\n"<<mstd::type_name<Iter>()<<"\nfrom iter of type\n"<<mstd::type_name<decltype(it)>()<<"\n";
+      DEBUG4(std::cout << "making new iter of type\n"<<mstd::type_name<Iter>()<<"\nfrom iter of type\n"<<mstd::type_name<decltype(it)>()<<"\n");
       if constexpr (std::is_same_v<std::remove_cvref_t<decltype(it)>, mstd::GenericEndIterator>)
         return it;
       else return Iter{it, chains};
@@ -227,9 +229,7 @@ namespace PT{
     using Parent = mstd::IterFactoryWithBeginEnd<typename _CutIt<Network, tt, ChainDecomp>::Iterator, WithChains<_CutIt<Network, tt, ChainDecomp>>>;
     _CutIterFactory(const Network& N): // construct the DFSIterator and the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(N), std::forward_as_tuple(N))
-    {
-      std::cout << "mark4\n";
-    }
+    {}
     _CutIterFactory(const Network& N, const NodeDesc u): // construct the DFSIterator with the given node u & the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(u), std::forward_as_tuple(N))
     {}

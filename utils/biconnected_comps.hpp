@@ -37,7 +37,7 @@ namespace PT{
     bool operator()(const Iterator& iter) const {
       const auto& cut_it = static_cast<const BasicBCCIter<Network>&>(iter);
       const auto& chains = cut_it.get_predicate();
-      std::cout << "checking edge "<<*cut_it<<" -> "<<*iter<<" for BCC - "<< chains.is_first_edge_in_bcc(*cut_it, *iter)  <<"\n";
+      DEBUG4(std::cout << "checking edge "<<*cut_it<<" -> "<<*iter<<" for BCC - "<< chains.is_first_edge_in_bcc(*cut_it, *iter)  <<"\n");
       if constexpr (allow_trivial)
         return chains.is_first_edge_in_bcc(*cut_it, *iter);
       else 
@@ -101,10 +101,10 @@ namespace PT{
 
     template<bool allow_trivial>
     Component& operator()(const BCCStartingCutNodeChildIterator<Network, allow_trivial>& iter) const {
-      std::cout << "making new BCC\n";
+      DEBUG4(std::cout << "making new BCC\n");
       const auto& cut_it = static_cast<const BasicBCCIter<Network>&>(iter);
-      std::cout << "anchor 1: "<<*cut_it<<"\n";
-      std::cout << "anchor 2: "<<*iter<<"\n";
+      DEBUG4(std::cout << "anchor 1: "<<*cut_it<<"\n");
+      DEBUG4(std::cout << "anchor 2: "<<*iter<<"\n");
       return operator()(*cut_it, *iter);
     }
   };
@@ -163,7 +163,7 @@ namespace PT{
 
     template<class Iter, class... Args> requires (std::is_same_v<std::remove_cvref_t<Iter>, InIterator>)
     OutIterator construct_bcc_iter(Iter&& iter, Args&&... args) const & {
-      std::cout << "creating new BCC iterator\n";
+      DEBUG4(std::cout << "creating new BCC iterator\n");
       auto a = BasicBCCIter<Network>(std::forward<Iter>(iter), chains);
       auto b = CutNodeChildContainerIterator<Network>(std::piecewise_construct, std::tuple{std::move(a)}, std::tuple{});
       auto c = CutNodeChildrenIterator<Network>(std::move(b));
