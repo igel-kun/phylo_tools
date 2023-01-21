@@ -55,10 +55,12 @@ namespace PT {
 
     template<class T> requires (!std::is_void_v<T>)
     friend std::ostream& operator<<(std::ostream& os, const Adjacency<T>& a) {
-      if constexpr (mstd::Printable<T>)
-        return os << a.nd << '[' << *(a.data_ptr) << ']';
-      else
-        return os << a.nd << '[' << '@' << a.data_ptr << ']';
+      if constexpr (mstd::Printable<T>) {
+        if(a.data_ptr)
+          return os << a.nd << '[' << *(a.data_ptr) << ']';
+        else
+          return os << a.nd << "[@NULL]";
+      } else return os << a.nd << '[' << '@' << a.data_ptr << ']';
     }
 
     // NodeAccess must be able to construct invalid adjacencies in order to report failure when trying to find an edge given by its endpoints
@@ -94,6 +96,14 @@ namespace PT {
   //       then the data of uv is "merged with" the data of vw via an AdjAdapter
   template<class T, class Adj, class Phylo>
   concept AdjAdapterType = std::invocable<T, const Adj&, typename Phylo::Adjacency&>;
-
 }
+
+namespace std{
+  template<class EdgeData> requires (!std::is_void_v<EdgeData>)
+  struct hash<PT::Adjacency<EdgeData>> {
+    hash<PT::NodeDesc> node_hash;
+    size_t operator()(const PT::Adjacency<EdgeData>& adj) const { return node_hash(adj.get_desc()); }
+  };
+}
+
 

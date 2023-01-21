@@ -97,6 +97,20 @@ namespace PT{
     friend std::ostream& operator<<(std::ostream& os, const NodeDesc nd);
   };
 
+}
+namespace std {
+  template<>
+  struct hash<PT::NodeDesc> {
+    std::hash<uintptr_t> uinthash;
+    size_t operator()(const PT::NodeDesc& x) const noexcept { return uinthash(x.data); }
+  };
+}
+namespace PT {
+
+#else
+  using NodeDesc = uintptr_t;
+#endif
+
   constexpr NodeDesc NoNode = NodeDesc{};
   const std::string NoName = "";
 
@@ -107,21 +121,6 @@ namespace PT{
   };
 
   template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
-}
-
-namespace std {
-  template<>
-  struct hash<PT::NodeDesc> {
-    std::hash<uintptr_t> uinthash;
-    size_t operator()(const PT::NodeDesc& x) const noexcept { return uinthash(x.data); }
-  };
-}
-
-namespace PT {
-#else
-  using NodeDesc = uintptr_t;
-#endif
-
 
   template<class T>
   concept NodeDescType = std::is_convertible_v<std::remove_cvref_t<T>, NodeDesc>;
@@ -222,7 +221,7 @@ namespace PT {
     typename P::Node;
     typename P::SuccContainer;
     typename P::PredContainer;
-    StrictNodeType<typename P::Node>;
+    requires StrictNodeType<typename P::Node>;
     { P::children(u) } -> std::same_as<typename P::SuccContainer&>;
     { P::parents(u) } -> std::same_as<typename P::PredContainer&>;
   };
@@ -241,10 +240,13 @@ namespace PT {
   concept OptionalTreeType = (std::is_void_v<std::remove_reference_t<P>> || TreeType<P>);
 
   using NodeTranslation = NodeMap<NodeDesc>;
+
   template<PhylogenyType Network>
-  using NetEdgeVec = std::vector<typename Network::Edge>;
+  using EdgeOf = typename std::remove_reference_t<Network>::Edge;
   template<PhylogenyType Network>
-  using NetEdgeSet = HashSet<typename Network::Edge>;
+  using NetEdgeVec = std::vector<EdgeOf<Network>>;
+  template<PhylogenyType Network>
+  using NetEdgeSet = HashSet<EdgeOf<Network>>;
 
 
   template<class T>

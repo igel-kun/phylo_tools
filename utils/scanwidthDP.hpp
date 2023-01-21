@@ -63,7 +63,7 @@ namespace PT {
   template<bool low_memory_version,
            PhylogenyType Network,
            class EdgeWeightExtracter = void,
-           bool ignore_deg2 = true>
+           bool ignore_deg2 = false>
   class ScanwidthDP {
   public:
     using DegreeExtracter = WeightedDegrees<Network, EdgeWeightExtracter>;
@@ -80,7 +80,7 @@ namespace PT {
     bool is_root_in_set(const NodeDesc u, const NodeSet& c) {
       for(auto v: node_of<Network>(u).parents()){
         // ignore deg-2 nodes
-        if(ignore_deg2) while(N.is_suppressible(v)) v = mstd::front(N.parents(v));
+        if constexpr (ignore_deg2) while(Network::is_suppressible(v)) v = Network::parent(v);
         if(mstd::test(c, v)) return false;
       }
       return true;
@@ -107,7 +107,7 @@ namespace PT {
         DEBUG5(std::cout << "======= checking constraint node subsets ========\n");
         // check all node-subsets constraint by the arcs in N
         STAT(uint64_t num_subsets = 0;)
-        for(auto& nodes: NetworkConstraintSubsetFactory<Network>(N)){
+        for(auto& nodes: NetworkConstraintSubsetFactory<Network, NodeSet, ignore_deg2>(N)){
           DEBUG4(std::cout << "\tcurrent subset: "<<nodes<<"\n");
           sw_t best_sw = std::numeric_limits<sw_t>::max();
           last_iter = mstd::append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
@@ -134,11 +134,13 @@ namespace PT {
               // append u along with its direct deg-2 ancestors and update the sw-map
               entry.update(u);
               // also append all suppressible ancestors of u
-              for(NodeDesc v: N.parents(u))
-                while(N.is_suppressible(v)){
-                  entry.update(v);
-                  v = N.parent(v);
-                }
+              if constexpr (ignore_deg2) {
+                for(NodeDesc v: N.parents(u))
+                  while(N.is_suppressible(v)){
+                    entry.update(v);
+                    v = N.parent(v);
+                  }
+              }
               // compute the new scanwidth
               const sw_t sw = entry.get_scanwidth();
               if(sw < best_sw){

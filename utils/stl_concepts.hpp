@@ -1,4 +1,6 @@
 
+#pragma once
+
 #include <concepts>
 #include <vector>
 #include "utils.hpp"

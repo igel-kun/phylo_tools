@@ -10,7 +10,7 @@ namespace PT{
 
   // const Container& will be the return type of the dereference operator
   // for performance reasons, it should support fast mstd::test() queries, as well as insert() and erase()
-  template<class Network, class Container = NodeSet, bool ignore_deg2_nodes = true>
+  template<class Network, class Container = NodeSet, bool ignore_deg2_nodes = false>
   class NetworkConstraintSubsetIterator: public mstd::iter_traits_from_reference<const Container&> {
   protected:
     NodeDesc root;
@@ -153,8 +153,8 @@ namespace PT{
   
   };
 
-  template<class Network, class Container = NodeSet>
-  using NetworkConstraintSubsetFactory = mstd::IterFactory<NetworkConstraintSubsetIterator<Network, Container>>;
+  template<class Network, class Container = NodeSet, bool ignore_deg_nodes = false>
+  using NetworkConstraintSubsetFactory = mstd::IterFactory<NetworkConstraintSubsetIterator<Network, Container, ignore_deg_nodes>>;
  
 }// namespace
 

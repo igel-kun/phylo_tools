@@ -5,60 +5,89 @@
  * in other words: if, between index i and j all numbers are between S[i] and S[j], then throw those numbers out
  */
 
+#pragma once
+
 #include <cassert>
 #include <tuple>
+#include "stl_concepts.hpp"
+#include "stl_utils.hpp"
 
 namespace PT {
 
   struct SlopeReduction {
-    // take the first and past-the-end iterators into the sequence
-    // also take iterators to the minimum and maximum elements in the range (recalculate if they are invalid)
-    // lets try and lift the restriction to lists - instead of erasing, we'll just not copy
-    template<class Container>
-    static void apply(Container& c, const auto first, const auto past_end, bool remove_front, bool pivot_on_max = false) {
-      if(first != past_end) {
-        if(next(first) != past_end) {
-          //std::cout << "running on " << Seq(first, past_end) << " (pivot on max: "<<pivot_on_max<<")\n";
-          // step 1: find minimum and maximum in the range
-          // NOTE: when remove_front is true, then find min/max greedily (last min/max instead of first) by using *_equal comparison
-          const auto pivot = pivot_on_max ?
-            (remove_front ? std::max_element(first, past_end, std::less_equal()) : std::max_element(first, past_end)) :
-            (remove_front ? std::min_element(first, past_end, std::less_equal()) : std::min_element(first, past_end));
-          //cout << "found pivot: "<<*pivot<<"\n";
-          // step 2: mark everything in between for deletion
-          if(remove_front) {
-            //std::cout << "removing (exclusively) " << Seq(first, next(pivot)) << "\n";
-            c.push_back(*first);
-            apply(c, pivot, past_end, true, !pivot_on_max);
-          } else {
-            assert(past_end != seq.end());
-            //std::cout << "removing (exclusively) " << Seq(pivot, next(past_end)) << "\n";
-            apply(c, first, pivot, false, !pivot_on_max);
-            c.push_back(*pivot);
-          }
-        } else c.push_back(*first);
-      }
-    }
 
+    // maintain a queue for the pareto-optimal max's and min's
     template<class Container>
     static void apply(Container& c) {
-      Container x;
-      if constexpr (VectorType<Container>) x.reserve(c.size());
-      const auto pivot = std::max_element(c.begin(), c.end());
-      //cout << "first pivot: "<<*pivot<<"\n";
-      treat_seq_n2(x, c.begin(), pivot, false);
-      treat_seq_n2(x, pivot, c.end(), true);
-      // in rare cases, our pivot was chosen unluckily: [0 10 1 10] --> the first 10 is selected as pivot and the center [10 1] is never removed
-      // note that the minimum is always unique (since we're starting with a maximum pivot)
-      const auto [unique_min, first_max] = std::minmax_element(x.begin(), x.end());
-      const auto last_max = std::max_element(first_max, x.end(), std::less_equal());
-      if(unique_min < first_max) {
-        x.erase(next(unique_min), last_max);
-      } else {
-        x.erase(next(first_max), unique_min);
+      DEBUG4(std::cout << "SLOPE reduction on " << c << "\n");
+      if(c.size() > 1) {
+        Container result;
+        result.reserve(c.size());
+        const auto end = c.end();
+        auto iter = c.begin();
+        auto max_q = result.emplace(result.end(), *(iter++));
+        while((iter != end) && (*iter == *max_q)) iter++;
+        if(iter != end) {
+          auto min_q = result.emplace(result.end(), *(iter++));
+          // go through the rest of c
+
+          // if min > max, we should swap them; in this case, max is last, otherwise min is
+          if(*min_q > *max_q) std::swap(min_q, max_q);
+          while(iter != end) {
+            const auto n = *(iter++);
+            //cout << "min: "<<*min_q<<"  max: "<<*max_q<<"\tcurrent seq: "<< result << " + " << n << "\n";
+            const auto min_cmp = (n <=> *min_q);
+            if(min_cmp <= 0) {
+              // if we found a new minimum, then pop back everything up to the current maximum
+              result.erase(next(max_q), result.end());
+              const auto it = result.emplace(result.end(), n);
+              if(min_cmp < 0) min_q = it;
+            } else {
+              const auto max_cmp = (n <=> *max_q);
+              if(max_cmp >= 0) {
+                // if we found a new maximum, then pop back everything up to the parent minimum
+                result.erase(next(min_q), result.end());
+                const auto it = result.emplace(result.end(), n);
+                if(max_cmp > 0) max_q = it;
+              } else {
+                // at this point min_q and max_q are different elements of c and both before current, so current-1 and current-2 exist!
+                assert((*min_q < n) && (n < *max_q));
+                auto parent = prev(result.end());
+                auto grand_parent = prev(parent);
+                while((n >= *parent) && (*parent > *grand_parent)) {
+                  result.erase(parent);
+                  parent = grand_parent;
+                  grand_parent = prev(parent);
+                }
+                while((n <= *parent) && (*parent < *grand_parent)) {
+                  result.erase(parent);
+                  parent = grand_parent;
+                  grand_parent = prev(parent);
+                }
+                if(n > *parent) {
+                  while((n >= *grand_parent) && (parent != min_q)) {
+                    result.erase(parent);
+                    parent = prev(grand_parent);
+                    result.erase(grand_parent);
+                    grand_parent = prev(parent);
+                  }
+                } else {
+                  while((n <= *grand_parent) && (parent != max_q)) {
+                    result.erase(parent);
+                    parent = prev(grand_parent);
+                    result.erase(grand_parent);
+                    grand_parent = prev(parent);
+                  }
+                }
+                result.push_back(n);
+              }
+            }
+          }
+        }
+        c = std::move(result);
       }
-      c = std::move(x);
     }
   };
-
 }
+
+

@@ -16,8 +16,10 @@ namespace mstd {
   // skip all items in a container for which the predicate is false (that is, list all items for which the predicate is true)
   // NOTE: while we could just always use lambda functions as predicate, the current way is more flexible
   //       since it allows default initializing the _filtered_iterator if our Predicate is static
-  // NOTE: _filtered_iterators cannot be replaced by C++20's filtered_view because one has to derive a filtered_view object from the container and one can then iterate this filtered view object
+  // NOTE: _filtered_iterators cannot be replaced by C++20's filtered_view because
+  //       one has to derive a filtered_view object from the container and one can then iterate this filtered view object
   //       while, here, we want the iterator to do the filtering!
+  // NOTE: the above doesn't seem to make sense, please re-evaluate
   template<class NormalIterator, class _Predicate, bool pass_iterator = false>
   class _filtered_iterator: public auto_iter<NormalIterator> {
     using Parent = auto_iter<NormalIterator>;

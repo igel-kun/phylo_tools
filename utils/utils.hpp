@@ -130,6 +130,13 @@ uint32_t integer_log(uint32_t v)
   return MultiplyDeBruijnBitPosition[(v * 0x07C4ACDDU) >> 27];
 }
 
+// return the printed length of a (possibly UTF-8 encoded) string
+// (credit: https://stackoverflow.com/questions/4063146/getting-the-actual-length-of-a-utf-8-encoded-stdstring )
+size_t utf8_len(const std::string& s)
+{
+  return std::count_if(s.begin(), s.end(), [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
+}
+
 // move items from overlapping ranges
 template<class _Item>
 inline void move_items(const _Item* dest, const _Item* source, const uint32_t num_items) { memmove(dest, source, num_items * sizeof(_Item)); }

@@ -192,6 +192,19 @@ namespace mstd{
 
   template<MapType M> using key_type_of_t = typename std::remove_reference_t<M>::key_type;
   template<MapType M> using mapped_type_of_t = typename std::remove_reference_t<M>::mapped_type;
+  
+  template<class T> struct mapped_or_value_type_of { using type = value_type_of_t<T>; };
+  template<MapType M> struct mapped_or_value_type_of<M> { using type = mapped_type_of_t<M>; };
+  template<class T>
+  using mapped_or_value_type_of_t = typename mapped_or_value_type_of<T>::type;
+
+
+  template<class T, class... Qs> struct _invoke_or_lookup_result { };
+  template<MapType T, class... Qs> struct _invoke_or_lookup_result<T, Qs...> { using type = mstd::mapped_type_of_t<T>; };
+  template<class T, class... Qs> requires (std::is_invocable_v<T, Qs...>)
+  struct _invoke_or_lookup_result<T, Qs...> { using type = std::invoke_result_t<T, Qs...>; };
+  template<class T, class... Qs> using invoke_or_lookup_result = typename _invoke_or_lookup_result<T, Qs...>::type;
+
 
   template<class _Iterator>
   constexpr bool is_forward_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::forward_iterator_tag>;

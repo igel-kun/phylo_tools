@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "utils.hpp"
+#include "config.hpp"
 #include "linear_interval.hpp"
 
 namespace PT{
@@ -21,9 +22,11 @@ namespace PT{
 
     for(int i=1; i < argc; ++i){
       const std::string current_arg(argv[i]);
-      if((current_arg == "-h") || (current_arg == "--help")){
+      if((current_arg == "-h") || (current_arg == "--help")){ // display help and exit
         std::cout << help_message << std::endl;
         exit(EXIT_SUCCESS);
+      } if((current_arg == "-u") || (current_arg == "--unicode")){ // use unicode character sets (f.ex. for displaying trees on the command line)
+        config::locale = config::UTF8_locale;
       } else {
         if(current_arg[0] == '-'){
           const auto mm_iter = description.find(current_arg);

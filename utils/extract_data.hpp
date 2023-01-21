@@ -56,6 +56,12 @@ namespace PT {
     template<AdjacencyType Adj> requires (!std::is_same_v<std::remove_cvref_t<Adj>, NodeDesc>)
     auto& operator()(const NodeDesc u, Adj&& v) const { return v.data(); }
 
+    template<AdjacencyType Adj> requires (!std::is_same_v<std::remove_cvref_t<Adj>, NodeDesc>)
+    auto& operator()(Adj&& u, const NodeDesc v) const { return u.data(); }
+
+    template<AdjacencyType Adj> requires (!std::is_same_v<std::remove_cvref_t<Adj>, NodeDesc>)
+    auto& operator()(Adj&& v) const { return v.data(); }
+
     auto& operator()(const NodeDesc u, const NodeDesc v) const {
       auto& u_children = node_of<Phylo>(u).children();
       const auto iter = mstd::find(u_children, v);

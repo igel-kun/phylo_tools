@@ -98,6 +98,9 @@ namespace PT{
     Adjacency& any_parent() { return any_predecessor(); }
     Adjacency& parent() { return any_predecessor(); }
 
+    Edge any_outedge() const { return Edge{get_desc(), any_successor()}; }
+    Edge any_inedge()  const { return Edge{reverse_edge_tag(), get_desc(), any_predecessor()}; }
+
   protected:
     template<class... Args>
     auto add_predecessor(Args&&... args) { return mstd::append(predecessors(), std::forward<Args>(args)...); }
@@ -374,6 +377,10 @@ namespace PT{
     static constexpr Adjacency& any_predecessor(const NodeDesc u) { return node_of(u).any_predecessor(); }
     static constexpr Adjacency& any_parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
     static constexpr Adjacency& parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
+
+    static constexpr Edge any_outedge(const NodeDesc u) { return node_of(u).any_outedge(); }
+    static constexpr Edge any_inedge(const NodeDesc u)  { return node_of(u).any_inedge(); }
+
 
   protected:
     template<class... Args>

@@ -86,14 +86,15 @@ namespace PT{
       if(nr_poss == 1) ++nr_fix;
       if(update_set.set(x))
         update_order.emplace(nr_poss, x);
+      DEBUG5(std::cout << "after update of "<<x<<": update set is now: "<< to_set<NodeSet>(update_set) <<"\n");
     }
 
     // set the unique mapping possibility of x1 to x2; fail if x1 has already been determined to not map to x2
     void set_unique_poss(const NodeDesc x1, const NodeDesc x2)
     {
-      auto emp_res = mapping.try_emplace(x1);
-      if(!emp_res.second){
-        PossSet& poss_in_N2 = emp_res.first->second;
+      auto [iter, success] = mapping.try_emplace(x1);
+      if(!success){
+        PossSet& poss_in_N2 = iter->second;
         if(test(poss_in_N2, x2)){
           if(poss_in_N2.size() > 1) mark_update(x1, 1);
           poss_in_N2.clear();
@@ -111,7 +112,9 @@ namespace PT{
       using PossAndHist = std::pair<PossSet, size_t>;
       HashMap<Something, PossAndHist> poss_and_hist;
 
+      DEBUG5(std::cout << "comparing nodes\n"<<N2_nodes<<"\nto\n"<<N1_nodes<<"\n");
       for(const NodeDesc u: N2_nodes){
+        DEBUG5(std::cout << "registering "<<u<<": "<<f(N2,u)<<"\n");
         PossAndHist& ph = poss_and_hist.try_emplace(f(N2,u), size_N, 0).first->second;
         ph.first.set(u);
         ph.second++;
@@ -119,6 +122,7 @@ namespace PT{
       for(const NodeDesc u: N1_nodes){
         const auto it = poss_and_hist.find(f(N1, u));
         if(it != poss_and_hist.end()) {
+          DEBUG5(std::cout << "checking "<<u<<": "<<f(N1,u)<<"\n");
           update_poss(u, it->second.first);
           if((it->second.second)-- == 0) throw NoPoss("node histograms differ");
         } else throw NoPoss(N1, u);
@@ -128,8 +132,8 @@ namespace PT{
     // use degrees and labels to restrict possibilities
     void degree_and_label_restrict()
     {
-      const auto get_label = [](const auto& Net, const NodeDesc u){ return Net.label(u); };
-      const auto get_degree = [](const auto& Net, const NodeDesc u){ return Net.degrees(u); };
+      constexpr auto get_label = [](const auto& Net, const NodeDesc u){ return Net.label(u); };
+      constexpr auto get_degree = [](const auto& Net, const NodeDesc u){ return Net.degrees(u); };
 
       if(flags == FLAG_MAP_LEAF_LABELS)
         restrict_by_something(N1.leaves(), N2.leaves(), get_label);
@@ -240,7 +244,7 @@ namespace PT{
     void treat_pending_updates()
     {
       DEBUG4(std::cout << update_set.size() <<" updates pending:"<<std::endl);
-      DEBUG4(for(const auto& p: update_set) std::cout << p << " "; std::cout<<std::endl);
+      DEBUG4(for(const NodeDesc p: update_set) std::cout << p << " "; std::cout<<std::endl);
       while(!update_order.empty()){
         const NodeDesc x = update_order.top().second;
         update_order.pop();
@@ -250,7 +254,7 @@ namespace PT{
     }
     void update_poss(const NodeDesc x1)
     {
-      DEBUG5(std::cout << "updating "<<x1<<" whose mapping is ("<<num_poss(x1)<<" possibilities):\n " << to_set(mapping.at(x1)) << std::endl);
+      DEBUG5(std::cout << "updating "<<x1<<" whose mapping is ("<<num_poss(x1)<<" possibilities):\n " << to_set<NodeSet>(mapping.at(x1)) << std::endl);
       PossSet possible_nodes(size_N);
       // update children
       if(!N1.is_leaf(x1)){
@@ -268,14 +272,15 @@ namespace PT{
     // update possibilities, return whether the number of possibilities changed
     bool update_poss(const NodeDesc x, const PossSet& new_poss)
     {
-      const auto emp_res = mapping.try_emplace(x, new_poss);
-      if(!emp_res.second){
+      const auto [iter, success] = mapping.try_emplace(x, new_poss);
+      if(!success){
         // if x had a possibility set before, get this PossSet and intersect new_poss with it
-        auto& x_poss = emp_res.first->second;
+        auto& x_poss = iter->second;
         const size_t old_count = x_poss.size();
-        DEBUG5(std::cout << "updating poss's of "<< x<<" ("<<old_count<<" poss) from\n " << to_set(x_poss) << " with\n "<< to_set(new_poss)<<std::endl);
         if(old_count != 1){
+          DEBUG5(std::cout << "updating poss's of "<< x<<" ("<<old_count<<" poss) from\n " << to_set<NodeSet>(x_poss) << " with\n "<< to_set<NodeSet>(new_poss)<<std::endl);
           intersect(x_poss, new_poss);
+          DEBUG5(std::cout << "new possibilities: "<<to_set<NodeSet>(x_poss)<<"\n");
           const size_t new_count = x_poss.size();
           // if something changed, update all parents and children
           if(new_count != old_count){
@@ -284,12 +289,14 @@ namespace PT{
             return true;
           } else return false;
         } else {
+          DEBUG5(std::cout << "not updating possibilities of "<<x<<" (already unique to "<< to_set<NodeSet>(x_poss)<<")\n");
           if(test(new_poss, front(x_poss)))
             return false;
           else throw NoPoss(N1, x);
         }
       } else {
         // if x did not have a possibility set before, default to "size changed"
+        DEBUG5(std::cout << "marking "<<x<<" for update\n");
         mark_update(x, new_poss.size());
         return true;
       }

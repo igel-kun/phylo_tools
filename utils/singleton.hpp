@@ -45,6 +45,11 @@ namespace mstd{
       clear();
       return true;
     }
+    bool erase(const const_iterator& it) {
+      if(empty() || (it != begin())) return false;
+      clear();
+      return true;
+    }
     bool erase(const value_type& el) {
       if(empty() || (el != *storage)) return false;
       clear();

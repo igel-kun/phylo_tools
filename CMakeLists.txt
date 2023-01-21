@@ -37,24 +37,11 @@ add_custom_target ( doc doxygen Doxyfile )
 
 include_directories ("${PROJECT_SOURCE_DIR}")
 
-if(${GRAPHITE})
-  message("setting graphite flags...")
-  #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
-  set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -funroll-loops -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
-endif()
-
-# static linking
-if(${STATIC})
-  SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-  SET(BUILD_SHARED_LIBRARIES OFF)
-  SET(CMAKE_EXE_LINKER_FLAGS "-static")
-endif()
 
 # suppress clangs silly "unused parameter" warnings...
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wno-unknown-warning-option")
 endif()
-
 
 if(${FATAL})
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wfatal-errors")
@@ -65,16 +52,33 @@ if(${STATISTICS})
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
 endif()
 
+if(${GRAPHITE})
+  message("setting graphite flags...")
+  #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
+  set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -funroll-loops -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
+endif()
+
 if(${ASAN})
   MESSAGE("enabling address sanitizer...")
   set(PROTOTYPE_SANITIZER "-fsanitize=address -fsanitize-address-use-after-scope")
 endif()
 
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-range-loop-construct -ftemplate-depth=100")
 set(PROTOTYPE_FLAGS "-fmax-errors=${MAXERR} -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200 -fno-omit-frame-pointer")
 set(PROTOTYPE_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -Wno-unused-function -Wshadow")
 
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-range-loop-construct -ftemplate-depth=100")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -Wno-cpp -DNDEBUG -pipe -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+
+# static linking
+if(${STATIC})
+  SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  SET(BUILD_SHARED_LIBRARIES OFF)
+  SET(CMAKE_EXE_LINKER_FLAGS "-static")
+  SET(CMAKE_COMMON_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O2")
+else()
+  SET(CMAKE_COMMON_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3 -march=native -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+endif()
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS_RELEASE} -Wno-cpp -DNDEBUG -pipe")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} ${PROTOTYPE_WARNINGS} ${PROTOTYPE_SANITIZER} ${PROTOTYPE_FLAGS}")
 
 

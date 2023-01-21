@@ -31,6 +31,8 @@ void parse_options(const int argc, const char** argv) {
   const std::string help_message(std::string(argv[0]) + " <file>\n\
       \tcompute the scanwidth (+extension and/or extension tree) of the network described in file (extended newick or edgelist format)\n\
       FLAGS:\n\
+      \t-h,--help\tprint this help screen\n\
+      \t-u,--unicode\tuse unicode to display some things more nicely\n\
       \t-v\tverbose output, prints network\n\
       \t-e\tprint an optimal extension\n\
       \t-et\tprint an optimal extension tree (corresponds to the extension)\n\
@@ -92,7 +94,7 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   // compute scanwidth of ex
   const auto sw = ex.get_sw_map<MyNetwork>();
 
-  std::cout << "sw: "<< sw << " --- (max: "<<*(mstd::max_element(mstd::seconds(sw)))<<")"<<std::endl;
+  std::cout << "sw: "<< sw << " --- (max: "<<std::ranges::max(mstd::seconds(sw))<<")"<<std::endl;
 
   std::cout << "constructing extension tree\n";
   const GammaTree Gamma(ex, [](const NodeDesc u){ return u; });
@@ -107,7 +109,7 @@ void print_extension(const MyNetwork& N, const Extension& ex) {
   const auto gamma_sw = Gamma.get_sw_map(Gamma_to_net);
   std::cout << "sw map: " << gamma_sw << std::endl;
 
-  const size_t N_sw = *mstd::max_element(mstd::seconds(gamma_sw));
+  const size_t N_sw = std::ranges::max(mstd::seconds(gamma_sw));
   const size_t reti_count = N.retis().to_container<NodeVec>().size();
   std::cout << "sw = "<< N_sw <<" retis = "<<reti_count<<"\n";
   assert(N_sw <= reti_count + 1);
@@ -124,15 +126,20 @@ int main(const int argc, const char** argv) {
   if(mstd::test(options, "-v"))
     std::cout << "N: " << std::endl << N << std::endl;
 
+  if(N.has_cycle()) {
+    std::cerr << "input not a network (has a directed cycle)!\n";
+    exit(1);
+  }
+
   const bool preprocess = mstd::test(options, "-pp");
 
   size_t count = 0;
   using BCC_Cuts = BCCCutIterFactory<MyNetwork>;
+  std::cout << "making cut-iter factory to list BCCs...\n";
   BCC_Cuts cuts(N);
-  std::cout << "made new cut-iter factory\n";
+  std::cout << "deriving BCC-iterator...\n";
   auto bcc_iter = std::move(cuts).begin();
   //auto bcc_iter = cuts.begin();
-  std::cout << "made new cut-iter\n";
   if(bcc_iter.is_valid()) std::cout << "iter is valid\n";
   while(bcc_iter.is_valid()){
     std::cout << "component #"<<++count<<"\n";

@@ -5,6 +5,7 @@
 #include "set_interface.hpp"
 
 #include "utils.hpp"
+#include "config.hpp"
 #include "types.hpp"
 #include "tags.hpp"
 #include "lca.hpp"
@@ -17,6 +18,8 @@
 #include "extract_data.hpp"
 
 namespace PT {
+
+
 
 	// ================ ProtoPhylogeny ======================
 	// in the proto phylogeny, differences between trees (singleS predecessor storage)
@@ -258,13 +261,14 @@ namespace PT {
           return create_node(data_maker.get_node_label);
         } else return create_node();
       }
-    }
+    } 
 
-
+  protected:
     void delete_node(const NodeDesc x) {
 			count_node(-1);
       Parent::delete_node(x);
     }
+  public:
 
     // add an edge between two nodes of the tree/network
     // NOTE: the nodes are assumed to have been added by add_root(), add_child(), or add_parent() (of another node) before!
@@ -957,17 +961,25 @@ namespace PT {
       return NoNode;
     }
 
+  protected:
+    static bool cyclic_below(const NodeDesc start, NodeSet& current_path, NodeSet& seen) {
+      if(append(current_path, start).second) {
+        if(append(seen, start).second)
+          for(const NodeDesc u: children(start))
+            if(cyclic_below(u, current_path, seen)) return true;
+        erase(current_path, start);
+      } else return true; // if we've reached someone on our current path, then we have found a cycle :(
+      return false;
+    }
+  public:
     //! for sanity checks: test if there is a directed cycle in the data structure (more useful for networks, but definable for trees too)
     bool has_cycle() const {
       if(!empty()) {
-        // to detect cycles, we just run a non-tracking DFS and do our own tracking; as soon as we re-see a node, we know there is a cycle
-        NodeSet seen;
-        NodeTraversal<preorder, Phylogeny, void, void> no_tracking_dfs(_roots);
-        for(const NodeDesc x: no_tracking_dfs)
-          if(!mstd::append(seen, x).second)
-            return true;
-        return false;
-      } else return false;
+        NodeSet current_path, seen;
+        for(const NodeDesc r: _roots)
+          if(cyclic_below(r, current_path, seen)) return true;
+      }
+      return false;
     }
 
     static bool are_siblings(const NodeDesc y, const NodeDesc z) {
@@ -1299,24 +1311,25 @@ namespace PT {
     {
       const Node& u_node = node_of(u);
       const bool u_reti = u_node.is_reti();
-      std::string u_name = std::to_string(name(u));
+
+      std::string u_name = config::locale.char_no_branch_hori + std::to_string(name(u));
       if constexpr (Node::has_label){
         const std::string u_label = std::to_string(u_node.label());
         if(!u_label.empty())
-          u_name += "[" + u_label + "]";
+          u_name += '[' + u_label + ']';
       }
       if constexpr (Node::has_data){
         const std::string u_data = node_data_to_string(u_node.data());
         if(!u_data.empty())
-          u_name += "(" + u_data + ")";
+          u_name += '(' + u_data + ')';
       }
-      if(u_name == "") {
+      if(u_name.empty()) {
         if(u_reti)
-          u_name = std::string("(" + std::to_string(u) + ")");
-        else if(!is_leaf(u)) u_name = std::string("+");
+          u_name = std::string('(' + std::to_string(u) + ')');
+        else if(!is_leaf(u)) u_name = config::locale.char_branch_low;
       }
-      os << '-' << u_name;
-      if(u_reti) os << 'R';
+      if(u_reti) u_name += config::locale.char_reti;
+      os << u_name;
       
       bool u_seen = true;
       if(!u_reti || !(u_seen = mstd::test(seen, u))) {
@@ -1327,17 +1340,19 @@ namespace PT {
             os << std::endl;
             break;
           case 1:
-            prefix += std::string(u_name.length() + 1 + u_reti, ' ');
+            prefix += std::string(utf8_len(u_name), ' ');
             print_subtree(os, mstd::front(children(u)), prefix, seen, node_data_to_string);
             break;
           default:
-            prefix += std::string(u_name.length() + u_reti, ' ') + '|';
+            prefix += std::string(utf8_len(u_name) - 1, ' ');
 
             uint32_t count = u_childs.size();
             for(const NodeDesc c: u_childs){
-              print_subtree(os, c, prefix, seen, node_data_to_string);
-              if(--count > 0) os << prefix;
-              if(count == 1) prefix.back() = ' ';
+              const char* last_char = (count >= 2) ? config::locale.char_no_branch_vert : " ";
+              print_subtree(os, c, prefix + last_char, seen, node_data_to_string);
+              if(count >= 3) last_char = config::locale.char_branch_right;
+              if(count == 2) last_char = config::locale.char_last_child;
+              if(--count > 0) os << prefix << last_char;
             }
         }
       } else os << std::endl;

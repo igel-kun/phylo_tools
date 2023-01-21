@@ -45,7 +45,9 @@ namespace PT{
     // return the scanwidth of the extension in the network N
     template<StrictPhylogenyType Net, class NetDeg = DefaultDegrees<Net>>
     sw_t scanwidth(NetDeg&& degrees = NetDeg()) const {
-      return this->empty() ? 0 : *mstd::max_element(mstd::seconds(get_sw_map<Net>(std::forward<NetDeg>(degrees))));
+      if(!this->empty()) {
+        return std::ranges::max(mstd::seconds(get_sw_map<Net>(std::forward<NetDeg>(degrees))));
+      } else return 0;
     }
 
     // add a node u and update sw using the set forest representing the current weak components in the extension

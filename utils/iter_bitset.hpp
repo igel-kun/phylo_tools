@@ -19,6 +19,15 @@
 
 namespace mstd {
 
+  template<class T>
+  concept StrictIterBitsetType = requires(T t){
+    typename T::bucket_map;
+    requires MapType<typename T::bucket_map>;
+    { t.test(0) } -> std::same_as<bool>;
+  };
+  template<class T> concept IterBitsetType = StrictIterBitsetType<std::remove_reference_t<T>>;
+
+
   template<MapType bucket_map = mstd::raw_vector_map<size_t, uint64_t> >
   class bitset_iterator;
 
@@ -286,29 +295,13 @@ namespace mstd {
     }
 
     template<class T = mstd::raw_vector_map<size_t, uint64_t> >
-    bool operator==(const iterable_bitset<T>& bs) const
-    {
+    bool operator==(const iterable_bitset<T>& bs) const {
       if(_count != bs._count) return false;
       return storage == bs.storage;
     }
-    
-    template<class Container>
-    iterable_bitset& operator-=(const Container& c)
-    {
-      for(const auto& i: c) erase(i);
-      return *this;
-    }
- 
-    template<class Container>
-    iterable_bitset& operator|=(const Container& c)
-    {
-      for(const auto& i: c) insert(i);
-      return *this;
-    }
-
-    template<class Container>
-    iterable_bitset& operator&=(const Container& c)
-    {
+     
+    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
+    iterable_bitset& operator&=(const Container& c) {
       auto _iter = begin();
       const auto _end = end();
       while(_iter != _end){
@@ -318,6 +311,49 @@ namespace mstd {
       }
       return *this;
     }
+
+    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
+    iterable_bitset& operator^=(const Container& c) {
+      for(const auto& i: c) flip(i);
+      return *this;
+    }
+
+    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
+    iterable_bitset& operator|=(const Container& c) {
+      for(const auto& i: c) insert(i);
+      return *this;
+    }
+    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
+    iterable_bitset& operator-=(const Container& c) {
+      for(const auto& i: c) erase(i);
+      return *this;
+    }
+
+    template<mstd::IterableType Container>
+    iterable_bitset operator&(const Container& c) const {
+      iterable_bitset result(*this);
+      result &= c;
+      return result;
+    }
+    template<mstd::IterableType Container>
+    iterable_bitset operator^(const Container& c) const {
+      iterable_bitset result(*this);
+      result ^= c;
+      return result;
+    }
+    template<mstd::IterableType Container>
+    iterable_bitset operator|(const Container& c) const {
+      iterable_bitset result(*this);
+      result |= c;
+      return result;
+    }
+    template<mstd::IterableType Container>
+    iterable_bitset operator-(const Container& c) const {
+      iterable_bitset result(*this);
+      result -= c;
+      return result;
+    }
+
 
 
     friend class bitset_iterator<bucket_map>;
@@ -340,15 +376,6 @@ namespace std {
   };
 }
 namespace mstd {
-
-  template<class T>
-  concept StrictIterBitsetType = requires(T t){
-    typename T::bucket_map;
-    requires MapType<typename T::bucket_map>;
-    { t.test(0) } -> std::same_as<bool>;
-  };
-  template<class T> concept IterBitsetType = StrictIterBitsetType<std::remove_reference_t<T>>;
-
 
   // ------------------ unordered_map-based bitset ----------------------------
 
@@ -582,17 +609,15 @@ namespace mstd {
   // since our *-operation does not return a reference, but an integer
   // however, iteration a la "for(auto i: my_set)" works very well...
   template<MapType bucket_map>
-  class bitset_iterator: public std::iterator<std::forward_iterator_tag, typename iterable_bitset<bucket_map>::value_type>
+  class bitset_iterator: public iter_traits_from_reference<typename iterable_bitset<bucket_map>::value_type>
   {
-    using Parent = std::iterator<std::forward_iterator_tag, typename iterable_bitset<bucket_map>::value_type>;
+    using Parent = iter_traits_from_reference<typename iterable_bitset<bucket_map>::value_type>;
     using Bitset = iterable_bitset<bucket_map>;
   public:
     using bucket_type = typename Bitset::bucket_type;
     using bucket_iter = typename bucket_map::const_iterator;
     using typename Parent::value_type;
-    using pointer     = self_deref<value_type>;
-    using reference   = value_type;
-    using const_reference = const value_type;
+    using typename Parent::reference;
   protected:
     const bucket_map& storage;
     bucket_iter index;
@@ -628,10 +653,9 @@ namespace mstd {
 
     bool is_valid() const { return index != storage.end(); }
     operator bool() const { return is_valid(); }
-    value_type operator*() const { return (*index).first * BITSET_BITS_IN_BUCKET + NUM_TRAILING_ZEROSL(buffer); }
+    reference operator*() const { return (*index).first * BITSET_BITS_IN_BUCKET + NUM_TRAILING_ZEROSL(buffer); }
 
-    bitset_iterator& operator++()
-    {
+    bitset_iterator& operator++() {
       buffer ^= (1ul << NUM_TRAILING_ZEROSL(buffer));
       if(!buffer) {
         ++index;
@@ -639,10 +663,10 @@ namespace mstd {
       }
       return *this;
     }
+
     bitset_iterator operator++(int) { bitset_iterator result(*this); ++(*this); return result; }
 
-    bool operator==(const bitset_iterator& it) const
-    {
+    bool operator==(const bitset_iterator& it) const {
       const bool we_at_end = !is_valid();
       const bool they_at_end = !it.is_valid();
       if(we_at_end != they_at_end) return false;

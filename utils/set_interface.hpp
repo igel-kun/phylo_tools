@@ -467,10 +467,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     } else return false;
   }
 
-  template<IterableType C>
-  iterator_of_t<const C> max_element(const C& c) { return std::ranges::max_element(c); }
-
-
   template<ContainerType C, class Iter>
   value_type_of_t<C> extract(C& c, const Iter& iter) {
   }

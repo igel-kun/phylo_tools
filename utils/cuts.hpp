@@ -156,6 +156,7 @@ namespace PT{
       ChainDecomposition(N.root(), N.num_nodes()) {}
 
     ChainDecomposition(const NodeDesc u, const size_t num_nodes = 0) {
+      DEBUG4(std::cout << "making chain decomposition for network with "<<num_nodes<<" nodes\n");
       NodeVec dfs_nodes;
       dfs_nodes.reserve(num_nodes);
       analyse_network(dfs_nodes, u);
@@ -219,13 +220,16 @@ namespace PT{
            class ChainDecomp,
            template<StrictPhylogenyType, TraversalType, class> class _CutIt>
   struct _CutIterFactory: public mstd::IterFactoryWithBeginEnd<
-                          typename _CutIt<Network, tt, ChainDecomp>::Iterator,
-                          WithChains<_CutIt<Network, tt, ChainDecomp>>>
+                            typename _CutIt<Network, tt, ChainDecomp>::Iterator,
+                            WithChains<_CutIt<Network, tt, ChainDecomp>>
+                          >
   {
     using Parent = mstd::IterFactoryWithBeginEnd<typename _CutIt<Network, tt, ChainDecomp>::Iterator, WithChains<_CutIt<Network, tt, ChainDecomp>>>;
     _CutIterFactory(const Network& N): // construct the DFSIterator and the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(N), std::forward_as_tuple(N))
-    {}
+    {
+      std::cout << "mark4\n";
+    }
     _CutIterFactory(const Network& N, const NodeDesc u): // construct the DFSIterator with the given node u & the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(u), std::forward_as_tuple(N))
     {}
