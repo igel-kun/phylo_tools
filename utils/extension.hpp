@@ -193,7 +193,7 @@ namespace PT{
   template<bool extend_only = false, PhylogenyType Network, NodeSetType Nodes>
   Extension apply_to_network(const Extension& ext, const Network& N, const Nodes& nodes_of_N) {
     Extension result;
-    std::cout << "extending "<<ext<<" to nodes "<<nodes_of_N<<" of network\n"<<ExtendedDisplay(N)<<"\n";
+    DEBUG3(std::cout << "extending "<<ext<<" to nodes "<<nodes_of_N<<" of network\n"<<ExtendedDisplay(N)<<"\n");
     if(!ext.empty()) {
       // we will continue to use a single NodeTraversal, and keep adding to its seen_set
       NodeTraversal<postorder, Network, void, NodeSet> traversal(N);
@@ -203,7 +203,7 @@ namespace PT{
           // add to the extension all nodes between u and the seen nodes 
           traversal.root = u;
           append(result, traversal);
-          std::cout << "appended traversal from "<<u<<" - result now: "<<result<<"\n";
+          DEBUG3(std::cout << "appended traversal from "<<u<<" - result now: "<<result<<"\n");
         } else // if u is not a node of N
           if constexpr (extend_only)
             append(result, u);
