@@ -362,13 +362,13 @@ namespace mstd {
   // a functional that just returns its argument (and hopefully gets optimized out)
   template<class T = void>
   struct IdentityFunction {
-    template<class Q> requires std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<Q>>
-    constexpr Q&& operator()(Q&& x) const { return std::forward<Q>(x); };
+    template<class Q> requires std::is_convertible_v<Q&&, T>
+    constexpr T operator()(Q&& x) const { return x; };
   };
   template<>
   struct IdentityFunction<void> {
     template<class Arg>
-    constexpr Arg&& operator()(Arg&& x) const { return std::forward<Arg>(x); };
+    constexpr decltype(auto) operator()(Arg&& x) const { return std::forward<Arg>(x); };
   };
 #pragma GCC pop_options
 
