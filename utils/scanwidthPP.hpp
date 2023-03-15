@@ -13,6 +13,7 @@ namespace PT {
   // The preprocessing might decide to include an arc xy in all of the 'scanwidth bags' that contain another arc uv
   // in this case, uv represents TWO arcs instead of one. To achieve this, we will use WEIGHTED arcs instead
 
+  // NOTE: EdgeWeightExtract can either take a Network::Adjacency or a Network::Edge and must return a REFERENCE to the edge weight
   template<StrictPhylogenyType Network, class EdgeWeightExtract = DefaultExtractData<Ex_edge_data, Network>>
   struct ScanwidthPreprocessor {
     Network& N;
@@ -22,6 +23,13 @@ namespace PT {
       N(_N), edge_weight(_edge_weight)
     {}
     ScanwidthPreprocessor(Network& _N): N(_N) {}
+
+    auto& get_edge_weight(const typename Network::Edge& uv) {
+      using Adjacency = typename Network::Adjacency;
+      if constexpr (std::is_invocable_v<EdgeWeightExtract, Adjacency>) {
+        return edge_weight(uv.head());
+      } else return edge_weight(uv);
+    }
 
 
     template<bool reverse = false, EdgeContainerType Edges>
@@ -39,16 +47,16 @@ namespace PT {
       const auto [u,v] = path_start_and_end<reverse>(path);
       const auto uv = N.find_edge(u,v);
       if(!uv.is_invalid()) {
-        const auto uv_weight = edge_weight(uv);
+        const auto uv_weight = get_edge_weight(uv);
         N.remove_edge_no_cleanup(uv);
         for(const auto& xy: path)
-          edge_weight(xy) += uv_weight;
+          get_edge_weight(xy) += uv_weight;
       }
     }
 
     template<class T>
     bool remove_shortcuts(T&& arg) {
-      DEBUG4(std::cout<<"removing shortcuts from:\n"<<N<<"\n");
+      DEBUG4(std::cout<<"removing shortcuts from:\n"<< ExtendedDisplay(N) <<"\n");
       
       // step 1: collect all shortcuts
       const auto shorts = detect_shortcuts<NodeMap<NodeDesc>, true, Network>(std::forward<T>(arg));
@@ -63,8 +71,6 @@ namespace PT {
       }
       return !shortcuts.empty();
     }
-
-
 
     NodeDesc something_with_edge_weights(const NodeDesc x, auto& do_something) {
       using Edge = typename Network::Edge;
@@ -88,8 +94,13 @@ namespace PT {
       NodeDesc x = path_end;
       
       auto contracter = [&](auto& weight) mutable {
-        if(*weight_iter != weight) { N.contract_up_unique(x); result = true; }
-        else { weight += offset; ++weight_iter;}
+        if(*weight_iter != weight) {
+          if(N.contract_up_abort(x) != 0) weight += offset;
+          result = true;
+        } else {
+          weight += offset;
+          ++weight_iter;
+        }
       };
       
       while(x != path_start) {
@@ -104,14 +115,11 @@ namespace PT {
     // apply path reduction to the given path (using slope-reduction)
     bool treat_path_end(const typename Network::Edge last_on_path) {
       using Edge = typename Network::Edge;
-      using Adjacency = typename Network::Adjacency;
       using Weight = std::remove_cvref_t<std::invoke_result_t<EdgeWeightExtract, Edge>>;
       DEBUG4(std::cout << "treating path-end "<<last_on_path<<"\n");
       // step 1: write down the edge weights of the path in a vector
       std::vector<Weight> weights;
-      if constexpr (std::is_invocable_v<EdgeWeightExtract, Adjacency>) {
-        append(weights, edge_weight(last_on_path.head()));
-      } else append(weights, edge_weight(last_on_path));
+      append(weights, get_edge_weight(last_on_path));
 
       const NodeDesc path_end = last_on_path.head();
       NodeDesc x = last_on_path.tail();
@@ -127,7 +135,7 @@ namespace PT {
       size_t weight_offset = 0;
       const auto xv = Network::find_edge(x, path_end);
       if(!xv.is_invalid()) {
-        weight_offset = edge_weight(xv);
+        weight_offset = get_edge_weight(xv);
         N.remove_edge_no_cleanup(xv);
         result = true;
       }
@@ -135,12 +143,13 @@ namespace PT {
       // step 2: apply slopw-reduction to the weight-vector
       SlopeReduction::apply(weights);
       assert(weights.size() >= 1);
-      DEBUG3(std::cout << "weights after slope reduction: "<<weights<<'\n');
+      DEBUG3(std::cout << "weights after slope reduction: "<<weights<<" (offset: "<<weight_offset<<")\n");
       
       // use weight-0 as 'stop-token' in case everything has been removed from the weight-sequence
       append(weights, 0);
 
       // step 3: go through the path and the reduced vector, contracting all edges whose weight has been removed
+      get_edge_weight(last_on_path) += weight_offset;
       result |= contract_edges_according_to_weights(x, last_on_path.tail(), std::next(weights.begin()), weight_offset);
       return result;
     }

@@ -118,7 +118,7 @@ namespace PT {
           else add(u_parent);
         } else {
           // NOTE: it might be that u_child is already a child of u_parent, so u_parent and u_child might become orphans
-          if(host.contract_up_unique(u, u_parent)) {
+          if(host.contract_up_count(u, u_parent)) {
             // NOTE: if we just removed a "double-edge", we'll have to inform the tree-component infos about this
             //  in particular, the child of u_child may now have a different component-root, so update that
             manager.contain.comp_info.react_to_edge_deletion(u_parent, u_child);
@@ -1005,7 +1005,7 @@ namespace PT {
       if(iter != info.N_to_comp_DAG.end()) {
         const NodeDesc u_in_cDAG = iter->second;
         if(info.comp_DAG.out_degree(u_in_cDAG) == 1)
-          info.comp_DAG.contract_down_unique(u_in_cDAG);
+          info.comp_DAG.contract_down_count(u_in_cDAG);
         else info.comp_DAG.remove_node(u_in_cDAG);
         info.N_to_comp_DAG.erase(iter);
       }
@@ -1016,7 +1016,7 @@ namespace PT {
       const auto u_child = Host::child(u);
       assert(Host::is_reti(u_child));
       remove_from_queues(u);
-      if(contain.host.contract_down_unique(u, u_child) != 0)
+      if(contain.host.contract_down_count(u, u_child) != 0)
         for(const NodeDesc pu: Host::parents(u_child))
           if((Host::in_degree(pu) <= 1) && (Host::out_degree(pu) <= 1))
             clean_orphan_later(pu);

@@ -25,6 +25,7 @@ namespace PT{
     const auto bc_components = get_biconnected_components<Component>(N, std::forward<ExtracterArgs>(args)...);
     for(auto& bcc: bc_components){
       DEBUG4(std::cout << "found biconnected comp ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n");
+
       if constexpr (preprocessing) {
         apply_sw_preprocessing(bcc);
         DEBUG4(std::cout << "after preprocessing ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n");
