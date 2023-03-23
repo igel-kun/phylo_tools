@@ -96,7 +96,7 @@ namespace PT {
 
     // given a path-end and a vector of weights, contract all edges whose weight does not correspond to the weight-vector
     bool contract_edges_according_to_weights(const NodeDesc path_start,
-                                             const Adjacency& last_on_path,
+                                             const NodeDesc last_on_path,
                                              const NodeDesc path_end,
                                              auto weight_iter,
                                              const size_t offset = 0) {
@@ -149,11 +149,10 @@ namespace PT {
       bool result = false;
       size_t weight_offset = 0;
       const auto xv = Network::find_edge(x, path_end);
-      if(!xv.is_invalid()) {
+      if(!xv.is_invalid())
         weight_offset = get_edge_weight(xv);
-        N.remove_edge_no_cleanup(xv);
-        result = true;
-      }
+        // defer removing xv such as not to disturb last_on_path
+      result = (weight_offset != 0);
       
       // step 2: apply slopw-reduction to the weight-vector
       const size_t old_length = weights.size();
@@ -161,20 +160,31 @@ namespace PT {
       assert(weights.size() >= 1);
       DEBUG3(std::cout << "weights after slope reduction: "<<weights<<" (offset: "<<weight_offset<<")\n");
       
-      if((weight_offset != 0) || (weights.size() < old_length)){
+      if(result || (weights.size() < old_length)){
+        const NodeDesc old_last = last_on_path;
         // use weight-0 as 'stop-token' in case everything has been removed from the weight-sequence
         // also remove the last weight since this is the weight of the uppermost edge, which will never be deleted anyways
         weights.back() = 0;
 
         // step 3: go through the path and the reduced vector, contracting all edges whose weight has been removed
-        //get_edge_weight(last_on_path) += weight_offset;
         if(weights.size() == 1) {
+          DEBUG4(std::cout<<"now hanging "<< path_end<<" from "<<old_last<<" to "<<path_start<<"\n");
           // if the slope reduction reduced everything, then all weights are equal, so we'll get a single edge as result, no need to call contract_bla_..
-          const NodeDesc dangling = last_on_path;
-          N.transfer_child_abort(path_end, last_on_path, path_start);
-          N.remove_upwards_no_suppression(dangling);
-        } else result |= contract_edges_according_to_weights(x, last_on_path, path_end, std::next(weights.begin()), weight_offset);
-        return result;
+          get_edge_weight(last_on_path, path_end) += weight_offset;
+
+          if(result) N.remove_edge_no_cleanup(xv);
+          
+          N.transfer_child_abort(path_end, old_last, path_start);
+          N.remove_upwards_no_suppression(old_last);
+          return true;
+        } else {
+          result |= contract_edges_according_to_weights(x, old_last, path_end, std::next(weights.begin()), weight_offset);
+          if(weight_offset > 0) {
+            N.remove_edge_no_cleanup(xv);
+            result = true;
+          }
+          return result;
+        }
       } else return false;
     }
 

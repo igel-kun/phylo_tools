@@ -342,10 +342,7 @@ namespace PT{
 
     static constexpr Node& node_of(const NodeDesc u) { return PT::node_of<Node>(u); }
 
-    void delete_node(const NodeDesc u) {
-      DEBUG5(std::cout << "NodeAccess: freeing memory of node "<<u<<"\n");
-      delete reinterpret_cast<Node*>(static_cast<uintptr_t>(u));
-    }
+    void delete_node(const NodeDesc u) { delete reinterpret_cast<Node*>(static_cast<uintptr_t>(u)); }
 
     Node& operator[](const NodeDesc u) const & { return node_of(u); }
     Node&& operator[](const NodeDesc u) && { return node_of(u); }

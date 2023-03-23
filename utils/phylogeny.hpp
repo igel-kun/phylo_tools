@@ -347,7 +347,7 @@ namespace PT {
           while(!v_parents.empty()) {
             const NodeDesc u = mstd::front(v_parents);
             remove_edge_no_cleanup(u,v);
-            remove_upwards(u);
+            remove_upwards<suppress_deg2>(u);
           }
           delete_node(v);
           return;
@@ -357,7 +357,7 @@ namespace PT {
             if(v_indeg == 1) {
               const NodeDesc u = v_node.any_parent();
               contract_up(v);
-              remove_upwards(u);
+              remove_upwards<suppress_deg2>(u);
             }
           }
           return;
