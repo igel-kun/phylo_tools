@@ -31,8 +31,8 @@
 // return whether the index x with value y is vacant
 #define __VECTOR_HASH_IS_VACANT(x, y) (static_cast<uintptr_t>(y) == static_cast<uintptr_t>(x) + 1u)
 // advance the given index
-#define __VECTOR_HASH_ADVANCE_IDX(x) {x = (x + 1u) & mask; STAT(++count);}
-#define __VECTOR_HASH_REVERT_IDX(x) {x = (x + vector_size() - 1u) & mask; STAT(++count);}
+#define __VECTOR_HASH_ADVANCE_IDX(x) {x = (x + 1u) & mask; STAT(++_count);}
+#define __VECTOR_HASH_REVERT_IDX(x) {x = (x + vector_size() - 1u) & mask; STAT(++_count);}
 // return the mask for the given number of elements
 #define __VECTOR_HASH_MASK(x) (~( static_cast<uintptr_t>(0u) ) >> (sizeof(uintptr_t)*8u - 1u - integer_log( (x) - 1u )) )
 // hashing
@@ -98,9 +98,9 @@ namespace mstd{
     using const_insert_result = std::pair<const_vector_iterator, bool>;
 
 #ifdef STATISTICS
-    using HistMap = unordered_map<uintptr_t, uintptr_t>;
+    using HistMap = std::unordered_map<uintptr_t, uintptr_t>;
     mutable HistMap hist;
-    mutable uintptr_t count;
+    mutable uintptr_t _count;
 #endif
   protected:
 
@@ -355,10 +355,10 @@ namespace mstd{
 
     bool contains(const Key& key) const { 
       if(empty()) return false;
-      STAT(count = 0);
+      STAT(_count = 0);
       bool result = find_slot(key).second == 1;
-      STAT(++hist[count]);
-      STAT(std::cout << count << "hops\n");
+      STAT(++hist[_count]);
+      STAT(std::cout << _count << "hops\n");
       return result;
     }
 
@@ -367,20 +367,20 @@ namespace mstd{
     iterator find(const Key& key)
     {
       if(empty()) return end();
-      STAT(count = 0);
+      STAT(_count = 0);
       const std::pair<uintptr_t,char> result = find_slot(key);
-      STAT(++hist[count]);
-      STAT(std::cout << count << "hops\n");
+      STAT(++hist[_count]);
+      STAT(std::cout << _count << "hops\n");
       return (result.second == 1) ? make_iterator(result.first) : end();
     }
 
     const_iterator find(const Key& key) const
     {
       if(empty()) return end();
-      STAT(count = 0);
+      STAT(_count = 0);
       const std::pair<uintptr_t,char> result = find_slot(key);
-      STAT(++hist[count]);
-      STAT(std::cout << count << "hops\n");
+      STAT(++hist[_count]);
+      STAT(std::cout << _count << "hops\n");
       return (result.second == 1) ? make_iterator(result.first) : end();
     }
 

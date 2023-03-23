@@ -114,7 +114,7 @@ namespace PT {
           last_iter = mstd::append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
           DPEntry& best_entry = last_iter->second;
 
-          STAT(++num_subsets);
+          STAT(++num_subsets; DEBUG4(std::cout << "processed "<<num_subsets<<" subsets\n"));
           DEBUG5(
               std::cout << "computing best partial extension for node-set "<<last_iter->first<< "\n";
               std::cout << "....::::: best extensions ::::....\n";
@@ -152,7 +152,7 @@ namespace PT {
             }
           }
         }
-        STAT(uint64_t count_unsupp = 0; for(const auto& u: N) { if(!N.is_suppressible(u)) ++count_unsupp;})
+        STAT(uint64_t count_unsupp = 0; for(const NodeDesc u: N.nodes()) { if(!N.is_suppressible(u)) ++count_unsupp;})
         STAT(std::cout << "STAT: " <<N.num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
         // the last extension should be the one we are looking for
         const auto& ex = last_iter->second.ex;

@@ -186,6 +186,8 @@ namespace PT {
     using Parent::is_declared_tree;
     using EdgeVec = PT::EdgeVec<EdgeData>;
     using EdgeSet = PT::EdgeSet<EdgeData>;
+    using SuccIterator = mstd::iterator_of_t<typename Node::SuccContainer>;
+    using PredIterator = mstd::iterator_of_t<typename Node::PredContainer>;
     using Parent::node_of;
     using Parent::parents;
     using Parent::parent;
@@ -362,6 +364,7 @@ namespace PT {
         }
       }
     }
+    void remove_upwards_no_suppression(const NodeDesc v) { remove_upwards<false>(v); }
 
 
     // new nodes can only be added as 1. new roots, 2. children or 3. parents of existing nodes
@@ -444,7 +447,7 @@ namespace PT {
     // NOTE: theoretically, it is possible that the target node does not belong to the same phylogeny as the source node,
     //       but this is highly discouraged (unless node/edge count is disabled) because the node and edge counts will be wrong
     template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class DataMaker = bool>
-    bool transfer_child(const mstd::iterator_of_t<typename Node::SuccContainer>& w_iter,
+    bool transfer_child(const SuccIterator& w_iter,
                         const NodeDesc source,
                         const Adj& target,                        
                         DataMaker&& make_data = DataMaker())
@@ -559,12 +562,13 @@ namespace PT {
     size_t transfer_children_count(Args&&... args) { return transfer_children<UniquenessBy::count>(std::forward<Args>(args)...); }
 
   protected:
-    // transfer the parents of the given source to the given parent
-    // NOTE: return the number of parents of source that were already parents of target
-    // NOTE: while source WILL become a root by this operation, it is NOT registered in _roots!
-    //       do this by hand if required!
+    // transfer the parent *w_iter of the given source to the given target
+    // NOTE: w_iter must be an interator into parents(w)
+    // NOTE: return false if we failed to inert *w_iter into the parents of the target (if *w_iter was already a parent of target before)
+    // NOTE: for uniqueness handing, see transfer_child(..)
+    // NOTE: while source WILL become a root by this operation, it is NOT registered in _roots! --> do this by hand if required!
     template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class DataMaker = bool>
-    bool transfer_parent(const mstd::iterator_of_t<typename Node::PredContainer>& w_iter,
+    bool transfer_parent(const PredIterator& w_iter,
                          const NodeDesc source,
                          const Adj& target,                         
                          DataMaker&& make_data = DataMaker())
@@ -726,11 +730,11 @@ namespace PT {
     // NOTE: v will be deleted!
     // NOTE: set uniqueness to something other than UniquenessBy::ignore in order to prevent double-edges
     template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class DataMaker = bool>
-    size_t contract_up(const NodeDesc v, Adj&& u_adj, DataMaker&& make_data = DataMaker()) {
+    size_t contract_up(const NodeDesc v, const Adj& u_adj, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(v) == 1);
       assert(u_adj == mstd::front(parents(v)));
       const NodeDesc u = u_adj;
-      const size_t result = transfer_children<uniqueness>(v, std::move(u_adj), make_data);
+      const size_t result = transfer_children<uniqueness>(v, u_adj, make_data);
       // finally, remove the edge uv and free v's storage
       remove_edge_and_child(u, v);
       return result;
@@ -758,10 +762,11 @@ namespace PT {
     // NOTE: return the number of parents of u that were already parents of v
     // NOTE: u will be deleted!
     template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class... Args>
-    size_t contract_down(const NodeDesc u, Adj&& v_adj, Args&&... args) {
+    size_t contract_down(const NodeDesc u, const Adj& v_adj, Args&&... args) {
       assert(out_degree(u) == 1);
       assert(v_adj == mstd::front(children(u)));
       const NodeDesc v = v_adj;
+      std::cout << "contracting "<<u<<" onto "<<v<<"\n";
       size_t result = 0;
       if(is_root(u)) {
         const auto iter = mstd::find(_roots, u);
@@ -770,7 +775,7 @@ namespace PT {
           mstd::replace(_roots, iter, v);
         } else mstd::erase(_roots, iter);
         assert(!_roots.empty());
-      } else result = transfer_parents<uniqueness>(u, std::forward<Adj>(v_adj), std::forward<Args>(args)...);
+      } else result = transfer_parents<uniqueness>(u, v_adj, std::forward<Args>(args)...);
       // finally, remove the edge uv and free u's storage
       remove_edge_and_parent(u, v);
       return result;

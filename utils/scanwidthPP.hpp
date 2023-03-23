@@ -9,13 +9,21 @@
 #include "shortcuts.hpp"
 
 namespace PT {
-
   // The preprocessing might decide to include an arc xy in all of the 'scanwidth bags' that contain another arc uv
   // in this case, uv represents TWO arcs instead of one. To achieve this, we will use WEIGHTED arcs instead
 
   // NOTE: EdgeWeightExtract can either take a Network::Adjacency or a Network::Edge and must return a REFERENCE to the edge weight
   template<StrictPhylogenyType Network, class EdgeWeightExtract = DefaultExtractData<Ex_edge_data, Network>>
   struct ScanwidthPreprocessor {
+    using Adjacency = typename Network::Adjacency;
+    using Edge = typename Network::Edge;
+    static constexpr bool call_with_adj = (std::is_invocable_v<EdgeWeightExtract, Adjacency>);
+
+    using DataRef = std::conditional_t<call_with_adj, std::invoke_result_t<EdgeWeightExtract, Adjacency>, std::invoke_result_t<EdgeWeightExtract, Edge>>;
+
+    static_assert(std::is_reference_v<DataRef>);
+
+
     Network& N;
     EdgeWeightExtract edge_weight;
 
@@ -24,11 +32,15 @@ namespace PT {
     {}
     ScanwidthPreprocessor(Network& _N): N(_N) {}
 
-    auto& get_edge_weight(const typename Network::Edge& uv) {
-      using Adjacency = typename Network::Adjacency;
-      if constexpr (std::is_invocable_v<EdgeWeightExtract, Adjacency>) {
+    DataRef get_edge_weight(const Edge& uv) {
+      if constexpr (call_with_adj) {
         return edge_weight(uv.head());
       } else return edge_weight(uv);
+    }
+    DataRef get_edge_weight(const Adjacency& u, const NodeDesc v) {
+      if constexpr (call_with_adj) {
+        return edge_weight(u);
+      } else return edge_weight(Edge{reverse_edge_tag{}, v, u});
     }
 
 
@@ -72,62 +84,65 @@ namespace PT {
       return !shortcuts.empty();
     }
 
-    NodeDesc something_with_edge_weights(const NodeDesc x, auto& do_something) {
-      using Edge = typename Network::Edge;
-      using Adjacency = typename Network::Adjacency;
-      NodeDesc result;
-      if constexpr (std::is_invocable_v<EdgeWeightExtract, Adjacency>) {
-        Adjacency& p_adj = Network::parent(x);
-        result = p_adj;
-        do_something(edge_weight(p_adj));
+    void apply_to_inedge(const NodeDesc x, auto& do_something) {
+      if constexpr (call_with_adj) {
+        const Adjacency& p_adj = Network::parent(x);
+        do_something(edge_weight(p_adj), p_adj);
       } else {
         const Edge px = Network::any_inedge(x);
-        result = px.tail();
-        do_something(edge_weight(px));
+        do_something(edge_weight(px), px.tail());
       }
-      return result;
     }
 
     // given a path-end and a vector of weights, contract all edges whose weight does not correspond to the weight-vector
-    bool contract_edges_according_to_weights(const NodeDesc path_start, const NodeDesc path_end, auto weight_iter, const size_t offset = 0) {
+    bool contract_edges_according_to_weights(const NodeDesc path_start,
+                                             const Adjacency& last_on_path,
+                                             const NodeDesc path_end,
+                                             auto weight_iter,
+                                             const size_t offset = 0) {
       bool result = false;
-      NodeDesc x = path_end;
+      NodeDesc x = last_on_path;
       
-      auto contracter = [&](auto& weight) mutable {
+      auto contracter = [&](auto& weight, const NodeDesc x_parent) mutable {
+        std::cout << "contracting edge between "<<x<<" and its parent "<<x_parent<<" (path start is "<<path_start<<")\n";
         if(*weight_iter != weight) {
-          if(N.contract_up_abort(x) != 0) weight += offset;
+          if(x_parent != path_start){
+            // NOTE: we will not contract the uppermost node of a path since
+            //    otherwise, completing the partial extension into a whole extension might put some other nodes before the end of the path
+            if(N.contract_up_abort(x, x_parent) != 0) weight += offset;
+          } else weight += offset;
           result = true;
         } else {
           weight += offset;
           ++weight_iter;
         }
+        x = x_parent;
       };
-      
+
       while(x != path_start) {
         DEBUG4(std::cout << "climbing to "<<x<<"\n");
         assert(Network::in_degree(x) == 1);
-        x = something_with_edge_weights(x, contracter);
+        apply_to_inedge(x, contracter);
         DEBUG4(std::cout << "next stop: "<<x<<"\n");
       }
       return result;
     }
 
     // apply path reduction to the given path (using slope-reduction)
-    bool treat_path_end(const typename Network::Edge last_on_path) {
-      using Edge = typename Network::Edge;
+    bool treat_path_end(const Adjacency& last_on_path, const NodeDesc path_end) {
       using Weight = std::remove_cvref_t<std::invoke_result_t<EdgeWeightExtract, Edge>>;
-      DEBUG4(std::cout << "treating path-end "<<last_on_path<<"\n");
+      DEBUG4(std::cout << "treating path-end "<<last_on_path<<" --> " << path_end<<"\n");
       // step 1: write down the edge weights of the path in a vector
       std::vector<Weight> weights;
-      append(weights, get_edge_weight(last_on_path));
+      append(weights, get_edge_weight(last_on_path, path_end));
 
-      const NodeDesc path_end = last_on_path.head();
-      NodeDesc x = last_on_path.tail();
-      auto weight_appender = [&](const auto weight) mutable { append(weights, weight); };
+      NodeDesc x = last_on_path;
+      auto weight_appender = [&](const auto weight, const NodeDesc x_parent) mutable { append(weights, weight); x = x_parent; };
       do{
         assert(Network::in_degree(x) == 1);
-        x = something_with_edge_weights(x, weight_appender);
+        apply_to_inedge(x, weight_appender);
       } while(Network::is_suppressible(x));
+      const NodeDesc path_start = x;
       // weights should contain at least 2 weights, otherwise u was not a path_end!
       assert(weights.size() > 1);
       // if xu is an edge, then the network contains a shortcut, so employ the shortcut reduction here
@@ -141,32 +156,40 @@ namespace PT {
       }
       
       // step 2: apply slopw-reduction to the weight-vector
+      const size_t old_length = weights.size();
       SlopeReduction::apply(weights);
       assert(weights.size() >= 1);
       DEBUG3(std::cout << "weights after slope reduction: "<<weights<<" (offset: "<<weight_offset<<")\n");
       
-      // use weight-0 as 'stop-token' in case everything has been removed from the weight-sequence
-      append(weights, 0);
+      if((weight_offset != 0) || (weights.size() < old_length)){
+        // use weight-0 as 'stop-token' in case everything has been removed from the weight-sequence
+        // also remove the last weight since this is the weight of the uppermost edge, which will never be deleted anyways
+        weights.back() = 0;
 
-      // step 3: go through the path and the reduced vector, contracting all edges whose weight has been removed
-      get_edge_weight(last_on_path) += weight_offset;
-      result |= contract_edges_according_to_weights(x, last_on_path.tail(), std::next(weights.begin()), weight_offset);
-      return result;
+        // step 3: go through the path and the reduced vector, contracting all edges whose weight has been removed
+        //get_edge_weight(last_on_path) += weight_offset;
+        if(weights.size() == 1) {
+          // if the slope reduction reduced everything, then all weights are equal, so we'll get a single edge as result, no need to call contract_bla_..
+          const NodeDesc dangling = last_on_path;
+          N.transfer_child_abort(path_end, last_on_path, path_start);
+          N.remove_upwards_no_suppression(dangling);
+        } else result |= contract_edges_according_to_weights(x, last_on_path, path_end, std::next(weights.begin()), weight_offset);
+        return result;
+      } else return false;
     }
 
 
     // apply path reduction to the given path_ends (using slope-reduction)
     bool treat_path_ends(const NodeSet& path_ends) {
-      using Edge = typename Network::Edge;
       bool result = false;
       DEBUG4(std::cout << N << "\ninput: "<<path_ends<<"\n");
       for(const NodeDesc path_end: path_ends) {
         DEBUG4(std::cout << "treating path end "<<path_end<<" with degrees "<<Network::degrees(path_end)<<"\n");
         if((Network::in_degree(path_end) > 1) || (Network::out_degree(path_end) > 1)) {
-          for(const auto& last_on_path: Network::parents(path_end)){
+          for(const Adjacency& last_on_path: Network::parents(path_end)){
             DEBUG4(std::cout << "treating parent "<<last_on_path<<" of "<<path_end<<"\n");
             if(Network::is_suppressible(last_on_path))
-              result |= treat_path_end(Edge{reverse_edge_tag(), path_end, last_on_path});
+              result |= treat_path_end(last_on_path, path_end);
           }
         }
       }

@@ -45,7 +45,7 @@ namespace PT{
                 dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ mstd::append(_register_node, node_of<Component>(u).data()); });
               }
       }
-      DEBUG5(std::cout << "done working with\n"; std::cout <<bcc<<"\n";)
+      DEBUG5(std::cout << "done working with\n"; std::cout <<bcc<<"\n");
     }
     mstd::append(_register_node, bc_components.get_begin_end_transformation().extracter(Ex_node_data{}, N.root()));
   }
