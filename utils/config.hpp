@@ -7,6 +7,9 @@ namespace PT{
     // when merging sorted vectors, switch from linear merge to iterator-queue merge when merging (strictly) more than x vectors
     uint8_t vector_queue_merge_threshold = 3;
 
+    // if a vector has more than this many items, we consider it slower to do linear search on it than a set-lookup
+    uint16_t linear_search_threshold = 8;
+
     // when applying reduction rules to network-containment instances,
     // apply the expensive extended cherry reduction only if N is at least x edges away from begin a tree
     uint8_t min_retis_to_apply_extended_cherry = 1;

@@ -57,6 +57,11 @@
 #define STAT(x) 
 #endif
 
+//#ifndef NDEBUG
+#define DEBUGNODES
+//#endif
+
+
 // these functions "turn off" the optimizer
 // thanks to Chandler Carruth (https://www.youtube.com/watch?v=nXaxk27zwlk)
 static void escape(void* p) { 

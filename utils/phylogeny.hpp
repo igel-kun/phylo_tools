@@ -48,6 +48,9 @@ namespace PT {
 		size_t _num_nodes = 0u;
 		size_t _num_edges = 0u;
 
+    void count_node(const int nr = 1) { _num_nodes += nr; } 
+		void count_edge(const int nr = 1) { _num_edges += nr; }
+
 	public:
     static constexpr bool is_declared_tree = false;
 
@@ -74,12 +77,10 @@ namespace PT {
       _roots.clear();
     }
 
-		void count_node(const int nr = 1) { _num_nodes += nr; } 
-		void count_edge(const int nr = 1) { _num_edges += nr; }
-
     bool is_forest() const { return _num_nodes == _num_edges + _roots.size(); }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return _num_edges; }
+		size_t num_roots() const { return _roots.size(); }
     NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
@@ -121,6 +122,8 @@ namespace PT {
     RootContainer _roots;
 		size_t _num_nodes = 0;
 
+		void count_node(const int nr = 1) { _num_nodes += nr; }
+		static constexpr void count_edge(const int nr = 1) {}
   public:
     static constexpr bool is_declared_tree = true;
 
@@ -144,12 +147,10 @@ namespace PT {
       _roots.clear();
     }
 
-		void count_node(const int nr = 1) { _num_nodes += nr; }
-		static constexpr void count_edge(const int nr = 1) {}
-
     static constexpr bool is_forest() { return true; }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - _roots.size(); }
+		size_t num_roots() const { return _roots.size(); }
     NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 

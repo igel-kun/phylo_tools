@@ -15,7 +15,7 @@ namespace PT{
 
   enum NodeTypeEnum { NODE_TYPE_LEAF, NODE_TYPE_INTERNAL_TREE, NODE_TYPE_INTERNAL_RETI};
 
-#ifndef NDEBUG
+#ifdef DEBUGNODES
   struct _ProtoNode {
     static uintptr_t num_names;
     const uintptr_t _name = num_names++;

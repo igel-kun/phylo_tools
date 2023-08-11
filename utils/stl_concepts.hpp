@@ -17,10 +17,16 @@ namespace mstd {
   template<class T> concept really_pre_incrementable = requires(T t){++t;};
   template<class T> concept really_post_incrementable = requires(T t){t++;};
 
+  template<class T> concept has_iterator = requires { typename T::iterator;};
+  template<class T> concept has_reference = requires { typename std::remove_reference_t<T>::reference; };
 
   // ever needed to get an iterator if T was non-const and a const_iterator if T was const? Try this:
-  template<class T> requires requires { typename T::iterator; typename T::const_iterator; } struct _iterator_of {
+  template<class T> struct _iterator_of {};
+  template<class T> requires has_iterator<T> struct _iterator_of<T> {
     using type = std::conditional_t<std::is_const_v<T>, typename T::const_iterator, typename T::iterator>;
+  };
+  template<class T> requires (std::ranges::range<std::remove_const_t<T>> && !has_iterator<T>) struct _iterator_of<T> {
+    using type = std::ranges::iterator_t<std::remove_const_t<T>>;
   };
   template<class T> struct _iterator_of<T*> { using type = T*; };
   template<class T, std::size_t N> struct _iterator_of<T (&)[N]> { using type = T*; };
@@ -59,6 +65,7 @@ namespace mstd {
     std::begin(a);
     std::end(a);
 	};
+
   template<class T>
   concept StrictIterableType = (IterableType<T> && !std::is_reference_v<T>);
   template<class T>

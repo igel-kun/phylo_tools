@@ -270,30 +270,39 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     else return y;
   }
 
-  template<SetType C1, SetType C2> requires std::is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
+  template<IterableType C1, SetType C2> requires std::is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
   C2& copy(const C1& x, C2& y) {
     y.clear();
     std::copy(x.begin(), x.end(), std::insert_iterator<C2>(y, y.begin()));
     return y;
   }
 
-  template<OptionalContainerType C = void, class T, class _C = VoidOr<C, std::unordered_set<value_type_of_t<iterable_bitset<T>>>>>
-  _C to_set(const iterable_bitset<T>& x) {
-    _C result;
-    return copy(x, result);
+  template<OptionalContainerType Target = void, class Source, class _Target = VoidOr<Target, std::unordered_set<value_type_of_t<Source>>>>
+    requires (!SetType<Source>)
+  _Target to_set(Source&& source) {
+    _Target result;
+    return copy(source, result);
   }
+  // default to no-op for SetTypes
+  template<SetType Source>
+  decltype(auto) to_set(Source&& source) { return std::forward<Source>(source); }
 
   //! a hash computation for a set, XORing its members
-  template<IterableType C>
+  template<IterableType C, class Val = value_type_of_t<C>> requires std::is_convertible_v<value_type_of_t<C>, Val>
   struct set_hash {
-    constexpr static std::hash<std::remove_cvref_t<value_type_of_t<C>>> Hasher{};
-    size_t operator()(const C& container) const {
-      return std::accumulate(std::begin(container), std::end(container), size_t(0), [](const size_t x, const auto& y) { return x ^ Hasher(y); });
+    using value_type = std::remove_cvref_t<Val>;
+    static constexpr std::hash<value_type> Hasher{};
+
+    static constexpr size_t hash_one(const size_t _hash, const value_type& element) { return _hash ^ Hasher(element); }
+
+    template<IterableType Container> requires std::is_convertible_v<value_type_of_t<Container>, Val>
+    size_t operator()(const Container& container) const {
+      return std::accumulate(std::begin(container), std::end(container), size_t(0), hash_one);
     }
   };
   // iterable bitset can be hashed faster
-  template<> struct set_hash<ordered_bitset>: public std::hash<ordered_bitset> {};
-  template<> struct set_hash<unordered_bitset>: public std::hash<unordered_bitset> {};
+  template<class T> struct set_hash<ordered_bitset, T>: public std::hash<ordered_bitset> {};
+  template<class T> struct set_hash<unordered_bitset, T>: public std::hash<unordered_bitset> {};
 
   //! a hash computation for a list, XORing and cyclic shifting its members (such that the order matters)
   template<IterableType C>
@@ -315,8 +324,11 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       return c.erase(key);
     else if constexpr (std::is_same_v<std::remove_cvref_t<Key>, const_iterator_of_t<C>>)
       return c.erase(key);
-    else if constexpr (VectorType<C>) {
-      return c.erase(std::remove(c.begin(), c.end(), key), c.end());
+    else if constexpr (VectorType<C>) { // erasing keys usually returns the number of keys removed, so we need to massage vector::erase a little
+      const auto iter = std::remove(c.begin(), c.end(), key);
+      const auto result = std::distance(iter, c.end());
+      c.erase(iter, c.end());
+      return result;
     } else return c.erase(key);
   }
   template<MapType M, class Key>
@@ -374,6 +386,17 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       } else erase_by_moving(c, keys);
     } else erase_by_iterating_keys(c, keys);
   }
+
+  // a quick erase for a vector, swapping the item with the last item and pop_back() that last item
+  template<VectorType V>
+  void quick_erase(V&& vec, const iterator_of_t<V>& iter) {
+    assert(vec.size() != 0);
+    std::swap(*iter, *std::prev(vec.end()));
+    vec.pop_back();
+  }
+  template<VectorType V>
+  void quick_erase(V&& vec, const size_t i) { quick_erase(std::forward<V>(vec), std::advance(vec.begin(), i)); }
+
 
   template<ContainerType C>
   void pop(C& c) {
@@ -513,10 +536,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     }
 
   };
+
 }
 
 
 namespace std {
+  
   template<mstd::ContainerType Container, class T> requires (!is_convertible_v<std::remove_cvref_t<Container>, std::string_view>)
   Container& operator-=(Container& container, T&& item) {
     mstd::erase(container, std::forward<T>(item));

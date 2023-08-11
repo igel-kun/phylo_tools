@@ -67,7 +67,7 @@ namespace PT{
 
 
   // node descriptors
-#ifndef NDEBUG
+#ifdef DEBUGNODES
   struct NodeDesc {
     uintptr_t data = reinterpret_cast<uintptr_t>(nullptr);
     constexpr NodeDesc() {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }

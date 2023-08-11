@@ -12,11 +12,60 @@ namespace PT {
   template<PhylogenyType Network,
            class NetworkDegrees = DefaultDegrees<Network>>
   struct _DPEntryLowMem {
-    Extension ex;
+    static constexpr mstd::set_hash<Extension> Hasher{};
+
+    static void recompute_sw() {}
+    static void update_sw(const NodeDesc u) {}
+
+    template<NodeIterableType Nodes>
+    static size_t hash(const Nodes& nodes) { return Hasher(nodes); }
+
+  protected:
+    mutable Extension ex;
+    size_t hash_cache = 0;
+
+    // copy the other entry's Extension, replacing our own prefix
+    // NOTE: only friends can do this since they know what they are doing
+    void replace_prefix(const _DPEntryLowMem& other){
+      assert(ex.size() >= other.ex.size());
+      std::copy(other.ex.begin(), other.ex.end(), ex.begin());
+    }
+
+    void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
+    void recompute_hash() { hash_cache = hash(ex); }
+
+    template<NodeIterableType Nodes>
+    _DPEntryLowMem(Nodes&& nodes, const size_t hash_value):
+      ex(std::forward<Nodes>(nodes)), hash_cache(hash_value)
+    {}
+  public:
+    _DPEntryLowMem() = default;
+    
+    template<NodeIterableType Nodes>
+    _DPEntryLowMem(Nodes&& nodes):
+      ex(std::forward<Nodes>(nodes)), hash_cache(hash(ex))
+    {
+      assert(hash_cache == hash(ex));
+    }
+    bool operator==(const _DPEntryLowMem&) const = default;
+
+    size_t hash() const { return hash_cache; }
+    
+    const Extension& get_ex() const { return ex; }
+
+    void swap_nodes(const size_t i, const size_t j) const { std::swap(ex.at(i), ex.at(j)); }
 
     sw_t get_scanwidth() const { return ex.template scanwidth<Network, NetworkDegrees>(); }
+
     // update entry with the next node u
-    void update(const NodeDesc u) { mstd::append(ex, u); }
+    void update(const NodeDesc u) {
+      mstd::append(ex, u);
+      hash_one(u);
+    }
+    void clear() { ex.clear(); hash_cache = 0; }
+
+    template<bool, PhylogenyType, class>
+    friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
@@ -28,16 +77,41 @@ namespace PT {
     using Parent::ex;
     using DynamicScanwidth = typename Extension::DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
 
-    DynamicScanwidth ds; 
+    using Parent::Parent;
+    
+    bool operator==(const _DPEntry& other) const { return Parent::operator==(other); }
+
+  protected:
+    DynamicScanwidth ds;
     sw_t scanwidth = 0;
+    
+    void replace_prefix(const _DPEntry& other) {
+      Parent::replace_prefix(other);
+      ds = other.ds;
+      scanwidth = other.scanwidth;
+      for(const NodeDesc u: ex | std::views::drop(other.ex.size())) 
+        update_sw(u);
+    }
+    void recompute_sw() {
+      ds.clear(); scanwidth = 0;
+      for(const NodeDesc u: ex) update_sw(u);
+    }
+    void update_sw(const NodeDesc u) {
+      scanwidth = std::max(scanwidth, ds.update_sw(u));
+    }
+
+  public:
 
     sw_t get_scanwidth() const { return scanwidth; }
     // update entry with the next node u
     void update(const NodeDesc u) {
       Parent::update(u);
-      ds.update_sw(u);
-      scanwidth = std::max(scanwidth, ds.out.at(u));
+      scanwidth = std::max(scanwidth, ds.update_sw(u));
     }
+    void clear() { Parent::clear(); ds.clear(); scanwidth = 0; }
+
+    template<bool, PhylogenyType, class>
+    friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };
 
 
@@ -109,7 +183,7 @@ namespace PT {
         // check all node-subsets constraint by the arcs in N
         STAT(uint64_t num_subsets = 0;)
         for(auto& nodes: NetworkConstraintSubsetFactory<Network, NodeSet, ignore_deg2>(N)){
-          DEBUG4(std::cout << "\tcurrent subset: "<<nodes<<"\n");
+          DEBUG2(std::cout << "\tcurrent subset: "<<nodes<<"\n");
           sw_t best_sw = std::numeric_limits<sw_t>::max();
           last_iter = mstd::append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
           DPEntry& best_entry = last_iter->second;
@@ -118,9 +192,9 @@ namespace PT {
           DEBUG5(
               std::cout << "computing best partial extension for node-set "<<last_iter->first<< "\n";
               std::cout << "....::::: best extensions ::::....\n";
-              for(const auto& x: dp_table) std::cout << x.first << ":\t"<<x.second.ex<<"\n";
+              for(const auto& x: dp_table) std::cout << x.first << ":\t"<<x.second.ex<<" --> sw = "<<x.second.get_scanwidth()<<"\n";
               );
-
+#warning "TODO: compute weakly-disconnected parts individually"
           // for each node u in the set, check the sw of the extension (dp_table[nodes-u].ex + u)
           for(const NodeDesc u: nodes){
             // first, make sure that u is a root in N[nodes]
@@ -145,7 +219,7 @@ namespace PT {
               // compute the new scanwidth
               const sw_t sw = entry.get_scanwidth();
               if(sw < best_sw){
-                DEBUG4(std::cout << "storing best extension "<<entry.ex << ":\t sw = "<<sw<<"\n");
+                DEBUG4(std::cout << "storing best extension "<<entry.get_ex() << ":\t sw = "<<sw<<"\n");
                 best_sw = sw;
                 best_entry = std::move(entry); // move assignment
               }
@@ -155,8 +229,8 @@ namespace PT {
         STAT(uint64_t count_unsupp = 0; for(const NodeDesc u: N.nodes()) { if(!N.is_suppressible(u)) ++count_unsupp;})
         STAT(std::cout << "STAT: " <<N.num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
         // the last extension should be the one we are looking for
-        const auto& ex = last_iter->second.ex;
-        std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(N)<<"\n";
+        const auto& ex = last_iter->second.get_ex();
+        DEBUG2(std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(N)<<"\n");
         assert(ex.size() == N.num_nodes());
         size_t num_nodes = ex.size();
         if constexpr (!include_root) --num_nodes;

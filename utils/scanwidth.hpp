@@ -5,10 +5,16 @@
 #include "biconnected_comps.hpp"
 #include "scanwidthPP.hpp"
 #include "scanwidthDP.hpp"
+#include "scanwidthDP2.hpp"
 
 namespace PT{
 
-  template<bool low_memory_version, bool preprocessing, StrictPhylogenyType Network, class RegisterNode, class... ExtracterArgs>
+  template<bool low_memory_version,
+           bool preprocessing,
+           bool restrict_to_non_raising,
+           StrictPhylogenyType Network,
+           class RegisterNode,
+           class... ExtracterArgs>
   void _compute_min_sw_extension(const Network& N, RegisterNode&& _register_node, ExtracterArgs&&... args) {
     using EdgeWeight = std::conditional_t<preprocessing, uint32_t, void>;
     using Component = CompatibleNetwork<Network, NodeDesc, EdgeWeight, void>;
@@ -19,7 +25,9 @@ namespace PT{
     // NOTE: if we're doing preprocessing, we will need to store edge-weights
     using EdgeWeightExtract = std::conditional_t<preprocessing, EdgeWeightExtracter, void>;
     // if we're preprocessing, we must not ignore deg-2 nodes in the dynamic programming
-    using DPType = ScanwidthDP<low_memory_version, const Component, EdgeWeightExtract, !preprocessing>;
+    using DPType = std::conditional_t<restrict_to_non_raising,
+          ScanwidthDP2<low_memory_version, const Component, EdgeWeightExtract>,
+          ScanwidthDP<low_memory_version, const Component, EdgeWeightExtract, !preprocessing>>;
     
     DEBUG4(std::cout << "getting biconnected component factory\n");
     const auto bc_components = get_biconnected_components<Component>(N, std::forward<ExtracterArgs>(args)...);
@@ -37,20 +45,20 @@ namespace PT{
                 const auto uv = mstd::front(bcc.edges());
                 //const auto& uv = std::front(bcc.edges());
                 DEBUG5(std::cout << "edge is "<<uv<<"\n");
-                mstd::append(_register_node, node_of<Component>(uv.head()).data());
+                append(_register_node, node_of<Component>(uv.head()).data());
                 break;
               }
       default:{
                 DPType dp(bcc);
-                dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ mstd::append(_register_node, node_of<Component>(u).data()); });
+                dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ append(_register_node, node_of<Component>(u).data()); });
               }
       }
       DEBUG5(std::cout << "done working with\n"; std::cout <<bcc<<"\n");
     }
-    mstd::append(_register_node, bc_components.get_begin_end_transformation().extracter(Ex_node_data{}, N.root()));
+    append(_register_node, bc_components.get_begin_end_transformation().extracter(Ex_node_data{}, N.root()));
   }
 
-  template<bool low_memory_version, bool preprocessing, StrictPhylogenyType Network, class RegisterNode>
+  template<bool low_memory_version, bool preprocessing, bool restrict_to_non_raising, StrictPhylogenyType Network, class RegisterNode>
   void compute_min_sw_extension(const Network& N, RegisterNode&& _register_node) {
     using NodeDataExtract = mstd::IdentityFunction<NodeDesc>;
     if constexpr (preprocessing) {
@@ -59,12 +67,12 @@ namespace PT{
       RWNetwork N_copy(N, NodeDataExtract(), [](const NodeDesc, const NodeDesc){return 1;});
       DEBUG3(std::cout << "after copy:\n"<<ExtendedDisplay(N_copy)<<"\n");
       apply_sw_preprocessing(N_copy);
-      _compute_min_sw_extension<low_memory_version, preprocessing>(N_copy, std::forward<RegisterNode>(_register_node));
+      _compute_min_sw_extension<low_memory_version, preprocessing, restrict_to_non_raising>(N_copy, std::forward<RegisterNode>(_register_node));
       if constexpr (std::is_same_v<std::remove_reference_t<RegisterNode>, Extension>) {
         _register_node = apply_to_network(_register_node, N);
       }
     } else
-      _compute_min_sw_extension<low_memory_version, preprocessing>(N, std::forward<RegisterNode>(_register_node), NodeDataExtract());
+      _compute_min_sw_extension<low_memory_version, preprocessing, restrict_to_non_raising>(N, std::forward<RegisterNode>(_register_node), NodeDataExtract());
   }
 
 

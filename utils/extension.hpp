@@ -4,7 +4,6 @@
 #include <unordered_map>
 #include "set_interface.hpp"
 
-
 namespace PT{
 
   struct partial_extension_tag {};
@@ -17,8 +16,18 @@ namespace PT{
   class Extension: public NodeVec {
     using Parent = NodeVec;
   public:
-    // import constructors
     using Parent::Parent;
+
+    Extension(const Parent& v): Parent(v) {}
+    Extension(Parent&& v): Parent(std::move(v)) {}
+
+    Extension& operator=(const Parent& v) { Parent::operator=(v); return *this; }
+    Extension& operator=(Parent&& v) { Parent::operator=(std::move(v)); return *this; }
+
+    template<mstd::IterableType C> requires (!std::is_convertible_v<C, Parent> && std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>)
+    Extension& operator=(C&& v) { Parent tmp(v.begin(), v.end()); Parent::operator=(std::move(tmp)); return *this; }
+
+
 
     void compute_inverse(std::unordered_map<NodeDesc, sw_t>& inverse) const {
        for(size_t i = 0; i < this->size(); ++i) inverse.emplace(this->at(i), i);
@@ -53,26 +62,34 @@ namespace PT{
     // add a node u and update sw using the set forest representing the current weak components in the extension
     // return the scanwidth of the given node
     template<PhylogenyType Net,
-             NodeMapType Out = NodeMap<sw_t>,
+             NodeMapType Output = NodeMap<sw_t>,
              class NetworkDegrees = DefaultDegrees<Net>>
-        requires (!mstd::ContainerType<mstd::mapped_type_of_t<Out>> || mstd::SetType<mstd::mapped_type_of_t<Out>>)
+        requires (!mstd::ContainerType<mstd::mapped_type_of_t<Output>> || mstd::SetType<mstd::mapped_type_of_t<Output>>)
     struct DynamicScanwidth {
-      Out out;
+    protected:
+      Output out;
       // the union-find structure knows what nodes are in the same weak-component "below" the current node
       // it also knows for each weak component which of their nodes is the most recent one
       mstd::DisjointSetForest<NodeDesc, NodeDesc> weak_components;
       [[no_unique_address]] NetworkDegrees network_degrees;
 
+      STAT(size_t sw_raising = 0; size_t sw_shrinking = 0);
+    public:
+
       DynamicScanwidth()
-        requires (!std::is_reference_v<Out> && !std::is_reference_v<NetworkDegrees>)
+        requires (!std::is_reference_v<Output> && !std::is_reference_v<NetworkDegrees>)
       = default;
 
       template<class NDInit>
-      DynamicScanwidth(Out& _out, NDInit&& net_deg_init): out{_out}, network_degrees{std::forward<NDInit>(net_deg_init)} {}
-      DynamicScanwidth(Out& _out): out{_out} {}
-    
+      DynamicScanwidth(Output& _out, NDInit&& net_deg_init): out{_out}, network_degrees{std::forward<NDInit>(net_deg_init)} {}
+      DynamicScanwidth(Output& _out): out{_out} {}
+
+      const Output& get_sw_map() const { return out; }
+
+      // add a new node u to the scanwidth calculation and return its scanwidth
       template<class CallBack = mstd::IgnoreFunction<void>>
-      void update_sw(const NodeDesc u, CallBack&& save_highest_child_of = CallBack()) {
+      sw_t update_sw(const NodeDesc u, CallBack&& save_highest_child_of = CallBack()) {
+        STAT(size_t child_sw_max = 0;);
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         const auto& u_node = node_of<Net>(u);
         auto [sw_u, outdeg] = network_degrees(u);
@@ -82,6 +99,7 @@ namespace PT{
         try{
           DEBUG5(std::cout << "working children "<<u_node.children()<<" of "<<u<<"\n");
           for(const auto& v: u_node.children()) {
+            STAT(child_sw_max = std::max(child_sw_max, out.at(v)));
             if(weak_components.in_different_sets(u, v)) {
               // if v is in a different weak component than u, then merge the components and increase sw(u) by sw(v)
               const auto& v_set = weak_components.set_of(v);
@@ -93,78 +111,85 @@ namespace PT{
               weak_components.merge_sets_keep_order(u, v);
             }
           }
+          STAT(if(child_sw_max != 0) {if(sw_u < child_sw_max) {++sw_shrinking;} else if(sw_u > child_sw_max) {++sw_raising;}});
           sw_u -= outdeg; // discount the edges u-->v from the scanwidth of u
           append(out, u, sw_u);
         } catch(std::out_of_range& e){
           throw(std::logic_error("trying to compute scanwidth of a non-extension"));
         }
+        return sw_u;
       }
+      
       template<class CallBack = mstd::IgnoreFunction<void>>
       void update_all(const Extension& ex, CallBack&& save_highest_child_of = CallBack()) {
-        for(const NodeDesc u: ex) update_sw(u, std::forward<CallBack>(save_highest_child_of));
+        for(const NodeDesc u: ex)
+          update_sw(u, std::forward<CallBack>(save_highest_child_of));
+        STAT(std::cout << "sw-raising nodes: "<<sw_raising<<" sw-shrinking nodes: "<<sw_shrinking<<" sw-neutral: " << ex.size() - sw_raising - sw_shrinking<<"\t "<< (100 * sw_raising) / (sw_raising + sw_shrinking) <<"\% raising\n");
       }
+
+      void clear() { weak_components.clear(); out.clear(); }
     };
 
 
     // compute the scanwidth of all nodes in a given extension
     // NOTE: NetworkDegree is used to return the degrees (pair of indegree and outdegree) of a node in the network
     // NOTE: this can be used to construct the actual edge- or node- set corresponding to the scanwidth entry by passing a suitable function network_degrees
-    template<StrictPhylogenyType Net, class NetDeg, class Out, class... Args>
-    void sw_map_meta(NetDeg&& network_degrees, Out& out, Args&&... args) const {
+    template<StrictPhylogenyType Net, class NetDeg, class Output, class... Args>
+    void sw_map_meta(NetDeg&& network_degrees, Output& out, Args&&... args) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
       DEBUG3(std::cout << "degree-extracter is "<<mstd::type_name<NetDeg>()<<"\n");
-      DynamicScanwidth<Net, Out&, NetDeg>{out, std::forward<NetDeg>(network_degrees)}.update_all(*this, std::forward<Args>(args)...);
+      DynamicScanwidth<Net, Output&, NetDeg>{out, std::forward<NetDeg>(network_degrees)}.update_all(*this, std::forward<Args>(args)...);
     }
 
 
 
-    template<StrictPhylogenyType Network, class NetDeg, class Callback, class Out>
-    void sw_map(Out&& out, NetDeg&& degrees, Callback&& save_highest_child) const {
-      return sw_map_meta<Network>(std::forward<NetDeg>(degrees), std::forward<Out>(out), std::forward<Callback>(save_highest_child));
+    template<StrictPhylogenyType Network, class NetDeg, class Callback, class Output>
+    void sw_map(Output&& out, NetDeg&& degrees, Callback&& save_highest_child) const {
+      return sw_map_meta<Network>(std::forward<NetDeg>(degrees), std::forward<Output>(out), std::forward<Callback>(save_highest_child));
     }
-    template<StrictPhylogenyType Network, class Out, class NetDeg = DefaultDegrees<Network>>
+    template<StrictPhylogenyType Network, class Output, class NetDeg = DefaultDegrees<Network>>
       requires (std::invocable<NetDeg, NodeDesc> && !std::is_void_v<std::invoke_result<NetDeg, NodeDesc>>)
-    void sw_map(Out&& out, NetDeg&& degrees = NetDeg()) const {
-      return sw_map_meta<Network>(std::forward<NetDeg>(degrees), std::forward<Out>(out));
+    void sw_map(Output&& out, NetDeg&& degrees = NetDeg()) const {
+      return sw_map_meta<Network>(std::forward<NetDeg>(degrees), std::forward<Output>(out));
     }
-    template<StrictPhylogenyType Network, class Out, class Callback = DefaultDegrees<Network>>
+    template<StrictPhylogenyType Network, class Output, class Callback = DefaultDegrees<Network>>
       requires (!std::invocable<Callback, NodeDesc> || std::is_void_v<std::invoke_result<Callback, NodeDesc>>)
-    void sw_map(Out&& out, Callback&& save_highest_child) const {
-      return sw_map_meta<Network>(DefaultDegrees<Network>(), std::forward<Out>(out), std::forward<Callback>(save_highest_child));
+    void sw_map(Output&& out, Callback&& save_highest_child) const {
+      return sw_map_meta<Network>(DefaultDegrees<Network>(), std::forward<Output>(out), std::forward<Callback>(save_highest_child));
     }
 
 
-    template<StrictPhylogenyType Network, class Out = NodeMap<sw_t>, class... Args>
-    Out get_sw_map(Args&&... args) const {
-      Out result;
+    template<StrictPhylogenyType Network, class Output = NodeMap<sw_t>, class... Args>
+    Output get_sw_map(Args&&... args) const {
+      Output result;
       sw_map<Network>(result, std::forward<Args>(args)...);
       return result;
     }
 
 
-    template<StrictPhylogenyType Network, NodeMapType Out, class... Args>
-    void sw_nodes_map(Out&& out, Args&&... args) const {
-      using Nodes = mstd::mapped_type_of_t<Out>;
+    template<StrictPhylogenyType Network, NodeMapType Output, class... Args>
+    void sw_nodes_map(Output&& out, Args&&... args) const {
+      using Nodes = mstd::mapped_type_of_t<Output>;
       static_assert(std::is_same_v<std::remove_cvref_t<mstd::value_type_of_t<Nodes>>, NodeDesc>);
       using NodesAndNode = std::pair<Nodes, NodeDesc>;
       return sw_map_meta<Network>([&](const NodeDesc u){
           const auto& u_parents = Network::parents(u);
           return NodesAndNode(std::piecewise_construct, std::tuple{u_parents.begin(), u_parents.end()}, std::tuple{u});
         },
-        std::forward<Out>(out),
+        std::forward<Output>(out),
         std::forward<Args>(args)...
       );
     }
-    template<StrictPhylogenyType Network, NodeMapType Out = NodeMap<NodeSet>, class... Args>
-    Out get_sw_nodes_map(Args&&... args) const {
-      Out result;
+    template<StrictPhylogenyType Network, NodeMapType Output = NodeMap<NodeSet>, class... Args>
+    Output get_sw_nodes_map(Args&&... args) const {
+      Output result;
       sw_nodes_map<Network>(result, std::forward<Args>(args)...);
       return result;
     }
 
-    template<StrictPhylogenyType Network, NodeMapType Out, class... Args>
-    void sw_edges_map(Out&& out, Args&&... args) const {
-      using Edges = mstd::mapped_type_of_t<Out>;
+    template<StrictPhylogenyType Network, NodeMapType Output, class... Args>
+    void sw_edges_map(Output&& out, Args&&... args) const {
+      using Edges = mstd::mapped_type_of_t<Output>;
       static_assert(EdgeType<mstd::value_type_of_t<Edges>>);
       using EdgesPair = std::pair<Edges, Edges>; 
       return sw_map_meta<Network>([&](const NodeDesc u) {
@@ -172,17 +197,16 @@ namespace PT{
           const auto& u_out_edges = Network::out_edges(u);
           return EdgesPair(u_in_edges.template to_container<Edges>(), u_out_edges.template to_container<Edges>());
         },
-        std::forward<Out>(out),
+        std::forward<Output>(out),
         std::forward<Args>(args)...
       );
     }
-    template<StrictPhylogenyType Network, NodeMapType Out = NodeMap<typename Network::EdgeSet>, class... Args>
-    Out get_sw_edges_map(Args&&... args) const {
-      Out result;
+    template<StrictPhylogenyType Network, NodeMapType Output = NodeMap<typename Network::EdgeSet>, class... Args>
+    Output get_sw_edges_map(Args&&... args) const {
+      Output result;
       sw_edges_map<Network>(result, std::forward<Args>(args)...);
       return result;
     }
-
 
   };
 

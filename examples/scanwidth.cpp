@@ -19,6 +19,10 @@ using SWIter = mstd::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>
 
 OptionMap options;
 
+
+constexpr size_t method_default = 3;
+constexpr size_t method_max = 5;
+
 void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
@@ -37,11 +41,11 @@ void parse_options(const int argc, const char** argv) {
       \t-e\tprint an optimal extension\n\
       \t-et\tprint an optimal extension tree (corresponds to the extension)\n\
       \t-lm\tuse low-memory data structures when doing dynamic programming (uses 25% of the space at the cost of factor |V(N)| running time)\n\
-      \t-m x\tmethod to use to compute scanwidth [default: x = 3]:\n\
+      \t-m x\tmethod to use to compute scanwidth [default: x = " + std::to_string(method_default) + "]:\n\
       \t\t\tx = 0: brute force all permutations,\n\
       \t\t\tx = 1: dynamic programming on all vertices,\n\
-      \t\t\tx = 2: brute force on raising vertices only,\n\
-      \t\t\tx = 3: dynamic programming on raising vertices only,\n\
+      \t\t\tx = 2: brute force on non-raising vertices only,\n\
+      \t\t\tx = 3: dynamic programming on non-raising vertices only,\n\
       \t\t\tx = 4: heuristic\n\
       \t\t\tx = 5: simple post-order layout\n\
       \t-pp\tuse preprocessing\n");
@@ -58,17 +62,16 @@ void parse_options(const int argc, const char** argv) {
 unsigned parse_method() {
   try{
     const unsigned method = std::stoi(options.at("-m").at(0));
-    if(method > 5){
+    if(method > method_max){
       std::cerr << method << " is not a vlid method, check help screen for valid methods" <<std::endl;
       exit(1);
     } else return method;
   } catch (const std::invalid_argument& ia) {
     // -m with non-integer argument
-    std::cerr << "-m expects an integer argument from 0 to 4" <<std::endl;
+    std::cerr << "-m expects an integer argument from 0 to " << method_max <<std::endl;
     exit(1);
   } catch (...) {
-    // default method is 1
-    return 1;
+    return method_default;
   } 
 }
 
@@ -148,6 +151,22 @@ void list_bccs(const MyNetwork& N) {
   std::cout << "\n================ done listing BCCs =================\n";
 }
 
+template<bool restrict_to_non_raising>
+void compute_sw(const auto& N, const bool preprocess, Extension& ex) {
+  std::cout << "\n ==== computing optimal extension ===\n";
+  if(mstd::test(options, "-lm")){
+    std::cout << "using low-memory version...\n";
+    if(preprocess)
+      compute_min_sw_extension<true, true, restrict_to_non_raising>(N, ex);
+    else compute_min_sw_extension<true, false, restrict_to_non_raising>(N, ex);
+    //compute_min_sw_extension<true>(N, ex); // this is equivalent
+  } else {
+    std::cout << "using faster, more memory hungry version...\n";
+    if(preprocess)
+      compute_min_sw_extension<false, true, restrict_to_non_raising>(N, ex);
+    else compute_min_sw_extension<false, false, restrict_to_non_raising>(N, ex);
+  }
+}
 
 int main(const int argc, const char** argv) {
   std::cout << "parsing options...\n";
@@ -172,22 +191,13 @@ int main(const int argc, const char** argv) {
   case 0:
     throw std::logic_error("unimplemented");
   case 1:
-    std::cout << "\n ==== computing optimal extension ===\n";
-    if(mstd::test(options, "-lm")){
-      std::cout << "using low-memory version...\n";
-      if(preprocess)
-        compute_min_sw_extension<true, true>(N, ex);
-      else compute_min_sw_extension<true, false>(N, ex);
-      //compute_min_sw_extension<true>(N, ex); // this is equivalent
-    } else {
-      std::cout << "using faster, more memory hungry version...\n";
-      if(preprocess)
-        compute_min_sw_extension<false, true>(N, ex);
-      else compute_min_sw_extension<false, false>(N, ex);
-    }
+    compute_sw<false>(N, preprocess, ex);
     break;
   case 2:
+    throw std::logic_error("unimplemented");
   case 3:
+    compute_sw<true>(N, preprocess, ex);
+    throw std::logic_error("unimplemented");
   case 4:
     throw std::logic_error("unimplemented");
   case 5:

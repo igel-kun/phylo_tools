@@ -104,6 +104,7 @@ namespace mstd{
   public:
     using Parent::at;
 
+    // add a new set to the forest
     template<class... Args>
     auto emplace_set(const Key& x, Args&&... args) {
       const auto result = try_emplace(x, x, std::forward<Args>(args)...);
@@ -111,7 +112,7 @@ namespace mstd{
       return result;
     }
 
-    // add a new set to the forest
+    // ... with error checks
     template<class... Args>
     Set& add_new_set(const Key& x, Args&&... args) {
       const auto [iter, success] = emplace_set(x, std::forward<Args>(args)...);
@@ -119,24 +120,24 @@ namespace mstd{
       return iter->second;
     }
 
+
+    // add a new item y (that should exist in the set forest) to the set of x 
     template<class... Args>
     auto emplace_item_to_set(Set& y_set, const Key& x, Args&&... args) {
+      // assert that y exists
+      assert(test(*this, y_set.get_representative()));
+      // insert the item
       const auto result = try_emplace(x, y_set.representative, std::forward<Args>(args)...);
       y_set.grow(result.second);
       return result;
     }
 
-    // add a new item to the set x_set (that should exist in the set forest)
+    // ... with error checks
     template<class... Args>
     Set& add_item_to_set(Set& y_set, const Key& x, Args&&... args) {
-      // assert that y exists
-      assert(test(*this, y_set.get_representative()));
-      // insert the item
-      const auto [iter, success] = try_emplace(x, y_set.representative, std::forward<Args>(args)...);
-      if(success){
-        y_set.grow(1);
-        return iter->second;
-      } else throw std::logic_error("trying to add existing item to set-forest");
+      const auto [iter, success] = emplace_item_to_set(y_set, x, std::forward<Args>(args)...);
+      if(!success) throw std::logic_error("trying to add existing item to set-forest");
+      return iter->second;
     }
 
 
@@ -179,7 +180,7 @@ namespace mstd{
 
 
     static const Key& representative(const Set& x_set) { return x_set.representative; }
-    static const Key& representative(const Key& x) { return at(x).representative; }
+    const Key& representative(const Key& x) const { return _set_of(x).representative; }
 
 
     // erase a Set s from the union-find structure
@@ -228,8 +229,23 @@ namespace mstd{
     // return true iff the given items are in the same set
     bool in_same_set(const Key& x, const Key& y) { return _set_of(x) == _set_of(y); }
 
+    template<IterableType Keys> requires std::is_convertible_v<value_type_of_t<Keys>, Key>
+    bool in_same_set(const Keys& keys) {
+      auto it = keys.begin();
+      if(it != keys.end()) {
+        const Key& rep = representative(static_cast<const Key&>(*it));
+        while(++it != keys.end())
+          if(rep != representative(static_cast<const Key&>(*it)))
+            return false;
+        return true;
+      } else return true;
+    }
+
     // return true iff the given items are in different sets
     bool in_different_sets(const Key& x, const Key& y) { return !in_same_set(x, y); }
+
+    template<IterableType Keys> requires std::is_convertible_v<value_type_of_t<Keys>, Key>
+    bool in_different_sets(const Keys& keys) { return !in_same_set(keys); }
 
     // return the number of sets in the forest
     size_t set_count() const { return _set_count; }

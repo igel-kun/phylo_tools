@@ -104,11 +104,12 @@ namespace PT {
       NodeDesc x = last_on_path;
       
       auto contracter = [&](auto& weight, const NodeDesc x_parent) mutable {
-        std::cout << "contracting edge between "<<x<<" and its parent "<<x_parent<<" (path start is "<<path_start<<")\n";
+        std::cout << "considering edge between "<<x<<" and its parent "<<x_parent<<" for contraction (offset: "<<offset<<")\n";
         if(*weight_iter != weight) {
           if(x_parent != path_start){
             // NOTE: we will not contract the uppermost node of a path since
             //    otherwise, completing the partial extension into a whole extension might put some other nodes before the end of the path
+            std::cout << "contracting edge between "<<x<<" and its parent "<<x_parent<<" (path start is "<<path_start<<")\n";
             if(N.contract_up_abort(x, x_parent) != 0) weight += offset;
           } else weight += offset;
           result = true;
@@ -125,6 +126,7 @@ namespace PT {
         apply_to_inedge(x, contracter);
         DEBUG4(std::cout << "next stop: "<<x<<"\n");
       }
+      DEBUG5(std::cout << "after contractions:\n"<<N<<"\n");
       return result;
     }
 
@@ -146,13 +148,12 @@ namespace PT {
       // weights should contain at least 2 weights, otherwise u was not a path_end!
       assert(weights.size() > 1);
       // if xu is an edge, then the network contains a shortcut, so employ the shortcut reduction here
-      bool result = false;
       size_t weight_offset = 0;
       const auto xv = Network::find_edge(x, path_end);
       if(!xv.is_invalid())
         weight_offset = get_edge_weight(xv);
         // defer removing xv such as not to disturb last_on_path
-      result = (weight_offset != 0);
+      const bool has_offset = (weight_offset != 0);
       
       // step 2: apply slopw-reduction to the weight-vector
       const size_t old_length = weights.size();
@@ -160,31 +161,26 @@ namespace PT {
       assert(weights.size() >= 1);
       DEBUG3(std::cout << "weights after slope reduction: "<<weights<<" (offset: "<<weight_offset<<")\n");
       
-      if(result || (weights.size() < old_length)){
+      if(has_offset || (weights.size() < old_length)){
         const NodeDesc old_last = last_on_path;
         // use weight-0 as 'stop-token' in case everything has been removed from the weight-sequence
         // also remove the last weight since this is the weight of the uppermost edge, which will never be deleted anyways
         weights.back() = 0;
+          
+        if(has_offset){
+          get_edge_weight(last_on_path, path_end) += weight_offset;
+          N.remove_edge_no_cleanup(xv);
+        }
 
         // step 3: go through the path and the reduced vector, contracting all edges whose weight has been removed
         if(weights.size() == 1) {
-          DEBUG4(std::cout<<"now hanging "<< path_end<<" from "<<old_last<<" to "<<path_start<<"\n");
           // if the slope reduction reduced everything, then all weights are equal, so we'll get a single edge as result, no need to call contract_bla_..
-          get_edge_weight(last_on_path, path_end) += weight_offset;
+          DEBUG4(std::cout<<"now hanging "<< path_end<<" from "<<old_last<<" to "<<path_start<<"\n");
 
-          if(result) N.remove_edge_no_cleanup(xv);
-          
           N.transfer_child_abort(path_end, old_last, path_start);
           N.remove_upwards_no_suppression(old_last);
           return true;
-        } else {
-          result |= contract_edges_according_to_weights(x, old_last, path_end, std::next(weights.begin()), weight_offset);
-          if(weight_offset > 0) {
-            N.remove_edge_no_cleanup(xv);
-            result = true;
-          }
-          return result;
-        }
+        } else return contract_edges_according_to_weights(x, old_last, path_end, std::next(weights.begin()), weight_offset) ? true : has_offset;
       } else return false;
     }
 
@@ -289,6 +285,7 @@ namespace PT {
       while(remove_trivial_nodes() && remove_shortcuts(N)) {
         DEBUG3(std::cout << "network is now:\n"<<N<<"\n");
       }
+      DEBUG4(std::cout << "edge weights:\n"; for(const auto& uv: N.edges()) std::cout << uv << "\n");
       return N.num_edges() != pre_edges;
     }
   };

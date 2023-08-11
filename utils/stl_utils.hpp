@@ -97,9 +97,8 @@ namespace mstd{
 
 
   // ---------------- reference_of and value_type_of -----------------
-
   template<class T> struct reference_of {};
-  template<class T> requires requires { typename std::remove_reference_t<T>::reference; }
+  template<class T> requires has_reference<T>
   struct reference_of<T> {
     using BareT = std::remove_reference_t<T>;
     // some containers do not allow modifying their contents via iterators (such as std::unordered_set)
@@ -112,6 +111,10 @@ namespace mstd{
     static constexpr bool returning_rvalue = !std::is_reference_v<Ref>;
     using value_type = copy_cv_t<correctT, std::remove_reference_t<Ref>>;
     using type = std::conditional_t<returning_rvalue, value_type, std::add_lvalue_reference_t<value_type>>;
+  };
+  template<class T> requires (std::ranges::range<std::remove_const_t<T>> && !has_reference<T>) struct reference_of<T> {
+    using _type = std::ranges::range_reference_t<std::remove_const_t<T>>;
+    using type = std::conditional_t<std::is_const_v<T>, std::add_const_t<_type>, _type>;
   };
   template<class T> struct reference_of<T*> { using type = T&; };
   template<class T> struct reference_of<T[]> { using type = T&; };
@@ -498,6 +501,13 @@ namespace std {
 }
 
 namespace mstd {
+
+  // -------------------- ranges --------------------------------
+  // this is the biggest sillyness yet: a c++-ranges const filtered-view cannot be iterated-over... why? why? WHY!!!!
+  template<class T> requires (!std::ranges::view<T>)
+  decltype(auto) make_usable(T&& t) { return std::forward<T>(t); }
+  template<class T> requires (std::ranges::view<T>)
+  decltype(auto) make_usable(const T& t) { return const_cast<T&>(t); }
 
 
   // --------------------- MISC ---------------------------------------------
