@@ -5,7 +5,7 @@
 #include "biconnected_comps.hpp"
 #include "scanwidthPP.hpp"
 #include "scanwidthDP.hpp"
-#include "scanwidthDP2.hpp"
+//#include "scanwidthDP2.hpp"
 
 namespace PT{
 
@@ -26,7 +26,7 @@ namespace PT{
     using EdgeWeightExtract = std::conditional_t<preprocessing, EdgeWeightExtracter, void>;
     // if we're preprocessing, we must not ignore deg-2 nodes in the dynamic programming
     using DPType = std::conditional_t<restrict_to_non_raising,
-          ScanwidthDP2<low_memory_version, const Component, EdgeWeightExtract>,
+          ScanwidthDP<low_memory_version, const Component, EdgeWeightExtract>,
           ScanwidthDP<low_memory_version, const Component, EdgeWeightExtract, !preprocessing>>;
     
     DEBUG4(std::cout << "getting biconnected component factory\n");

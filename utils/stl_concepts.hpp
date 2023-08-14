@@ -121,7 +121,7 @@ namespace mstd {
 
   template<class Iter, class C>
   concept StrictIteratorTypeOf = ContainerType<C> && !ContainerType<Iter> &&
-                                  std::is_same_v<typename std::iterator_traits<Iter>::value_type, C::value_type>;
+                                  std::is_same_v<typename std::iterator_traits<Iter>::value_type, typename C::value_type>;
   template<class Iter, class C>
   concept IteratorTypeOf = StrictIteratorTypeOf<std::remove_reference_t<Iter>, std::remove_reference_t<C>>;
 
