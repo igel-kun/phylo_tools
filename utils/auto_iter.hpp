@@ -68,6 +68,9 @@ namespace mstd {
     template<class T>
     bool operator==(const T& other) const { return is_valid() ? Iterator::operator==(other.it) : !(other.is_valid()); }
 
+    _auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
+    _auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }
+
     bool is_valid() const { return end_it != get_iter(); }
     bool is_invalid() const { return !is_valid(); }
     operator bool() const { return is_valid(); }
@@ -111,7 +114,8 @@ namespace mstd {
   public:
     using typename Parent::iterator;
     using Parent::is_valid;
-
+    using Parent::Parent;
+/*
     auto_iter(){}
     auto_iter(const auto_iter& other): Parent(static_cast<const Parent&>(other)) {}
     auto_iter(auto_iter&& other): Parent(static_cast<Parent&&>(other)) {}
@@ -124,7 +128,7 @@ namespace mstd {
 
     auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }
-
+*/
     // copy the elements in the traversal to a container using the 'append()'-function
     template<class _Container>
     _Container& append_to(_Container& c) const { for(auto i = Parent::get_iter(); i != Parent::get_end(); ++i) c += *i; return c; }

@@ -113,11 +113,11 @@ int main(const int argc, const char** argv) {
     std::cout << "\n ==== computing optimal extension ===\n";
     if(mstd::test(options, "-lm")){
       std::cout << "using low-memory version...\n";
-      compute_min_sw_extension<true>(N, [&](const NodeDesc u){ ex.push_back(u); });
+      compute_min_sw_extension<true, true>(N, [&](const NodeDesc u){ ex.push_back(u); });
       //compute_min_sw_extension<true>(N, ex); // this is equivalent
     } else {
       std::cout << "using faster, more memory hungry version...\n";
-      compute_min_sw_extension<false>(N, ex);
+      compute_min_sw_extension<false, true>(N, ex);
     }
     break;
   case 4:

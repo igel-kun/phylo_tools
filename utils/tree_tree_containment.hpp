@@ -93,12 +93,12 @@ namespace PT {
 
     // lookup where the guest node u could be hosted; if u is not in the DP table yet, compute the entry
     const NodeList& who_displays(const NodeDesc u) {
-      std::cout << "who displays "<<u<<"? ";
+      DEBUG2(std::cout << "who displays "<<u<<"? ");
       const auto [iter, success] = mstd::append(table, u);
       if(success) {
-        std::cout << "\n";
+        DEBUG2(std::cout << "\n");
         compute_possibilities(u, iter->second);
-      } else std::cout << iter->second << "\n";
+      } else DEBUG2(std::cout << iter->second << "\n");
       return iter->second;
     }
     
@@ -120,7 +120,7 @@ namespace PT {
       size_t register_child_poss(const NodeDesc child, const NodeDesc u_child) {
         const auto [it, success] = nodes_for_poss.try_emplace(u_child);
         mstd::append(it->second, child);
-        std::cout << "marking that v's child "<<child<<" displays u's child "<<u_child<<" whose current possibilities are: "<<it->second<<"\n";
+        DEBUG2(std::cout << "marking that v's child "<<child<<" displays u's child "<<u_child<<" whose current possibilities are: "<<it->second<<"\n");
         return success ? nodes_for_poss.size() : 0;
       }
       // mark the node uninteresting (by clearing node_for_poss), return whether it was already cleared before
@@ -153,10 +153,10 @@ namespace PT {
       if(!child_poss.empty()) {
         if(guest.out_degree(u) > 1) {
           NodeTranslation host_to_subhost;
-          std::cout << "building tree induced by "<<child_poss<<" (translation @"<<&host_to_subhost<<")\n";
+          DEBUG4(std::cout << "building tree induced by "<<child_poss<<" (translation @"<<&host_to_subhost<<")\n");
           Subhost induced_subhost(get_induced_edges(host, child_poss, node_infos), host_to_subhost, [](const NodeDesc x){return x;});
-          std::cout << "induced tree:\n"<<induced_subhost<<"\n";
-          std::cout << "host to subhost translation: "<<host_to_subhost<<"\n";
+          DEBUG4(std::cout << "induced tree:\n"<<induced_subhost<<"\n");
+          DEBUG4(std::cout << "host to subhost translation: "<<host_to_subhost<<"\n");
           if(!induced_subhost.edgeless()) {
             // step 2: find all nodes v such that each child of u has a possibility that is seen by a distinct leaf of v
             // register the possibilities for all but one child of u
@@ -166,7 +166,7 @@ namespace PT {
                 NodeDesc v_child_sh = host_to_subhost.at(v_child);
                 while(v_child_sh != induced_subhost.root()) {
                   const NodeDesc v_parent_sh = induced_subhost.parent(v_child_sh);
-                  std::cout << "for node "<<v_parent_sh<<": ";
+                  DEBUG3(std::cout << "for node "<<v_parent_sh<<": ");
                   if(!node_of<Subhost>(v_parent_sh).data().register_child_poss(v_child, u_child)) break;
                   v_child_sh = v_parent_sh;
                 }
@@ -177,11 +177,11 @@ namespace PT {
             for(NodeDesc v: induced_subhost.nodes_postorder()){
               const auto& v_infos = node_of<Subhost>(v).data();
               if(v_infos.nodes_for_poss.size() == guest.out_degree(u)){ // if all children of u have a child of u that can display them
-                std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n";
+                DEBUG3(std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n");
                 if(perfect_child_matching(v_infos.nodes_for_poss)){ // if each child of v can be displayed by a different child of u
                   // H_v displays G_u \o/ - register and mark all ancestors uninteresting, so we don't run matching on them in the future
                   poss.push_back(v_infos.node_in_host);
-                  std::cout << "display possibilities for "<<u<<" are now "<<poss<<"\n";
+                  DEBUG3(std::cout << "display possibilities for "<<u<<" are now "<<poss<<"\n");
                   // if someone else already marked v uninteresting, then all ancestors are already marked as well
                   while((v != induced_subhost.root()) && !node_of<Subhost>(v = induced_subhost.parent(v)).data().mark_uninteresting());
                 }
@@ -193,7 +193,7 @@ namespace PT {
         } else mstd::append(poss, child_poss); // if u has a single child, then u maps where this child maps
       } else poss.clear(); // if no child of u can be mapped, then u cannot be mapped either
 
-      std::cout << "found that "<< u << " is displayed at "<<poss<<"\n";
+      DEBUG2(std::cout << "found that "<< u << " is displayed at "<<poss<<"\n");
     }
 
     // return whether all children of u can be matched using the possibilities given
@@ -204,14 +204,15 @@ namespace PT {
     // merge the mapping possibilities of all childs into one vector; unless one of the children cannot be mapped, in which case return the empty vector
     NodeVec merge_child_poss(const NodeDesc u) {
       using NodeIter = mstd::auto_iter<typename NodeList::const_iterator>;
+      using IterQueue = std::priority_queue<NodeIter, std::vector<NodeIter>, sort_by_order<true>>;
       // if u is a leaf, it should be managed by the base case, unless its label is not in the host, in which case it's not displayed
       NodeVec poss;
       if(!guest.is_leaf(u)){
-        std::cout << "merging possibilities of "<<guest.children(u)<<"\n";
+        DEBUG4(std::cout << "merging possibilities of "<<guest.children(u)<<"\n");
         // for degree up to x, merge the child possibilities by linear "inplace_merge", otherwise, merge via iterator-queue in O(n log deg)
         if(guest.out_degree(u) > config::vector_queue_merge_threshold){
           // NOTE: priority_queue outputs the LARGEST element first, so we'll have to reverse sort_by_order by swapping its arguments
-          std::priority_queue<NodeIter, std::vector<NodeIter>, sort_by_order<true>> iter_queue(sort_by_order<true>{node_infos});
+          IterQueue iter_queue(sort_by_order<true>{node_infos});
           size_t total_size = 0;
           // for each child v of u, add an auto iter to its possibility list
           for(const NodeDesc v: guest.children(u)){
@@ -236,8 +237,8 @@ namespace PT {
             const NodeList& v_poss = who_displays(v);
             if(!v_poss.empty()){
               const size_t old_size = poss.size();
-              std::cout << "merging "; for(const auto& x: poss) std::cout << x <<":"<<node_infos.at(x).order_number<<" ";
-              std::cout << "\t&\t";  for(const auto& x: v_poss) std::cout << x <<":"<<node_infos.at(x).order_number<<" "; std::cout << "\n";
+              DEBUG3(std::cout << "merging "; for(const auto& x: poss) std::cout << x <<":"<<node_infos.at(x).order_number<<" ");
+              DEBUG3(std::cout << "\t&\t";  for(const auto& x: v_poss) std::cout << x <<":"<<node_infos.at(x).order_number<<" "; std::cout << "\n");
               
               poss.insert(poss.end(), v_poss.begin(), v_poss.end());
               std::inplace_merge(poss.begin(), poss.begin() + old_size, poss.end(), sort_by_order{node_infos});

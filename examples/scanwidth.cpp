@@ -151,20 +151,19 @@ void list_bccs(const MyNetwork& N) {
   std::cout << "\n================ done listing BCCs =================\n";
 }
 
-template<bool restrict_to_non_raising>
 void compute_sw(const auto& N, const bool preprocess, Extension& ex) {
   std::cout << "\n ==== computing optimal extension ===\n";
   if(mstd::test(options, "-lm")){
     std::cout << "using low-memory version...\n";
     if(preprocess)
-      compute_min_sw_extension<true, true, restrict_to_non_raising>(N, ex);
-    else compute_min_sw_extension<true, false, restrict_to_non_raising>(N, ex);
+      compute_min_sw_extension<true, true>(N, ex);
+    else compute_min_sw_extension<true, false>(N, ex);
     //compute_min_sw_extension<true>(N, ex); // this is equivalent
   } else {
     std::cout << "using faster, more memory hungry version...\n";
     if(preprocess)
-      compute_min_sw_extension<false, true, restrict_to_non_raising>(N, ex);
-    else compute_min_sw_extension<false, false, restrict_to_non_raising>(N, ex);
+      compute_min_sw_extension<false, true>(N, ex);
+    else compute_min_sw_extension<false, false>(N, ex);
   }
 }
 
@@ -189,15 +188,12 @@ int main(const int argc, const char** argv) {
   ex.reserve(N.num_nodes());
   switch(parse_method()) {
   case 0:
-    throw std::logic_error("unimplemented");
   case 1:
-    compute_sw<false>(N, preprocess, ex);
-    break;
   case 2:
     throw std::logic_error("unimplemented");
   case 3:
-    compute_sw<true>(N, preprocess, ex);
-    throw std::logic_error("unimplemented");
+    compute_sw(N, preprocess, ex);
+    break;
   case 4:
     throw std::logic_error("unimplemented");
   case 5:

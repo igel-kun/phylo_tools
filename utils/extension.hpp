@@ -74,6 +74,7 @@ namespace PT{
       [[no_unique_address]] NetworkDegrees network_degrees;
 
       STAT(size_t sw_raising = 0; size_t sw_shrinking = 0);
+      static constexpr bool sw_accumulatable = std::is_convertible_v<decltype(network_degrees(NoNode).first), sw_t>;
     public:
 
       DynamicScanwidth()
@@ -88,7 +89,7 @@ namespace PT{
 
       // add a new node u to the scanwidth calculation and return its scanwidth
       template<class CallBack = mstd::IgnoreFunction<void>>
-      sw_t update_sw(const NodeDesc u, CallBack&& save_highest_child_of = CallBack()) {
+      auto update_sw(const NodeDesc u, CallBack&& save_highest_child_of = CallBack()) {
         STAT(size_t child_sw_max = 0;);
         DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
         const auto& u_node = node_of<Net>(u);
@@ -99,7 +100,7 @@ namespace PT{
         try{
           DEBUG5(std::cout << "working children "<<u_node.children()<<" of "<<u<<"\n");
           for(const auto& v: u_node.children()) {
-            STAT(child_sw_max = std::max(child_sw_max, out.at(v)));
+            STAT(if constexpr (sw_accumulatable) {child_sw_max = std::max(child_sw_max, out.at(v));} );
             if(weak_components.in_different_sets(u, v)) {
               // if v is in a different weak component than u, then merge the components and increase sw(u) by sw(v)
               const auto& v_set = weak_components.set_of(v);
@@ -111,7 +112,8 @@ namespace PT{
               weak_components.merge_sets_keep_order(u, v);
             }
           }
-          STAT(if(child_sw_max != 0) {if(sw_u < child_sw_max) {++sw_shrinking;} else if(sw_u > child_sw_max) {++sw_raising;}});
+          STAT(if constexpr (sw_accumulatable) {
+              if(child_sw_max != 0) {if(sw_u < child_sw_max) {++sw_shrinking;} else if(sw_u > child_sw_max) {++sw_raising;}}});
           sw_u -= outdeg; // discount the edges u-->v from the scanwidth of u
           append(out, u, sw_u);
         } catch(std::out_of_range& e){
@@ -147,11 +149,13 @@ namespace PT{
     void sw_map(Output&& out, NetDeg&& degrees, Callback&& save_highest_child) const {
       return sw_map_meta<Network>(std::forward<NetDeg>(degrees), std::forward<Output>(out), std::forward<Callback>(save_highest_child));
     }
+    
     template<StrictPhylogenyType Network, class Output, class NetDeg = DefaultDegrees<Network>>
       requires (std::invocable<NetDeg, NodeDesc> && !std::is_void_v<std::invoke_result<NetDeg, NodeDesc>>)
     void sw_map(Output&& out, NetDeg&& degrees = NetDeg()) const {
       return sw_map_meta<Network>(std::forward<NetDeg>(degrees), std::forward<Output>(out));
     }
+
     template<StrictPhylogenyType Network, class Output, class Callback = DefaultDegrees<Network>>
       requires (!std::invocable<Callback, NodeDesc> || std::is_void_v<std::invoke_result<Callback, NodeDesc>>)
     void sw_map(Output&& out, Callback&& save_highest_child) const {
@@ -167,12 +171,15 @@ namespace PT{
     }
 
 
+    // sw_nodes_map is for retrieving the SW-sets for each node in the scanwidth-layout corresponding to the extension
     template<StrictPhylogenyType Network, NodeMapType Output, class... Args>
     void sw_nodes_map(Output&& out, Args&&... args) const {
       using Nodes = mstd::mapped_type_of_t<Output>;
-      static_assert(std::is_same_v<std::remove_cvref_t<mstd::value_type_of_t<Nodes>>, NodeDesc>);
       using NodesAndNode = std::pair<Nodes, NodeDesc>;
-      return sw_map_meta<Network>([&](const NodeDesc u){
+      static_assert(std::is_same_v<std::remove_cvref_t<mstd::value_type_of_t<Nodes>>, NodeDesc>);
+
+      return sw_map_meta<Network>(
+        [&](const NodeDesc u){
           const auto& u_parents = Network::parents(u);
           return NodesAndNode(std::piecewise_construct, std::tuple{u_parents.begin(), u_parents.end()}, std::tuple{u});
         },

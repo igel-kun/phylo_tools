@@ -157,7 +157,7 @@ namespace PT {
             const auto hc_iter = highest_children_of.find(u);
             size_t children_cost = 0;
             if(hc_iter != highest_children_of.end()) {
-              for(const NodeDesc v: highest_children_of.at(u)) {
+              for(const NodeDesc v: hc_iter->second) {
                 const auto& v_bag = dp_table.at(v);
                 // step 1: translate the index for v's bag, leaving a spot for u
                 Index sub_index = prepare_index(index, u_bag, v_bag);
