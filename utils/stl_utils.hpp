@@ -54,7 +54,7 @@ namespace mstd{
   template<class First, class... Args>
   struct _FirstTypeOf<First, Args...> { using type = First; };
   template<class... Args>
-  using FirstTypeOf = _FirstTypeOf<Args...>::type;
+  using FirstTypeOf = typename _FirstTypeOf<Args...>::type;
 
   // ---------------- conditional invocation ---------------------------
 
@@ -188,7 +188,9 @@ namespace mstd{
   template<typename T> requires HasIterTraits<T>
   struct iterator_traits: public std::iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just std::remove_reference_t from it
-    using value_type = std::conditional_t<!std::is_pointer_v<T>, typename std::iterator_traits<T>::value_type, std::remove_reference_t<typename std::iterator_traits<T>::reference>>;
+    using value_type = std::conditional_t<!std::is_pointer_v<T>,
+                                          typename std::iterator_traits<T>::value_type,
+                                          std::remove_reference_t<typename std::iterator_traits<T>::reference>>;
     using const_reference = const_reference_of_t<T>;
     using const_pointer   = const_pointer_of_t<T>;
   };
