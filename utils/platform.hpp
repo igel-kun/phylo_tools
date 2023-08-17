@@ -40,3 +40,18 @@
     // POSIX
 #endif
 
+
+// we will make a number of checks against versions of GCC and clang under which certain things do and don't work...
+// for example, clang-14 does not have 'from_chars' :(
+#ifdef __GNUC__
+#   define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+#else
+#   define GCC_VERSION 0
+#endif
+
+#ifdef __clang__
+#   define CLANG_VERSION (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevelL__)
+#else
+#   define CLANG_VERSION 0
+#endif
+

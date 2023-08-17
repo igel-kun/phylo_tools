@@ -11,7 +11,13 @@
 #include<type_traits> // deal with STL's missing type checks
 #include<algorithm> // deal with STL's sort problems
 #include<functional>
-#include<charconv>
+
+#if __clang__ && (CLANG_VERSION < 150000)
+#   include<cstdlib> // for strtof
+#else
+#   include<charconv> // for from_chars
+#endif
+
 
 #include "hash_utils.hpp"
 #include "stl_concepts.hpp"
@@ -498,7 +504,17 @@ namespace std {
   std::string operator+(const std::string_view s1, const char s2) { return std::string(s1) += s2; }
   std::string operator+(const std::string& s1, const char s2) { return std::string(s1) += s2; }
 
+#if __clang__ && (CLANG_VERSION < 150000)
+  // clang before version 15 doesn't have from_chars, so
+
+  // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
+  float stof(const std::string_view s) {
+    const char const * s_end = s.data() + s.size();
+    return strtof(s.data(), &s_end);
+  } 
+#else
   float stof(const std::string_view s) { float result; from_chars(s.data(), s.data() + s.size(), result); return result; } 
+#endif
 
 }
 

@@ -19,19 +19,15 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "platform.hpp"
 #include "debug_utils.hpp"
 #include "stl_utils.hpp"
 
 #warning TODO: sanitize namespaces using a subnamespace "details"
 
 // we reuire gcc-11.3 here since that version fixes some bugs in gcc that we'll be hit with :/
-#ifdef __GNUC__
-#   define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
-#   if GCC_VERSION < 110300
-#     error "You'll need at least gcc-11.3 to compile this project"
-#   endif
-#else
-//    If not gcc
+#if __GNUC__ && (GCC_VERSION < 110300)
+#   error "You'll need at least gcc-11.3 to compile this project"
 #endif
 
 
