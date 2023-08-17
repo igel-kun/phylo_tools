@@ -509,8 +509,11 @@ namespace std {
 
   // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
   float stof(const std::string_view s) {
-    const char const * s_end = s.data() + s.size();
-    return strtof(s.data(), &s_end);
+    const char* const c_str = s.data();
+    if(*(c_str + s.size()) != 0) {
+      const std::string my_s(s);
+      return atof(my_s.c_str());
+    } else return atof(c_str);
   } 
 #else
   float stof(const std::string_view s) { float result; from_chars(s.data(), s.data() + s.size(), result); return result; } 
