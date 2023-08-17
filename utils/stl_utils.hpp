@@ -504,8 +504,8 @@ namespace std {
   std::string operator+(const std::string_view s1, const char s2) { return std::string(s1) += s2; }
   std::string operator+(const std::string& s1, const char s2) { return std::string(s1) += s2; }
 
-#if __clang__ && (CLANG_VERSION < 150000)
-  // clang before version 15 doesn't have from_chars, so
+#if __clang__ && (CLANG_VERSION < 130000)
+  // clang before version 13 doesn't have from_chars, so
 
   // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
   float stof(const std::string_view s) {

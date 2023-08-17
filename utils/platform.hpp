@@ -42,7 +42,7 @@
 
 
 // we will make a number of checks against versions of GCC and clang under which certain things do and don't work...
-// for example, clang-14 does not have 'from_chars' :(
+// for example, clang-12 does not have 'from_chars' :(
 #ifdef __GNUC__
 #   define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #else
