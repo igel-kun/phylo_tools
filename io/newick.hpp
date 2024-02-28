@@ -250,11 +250,15 @@ namespace PT{
   using NodeFromString = std::function<NodeDesc(const std::string_view)>;
   template<StrictPhylogenyType Phylo>
   using AdjacencyFromString = std::function<typename Phylo::Adjacency(const NodeDesc d, const std::string_view)>;
+  template<StrictPhylogenyType Phylo>
+  using AdjacencyFromTwoNodesAndString = std::function<typename Phylo::Adjacency(const NodeDesc u, const NodeDesc v, const std::string_view)>;
 
   template<class F>
   concept NodeFromStringFunction = std::invocable<F, const std::string_view>;
   template<class F>
   concept AdjacencyFromStringFunction = std::invocable<F, const NodeDesc, const std::string_view>;
+  template<class F>
+  concept AdjacencyFromTwoNodesAndStringFunction = std::invocable<F, const NodeDesc, const NodeDesc, const std::string_view>;
 
   template<StrictPhylogenyType Phylo>
   struct DefaultNodeCreation {
@@ -281,12 +285,41 @@ namespace PT{
       } else return d;
     }
   };
+  template<StrictPhylogenyType Phylo>
+  struct DefaultAdjTwoNodesCreation {
+    using Adjacency = typename Phylo::Adjacency;
+
+    auto operator()(const NodeDesc u, const NodeDesc v, std::string_view s) const {
+      if constexpr (Phylo::has_edge_data && std::is_constructible_v<typename Phylo::EdgeData, std::string_view>) {
+        return Adjacency(v, s);
+      } else return v;
+    }
+  };
 
   // define const references to these global functions
   template<PhylogenyType Phylo>
   using DefaultNodeCreationRef = const DefaultNodeCreation<Phylo>&;
   template<PhylogenyType Phylo>
   using DefaultAdjCreationRef = const DefaultAdjCreation<Phylo>&;
+  template<PhylogenyType Phylo>
+  using DefaultAdjTwoNodesCreationRef = const DefaultAdjTwoNodesCreation<Phylo>&;
+
+
+  // build phylogeny from a string and, optionally, a node- and edge- creation functions
+  template<PhylogenyType Phylo,
+           NodeFromStringFunction CreateNode = DefaultNodeCreation<Phylo>,
+           AdjacencyFromTwoNodesAndStringFunction CreateAdjacency = DefaultAdjTwoNodesCreation<Phylo>>
+  Phylo parse_newick(const std::string& in,
+                     CreateNode&& _create_node = CreateNode(),
+                     CreateAdjacency&& _create_adjacency = CreateAdjacency())
+  {
+    Phylo N; // this allows NRVO
+    const auto create_node = [&](const std::string_view data){ N.count_node(); return _create_node(data); };
+    const auto create_edge = [&](const NodeDesc u, const NodeDesc v, const std::string_view data){ N.add_edge(u, _create_adjacency(u, v, data)); };
+    const NodeDesc root = NewickParser(in, create_node, create_edge).parse();
+    N.mark_root(root);
+    return N;
+  }
 
   // build phylogeny from a string and, optionally, a node- and edge- creation functions
   template<PhylogenyType Phylo,
@@ -298,17 +331,22 @@ namespace PT{
   {
     Phylo N; // this allows NRVO
     const auto create_node = [&](const std::string_view data){ N.count_node(); return _create_node(data); };
-    const auto create_edge = [&](const NodeDesc& u, const NodeDesc& v, const std::string_view data){ N.add_edge(u, _create_adjacency(v, data)); };
+    const auto create_edge = [&](const NodeDesc u, const NodeDesc v, const std::string_view data){ N.add_edge(u, _create_adjacency(v, data)); };
     const NodeDesc root = NewickParser(in, create_node, create_edge).parse();
     N.mark_root(root);
     return N;
   }
   // build a phylogeny from a string and, possibly, an edge-creation function, but neither given phylogeny nor node-creation function
+  template<PhylogenyType Phylo, AdjacencyFromTwoNodesAndStringFunction CreateAdjacency>
+  Phylo parse_newick(const std::string& in, CreateAdjacency&& create_adjacency) {
+    return parse_newick<Phylo>(in, DefaultNodeCreation<Phylo>(), std::forward<CreateAdjacency>(create_adjacency));
+  }
+   // build a phylogeny from a string and, possibly, an edge-creation function, but neither given phylogeny nor node-creation function
   template<PhylogenyType Phylo, AdjacencyFromStringFunction CreateAdjacency>
   Phylo parse_newick(const std::string& in, CreateAdjacency&& create_adjacency) {
     return parse_newick<Phylo>(in, DefaultNodeCreation<Phylo>(), std::forward<CreateAdjacency>(create_adjacency));
   }
- 
+
   template<class Network, class... Args>
   Network parse_newick(std::istream& in, Args&&... args) {
     std::string in_line;
