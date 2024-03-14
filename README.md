@@ -10,6 +10,13 @@ Library to work with phylogenetic networks aiming at pure performance
 
 Please make sure that your compiler is (very) recent! The code has been tested with GCC-11.3.
 
+In order to compile example `x` issue the following steps while in the project root:
+1. `cmake .`
+  This will also show you all compile options, such as `debug mode` which can be changed by saying `cmake -DDEBUG=3 -DSTATISTICS=0 .` for example to disable collecting run-time statistics and set the debug-verbosity to 3 (verbosity 0 turns off all debug messages)
+2. `make x`
+
+This will try to compile `x`. If it succeeds, an executable will be created in the project root and you can run it (it is recommended to check `./x --help` first).
+
 # Examples
 
 For each example `x`, `x -h` or `x --help` will give usage information.
