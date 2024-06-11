@@ -4,11 +4,7 @@
 // NOTE: insert and query may be expensive, but we hope that, in practice, they are not :)
 // NOTE: erase may be VERY expensive (might move items around the whole vector)
 //
-// theory 1: a slot at index i is considered empty <=> the value in slot i is i+1
-//    this means that, whenever we want to store a value with hash i+1 in slot i, we MUST rehash!
-//    If our hash function is good, this happens only if the vector is full.
-//    By keeping the load factor down, we can decrease search/insert times at the cost of wasted memory
-// theory 2: stored values always have increasing hashes (modulo the vector size) -
+// theory: stored values always have increasing hashes (modulo the vector size) -
 //    consider the scenario with size = 4 and we insert 2, then 3, then 6 (collision with 2) and remove the 2 afterwards.
 //    If we stored the 6 willy-nilly after the 3, we would vacate the slot for 2 and never find the 6 again...
 //    Thus, the storage after insertion will be [1,2,6,3] (note: slot 0 is vacant and 3 is NOT stored at vec[hash(3)])
