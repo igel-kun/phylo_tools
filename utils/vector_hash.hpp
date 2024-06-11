@@ -223,7 +223,7 @@ namespace mstd{
     template<typename KeyRef>
     insert_result _insert(KeyRef&& key)
     {
-      DEBUG5(std::cout << "inserting "<<key<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
+      DEBUG5(std::cout << "===> inserting "<<key<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
       // find the slot where we would place the key
       const auto [index, status] = find_slot(key);
 
@@ -276,29 +276,24 @@ namespace mstd{
       DEBUG5(std::cout << "before:\n"<<static_cast<std::vector<KeyOpt>>(*this)<<" (size "<<size()<<")\n");
       DEBUG5(std::cout << "set: "; for(auto it = begin(); it != end(); ++it) std::cout << *it << " "; std::cout << "\n");
       assert(target_size >= size());
-      
-      const size_t old_vec_size = vector_size();
-      std::vector<Key> tmp_vec;
-      tmp_vec.reserve(size());
-      Parent::resize(target_size);
-      mask = target_size-1;
+     
+      if(empty()){
+        Parent::resize(target_size);
+        mask = target_size-1;
+      } else {
+        vector_hash tmp_vec(target_size);
+        
+        DEBUG5(std::cout << "new vector of size "<<size()<<'\n'; );
 
-      if(!empty()){
-        for(size_t i = 0; i < old_vec_size; ++i){
+        for(size_t i = 0; i < vector_size(); ++i) {
           KeyOpt& key = *(data() + i);
-          if(key && (do_hash(key) != i)){
-            tmp_vec.emplace_back(key);
-            key.reset();; // set key to empty
-          }
+          if(key.has_value())
+            tmp_vec._insert(std::move(key));
         }
-        active_values -= tmp_vec.size();
-
-        for(size_t i = old_vec_size; i < vector_size(); ++i)
-          set_vacant(i);
-
-        insert(tmp_vec.begin(), tmp_vec.end(), false);
+        *this = std::move(tmp_vec);
         DEBUG5(std::cout << "after:\n"<<*this<<" (size "<<size()<<")\n");
         DEBUG5(std::cout << "set: "; for(auto it = begin(); it != end(); ++it) std::cout << *it << " "; std::cout << "\n");
+        DEBUG5(std::cout << "vec: "; for(int i = 0; i < vector_size(); ++i) std::cout << Parent::operator[](i) << " "; std::cout << "\n");
       }
     }
 
@@ -386,18 +381,12 @@ namespace mstd{
       return (result.second == 1) ? make_iterator(result.first) : end();
     }
 
-    insert_result insert(const Key& key)
+    template<class T> requires (std::is_same_v<std::remove_reference_t<T>, Key>)
+    insert_result insert(T&& key)
     {
       // check if load factor is exceeded and trigger rehash
       if(load_factor() > max_load_factor) rehash();
-      return _insert(key);
-    }
-
-    insert_result insert(Key&& key)
-    {
-      // check if load factor is exceeded and trigger rehash
-      if(load_factor() > max_load_factor) rehash();
-      return _insert<Key&&>(static_cast<Key&&>(key));
+      return _insert(std::forward<T>(key));
     }
 
     template<class InputIt>
@@ -425,7 +414,7 @@ namespace mstd{
     {
       assert(std::is_move_assignable_v<Key>);
       if(load_factor() > max_load_factor) rehash();
-      return _insert<Key&&>(static_cast<Key&&>(Key(std::forward<Args>(args)...)));
+      return _insert(Key(std::forward<Args>(args)...));
     }
 
     inline bool erase(const Key& key) {
