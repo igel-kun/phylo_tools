@@ -58,14 +58,15 @@ namespace mstd {
                !std::is_same_v<std::remove_cvref_t<ParentInit>, do_not_fix_index_tag> &&
                !std::is_same_v<std::remove_cvref_t<ParentInit>, filter_only_tag>)
     _filtered_iterator(ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
-      Parent(std::forward<ParentInit>(parent_init)),
-      pred(std::forward<PredInit>(pred_init))
+      Parent{std::forward<ParentInit>(parent_init)},
+      pred{std::forward<PredInit>(pred_init)}
     { fix_index(); }
 
     template<class ParentInit, class PredInit = Predicate>
+      requires (!std::is_same_v<std::remove_cvref_t<ParentInit>, std::piecewise_construct_t>)
     _filtered_iterator(const do_not_fix_index_tag, ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
-      Parent(std::forward<ParentInit>(parent_init)),
-      pred(std::forward<PredInit>(pred_init))
+      Parent{std::forward<ParentInit>(parent_init)},
+      pred{std::forward<PredInit>(pred_init)}
     {}
 
     template<class PredInit = Predicate>
@@ -75,16 +76,16 @@ namespace mstd {
     {}
 
     // piecewise construction of the auto_iter and the predicate
-    template<class ParentTuple, class PredicateTuple>
-    constexpr _filtered_iterator(const std::piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init):
-      Parent(std::make_from_tuple<Parent>(parent_init)),
-      pred(std::make_from_tuple<Predicate>(std::forward<PredicateTuple>(pred_init)))
+    template<class ParentTuple, class PredicateTuple = std::tuple<>>
+    constexpr _filtered_iterator(const std::piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init = PredicateTuple()):
+      Parent{std::make_from_tuple<Parent>(std::forward<ParentTuple>(parent_init))},
+      pred{std::make_from_tuple<Predicate>(std::forward<PredicateTuple>(pred_init))}
     { fix_index(); }
 
-    template<class ParentTuple, class PredicateTuple>
-    constexpr _filtered_iterator(const do_not_fix_index_tag, const std::piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init):
-      Parent(std::forward<ParentTuple>(parent_init)),
-      pred(make_from_tuple<Predicate>(std::forward<PredicateTuple>(pred_init)))
+    template<class ParentTuple, class PredicateTuple = std::tuple<>>
+    constexpr _filtered_iterator(const do_not_fix_index_tag, const std::piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init = PredicateTuple()):
+      Parent{std::make_from_tuple<Parent>(std::forward<ParentTuple>(parent_init))},
+      pred{std::make_from_tuple<Predicate>(std::forward<PredicateTuple>(pred_init))}
     {}
 
     _filtered_iterator() = default;

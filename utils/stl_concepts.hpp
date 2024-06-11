@@ -18,18 +18,24 @@ namespace mstd {
   template<class T> concept really_post_incrementable = requires(T t){t++;};
 
   template<class T> concept has_iterator = requires { typename T::iterator;};
+  // for reasons, C++20's std::span has no const_iterator yet (added in C++23)
+  template<class T> concept has_const_iterator = requires { typename T::const_iterator;};
   template<class T> concept has_reference = requires { typename std::remove_reference_t<T>::reference; };
 
   // ever needed to get an iterator if T was non-const and a const_iterator if T was const? Try this:
   template<class T> struct _iterator_of {};
-  template<class T> requires has_iterator<T> struct _iterator_of<T> {
-    using type = std::conditional_t<std::is_const_v<T>, typename T::const_iterator, typename T::iterator>;
+  template<class T> requires std::ranges::range<T>  struct _iterator_of<T> {
+    using type = decltype(std::ranges::begin(std::declval<T&>()));
   };
-  template<class T> requires (std::ranges::range<std::remove_const_t<T>> && !has_iterator<T>) struct _iterator_of<T> {
-    using type = std::ranges::iterator_t<std::remove_const_t<T>>;
+  template<class T> requires (!std::ranges::range<T> && std::is_const_v<T> && has_const_iterator<T>)  struct _iterator_of<T> {
+    using type = typename T::const_iterator;
+  };
+  template<class T> requires (!std::ranges::range<T> && has_iterator<T> && (!std::is_const_v<T> || !has_const_iterator<T>))  struct _iterator_of<T> {
+    using type = typename T::iterator;
   };
   template<class T> struct _iterator_of<T*> { using type = T*; };
   template<class T, std::size_t N> struct _iterator_of<T (&)[N]> { using type = T*; };
+
   template<class T>
   using _iterator_of_t = typename _iterator_of<std::remove_reference_t<T>>::type;
 
@@ -46,6 +52,12 @@ namespace mstd {
   template<class T>
   concept StrictVectorOrStringType = (VectorOrStringType<T> && !std::is_reference_v<T>);
 
+  template<class T, class I = size_t>
+  concept is_indexible_v = requires (T& t, const I& i) { {t[i]}; };
+  template<class T, class I = size_t>
+  concept IndexibleType = is_indexible_v<T, I>;
+  template<class T, class I = size_t>
+  concept StrictIndexibleType = IndexibleType<T, I>  && !std::is_reference_v<T>;
 
   template<class T>
   concept HasIterTraits = requires { typename std::iterator_traits<T>; };

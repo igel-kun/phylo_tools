@@ -504,20 +504,50 @@ namespace std {
   std::string operator+(const std::string_view s1, const char s2) { return std::string(s1) += s2; }
   std::string operator+(const std::string& s1, const char s2) { return std::string(s1) += s2; }
 
-#if __clang__ && (CLANG_VERSION < 130000)
+#if __APPLE__ || (__clang__ && (CLANG_VERSION < 130000))
   // clang before version 13 doesn't have from_chars, so
+  // also, apple is, shall we say, less than optimal
 
   // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
-  float stof(const std::string_view s) {
+  template<mstd::ArithmeticType T, class Converter>
+  T _stoX(const std::string_view s) {
     const char* const c_str = s.data();
     if(*(c_str + s.size()) != 0) {
       const std::string my_s(s);
-      return atof(my_s.c_str());
-    } else return atof(c_str);
-  } 
+      return Converter(my_s.c_str());
+    } else return Converter(c_str);
+  }
+  template<mstd::ArithmeticType T>
+  T stoX(const std::string_view s) {
+    if constexpr (std::is_same_v<T, int>)
+      return _stoX<int, std::atoi>(s);
+    else if constexpr (std::is_same_v<T, long>)
+      return _stoX<int, std::atol>(s);
+    else if constexpr (std::is_same_v<T, float>)
+      return _stoX<float, std::atof>(s);
+    else return _stoX<double, std::atod>(s);
+  }
+
 #else
-  float stof(const std::string_view s) { float result; from_chars(s.data(), s.data() + s.size(), result); return result; } 
+  // std::string_view conversion
+  template<mstd::ArithmeticType T>
+  T stoX(const std::string_view sv) {
+    T result;
+    std::from_chars(sv.data(), sv.data() + sv.size(), result);
+    return result;
+  }
+ 
+  //int    stoi(const std::string_view sv) { int result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
+  //long   stol(const std::string_view sv) { long result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
+  //float  stof(const std::string_view sv) { float result = 0.0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
+  //double stod(const std::string_view sv) { double result = 0.0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
 #endif
+
+  int    stoi(const std::string_view s) { return stoX<int>(s); }
+  long   stol(const std::string_view s) { return stoX<long>(s); }
+  float  stof(const std::string_view s) { return stoX<float>(s); }
+  double stod(const std::string_view s) { return stoX<double>(s); }
+
 
 }
 
@@ -567,11 +597,6 @@ namespace mstd {
   template<class Else> struct _VoidOr<void, Else> { using type = Else; };
   template<class T, class Else> using VoidOr = typename _VoidOr<T, Else>::type;
   template<class T, class Else = uint_fast8_t> using ReturnableType = VoidOr<T, Else>;
-
-  // std::string_view conversion
-  float stoi(const std::string_view sv) { int result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
-  float stof(const std::string_view sv) { float result = 0.0f; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
-  float stod(const std::string_view sv) { double result = 0.0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
 
 
   // an operator that appends anything to a given container

@@ -5,11 +5,11 @@
 #include <optional>
 
 namespace mstd {
-  // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (much like nullptr)
+  // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (aka a 'tombstone')
   template<class T, T _invalid = std::numeric_limits<T>::max()>
-  class optional_by_invalid {
-    T element = _invalid;
-  public:
+  struct optional_by_invalid {
+    T element{_invalid};
+    
     using value_type = T;
     using reference = T&;
     using const_reference = const T&;
