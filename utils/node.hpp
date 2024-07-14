@@ -255,6 +255,7 @@ namespace PT{
   };
 
   // a node may have a label (can be accessed via label())
+  // NOTE: has_label only tells that a node MAY have a (possibly empty) label!
   template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData, class _LabelType = void>
   class Node: public _Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData> {
     using Parent = _Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>;

@@ -5,6 +5,11 @@
 
 namespace mstd {
 
+  template<class T>
+  concept is_auto_iter = requires(T a) {
+    typename T::UnderlyingIterator;
+    {a.is_invalid()} -> std::same_as<bool>;
+  };
 
   template<class Ptr>
   struct PointerIterWrapper: public std::iterator_traits<Ptr> {
@@ -16,8 +21,6 @@ namespace mstd {
 
     operator TptrRef() { return data; }
     operator TptrConstRef() const { return data; }
-
-    PointerIterWrapper(const Tptr& _data): data(_data) {}
   };
 
   template<class T>
@@ -65,8 +68,10 @@ namespace mstd {
     _auto_iter& operator=(const _auto_iter&) = default;
     _auto_iter& operator=(_auto_iter&&) = default;
 
+    template<class T> requires (!is_auto_iter<T>)
+    bool operator==(const T& other) const { return is_valid() && (other == get_iter()); }
     template<class T>
-    bool operator==(const T& other) const { return is_valid() ? Iterator::operator==(other.it) : !(other.is_valid()); }
+    bool operator==(const _auto_iter<T>& other) const { return is_valid() ? (other == get_iter()) : other.is_invalid(); }
 
     _auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     _auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }

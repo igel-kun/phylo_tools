@@ -89,8 +89,8 @@ namespace PT{
 
 
   //! generate labels
-  template<StrictTreeType Tree, bool leaf_labels_only = false> requires (Tree::has_node_labels)
-  void generate_labels(Tree& T, const float multilabel_density = 0.0f) {
+  template<StrictPhylogeny Net, bool leaf_labels_only = false> requires (Net::has_node_labels)
+  void generate_labels(Net& T, const float multilabel_density = 0.0f) {
 #warning "TODO: implement multi-labels"
     assert(multilabel_density >= 0.0f   && multilabel_density < 1.0f);
 
@@ -102,13 +102,13 @@ namespace PT{
     }
   }
 
-  template<StrictTreeType Tree>
-  void generate_labels(const leaf_labels_only_tag, Tree& T, const float multilabel_density = 0.0f) {
-    generate_labels<Tree, true>(T, multilabel_density);
+  template<StrictPhylogenyType Net>
+  void generate_labels(const leaf_labels_only_tag, Net& T, const float multilabel_density = 0.0f) {
+    generate_labels<Net, true>(T, multilabel_density);
   }
-  template<StrictTreeType Tree>
-  void generate_leaf_labels(Tree& T, const float multilabel_density = 0.0f) {
-    generate_labels<Tree, true>(T, multilabel_density);
+  template<StrictPhylogenyType Net>
+  void generate_leaf_labels(Net& T, const float multilabel_density = 0.0f) {
+    generate_labels<Net>(T, multilabel_density);
   }
 
   //! add a number of random edges to a given network, introducing new_tree_nodes new tree nodes and new_reticulations new reticulations

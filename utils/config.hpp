@@ -14,6 +14,9 @@ namespace PT{
     // apply the expensive extended cherry reduction only if N is at least x edges away from begin a tree
     uint8_t min_retis_to_apply_extended_cherry = 1;
 
+    // when selecting k of n elements at random, choose the k log k "cardchoose" method of Paul Crowley if k is below this threshold
+    uint32_t cardchoose_threshold = 10;
+
     // characters to use for displaying trees/networks on the console
     // the standard ASCII set is a bit daft but only uses ASCII < 128
     // we allow using a much nicer UTF8 set

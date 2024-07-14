@@ -2,56 +2,62 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 namespace mstd{
 
-  class Tokenizer
-  {
-    const std::string& s;
-    const char delim;
+  // this iterator 
+  template<class DelimRef = char>
+  class TokenIter {
+    using Delim = std::remove_cvref_t<DelimRef>;
+    static constexpr bool single_delim = std::is_same_v<std::remove_cvref_t<Delim>, char>;
+
+    std::string_view s;
+    Delim delim;
     size_t front, next;
   public:
-    Tokenizer(const std::string& input_string, const char delimeter, const size_t _front = 0, const size_t _next = 0):
-      s(input_string), delim(delimeter), front(_front), next(_next == 0 ? input_string.find(delimeter) : _next)
+    using value_type = std::string_view;
+    using reference  = value_type;
+    using const_reference = const value_type;
+    using pointer    = mstd::pointer_from_reference<reference>;
+   
+    TokenIter(const std::string_view input_string, const Delim& delimeter, const size_t _front = 0, const size_t _next = 0):
+      s(input_string), delim(delimeter), front(_front), next(_next == 0 ? input_string.find_first_of(delimeter) : _next)
     {}
 
-    ~Tokenizer() {}
-
-    bool is_valid() const
-    {
-      return next != std::string::npos;
-    }
-
-    operator bool() const
-    {
-      return is_valid();
-    }
-
-    std::string operator*() const
-    {
-      return s.substr(front, next - front + 1);
-    }
+    bool is_valid() const { return front != std::string::npos; }
+    operator bool() const { return is_valid(); } 
+    reference operator*() const { return s.substr(front, next - front); }
 
     //! increment operator
-    Tokenizer& operator++()
-    {
-      front = next + 1;
-      next = s.find(delim, front);
+    TokenIter& operator++() {
+      if(next != std::string::npos) {
+        front = next + 1;
+        next = s.find_first_of(delim, front);
+      } else front = std::string::npos;
       return *this;
     }
 
     //! post-increment
-    Tokenizer operator++(int)
-    {
+    TokenIter operator++(int) {
       const size_t old_front = front;
       const size_t old_next = next;
       ++(*this);
-      return Tokenizer(s, delim, old_front, old_next);
+      return TokenIter(s, delim, old_front, old_next);
     }
 
-    std::pair<size_t,size_t> current_indices() const 
-    {
+    std::pair<size_t,size_t> current_indices() const  {
       return {front, next};
     }
   };
+
+  template<class Delim>
+  using Tokenizer = mstd::IterFactory<TokenIter<Delim>>;
+
+  template<class Delim>
+  auto tokenize(const std::string_view sv, Delim&& delim) {
+    return Tokenizer<Delim>(sv, std::forward<Delim>(delim));
+  }
+
 }
+

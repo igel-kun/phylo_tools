@@ -24,30 +24,44 @@ namespace PT{
     }
   };
 
+  // ------ WRITE OUTPUT --------
   // compute the extended newick string for a subnetwork rooted at sub_root of a network N with retis_seen reticulations considered as treated
   template<class _Network, class Container = PT::NodeSet>
-  std::string get_extended_newick(const _Network& N, const NodeDesc sub_root, Container&& retis_seen = Container()) {
-    std::string accu = "";
+  void write_extended_newick(std::ostream& os, const _Network& N, const NodeDesc sub_root, Container&& retis_seen = Container()) {
     if((N.in_degree(sub_root) <= 1) || !mstd::test(retis_seen, sub_root)){
-      accu += '(';
-      for(const auto& w: N.children(sub_root))
-        accu += get_extended_newick(N, w, retis_seen) + ',';
-      // remove last "," (or the "(" for leaves)
-      accu.pop_back();
-      if(!N.is_leaf(sub_root)) accu += ')';
+      os << '(';
+      bool not_first = false;
+      for(const auto& w: N.children(sub_root)) {
+        if(not_first) not_first = true; else os << ',';
+        write_extended_newick(os, N, w, retis_seen);
+      }
+      if(!N.is_leaf(sub_root)) os << ')';
     }
-    if constexpr (_Network::Node::has_label) accu += N.label(sub_root);
+    if constexpr (_Network::Node::has_label) os << N.label(sub_root);
     if(N.in_degree(sub_root) > 1) {
-      accu += "#H" + std::to_string(sub_root);
+      os << "#H" + std::to_string(sub_root);
       mstd::append(retis_seen, sub_root);
     }
-    return accu;
+  }
+
+  // write the extended newick string for a network N onto a stream
+  template<class _Network>
+  void write_extended_newick(std::ostream& os, const _Network& N) { write_extended_newick(os, N, N.root()) += ';'; }
+
+  // compute the extended newick string for a network N (only the part below sub_root)
+  template<class _Network>
+  std::string get_extended_newick(const _Network& N, const NodeDesc sub_root) {
+    std::stringstream os;
+    write_extended_newick(os, N, sub_root);
+    return os.str();
   }
 
   // compute the extended newick string for a network N
   template<class _Network>
-  std::string get_extended_newick(const _Network& N) { return get_extended_newick(N, N.root()) += ';'; }
+  std::string get_extended_newick(const _Network& N) { return get_extended_newick(N, N.root()); }
 
+
+  // ------ READ INPUT --------
   template<bool store_degree = true>
   struct NodeDescAndDegree: public std::pair<NodeDesc, Degree> {
     using Parent = std::pair<NodeDesc, Degree>;
@@ -89,8 +103,8 @@ namespace PT{
 
     bool parsed = false;
 
-    NodeCreationFunctor create_node;
-    EdgeCreationFunctor create_edge;
+    [[no_unique_address]] NodeCreationFunctor create_node;
+    [[no_unique_address]] EdgeCreationFunctor create_edge;
 
   public:
 
@@ -247,6 +261,7 @@ namespace PT{
 
   };
 
+
   using NodeFromString = std::function<NodeDesc(const std::string_view)>;
   template<StrictPhylogenyType Phylo>
   using AdjacencyFromString = std::function<typename Phylo::Adjacency(const NodeDesc d, const std::string_view)>;
@@ -304,24 +319,7 @@ namespace PT{
   template<PhylogenyType Phylo>
   using DefaultAdjTwoNodesCreationRef = const DefaultAdjTwoNodesCreation<Phylo>&;
 
-
-  // build phylogeny from a string and, optionally, a node- and edge- creation functions
-  template<PhylogenyType Phylo,
-           NodeFromStringFunction CreateNode = DefaultNodeCreation<Phylo>,
-           AdjacencyFromTwoNodesAndStringFunction CreateAdjacency = DefaultAdjTwoNodesCreation<Phylo>>
-  Phylo parse_newick(const std::string& in,
-                     CreateNode&& _create_node = CreateNode(),
-                     CreateAdjacency&& _create_adjacency = CreateAdjacency())
-  {
-    Phylo N; // this allows NRVO
-    const auto create_node = [&](const std::string_view data){ N.count_node(); return _create_node(data); };
-    const auto create_edge = [&](const NodeDesc u, const NodeDesc v, const std::string_view data){ N.add_edge(u, _create_adjacency(u, v, data)); };
-    const NodeDesc root = NewickParser(in, create_node, create_edge).parse();
-    N.mark_root(root);
-    return N;
-  }
-
-  // build phylogeny from a string and, optionally, a node- and edge- creation functions
+  // build phylogeny from a string and, optionally, a node- and edge- creation functions (adjacency creation with 1 node!)
   template<PhylogenyType Phylo,
            NodeFromStringFunction CreateNode = DefaultNodeCreation<Phylo>,
            AdjacencyFromStringFunction CreateAdjacency = DefaultAdjCreation<Phylo>>
@@ -336,6 +334,23 @@ namespace PT{
     N.mark_root(root);
     return N;
   }
+
+  // build phylogeny from a string and, optionally, a node- and edge- creation functions (adjacency creation with 2 nodes!)
+  template<PhylogenyType Phylo,
+           NodeFromStringFunction CreateNode,
+           AdjacencyFromTwoNodesAndStringFunction CreateAdjacency>
+  Phylo parse_newick(const std::string& in,
+                     CreateNode&& _create_node,
+                     CreateAdjacency&& _create_adjacency)
+  {
+    Phylo N; // this allows NRVO
+    const auto create_node = [&](const std::string_view data){ N.count_node(); return _create_node(data); };
+    const auto create_edge = [&](const NodeDesc u, const NodeDesc v, const std::string_view data){ N.add_edge(u, _create_adjacency(u, v, data)); };
+    const NodeDesc root = NewickParser(in, create_node, create_edge).parse();
+    N.mark_root(root);
+    return N;
+  }
+
   // build a phylogeny from a string and, possibly, an edge-creation function, but neither given phylogeny nor node-creation function
   template<PhylogenyType Phylo, AdjacencyFromTwoNodesAndStringFunction CreateAdjacency>
   Phylo parse_newick(const std::string& in, CreateAdjacency&& create_adjacency) {

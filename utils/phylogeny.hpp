@@ -77,13 +77,14 @@ namespace PT {
       _roots.clear();
     }
 
-    bool is_forest() const { return _num_nodes == _num_edges + _roots.size(); }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return _num_edges; }
 		size_t num_roots() const { return _roots.size(); }
+    bool is_forest() const { return _num_nodes == _num_edges + num_roots(); }
     NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
+    // return whether the network contains a path from x to y
 #warning "TODO: change this once we have a better LCA oracle"
     bool has_path(const NodeDesc x, NodeDesc y) const {
       std::unordered_set<NodeDesc> seen;
@@ -149,8 +150,8 @@ namespace PT {
 
     static constexpr bool is_forest() { return true; }
 		size_t num_nodes() const { return _num_nodes; }
-		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - _roots.size(); }
 		size_t num_roots() const { return _roots.size(); }
+		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - num_roots(); }
     NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
@@ -200,6 +201,7 @@ namespace PT {
     using Parent::in_edges;
     using Parent::out_edges;
 		using Parent::num_edges;
+    using Parent::num_roots;
 		using Parent::_num_nodes;
     using Parent::name;
     using Parent::label;
@@ -714,7 +716,7 @@ namespace PT {
       subdivide_edge(uv.tail(), std::forward<_Edge>(uv).head(), std::forward<Adj>(w), make_data);
     }
 
-    // subdivide and edge, creating a new node
+    // subdivide an edge, creating a new node
     // NOTE: if a NodeFunctionType or a DataExtracterType is passed, then we try to initialize the node data with it
     //       if DataMaker is invocable with 2 Adjacencies, then we use it to set the edge data
     template<EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
@@ -880,23 +882,59 @@ namespace PT {
       const auto& C = children(u);
       while(!C.empty()) remove_subtree(back(C), std::forward<Args>(args)...);
     }
-    
+
+    // re-root the phylogeny at a given node r
+    // if requested, suppress deg-2 nodes on the root-r-path (including the root itself)
+    // NOTE: the _no_cleanup-suffix indicates that the 'roots' set is not updated, if you want that updated, call the 'reroot' function
+    // NOTE: this is only supported if we have a unique root and the path from the root to r does not contain reticulations
+    //       (in this case, we will just reverse this path)
+    void reroot_no_cleanup(const NodeDesc r, const bool suppress_deg2 = false) {
+      if(Parent::num_roots() == 1){
+        NodeDesc x = r;
+        while(1) {
+          const auto& x_pars = parents(x);
+          if(x_pars.size() == 1) {
+            const auto& x_adj = x_pars.front();
+            const NodeDesc tmp = x_adj;
+            reverse_edge(Edge(reverse_edge_tag(), x, x_adj));
+            x = tmp;
+          } else break;
+        }
+        auto& rt = front(_roots);
+        if(x == rt) {
+          rt = r;
+        } else throw Unimplemented("rerooting at a descendant of a reticulation");
+#warning "TODO: implement rooting strategy"
+      // TODO: idea: 
+      // binary strategy: "reversal network"
+      //  1. reversal nerwork Nr = reverse of any root-r-path p
+      //  2. for each reticulation x on p in N, reverse any path from x to any node on Nr
+      //  --> if we reverse Nr in N, then we have a valid network if N was binary
+      // multifurcating strategy:
+      //  1. use the binary strategy
+      //  2. for each node with indeg > 1 AND outdeg > 1, "pull apart" the node (turn the node into 2 nodes, one with all in-edges, and one with all out-edges)
+      // TODO: add a callback that ist called for all nodes with indeg > 1 and outdeg > 1 to resolve them (or exit throwing exceptions etc)
+      } else throw Unimplemented("rerooting of multi-root phylogenies");
+    }
+
+
     // =============== variable query ======================
     bool empty() const { return _num_nodes == 0; }
     bool edgeless() const { return num_edges() == 0; }
     // NOTE: the empty network is considered a forest
     bool is_forest() const {
       if constexpr (!is_declared_tree)
-        return empty() || (num_edges() + _roots.size() == _num_nodes);
+        return empty() || (num_edges() + num_roots() == _num_nodes);
       else return true;
     }
     // NOTE: the empty network is considered a tree
     bool is_tree() const {
       if constexpr (Parent::has_unique_root)
         return is_forest();
-      else return (_roots.size() <= 1) && is_forest();
+      else return (num_roots() <= 1) && is_forest();
     }
 
+    size_t num_leaves() const { return leaves().to_container().size(); } // NOTE: this is slow since we have to crawl the phylogeny
 
     // =============== traversals ======================
     
@@ -1098,7 +1136,7 @@ namespace PT {
       std::pair<size_t,size_t> node_and_edge_count;
 
       // if other_x was the only root of other, then we'll use other's node- and edge- numbers, otherwise we'll have to count them :/
-      if(other.is_root(other_x) && (other._roots.size() == 1)) {
+      if(other.is_root(other_x) && (other.num_roots() == 1)) {
         node_and_edge_count = {other.num_nodes(), other.num_edges()};
       } else {
         node_and_edge_count = Phylo::node_of(other_x).count_nodes_and_edges_below();
@@ -1263,8 +1301,7 @@ namespace PT {
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
     Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const RContainer& in_roots) {
 #warning "TODO: write me"
-      std::cerr << "unimplemented\n";
-      exit(1);
+      throw Unimplemented("move-construction of phylogenies with different root containers");
     }
 
     template<StrictPhylogenyType Phylo, class... Args>
@@ -1330,7 +1367,7 @@ namespace PT {
     // =================== i/o ======================
 
     std::ostream& tree_summary(std::ostream& os) const {
-      DEBUG3(os << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<_roots.size()<<" roots\n");
+      DEBUG3(os << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots\n");
       DEBUG3(os << "leaves: "<<leaves()<<"\n");
       DEBUG3(os << Parent::num_nodes() << " nodes: "<<nodes()<<'\n');
       DEBUG3(os << Parent::num_edges() << " edges: "<<edges()<<'\n');
@@ -1466,5 +1503,10 @@ namespace PT {
   };
 
 
+  template<StrictPhylogenyType Net>
+  struct DefaultDegrees {
+    constexpr Degree operator()(const NodeDesc, const NodeDesc) const { return 1; }
+    Degrees operator()(const NodeDesc u) const { return Net::degrees(u); }
+  };
 
 }

@@ -14,8 +14,42 @@ namespace PT{
     }
   };
 
+  // ------ WRITE OUTPUT --------
+  template<PhylogenyType _Network>
+  void write_label(std::ostream& os, const NodeDesc x) {
+    if constexpr (_Network::has_node_labels){
+      const auto x_node = _Network::node_of(x);
+      if(!x_node.label().empty()) os << '_' << x_node.label();
+    }
+  }
+
+  template<PhylogenyType _Network>
+  void write_edgelist(std::ostream& os, const _Network& N, const NodeDesc sub_root) {
+    NodeMap<size_t> node_number;
+    for(const auto uv: N.edges_below_preorder(sub_root)) {
+      const NodeDesc u = uv.tail();
+      const NodeDesc v = uv.head();
+      const auto& u_num = node_number.emplace(u, node_number.size()).first->second;
+      const auto& v_num = node_number.emplace(v, node_number.size()).first->second;
+      os << u_num;
+      write_label<_Network>(os, u);
+      os << '\t' << v_num;
+      write_label<_Network>(os, v);
+      os << '\n';
+    }
+  }
+
+  // compute the extended newick string for a network N
+  template<PhylogenyType _Network>
+  void write_edgelist(std::ostream& os, const _Network& N) { write_edgelist(os, N, N.root()); }
+
+
+
+
 #warning TODO: teach it to parse weighted edges
 
+  // ------ READ INPUT --------
+  // read an edgelist
   template<class EdgeList, class LabelMap>
   class EdgeVecParser
   {
@@ -84,8 +118,6 @@ namespace PT{
   {
     return EdgeVecParser<EdgeList, LabelMap>(in, el, *names).read_tree();
   }
-
-
 
 }
 

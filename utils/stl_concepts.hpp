@@ -129,7 +129,9 @@ namespace mstd {
   concept UnorderedContainerType = ContainerType<T> && requires { typename T::hasher; };
   template<class T>
   concept OptionalUnorderedContainerType = std::is_void_v<T> || UnorderedContainerType<T>;
-
+  template<class C, class V>
+  concept ContainerOfType = ContainerType<C> &&
+    std::is_same_v<std::remove_cvref_t<V>, std::remove_cvref_t<typename std::iterator_traits<_iterator_of_t<C>>::value_type>>;
 
   template<class Iter, class C>
   concept StrictIteratorTypeOf = ContainerType<C> && !ContainerType<Iter> &&
@@ -190,10 +192,11 @@ namespace mstd {
       { std::cout << t } -> std::same_as<std::ostream&>;
   };
 
+  template <typename> struct is_tuple: std::false_type {};
+  template <typename ...T> struct is_tuple<std::tuple<T...>>: std::true_type {};
   template<class T>
-  concept TupleType = requires(T t) {
-    typename std::tuple_size<T>::type;
-    requires std::derived_from<std::tuple_size<T>, std::integral_constant<size_t, std::tuple_size_v<T>>>;
-  };
+  constexpr bool is_tuple_v = is_tuple<T>::value;
 
+  template<class T>
+  concept TupleType = is_tuple_v<T>;
 }

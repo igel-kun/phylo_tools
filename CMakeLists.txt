@@ -98,10 +98,11 @@ ADD_EXECUTABLE( tc examples/tc.cpp )
 ADD_EXECUTABLE( gen examples/gen.cpp )
 ADD_EXECUTABLE( node_data examples/node_data.cpp )
 ADD_EXECUTABLE( branch_len examples/branch_len.cpp )
-ADD_EXECUTABLE( network_pd examples/network_pd.cpp )
 ADD_EXECUTABLE( cuts examples/cuts.cpp )
 ADD_EXECUTABLE( scanwidth examples/scanwidth.cpp )
 ADD_EXECUTABLE( parsimony examples/parsimony.cpp )
+ADD_EXECUTABLE( undir examples/undir.cpp )
+ADD_EXECUTABLE( diversity examples/diversity.cpp )
 
 
 

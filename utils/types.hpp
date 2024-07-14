@@ -27,7 +27,7 @@ namespace PT{
     setS,     // store items in a std::set
     hashsetS, // store items in a std::unordered_set
     multisetS,// store items in a std::unordered_multiset
-    vecsetS,  // store items in a std::vector_hash
+    vecsetS,  // store items in a mstd::vector_hash
     singleS  // store a single item (like the parent for a tree node)
   };
 
@@ -111,8 +111,8 @@ namespace PT {
   using NodeDesc = uintptr_t;
 #endif
 
-  constexpr NodeDesc NoNode = NodeDesc{};
-  const std::string NoName = "";
+  static constexpr NodeDesc NoNode = NodeDesc{};
+  static constexpr std::string NoName = "";
 
   using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc, NoNode>;
 

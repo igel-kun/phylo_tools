@@ -31,10 +31,11 @@ void parse_options(const int argc, const char** argv)
 
 const auto parse_branch_len = [](const NodeDesc d, const std::string_view s){ return typename MyNetwork::Adjacency(d, std::stof(s)); };
 
-MyNetwork read_network(std::ifstream& in) {
+MyNetwork read_network(const std::string& in) {
   std::cout << "reading network..."<<std::endl;
   try{
-    MyNetwork N(parse_newick<MyNetwork>(in, parse_branch_len));
+    std::ifstream in_stream{std::string{in}};
+    MyNetwork N(parse_newick<MyNetwork>(in_stream, parse_branch_len));
     return N;
   } catch(const std::exception& err){
     std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
@@ -46,8 +47,7 @@ int main(const int argc, const char** argv)
 {
   parse_options(argc, argv);
 
-  std::ifstream in(options[""][0]);
-  MyNetwork N(read_network(in));
+  const MyNetwork N(read_network(options[""][0]));
 
   if(mstd::test(options, "-v"))
     std::cout << N << std::endl;

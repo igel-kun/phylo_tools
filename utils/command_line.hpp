@@ -7,6 +7,7 @@
 #include "utils.hpp"
 #include "config.hpp"
 #include "linear_interval.hpp"
+#include "stl_concepts.hpp"
 
 namespace PT{
 
@@ -63,6 +64,7 @@ namespace PT{
   struct ConstraintArgumentParser {
     using ExtractArgFromString = _ExtractArgFromString;
     using ValidityChecker = _ValidityChecker;
+
     const std::vector<std::string>& arguments;
     ExtractArgFromString extract;
     ValidityChecker check_valid;
@@ -75,20 +77,32 @@ namespace PT{
         T result = extract(arguments.at(arg_index));
         if(!check_valid(result)) {
           std::cerr << "unexpected argument '"<< arguments.at(arg_index) << "', please see the help screen (--help)\n";
-          exit(1);
+          exit(EXIT_FAILURE);
         } else return result;
       } else {
         std::cerr << "not enough arguments for an option, please see the help screen (--help)\n";
-        exit(1);
+        exit(EXIT_FAILURE);
       }
     }
   };
 
-  struct StringToInt { constexpr auto operator()(const auto& x) const {return std::stoi(x);} };
+
+  template<mstd::ArithmeticType T = size_t>
+  T arg_from_string(const auto& x) {
+    try {
+      return stoX<T>(x);
+    } catch(const std::exception& err){
+      std::cerr << "problem converting argument to arithmetic type: "<<err.what()<<std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  struct FromString {
+    constexpr auto operator()(const auto& x) const { return stoX<int>(x); }
+  };
 
   template<class T>
-  using ProtoConstraintIntParser = ConstraintArgumentParser<StringToInt, mstd::linear_interval<int>>;
-
+  using ProtoConstraintIntParser = ConstraintArgumentParser<FromString, mstd::linear_interval<int>>;
 
   struct ConstraintIntParser: public ProtoConstraintIntParser<mstd::linear_interval<int>> {
     using Parent = ProtoConstraintIntParser<mstd::linear_interval<int>>;

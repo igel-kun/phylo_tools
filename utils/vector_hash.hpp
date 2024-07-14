@@ -1,5 +1,6 @@
 
-// this is a simple hashing vector 
+// this is a simple flat-hashset (based on vector) with a variant of open addressing
+// https://en.wikipedia.org/wiki/Open_addressing
 // on collision, we just move forward until we find an empty spot
 // NOTE: insert and query may be expensive, but we hope that, in practice, they are not :)
 // NOTE: erase may be VERY expensive (might move items around the whole vector)
@@ -7,7 +8,8 @@
 // theory: stored values always have increasing hashes (modulo the vector size) -
 //    consider the scenario with size = 4 and we insert 2, then 3, then 6 (collision with 2) and remove the 2 afterwards.
 //    If we stored the 6 willy-nilly after the 3, we would vacate the slot for 2 and never find the 6 again...
-//    Thus, the storage after insertion will be [1,2,6,3] (note: slot 0 is vacant and 3 is NOT stored at vec[hash(3)])
+//    Thus, the storage after insertion will be [tombstone,2,6,3] (note: slot 0 is vacant and 3 is NOT stored at vec[hash(3)]),
+//    but skipping all entries with smaller hash than hash(3) gives us the position where 3 should be stored
 #pragma once
 
 #include <cstring> // for memmove
@@ -16,26 +18,10 @@
 #include "utils.hpp"
 #include "stl_utils.hpp"
 #include "filter.hpp"
+#include "optional.hpp"
 #ifdef STATISTICS
 #include <unordered_map>
 #endif
-//#include "utils.hpp"
-
-// shift forward y keys at index x by z indices
-#define __VECTOR_HASH_SHIFT_FWD(x,y,z) std::memmove(static_cast<void*>(data() + (x) + (z)), static_cast<void*>(data() + (x)), (y) * sizeof(KeyOpt))    
-// shift backward y keys to index x by z indices
-#define __VECTOR_HASH_SHIFT_BWD(x,y,z) std::memmove(static_cast<void*>(data() + (x)), static_cast<void*>(data() + (x) + (z)), (y) * sizeof(KeyOpt))    
-// return whether the index x with value y is vacant
-// #define __VECTOR_HASH_IS_VACANT(x, y) (static_cast<uintptr_t>(y) == static_cast<uintptr_t>(x) + 1u)
-// advance the given index
-#define __VECTOR_HASH_ADVANCE_IDX(x) {x = (x + 1u) & mask; STAT(++_count);}
-#define __VECTOR_HASH_REVERT_IDX(x) {x = (x + vector_size() - 1u) & mask; STAT(++_count);}
-// return the mask for the given number of elements
-//#define __VECTOR_HASH_MASK(x) (~( static_cast<uintptr_t>(0u) ) >> (sizeof(uintptr_t)*8u - 1u - integer_log( (x) - 1u )) )
-// hashing
-#define __VECTOR_HASH_DO_HASH(x) (static_cast<uintptr_t>(x) & mask)
-// default load factor, right below 7/8
-#define __VECTOR_HASH_DEFAULT_LOAD_FACTOR 0.8749f
 
 namespace mstd{
 
@@ -61,7 +47,7 @@ namespace mstd{
 
   template<
     class _Key,
-    class Hash = std::hash<ValFor<_Key>>,
+    class Hash = std::conditional_t<mstd::is_really_arithmetic_v<ValFor<_Key>>, mstd::IdentityFunction<void>, std::hash<ValFor<_Key>>>,
     class KeyEqual = std::equal_to<ValFor<_Key>>,
     class Allocator = std::allocator<OptFor<_Key>>>
   class vector_hash: public std::vector<OptFor<_Key>> {
@@ -101,6 +87,9 @@ namespace mstd{
     
     using insert_result       = std::pair<vector_iterator, bool>;
     using const_insert_result = std::pair<const_vector_iterator, bool>;
+  
+    // default load factor, right below 7/8
+    static constexpr float default_load_factor = 0.8749f;
 
 #ifdef STATISTICS
     using HistMap = std::unordered_map<uintptr_t, uintptr_t>;
@@ -108,15 +97,25 @@ namespace mstd{
     mutable uintptr_t _count;
 #endif
   protected:
+    // finding a key may have one of the following results:
+    // the returned index points to a position containing key
+    // the key is not in the set and the returned index points to a vacant position
+    // the key is not in the set and the returned index points to the item that has to be shifted to make room
+    enum class FindStatus:char {FS_key_found, FS_vacant, FS_shiftable};
 
     // number of values in the set
-    uintptr_t active_values;
+    uintptr_t active_values = 0;
 
     // when this load factor is reached, double the size and trigger a rehash
-    float max_load_factor;
+    float max_load_factor = default_load_factor;
 
     // ANDing this to some x gives x's hash value
-    uintptr_t mask;
+    uintptr_t mask = 0;
+  
+    // the provided hasher
+    [[ no_unique_address ]] Hash hasher;
+    // key comparator
+    [[ no_unique_address ]] KeyEqual key_eq;
 
     // make an iterator poiting to the index
     iterator make_iterator(const uintptr_t index) 
@@ -129,11 +128,27 @@ namespace mstd{
     { return next(Parent::begin(), index); }
 
     // compute the hash of an integer in the current vector
-    inline uintptr_t do_hash(const Key& x) const noexcept {  return __VECTOR_HASH_DO_HASH(x); } 
+    inline uintptr_t do_hash(const Key& x) const noexcept {  return simple_hash(hasher(x)); }
+    inline uintptr_t simple_hash(const Key& x) const noexcept {  return static_cast<uintptr_t>(x) & mask; } 
+    inline uintptr_t fibo_hash(const Key& x) const noexcept { return ((11400714819323198485llu * x) >> 32) & mask; }
+
     // advance the given index by one (circular)
-    inline void advance_index(uintptr_t& index) const noexcept { __VECTOR_HASH_ADVANCE_IDX(index); }
+    inline void advance_index(uintptr_t& index) const noexcept { index = (index + 1u) & mask; STAT(++_count);}
+    inline void revert_index(uintptr_t& index) const noexcept { index = (index + vector_size() - 1u) & mask; STAT(++_count);}
+    
     inline void set_vacant(const uintptr_t index) { (data() + index)->reset(); }
 
+    // shift forward 'num_keys' keys at index 'source_index' by 'offset' indices
+    inline void shift_forward(uintptr_t source_index, uint64_t num_keys, int64_t offset) {
+      static_assert(std::is_trivially_copyable_v<KeyOpt>);
+      std::memmove(static_cast<void*>(data() + source_index + offset), static_cast<void*>(data() + source_index), num_keys * sizeof(KeyOpt));
+    }
+    // shift backward 'num_keys' keys to index 'target_index' by 'offset' indices
+    // NOTE: the internal logic of vector_hash only permits shifting backwards blocks of keys with the same hash
+    inline void shift_backward(uintptr_t target_index, uint64_t num_keys, int64_t offset) {
+      static_assert(std::is_trivially_copyable_v<KeyOpt>);
+      std::memmove(static_cast<void*>(data() + target_index), static_cast<void*>(data() + target_index + offset), num_keys * sizeof(KeyOpt));
+    }
   public:
     // define what it means to be vacant
     inline bool is_vacant(const KeyOpt& k) const noexcept { return !(k.has_value()); }
@@ -141,126 +156,135 @@ namespace mstd{
     inline bool is_vacant(const const_reverse_vector_iterator& it) const noexcept { return is_vacant(std::distance(vector_begin(), it.base()) - 1); }
 
   protected:
+    KeyOpt* slot_at(const uintptr_t index) { return data() + index; }
+    const KeyOpt* slot_at(const uintptr_t index) const { return data() + index; }
+    KeyOpt& key_at(const uintptr_t index) { return *slot_at(index); }
+    const KeyOpt& key_at(const uintptr_t index) const { return *slot_at(index); }
+
     // compute the index where key should be located in the vector
     // return 1 if the index points to a position containing key
     // return 0 if key is not in the set and the index points to a vacant position
-    // return 2 if key is not in the set and the index points to the next item with larger hash
-    std::pair<uintptr_t,char> find_slot(const Key& key) const
-    {
-      assert(!Parent::empty());
-      uintptr_t index = do_hash(key);
+    // return 2 if key is not in the set and the index points to the item that has to be shifted to make room
+    std::pair<uintptr_t, FindStatus> find_slot(const Key& key) const {
+      return find_slot(do_hash(key), [&](const KeyOpt& other){ return key_eq(other, key); });
+    }
+    // this version takes a slot (that is, a hash) and a key-comparison function that says 'yes' if it is given the requested key
+    std::pair<uintptr_t, FindStatus> find_slot(uintptr_t index, auto&& key_cmp) const {
       const uintptr_t key_hash = index;
-      const KeyOpt* slot = data() + index;
+      const KeyOpt* slot = slot_at(index);
+      if(is_vacant(*slot)) return {index, FindStatus::FS_vacant};
+      if(key_cmp(*slot)) return {index, FindStatus::FS_key_found};
+      
       uintptr_t slot_hash = do_hash(*slot);
-      uintptr_t prev_hash;
-      DEBUG5(std::cout << "finding "<<key<<" (hash "<<key_hash<<") starting from index "<<index<<"\n");
+      DEBUG5(std::cout << "finding entry with hash "<<key_hash<<" starting from index "<<index<<"\n");
 
       // first, skip all large hashes that overflow onto us; return 0 if we found a vacant slot
-      if(slot_hash > key_hash + 1){
+      if(slot_hash > key_hash){
         const uintptr_t start_index = index;
+        uintptr_t prev_hash;
         do{
           DEBUG5(std::cout << "skipping index "<<index<<" (value: "<<*slot<<" hash: "<<slot_hash<<" (vs bound "<<key_hash+1<<")\n");
           advance_index(index);
-          slot = data() + index;
+          if(index == start_index) return {index, FindStatus::FS_shiftable};
+          slot = slot_at(index);
+          if(is_vacant(*slot)) return {index, FindStatus::FS_vacant};
           prev_hash = slot_hash;
           slot_hash = do_hash(*slot);
-          if(is_vacant(*slot)) return {index, 0};
-          if(index == start_index) return {index, 2};
         } while(prev_hash <= slot_hash);
         DEBUG5(std::cout << "skipped to index "<<index<<" where the slot is "<<*slot<<" (hash "<<slot_hash<<")\n");
-        if(slot_hash > key_hash) return {index, 2};
-      } else if(is_vacant(*slot)) return {index, 0};
-      // if we skipped onto key or a vacant slot, return success
-      if((slot_hash == key_hash) && (*slot == key)) return {index, 1};
+        if(slot_hash > key_hash) return {index, FindStatus::FS_shiftable};
+        // if we skipped onto key, return success
+        if(key_cmp(*slot)) return {index, FindStatus::FS_key_found};
+      }
+      // at this point, slot_hash <= key_hash is guaranteed
+      assert(slot_hash <= key_hash);
       
-      // otherwise, keep searching
+      // if we haven't found key or a vacant spot, we'll keep searching
       DEBUG5(std::cout << "keep looking from index "<<index<<"\n");
-      prev_hash = slot_hash;
+      const uintptr_t prev_hash = slot_hash;
       const uintptr_t start_index = index;
       do{
         advance_index(index);
-        slot = data() + index;
+        slot = slot_at(index);
+        if(is_vacant(*slot)) return {index, FindStatus::FS_vacant};
         slot_hash = do_hash(*slot);
         DEBUG5(std::cout << "next index: "<<index<<" (value: "<<*slot<<" hash: "<<slot_hash<<")\n");
-        // if we find a free slot, then return failure
-        if(is_vacant(*slot)) return {index, 0};
-        // if we find the key, return it
-        if((slot_hash == key_hash) && (*slot == key)) return {index, 1};
+        if(key_cmp(*slot)) return {index, FindStatus::FS_key_found};
       } while((slot_hash <= key_hash) && (prev_hash <= slot_hash) && (index != start_index));
       // if the slot hash grew larger than the key_hash, there is no hope of finding the key
-      return {index, 2};
+      return {index, FindStatus::FS_shiftable};
     }
 
     // erase the key at index from the container
-    void _erase(const uintptr_t index)
-    {
-      assert(!empty());
-      uintptr_t next_index = index;
+    void _erase(const uintptr_t start_index) {
+      assert(!is_vacant(start_index));
+      // step 1:
+      uintptr_t end_index = start_index;
       const KeyOpt* next_slot;
       do{
-        advance_index(next_index);
-        next_slot = data() + next_index;
-      } while(!is_vacant(*next_slot) && !(do_hash(*next_slot) == next_index));
-      __VECTOR_HASH_REVERT_IDX(next_index);
-      DEBUG5(std::cout << "shifting up to (including) index "<<next_index<<" (key "<<*next_slot<<")\n");
-      // next_index points to the last slot to move
-      if(next_index < index){
-        // if next_index < index, we wrapped around the end of the vector, so we need 2 move operations
-        __VECTOR_HASH_SHIFT_BWD(index, vector_size() - index - 1, 1);
-        *(data() + vector_size() - 1) = *(data());
-        __VECTOR_HASH_SHIFT_BWD(0, next_index, 1);
-      } else __VECTOR_HASH_SHIFT_BWD(index, next_index - index, 1);
+        advance_index(end_index);
+        next_slot = slot_at(end_index);
+      } while((do_hash(*next_slot) != end_index) && !vacant(*next_slot));
+      revert_index(end_index);
+      DEBUG5(std::cout << "shifting up to (including) index "<<end_index<<" (key "<<*next_slot<<")\n");
+      // end_index points to the last slot to move
+      if(end_index < start_index){
+        // if end_index < start_index, then we wrapped around the end of the vector, so we need 2 shifts (and a single-element move)
+        shift_backward(start_index, vector_size() - start_index - 1, 1);
+        key_at(vector_size() - 1) = std::move(key_at(0));
+        shift_backward(0, end_index, 1);
+      } else shift_backward(start_index, end_index - start_index, 1);
       // finally, mark the last index as vacant
-      set_vacant(next_index);
+      set_vacant(end_index);
       --active_values;
     }
 
     // insert key and return index and whether an insertion took place
     template<typename KeyRef>
-    insert_result _insert(KeyRef&& key)
-    {
+    insert_result _insert(KeyRef&& key) {
       DEBUG5(std::cout << "===> inserting "<<key<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
       // find the slot where we would place the key
       const auto [index, status] = find_slot(key);
 
       switch(status){
-        case 0: 
+        case FindStatus::FS_vacant: 
           DEBUG5(std::cout << "found vacant index "<<index<<" for "<<key<<"\n");
           // 0 is returned if we reached an empty slot, so insert there
           // unless 'key' is already there, which means that we went all the way around to find this vacant slot
           // In this case, trigger a rehash
-          if(*(data() + index) != key){
-            *(data() + index) = std::forward<KeyRef>(key);
+          if(key_at(index) != key){
+            key_at(index) = std::forward<KeyRef>(key);
             ++active_values;
             return {make_vector_iterator(index), true};
           } else {
             rehash();
             return _insert(std::forward<KeyRef>(key));
           }
-        case 1:
+        case FindStatus::FS_key_found:
           DEBUG5(std::cout << key << " is already in the set (index "<<index<<")\n");
           // 1 is returned if the key was found, so return failure
           return {make_vector_iterator(index), false};
-        default:{
+        case FindStatus::FS_shiftable: {
           // otherwise, the hash at the index has grown too large
           // in this case, we'll shift everyone forward by one and insert at index
           uintptr_t next_free = index;
           do{
             advance_index(next_free);
-          } while(!is_vacant(*(data() + next_free)));
-          assert((next_free != index) && "vector is full, did you tamper with the load factor?");
+          } while(!is_vacant(key_at(next_free)));
           DEBUG5(std::cout << "next free index is "<<next_free<<"\n");
           if(next_free < index){
             // if next_free < index, we wrapped around the end of the vector, so we need 2 move operations
-            __VECTOR_HASH_SHIFT_FWD(0, next_free, 1);
-            *(data()) = *(data() + vector_size() - 1);
-            __VECTOR_HASH_SHIFT_FWD(index, vector_size() - index - 1, 1);
-          } else __VECTOR_HASH_SHIFT_FWD(index, next_free - index, 1);
+            shift_forward(0, next_free, 1);
+            key_at(0) = key_at(vector_size() - 1);
+            shift_forward(index, vector_size() - index - 1, 1);
+          } else shift_forward(index, next_free - index, 1);
           // the slot at resukt.first should not be free to receive the key
-          *(data() + index) = key;
+          key_at(index) = std::forward<KeyRef>(key);
           ++active_values;
           return {make_vector_iterator(index), true};
-      }}
+        }
+        default: throw std::logic_error("unexpected find-status out of eval");
+      }
     }
 
     // to rehash, double the size of the vector and re-insert everyone
@@ -282,7 +306,7 @@ namespace mstd{
         DEBUG5(std::cout << "new vector of size "<<size()<<'\n'; );
 
         for(size_t i = 0; i < vector_size(); ++i) {
-          KeyOpt& key = *(data() + i);
+          KeyOpt& key = key_at(i);
           if(key.has_value())
             tmp_vec._insert(std::move(key));
         }
@@ -295,33 +319,28 @@ namespace mstd{
 
   public:
 
-    vector_hash():
-      Parent(),
-      active_values(0),
-      max_load_factor(__VECTOR_HASH_DEFAULT_LOAD_FACTOR),
-      mask(0)
-    {
-      assert(max_load_factor <= 1);
-    }
+    vector_hash() = default;
+
     // create an empty vector_hash with _size empty slots
-    vector_hash(const size_t _size, const Allocator& alloc = Allocator()):
+    vector_hash(const size_t _size,
+                const Hash& _hasher = Hash(),
+                const Allocator& alloc = Allocator()):
       Parent(std::bit_ceil(_size), KeyOpt{}, alloc),
-      active_values(0),
-      max_load_factor(__VECTOR_HASH_DEFAULT_LOAD_FACTOR),
-      mask(std::bit_ceil(_size)-1)
+      mask(std::bit_ceil(_size)-1),
+      hasher(_hasher)
     {
-      assert(max_load_factor <= 1);
+      assert(max_load_factor < 1);
     }
 
     template<class InputIt>
     vector_hash(const InputIt& _begin,
                 const InputIt& _end,
-                const float _max_load_factor = __VECTOR_HASH_DEFAULT_LOAD_FACTOR,
+                const float _max_load_factor = default_load_factor,
+                const Hash& _hasher = Hash(),
                 const Allocator& alloc = Allocator()):
       Parent(0, KeyOpt{}, alloc),
-      active_values(0),
       max_load_factor(_max_load_factor),
-      mask(0)
+      hasher(_hasher)
     {
       // prepare the container such that vector[i] = i+1, that is, all slots are unoccupied
       insert(_begin, _end);
@@ -349,7 +368,7 @@ namespace mstd{
     bool contains(const Key& key) const { 
       if(empty()) return false;
       STAT(_count = 0);
-      bool result = find_slot(key).second == 1;
+      const bool result = find_slot(key).second == FindStatus::FS_found_key;
       STAT(++hist[_count]);
       STAT(std::cout << _count << "hops\n");
       return result;
@@ -357,43 +376,39 @@ namespace mstd{
 
     bool count(const Key& key) const { return contains(key); }
 
-    iterator find(const Key& key)
-    {
+    iterator find(const Key& key) {
       if(empty()) return end();
       STAT(_count = 0);
-      const std::pair<uintptr_t,char> result = find_slot(key);
+      const auto [iter, status] = find_slot(key);
       STAT(++hist[_count]);
       STAT(std::cout << _count << "hops\n");
-      return (result.second == 1) ? make_iterator(result.first) : end();
+      return (status == FindStatus::FS_found_key) ? make_iterator(iter) : end();
     }
 
-    const_iterator find(const Key& key) const
-    {
+    const_iterator find(const Key& key) const {
       if(empty()) return end();
       STAT(_count = 0);
-      const std::pair<uintptr_t,char> result = find_slot(key);
+      const auto [iter, status] = find_slot(key);
       STAT(++hist[_count]);
       STAT(std::cout << _count << "hops\n");
-      return (result.second == 1) ? make_iterator(result.first) : end();
+      return (status == FindStatus::FS_found_key) ? make_iterator(iter) : end();
     }
 
     template<class T> requires (std::is_same_v<std::remove_reference_t<T>, Key>)
-    insert_result insert(T&& key)
-    {
+    insert_result insert(T&& key) {
       // check if load factor is exceeded and trigger rehash
       if(load_factor() > max_load_factor) rehash();
       return _insert(std::forward<T>(key));
     }
 
     template<class InputIt>
-    void insert(InputIt _from, const InputIt& _to, const bool do_rehash = true)
-    {
+    void insert(InputIt _from, const InputIt& _to, const bool do_rehash = true) {
       if(do_rehash){
         const size_t num_new_items = distance(_from, _to);
         const size_t prospected_size = (size() + num_new_items) * 1.0 / max_load_factor;
         if(vector_size() < prospected_size) rehash(prospected_size);
       }
-      while(_from != _to){
+      while(_from != _to) {
         insert(*_from);
         ++_from;
       }
@@ -415,14 +430,13 @@ namespace mstd{
 
     inline bool erase(const Key& key) {
       const auto [index, status] = find_slot(key);
-      if(status == 1){
+      if(status == FindStatus::FS_key_found){
         _erase(index);
         return true;
       } else return false;
     }
 
-    bool erase(const const_iterator& it)
-    {
+    bool erase(const const_iterator& it) {
       if(it != vector_end()){
         _erase((&(*it) - data()));
         return true;

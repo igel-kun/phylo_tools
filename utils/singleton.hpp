@@ -110,6 +110,8 @@ namespace mstd{
     bool operator==(const singleton_set& other) const {
       return empty() ? other.empty() : (storage == other.storage);
     }
+    reference operator[](const size_t i) { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
+    const_reference operator[](const size_t i) const { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
   };
 
   template<class T, T _invalid = std::numeric_limits<T>::max()>

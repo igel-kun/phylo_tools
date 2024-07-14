@@ -148,16 +148,28 @@ namespace mstd{
   // ------------------ ITERATORS -----------------------------------
 
   // a lightweight end-iterator dummy that can be returned by calls to end() and compared to by other iterators
-  struct GenericEndIterator{
+  template<class> class _GenericEndIterator;
+
+  template<>
+  struct _GenericEndIterator<void> {
     static bool is_valid() { return false; }
-    bool operator==(const GenericEndIterator& x) const { return true; }
+    bool operator==(const _GenericEndIterator&) const { return true; }
     template<class Other>
     bool operator==(const Other& x) const { return (x.operator==(*this)); }
-    template<class Other>
-    bool operator==(const Other* x) const { assert(x != nullptr); return static_cast<bool>(*x); }
   };
-  template<iter_verifyable Iter>
-  bool operator==(const Iter& other, const GenericEndIterator&) { return !other.is_valid(); }
+
+  template<class Sentinel>
+  struct _GenericEndIterator: public _GenericEndIterator<void> {
+    Sentinel s;
+    template<class Other>
+    bool operator==(const Other* x) const { assert(x != nullptr); return *x == s; }
+  };
+  template<class T>
+  using GenericEndIteratorS = _GenericEndIterator<T>;
+  using GenericEndIterator = _GenericEndIterator<void>;
+
+  template<iter_verifyable Iter, class T>
+  bool operator==(const Iter& other, const GenericEndIteratorS<T>&) { return !other.is_valid(); }
 
 
 
@@ -230,6 +242,16 @@ namespace mstd{
   bool operator==(const T& i1, const std::reverse_iterator<T>& i2) {  return (next(i1) == i2.base()); }
   template<typename T>
   bool operator==(const std::reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
+  
+
+  // ----------------------- container to array (first 'elements' elements)  ----------------------------------
+  template<size_t elements, ContainerType Container>
+  auto to_array(const Container& c) {
+    using Val = value_type_of_t<Container>;
+    std::array<Val, elements> result;
+    std::copy_n(std::begin(c), elements, result.begin());
+    return result;
+  }
   
 
 
@@ -368,7 +390,7 @@ namespace mstd {
   template<class ReturnType = void>
   struct IgnoreFunction {
     template<class... Args>
-    constexpr ReturnType operator()(Args&&... args) const { if constexpr (!std::is_void_v<ReturnType>) return ReturnType(); };
+    constexpr ReturnType operator()(Args&&... args) const { if constexpr (!std::is_void_v<ReturnType>) return ReturnType{}; };
   };
   // a functional that just returns its argument (and hopefully gets optimized out)
   template<class T = void>

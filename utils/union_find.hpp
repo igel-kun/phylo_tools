@@ -31,7 +31,7 @@ namespace mstd{
 
     bool operator==(const _DSet& y) const { return representative == y.representative; }
 
-    template<class, class>
+    template<class, class, class>
     friend class DisjointSetForest;
   };
 
@@ -65,11 +65,17 @@ namespace mstd{
 
 
   // a union-find datastructure on keys, allowing an additional payload to be stored for each key
-  template<class Key, class Payload = void>
+  // MergePayloads is a functor that is called with arguments x & y when y is merged onto x, so the payloads may be updated when merging
+  template<class Key, class Payload = void, class MergePayloads = mstd::IgnoreFunction<void>>
+    requires (!std::is_same_v<Payload, void> || std::is_same_v<MergePayloads, mstd::IgnoreFunction<void>>)
   class DisjointSetForest: public std::unordered_map<Key, DSet<Key, Payload>> {
     using Parent = std::unordered_map<Key, DSet<Key, Payload>>;
-  protected:
+  public:
+    static constexpr bool has_payload = !std::is_same_v<Payload, void>;
+    static constexpr bool has_payload_merger = !std::is_same_v<MergePayloads, mstd::IgnoreFunction<void>>;
+
     using Set = DSet<Key, Payload>;
+  protected:
     using Parent::try_emplace;
     using Parent::emplace;
     using Parent::erase;
@@ -77,32 +83,34 @@ namespace mstd{
     using Parent::find;
 
     size_t _set_count = 0;
+    [[ no_unique_address ]] MergePayloads merge_payloads;
 
-
-    Set& _set_of(const Key& x) { return _set_of(x, at(x)); }
     static const Set& _set_of(const Set& x_set) { return x_set; }
     static Set& _set_of(Set& x_set) { return x_set; }
     static Key& representative(Set& x_set) { return x_set.representative; }
-    void shrink(const Key& x) { _set_of(x).grow(-1); }
 
     // return the set containing x, use path compression
     Set& _set_of(const Key& x, Set& x_set, const unsigned decrease_size = 0) {
       const Key& x_set_rep = x_set.get_representative();
       if(x_set_rep != x){
         x_set.grow(-decrease_size);
-        Set& x_parent = at(x_set_rep);
-        const Key& x_parent_rep = x_parent.get_representative();
-        assert(x_parent_rep != x); // this is bizarre, we already know that x's representative is x_parent so why would their representative be x???
-        if(x_parent_rep != x){
-          Set& root_set = _set_of(x_set_rep, x_parent, decrease_size + x_set.size());
-          x_set.representative = root_set.representative;
-          return root_set;
-        } else return at(x_parent_rep);
+        Set& x_parent_set = at(x_set_rep);
+
+        assert(x_parent_set.get_representative() != x); // assert that there are no cycles in the data structure
+        Set& root_set = _set_of(x_set_rep, x_parent_set, decrease_size + x_set.size());
+        x_set.representative = root_set.representative;
+        return root_set;
       } else return x_set;
     }
 
+    Set& _set_of(const Key& x) { return _set_of(x, at(x)); }
+    void shrink(const Key& x) { _set_of(x).grow(-1); }
+
+
   public:
     using Parent::at;
+
+    Set& set_of(const Key& x) { return _set_of(x, at(x)); }
 
     // add a new set to the forest
     template<class... Args>
@@ -121,14 +129,19 @@ namespace mstd{
     }
 
 
-    // add a new item y (that should exist in the set forest) to the set of x 
+    // add a new item x to the set of y, which should exist in the set forest
     template<class... Args>
     auto emplace_item_to_set(Set& y_set, const Key& x, Args&&... args) {
       // assert that y exists
       assert(test(*this, y_set.get_representative()));
-      // insert the item
+      // insert the item x into y_set
       const auto result = try_emplace(x, y_set.representative, std::forward<Args>(args)...);
-      y_set.grow(result.second);
+      if(result.first) {
+        y_set.grow(result.second);
+        if constexpr (has_payload_merger) {
+          merge_payloads(y_set.payload, result.second.payload);
+        }
+      }
       return result;
     }
 
@@ -140,15 +153,12 @@ namespace mstd{
       return iter->second;
     }
 
-
-    Set& set_of(const Key& x) { return _set_of(x, at(x)); }
-
     // add a new item x to the set of another item y
     Set& add_item_to_set_of(const Key& y, const Key& x) { return add_item_to_set(_set_of(y), x); }
 
     // merge two sets into one
     // the one with the lower size is merged into the one with the higher
-    // in case of ties, x is merged into y's set
+    // in case of ties, y is merged into x's set
     // return the set that the other has been merged into
     template<bool respect_sizes = true>
     Set& merge_sets(Set& x_set, Set& y_set) {
@@ -157,10 +167,16 @@ namespace mstd{
         if constexpr (respect_sizes) {
           if(x_set.size() < y_set.size()){
             x_set.merge_onto(y_set);
+            if constexpr (has_payload_merger) {
+              merge_payloads(y_set.payload, x_set.payload);
+            }
             return y_set;
           }
         }
         y_set.merge_onto(x_set);
+        if constexpr (has_payload_merger) {
+          merge_payloads(x_set.payload, y_set.payload);
+        }
       }
       return x_set;
     }
@@ -223,7 +239,7 @@ namespace mstd{
       }
     }
 
-    // if one wants to keep a single item of each set, one can use is_root, which returns true if all elements in its set have x as their root
+    // if one wants to keep a single item of each set, one can use is_root, which returns true x is the representative of the set containing x
     bool is_root(const Key& x) const { return at(x).representative == x; }
 
     // return true iff the given items are in the same set
@@ -250,26 +266,21 @@ namespace mstd{
     // return the number of sets in the forest
     size_t set_count() const { return _set_count; }
 
-    // we'll need a custom copy and move constructor :/
-
-    DisjointSetForest(): Parent() {}
-    DisjointSetForest(const DisjointSetForest& _dsf):
-      Parent(_dsf)
+    template<class... Args>
+    DisjointSetForest(std::piecewise_construct_t, Args&&... args):
+      Parent(),
+      merge_payloads(std::forward<Args>(args)...)
     {}
-    // for moving, the unordered_map move-constructor should be fine
-    DisjointSetForest(DisjointSetForest&& _dsf):
-      Parent(_dsf), _set_count(std::move(_dsf._set_count))
-    {}
+   
+    /*
+    // we'll need a custom copy and move constructor... do we?
+    DisjointSetForest() = default;
+    DisjointSetForest(const DisjointSetForest& _dsf) = default;
+    DisjointSetForest(DisjointSetForest&& _dsf) = default;
 
-    DisjointSetForest& operator=(const DisjointSetForest& _dsf) {
-      Parent::operator=(_dsf);
-      return *this;
-    }
-    // for moving, the unordered_map move-constructor should be fine
-    DisjointSetForest& operator=(DisjointSetForest&& _dsf) {
-      Parent::operator=(_dsf);
-      return *this;
-    }
+    DisjointSetForest& operator=(const DisjointSetForest& _dsf) = default;
+    DisjointSetForest& operator=(DisjointSetForest&& _dsf) = default;
+    */
   };
 
 }
