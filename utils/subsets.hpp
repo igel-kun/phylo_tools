@@ -10,13 +10,13 @@ namespace PT{
   //! note: if you want to modify the original container, set the _OutputContainer to contain std::reference_wrapper<_Container::value_type> 
   //NOTE: this assumes that the underlying container's order does not change!
   template<class _Container, class _OutputContainer = _Container>
-  class SubsetIterator
-  {
+  class SubsetIterator {
   protected:
     _Container& c;
     std::ordered_bitset bits;
 
   public:
+    using difference_type = ptrdiff_t;
     using value_type = _OutputContainer;
     using reference  = value_type;
     using const_reference = const value_type;
@@ -48,8 +48,7 @@ namespace PT{
     bool operator==(const SubsetIterator& it) const { return bits == it.bits; }
 
     // dereference
-    value_type operator*()
-    {
+    value_type operator*() {
       value_type out;
       auto container_iter = c.begin();
       uint64_t last = 0;
@@ -65,6 +64,7 @@ namespace PT{
       }
       return out;
     }
+    pointer operator->() { return operator*(); }
 
   };
 

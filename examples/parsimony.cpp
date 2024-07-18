@@ -29,8 +29,9 @@ void parse_options(const int argc, const char** argv) {
   description["-m"] = {1,1};
   description["-s"] = {1,1};
   description[""] = {1,1};
-  const std::string help_message(std::string(argv[0]) + " <file>\n\
-      \tcompute the scanwidth (+extension and/or extension tree) of the network described in file (extended newick or edgelist format)\n\
+  const std::string help_message(std::string(argv[0]) + " <net>\n\
+      \tcompute the small parsimony score of a given network described in file 'net' (extended newick or edgelist format)\
+      with randomly generated character states\n\
       FLAGS:\n\
       \t-s x\tnumber of character states to generate (between 2 and 256) [default: x = 2]\n\
       \t-v\tverbose output, prints network\n\
@@ -108,7 +109,8 @@ int main(const int argc, const char** argv) {
   case 0:
   case 1:
   case 2:
-    throw std::logic_error("unimplemented");
+  case 4:
+    throw Unimplemented("methods 0, 1, 2, and 4");
   case 3:
     std::cout << "\n ==== computing optimal extension ===\n";
     if(mstd::test(options, "-lm")){
@@ -120,8 +122,6 @@ int main(const int argc, const char** argv) {
       compute_min_sw_extension<false, true>(N, ex);
     }
     break;
-  case 4:
-    throw std::logic_error("unimplemented");
   case 5:
     std::cout << "\n ==== computing silly post-order extension ===\n";  
     for(const auto& x: N.nodes_postorder()) ex.push_back(x);

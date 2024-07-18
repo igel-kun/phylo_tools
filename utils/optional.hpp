@@ -4,10 +4,14 @@
 #include <limits>
 #include <optional>
 
+
 namespace mstd {
   // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (aka a 'tombstone')
-  template<class T, T _invalid = std::numeric_limits<T>::max()>
+  template<class T, auto _invalid = std::numeric_limits<T>::max()>
+    requires (std::is_constructible_v<T, const decltype(_invalid)&> && std::is_assignable_v<T&, const decltype(_invalid)&>)
   struct optional_by_invalid {
+    using Inv = decltype(_invalid);
+    static constexpr bool detect_optional = true;
     T element{_invalid};
     
     using value_type = T;
@@ -21,11 +25,16 @@ namespace mstd {
     // in-place construct the element
     template<class... Args>
     constexpr optional_by_invalid(const std::in_place_t, Args&&... args): element(std::forward<Args>(args)...) {}
-    template<class U, U I>
+
+    template<class U, auto I>
+      requires (std::is_constructible_v<T, const U&> && !std::is_same_v<optional_by_invalid, std::remove_cvref_t<optional_by_invalid<U,I>>>)
     constexpr optional_by_invalid(const optional_by_invalid<U, I>& other): element(other.element) {}
-    template<class U, U I>
+
+    template<class U, auto I>
+      requires (std::is_constructible_v<T, U&&> && !std::is_same_v<optional_by_invalid, std::remove_cvref_t<optional_by_invalid<U,I>>>)
     constexpr optional_by_invalid(optional_by_invalid<U, I>&& other): element(std::move(other.element)) {}
-    template<class U = T> requires (std::is_constructible_v<T, U&&>)
+    
+    template<class U> requires (std::is_constructible_v<T, U&&>)
     constexpr optional_by_invalid(U&& other): element(std::forward<U>(other)) {}
 
     // re-construct the element
@@ -36,9 +45,9 @@ namespace mstd {
       new(addr) T(std::forward<Args>(args)...);
       return *addr;
     }
-    template<class Q> requires (std::is_trivially_assignable_v<T&, Q&&>)
-    constexpr T& emplace(Q&& other) {
-      element = std::forward<Q>(other);
+    template<class U> requires std::is_assignable_v<T&, U&&>
+    constexpr T& emplace(U&& other) {
+      element = std::forward<U>(other);
       return element;
     }
 
@@ -75,14 +84,12 @@ namespace mstd {
   };
 
   template<class T>
-  static constexpr bool is_optional_v = false;
+  static constexpr bool std_optional_v = false;
   template<class T>
-  static constexpr bool is_optional_v<std::optional<T>> = true;
-  template<class T, T _invalid>
-  static constexpr bool is_optional_v<optional_by_invalid<T, _invalid>> = true;
+  static constexpr bool std_optional_v<std::optional<T>> = true;
 
   template<class T>
-  concept Optional = is_optional_v<std::remove_reference_t<T>>;
+  concept Optional = std_optional_v<std::remove_reference_t<T>> || requires(T t){ T::detect_optional; };
 
   template<bool invert = false>
   struct optional_value_predicate {
@@ -91,7 +98,12 @@ namespace mstd {
   };
 
 #warning "TODO: remove me"
+
+  static_assert(std::is_default_constructible_v<optional_by_invalid<int>>);
+  static_assert(std::is_trivially_destructible_v<optional_by_invalid<int>>);
   static_assert(std::is_trivially_copyable_v<optional_by_invalid<int>>);
+  static_assert(std::is_trivially_copy_assignable_v<optional_by_invalid<int>>);
+  static_assert(std::is_trivially_move_assignable_v<optional_by_invalid<int>>);
 }
 
 namespace std {

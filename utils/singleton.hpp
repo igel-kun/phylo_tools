@@ -114,7 +114,7 @@ namespace mstd{
     const_reference operator[](const size_t i) const { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
   };
 
-  template<class T, T _invalid = std::numeric_limits<T>::max()>
+  template<class T, auto _invalid = std::numeric_limits<T>::max()>
   using singleton_set_by_invalid = singleton_set<optional_by_invalid<T, _invalid>>;
 
   template<class T> struct is_singleton_set: public std::false_type {};

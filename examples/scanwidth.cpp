@@ -44,8 +44,8 @@ void parse_options(const int argc, const char** argv) {
       \t-m x\tmethod to use to compute scanwidth [default: x = " + std::to_string(method_default) + "]:\n\
       \t\t\tx = 0: brute force all permutations,\n\
       \t\t\tx = 1: dynamic programming on all vertices,\n\
-      \t\t\tx = 2: brute force on non-raising vertices only,\n\
-      \t\t\tx = 3: dynamic programming on non-raising vertices only,\n\
+      \t\t\tx = 2: branching with memoization,\n\
+      \t\t\tx = 3: brute force on reticulations only,\n\
       \t\t\tx = 4: heuristic\n\
       \t\t\tx = 5: simple post-order layout\n\
       \t-pp\tuse preprocessing\n");
@@ -151,19 +151,25 @@ void list_bccs(const MyNetwork& N) {
   std::cout << "\n================ done listing BCCs =================\n";
 }
 
-void compute_sw(const auto& N, const bool preprocess, Extension& ex) {
+void compute_sw(const auto& N, Extension& ex, const int bottom_up) {
+  const int preprocess = mstd::test(options, "-pp");
+  const int low_mem = mstd::test(options, "-lm");
+
   std::cout << "\n ==== computing optimal extension ===\n";
-  if(mstd::test(options, "-lm")){
-    std::cout << "using low-memory version...\n";
-    if(preprocess)
-      compute_min_sw_extension<true, true>(N, ex);
-    else compute_min_sw_extension<true, false>(N, ex);
-    //compute_min_sw_extension<true>(N, ex); // this is equivalent
-  } else {
-    std::cout << "using faster, more memory hungry version...\n";
-    if(preprocess)
-      compute_min_sw_extension<false, true>(N, ex);
-    else compute_min_sw_extension<false, false>(N, ex);
+  std::cout << "flags: preprocessing: "<<preprocess << "\tlow_mem: "<<low_mem<<"\tmemoization: "<<!bottom_up<<"\n";
+
+  switch((!preprocess << 16) + (low_mem << 8) + bottom_up){
+    case 0x001: compute_min_sw_extension<sw_bottom_up>(N, ex); break;
+    case 0x010: compute_min_sw_extension<sw_low_mem_footprint>(N, ex); break;
+    case 0x100: compute_min_sw_extension<sw_no_preprocess>(N, ex); break;
+    //
+    case 0x011: compute_min_sw_extension<sw_bottom_up + sw_low_mem_footprint>(N, ex); break;
+    case 0x101: compute_min_sw_extension<sw_bottom_up + sw_no_preprocess>(N, ex); break;
+    case 0x110: compute_min_sw_extension<sw_low_mem_footprint + sw_no_preprocess>(N, ex); break;
+    //
+    case 0x111: compute_min_sw_extension<sw_bottom_up + sw_low_mem_footprint + sw_no_preprocess>(N, ex); break;
+    default:
+      compute_min_sw_extension<sw_default>(N, ex);
   }
 }
 
@@ -182,20 +188,19 @@ int main(const int argc, const char** argv) {
   }
 	//list_bccs(N);
 
-  const bool preprocess = mstd::test(options, "-pp");
-
   Extension ex;
   ex.reserve(N.num_nodes());
   switch(parse_method()) {
   case 0:
   case 1:
-  case 2:
-    throw std::logic_error("unimplemented");
-  case 3:
-    compute_sw(N, preprocess, ex);
+    compute_sw(N, ex, false);
     break;
+  case 2:
+    compute_sw(N, ex, true);
+    break;
+  case 3:
   case 4:
-    throw std::logic_error("unimplemented");
+    throw Unimplemented("methods 3 & 4");
   case 5:
     std::cout << "\n ==== computing silly post-order extension ===\n";  
     for(const auto& x: N.nodes_postorder()) ex.push_back(x);
