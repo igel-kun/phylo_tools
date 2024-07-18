@@ -4,26 +4,38 @@
 
 namespace PT {
 
-  template<StrictPhylogenyType Net, NodeContainerType Nodes, class GammaFunctor, class InheritanceProbFunctor>
-  void compute_gammas(const Net& N, const Nodes& nodes_to_save, GammaFunctor&& gamma, InheritanceProbFunctor&& p){
+  template<StrictPhylogenyType Net, NodeContainerType Nodes, class UtilityFunctors>
+  void compute_gammas(const Net& N, const Nodes& nodes_to_save, UtilityFunctors&& f){
+    using Gamma = typename std::remove_reference_t<UtilityFunctors>::Gamma;
     for(const auto uv: N.edges_postorder()) {
-      float& current_gamma = gamma(uv);
+      auto& current_gamma = f.gamma(uv);
       const NodeDesc v = uv.head();
-      const float p_val = (N.is_leaf(v) && !test(nodes_to_save, v)) ? 0.0f : p(uv);
+      const float p_val = (N.is_leaf(v) && !test(nodes_to_save, v)) ? 0.0f : f.iprob(uv);
       
-      float tmp = 1.0f;
+      Gamma tmp = 1.0f;
       if(!N.is_leaf(v)) {
         for(const auto vw: N.out_edges(v)) {
-          const float g_vw = gamma(vw);
+          const auto g_vw = f.gamma(vw);
           if(g_vw == 1.0f) {
             tmp = 0.0f;
             break;
-          } else tmp *= 1.0f - gamma(vw);
+          } else tmp *= 1.0f - f.gamma(vw);
         }
         tmp = 1.0f - tmp;
       } 
       current_gamma = tmp * p_val;
     }
+  }
+
+  template<StrictPhylogenyType Net, NodeContainerType Nodes, class UtilityFunctors>
+  double pd_score(const Net& N, const Nodes& nodes_to_save, UtilityFunctors&& f) {
+    compute_gammas(N, nodes_to_save, std::forward<UtilityFunctors>(f));
+    // NOTE: (note: we're not using std::accumulate since N.edges().end() has different type than it's begin())
+    // TODO: in C++23, use std::ranges::fold_left
+    double D = 0.0;
+    for(const auto e: N.edges())
+      D += static_cast<double>(f.score(e));
+    return D;
   }
 
   // return a list of tree-component roots r that have a "private" leaf, that is, each r has a tree-path to some leaf
@@ -68,19 +80,27 @@ namespace PT {
     apply_for_all_subsets(leaves.begin(), leaves.end(), S, subset_size, f);
   }
 
-  template<StrictPhylogenyType Net>
-  NodeSet optimize_diversity_brute_force(const Net& N, const size_t k) {
-    float max_score = 0;
-    NodeSet max_set;
+  template<StrictPhylogenyType Net, class UtilityFunctors>
+  auto optimize_diversity_brute_force(const Net& N, const size_t k, UtilityFunctors&& f) {
+    std::pair<NodeSet, double> max;
+    const auto L = N.leaves();
+    std::cout << "leaves: "<<L << '\n';
+    std::cout << mstd::type_name<decltype(L)>() << '\n';
+    //const NodeSet leaves = L.template to_container<NodeSet>();
+    const NodeSet leaves = L;
+    std::cout << "N = "<<N<<'\n';
+    std::cout << "testing all size-"<<k<<" subsets of "<<leaves<<'\n';
 #warning "TODO: make a subset-iterator"
-    apply_for_all_subsets(L, k, [&](const auto& S){
-        const float score = pd_score(N, inheritence_probs, S);
-        if(score > max_score) { max_score = score; max_set = S; }; });
+    apply_for_all_subsets(leaves, k, [&](const auto& S){
+        const auto score = pd_score(N, S, f);
+        if(score > max.second) max = {S, score}; });
+    return max;
   }
 
-
-  template<StrictPhylogenyType Net>
-  NodeSet get_optimal_leaves_to_save(const Net& N, const size_t k) {
+  template<StrictPhylogenyType Net, class UtilityFunctors>
+  auto optimize_diversity(const Net& N, const size_t k, UtilityFunctors&& f) {
+    // NOTE: for now, we brute-force this
+    return optimize_diversity_brute_force(N, k, std::forward<UtilityFunctors>(f));
   }
 }
 

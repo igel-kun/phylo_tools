@@ -7,15 +7,16 @@
 #include <unordered_map>
 #include <type_traits>
 #include <numeric>
-#include "auto_iter.hpp"
 #include "iter_bitset.hpp"
 #include "singleton.hpp"
 #include "stl_utils.hpp"
+#include "auto_iter.hpp"
+
 // unifcation for the set interface
 // this is to use std::unordered_set<uint32_t> with the same interface as iterable_bitset
 
 namespace mstd { // since it was the job of STL to provide for it and they failed, I'll pollute their namespace instead :) 
-#warning TODO: write a back() function (doing front() for std::unordered containers)
+#warning "TODO: write a back() function (doing front() for std::unordered containers)"
 
   template<class T>
   using emplace_result = std::pair<typename std::remove_reference_t<T>::iterator, bool>;
@@ -90,10 +91,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     } else return c.find(key);
   }
 
-
   template<SetType S1, SetType S2 = S1> requires std::is_convertible_v<typename S2::const_iterator, typename S1::const_iterator>
-  auto_iter<typename S1::const_iterator> common_element(const S1& x, const S2& y)
-  {
+  auto common_element(const S1& x, const S2& y) {
     auto_iter<typename S1::const_iterator> result;
     auto& iter = result.first;
 
@@ -163,6 +162,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> std::convertible_to<bool>; };
   template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
+
 
   // on arithmetic types just adds the second to the first
   template<ArithmeticType P, ArithmeticType Q>
@@ -542,7 +542,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
 
 namespace std {
-  
+/*  
   template<mstd::ContainerType Container, class T> requires (!is_convertible_v<std::remove_cvref_t<Container>, std::string_view>)
   Container& operator-=(Container& container, T&& item) {
     mstd::erase(container, std::forward<T>(item));
@@ -554,7 +554,7 @@ namespace std {
     mstd::append(container, std::forward<T>(item));
     return container;
   }
-
+*/
 
   template<class... Args> bool test(Args&&... args) { return mstd::test(std::forward<Args>(args)...); }
   template<class... Args> decltype(auto) append(Args&&... args) { return mstd::append(std::forward<Args>(args)...); }

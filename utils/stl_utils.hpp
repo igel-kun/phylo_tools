@@ -448,7 +448,7 @@ namespace mstd {
 
 namespace std {
   // ----------------------- OUTPUT ---------------------------------------
-  template<mstd::IterableType C> requires (!std::is_convertible_v<C,std::string_view>)
+  template<mstd::IterableType C> requires (!mstd::is_stringlike_v<C>)
   inline std::ostream& operator<<(std::ostream& os, const C& objs) {
     os << '[';
     for(const auto& obj : objs) {

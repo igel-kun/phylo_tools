@@ -1214,7 +1214,7 @@ namespace PT {
     template<mstd::IterableType Edges, class... EmplacerArgs> requires (!PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges, EmplacerArgs&&... args) {
       build_from_edges(std::forward<Edges>(edges), EdgeEmplacers<true>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...));
-      DEBUG2(tree_summary(std::cout));
+      DEBUG2(print_summary(std::cout));
     }
 
     // NOTE: construction from another (sub-)phylogeny largely depends on the data policy:
@@ -1238,7 +1238,7 @@ namespace PT {
         DEBUG4(std::cout << "marking roots: "<<in_roots<<"\n");
         // mark the roots
         emplacer.mark_roots(in_roots);
-        DEBUG2(tree_summary(std::cout));
+        DEBUG2(print_summary(std::cout));
       }
     }
     
@@ -1254,7 +1254,7 @@ namespace PT {
       assert(emplacer.contains(in_root));
       DEBUG4(std::cout << "marking root: "<<emplacer.at(in_root)<<"\n");
       emplacer.mark_root(in_root);
-      DEBUG2(tree_summary(std::cout));
+      DEBUG2(print_summary(std::cout));
     }
 
     // "copy" construction without root (using all roots of in_tree)
@@ -1366,7 +1366,7 @@ namespace PT {
 
     // =================== i/o ======================
 
-    std::ostream& tree_summary(std::ostream& os) const {
+    std::ostream& print_summary(std::ostream& os) const {
       DEBUG3(os << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots\n");
       DEBUG3(os << "leaves: "<<leaves()<<"\n");
       DEBUG3(os << Parent::num_nodes() << " nodes: "<<nodes()<<'\n');

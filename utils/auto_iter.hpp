@@ -3,6 +3,13 @@
 
 #include "stl_utils.hpp"
 
+// NOTE: set_interface needs auto_iter's so we're forward-declaring it here
+namespace mstd {
+  template<class T, class EndIterator = std::conditional_t<iter_verifyable<iterator_of_t<T>>, void, iterator_of_t<T>>> class auto_iter;
+}
+
+#include "set_interface.hpp" // for mstd::append
+
 namespace mstd {
 
   template<class T>
@@ -113,7 +120,8 @@ namespace mstd {
 
 
   // add some convenience functions to _auto_iters
-  template<class T, class EndIterator = std::conditional_t<iter_verifyable<iterator_of_t<T>>, void, iterator_of_t<T>>>
+  //template<class T, class EndIterator = std::conditional_t<iter_verifyable<iterator_of_t<T>>, void, iterator_of_t<T>>>
+  template<class T, class EndIterator>
   class auto_iter: public _auto_iter<iterator_of_t<T>, EndIterator> {
     using Parent = _auto_iter<iterator_of_t<T>, EndIterator>;
   public:
@@ -136,9 +144,17 @@ namespace mstd {
 */
     // copy the elements in the traversal to a container using the 'append()'-function
     template<class _Container>
-    _Container& append_to(_Container& c) const { for(auto i = Parent::get_iter(); i != Parent::get_end(); ++i) c += *i; return c; }
+    _Container& append_to(_Container& c) const {
+      for(auto i = Parent::get_iter(); i != Parent::get_end(); ++i) 
+        mstd::append(c, *i);
+      return c;
+    }
+
     template<class _Container = std::vector<std::remove_cvref_t<value_type_of_t<T>>>>
     _Container to_container() const { _Container result; return append_to(result); }
+
+    template<ContainerType _Container> requires std::is_convertible_v<value_type_of_t<T>, value_type_of_t<_Container>>
+    operator _Container() const { return to_container<_Container>(); }
   };
 
   template<class T>
@@ -151,6 +167,7 @@ namespace mstd {
            class KeyType,
            class Iterator = iterator_of_t<Container>>
   auto_iter<Iterator> auto_find(Container&& c, const KeyType& key) { return {c.find(key), end(c)}; }
+
 
 
 } //namespace

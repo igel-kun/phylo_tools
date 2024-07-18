@@ -1,7 +1,6 @@
 
 #pragma once
 
-#include "optional_tuple.hpp"
 #include "union_find.hpp"
 #include "types.hpp"
 #include "network.hpp"

@@ -3,6 +3,7 @@
 
 #include "set_interface.hpp"
 #include "extension.hpp"
+#include "dynamic_sw.hpp"
 #include "tree_extension.hpp"
 #include "subsets_constraint.hpp"
 
@@ -39,6 +40,9 @@ namespace PT {
       ex(std::forward<Nodes>(nodes)), hash_cache(hash_value)
     {}
   public:
+    using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
+    using SWInfo = std::pair<sw_t, DynamicSW>;
+
     _DPEntryLowMem() = default;
     
     template<NodeIterableType Nodes>
@@ -48,6 +52,12 @@ namespace PT {
       assert(hash_cache == hash(ex));
     }
     bool operator==(const _DPEntryLowMem&) const = default;
+
+    SWInfo get_dynamic_scanwidth() const {
+      SWInfo result;
+      result.first = result.second.update_all(ex);
+      return result;
+    }
 
     size_t hash() const { return hash_cache; }
     
@@ -75,14 +85,15 @@ namespace PT {
     using Parent = _DPEntryLowMem<Network>;
     using Edge = typename Network::Edge;
     using Parent::ex;
-    using DynamicScanwidth = typename Extension::DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
+    using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
+    using SWInfo = std::pair<DynamicSW, sw_t>;
 
     using Parent::Parent;
     
     bool operator==(const _DPEntry& other) const { return Parent::operator==(other); }
 
   protected:
-    DynamicScanwidth ds;
+    DynamicSW ds;
     sw_t scanwidth = 0;
     
     void replace_prefix(const _DPEntry& other) {
@@ -101,12 +112,13 @@ namespace PT {
     }
 
   public:
+    SWInfo get_dynamic_scanwidth() const { return SWInfo{scanwidth, ds}; }
 
     sw_t get_scanwidth() const { return scanwidth; }
     // update entry with the next node u
     void update(const NodeDesc u) {
       Parent::update(u);
-      scanwidth = std::max(scanwidth, ds.update_sw(u));
+      update_sw(u);
     }
     void clear() { Parent::clear(); ds.clear(); scanwidth = 0; }
 
@@ -117,6 +129,14 @@ namespace PT {
 
   template<StrictPhylogenyType Network, class EdgeWeightExtracter = void>
   struct WeightedDegrees {
+    Degree operator()(const NodeDesc u, const typename Network::Adjacency& v_adj) const {
+      EdgeWeightExtracter extract;
+      return extract(v_adj);
+    }
+    Degree operator()(const typename Network::Adjacency& u_adj, const NodeDesc v) const {
+      EdgeWeightExtracter extract;
+      return extract(u_adj);
+    }
 
     Degrees operator()(const NodeDesc u) const {
       Degrees result{0,0};
@@ -127,16 +147,14 @@ namespace PT {
     }
   };
   template<StrictPhylogenyType Network>
-  struct WeightedDegrees<Network, void> {
-    Degrees operator()(const NodeDesc u) { return Network::degrees(u); }
-  };
+  struct WeightedDegrees<Network, void>: public DefaultDegrees<Network> {};
 
 
   // NOTE: you can pass an EdgeWeightExtracter functor that, given an edge uv of the network, returns the number of edges represented by this edge
   //       this is useful when doing preprocessing which can double certain edges or even have edges represent other edges
   //       if this is void, only the edge itself is considered
   template<bool low_memory_version,
-           PhylogenyType Network,
+           StrictPhylogenyType Network,
            class EdgeWeightExtracter = void,
            bool ignore_deg2 = false>
   class ScanwidthDP {

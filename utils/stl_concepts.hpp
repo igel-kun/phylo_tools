@@ -17,6 +17,16 @@ namespace mstd {
   template<class T> concept really_pre_incrementable = requires(T t){++t;};
   template<class T> concept really_post_incrementable = requires(T t){t++;};
 
+  // containers can be output to std::cout in the form [a b c ], unless they are strings or char* or string_view or....
+	template<class T> constexpr bool is_stringlike_v = false;
+	template<class... T> constexpr bool is_stringlike_v<std::basic_string<T...>> = true;
+	template<> constexpr bool is_stringlike_v<std::string_view> = true;
+	template<> constexpr bool is_stringlike_v<char*> = true;
+	template<> constexpr bool is_stringlike_v<char[]> = true;
+	template<> constexpr bool is_stringlike_v<const char*> = true;
+	template<> constexpr bool is_stringlike_v<const char[]> = true;
+	template<class T> concept Stringlike = is_stringlike_v<T>;
+
   template<class T> concept has_iterator = requires { typename T::iterator;};
   // for reasons, C++20's std::span has no const_iterator yet (added in C++23)
   template<class T> concept has_const_iterator = requires { typename T::const_iterator;};

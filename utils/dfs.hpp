@@ -2,7 +2,6 @@
 #pragma once
 
 #include "set_interface.hpp"
-#include "auto_iter.hpp"
 #include "concat_iter.hpp"
 #include "trans_iter.hpp"
 #include "traversal_traits.hpp"
@@ -525,6 +524,7 @@ namespace PT{
   //      if you want to reuse the same SeenSet for multiple DFS' you have the following options:
   //      (a) reset the SeenSet between calls to begin()
   //      (b) call begin(bla, ...) instead of begin()
+#warning "TODO: check if this can be an auto_iter"
   template<TraversalType o,
            PhylogenyType Network,
            class _Roots = void,

@@ -77,8 +77,11 @@ namespace mstd {
     template<class... Args> requires (!std::is_reference_v<T> || (sizeof...(Args) != 0))
     optional_item(Args&&... args): value(std::forward<Args>(args)...) {}
 
-    operator T&() { return value; }
-    operator const T&() const { return value; }
+// NOTE: the ability to convert an optional_tuple to any of its members is confusing and NOT a good idea
+//    For example: NodeSet L = N.leaves() returns the SeenSet of the DFS traversal and that's NOT what we want
+//
+//    operator T&() { return value; }
+//    operator const T&() const { return value; }
   };
   template<size_t i>
   struct optional_item<i, void> {
@@ -87,14 +90,18 @@ namespace mstd {
     template<class T> optional_item(const T&) {}
   };
 
+
+  // forward declaration of the tuple
   template<size_t i, class... T>
   struct _optional_tuple;
 
+  // base case: tuple with no items
   template<size_t i>
   struct _optional_tuple<i>{
     _optional_tuple(const std::piecewise_construct_t = std::piecewise_construct) {}
   };
 
+  // recursive case: tuple with item of type LastT
   template<size_t i, class LastT, class... Rest>
   struct _optional_tuple<i, LastT, Rest...>:
     public optional_item<i, LastT>,

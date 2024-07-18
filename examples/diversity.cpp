@@ -28,9 +28,17 @@ struct EdgeData {
         inheritance_prob = std::stof(*iter);
     } 
   }
-
-  float score() const { return weight * gamma; }
 };
+
+// return the gamma, inheritence-probablility, and weight of an edge
+struct UtilityFunctors {
+  using Gamma = decltype(EdgeData::gamma);
+  static constexpr auto& gamma(const auto& e) { return e.data().gamma; }
+  static constexpr auto& iprob(const auto& e) { return e.data().inheritance_prob; }
+  static constexpr auto& weight(const auto& e) { return e.data().weight; }
+  static constexpr auto score(const auto& e) { return weight(e) * gamma(e); }
+};
+
 using MyNetwork = DefaultLabeledNetwork<void, EdgeData>;
 using MyNode = typename MyNetwork::Node;
 using MyEdge = typename MyNetwork::Edge;
@@ -64,9 +72,9 @@ void parse_options(const int argc, const char** argv) {
   }
 
   if(!test(options, "-l") && (options[""].size() == 1)) {
-    std::cerr << "If you want me to compute a leaf-set maximizing the diversity score,\
-      you'll have to give me an upper bound k on the size of said leaf-set.\
-      Otherwise, I'll just take all the leaves and that's not what you want is it?\n";
+    std::cerr << "If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n";
+    std::cerr << '\n' << help_message;
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -101,7 +109,6 @@ MyNetwork read_network(const std::string& in) {
   }
 }
 
-
 int main(const int argc, const char** argv) {
   std::cout << "parsing options...\n";
   parse_options(argc, argv);
@@ -109,28 +116,22 @@ int main(const int argc, const char** argv) {
   std::cout << "reading network...\n";
   MyNetwork N(read_network(options[""][0]));
 
-  if(mstd::test(options, "-v"))
+  if(mstd::test(options, "-v")) {
     std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
+    N.print_summary(std::cout);
+  }
 
   if(test(options, "-l")) {
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
     const auto leaves_range = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
     const NodeVec leaves{leaves_range.begin(), leaves_range.end()};
     std::cout << "computing diversity score of leaves " << leaves << '\n';
-    // fill the gamma-values in the network using a DiversityCalculator
-    calculate_diversity(leaves, N,
-        [](const MyEdge& e) -> float& {return e.data().gamma;},
-        [](const MyEdge& e) -> float& {return e.data().inheritance_prob;});
-    float D;
-    for(const auto e: N.edges())
-      D += e.data().score();
-    std::cout << "score = "<<D<<'\n';
+    std::cout << "score = "<<pd_score(N, leaves, UtilityFunctors())<<'\n';
   } else {
     const size_t k = stol(options[""][1]);
-    std::cout << "computing optimal diversity score rachable with " << k << " leaves\n";
-
-#warning "TODO: write me"
-    throw(std::logic_error{"unimplemented"});
+    std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
+    const auto [sol, score] = optimize_diversity_brute_force(N, k, UtilityFunctors());
+    std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<'\n';
   }
 }
 
