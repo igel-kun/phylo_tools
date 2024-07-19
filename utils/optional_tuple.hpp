@@ -63,20 +63,25 @@ namespace mstd {
 
 
 
-  template<size_t i, class T>
+  template<size_t i, class T> requires (!std::is_reference_v<T>)
   struct optional_item {
     using value_type = T;
     T value;
     static constexpr bool has_value = true;
 
-//    optional_item() { }
-//
-//    optional_item(const optional_item&) = default;
-//    optional_item(optional_item&&) = default;
-    
-    template<class... Args> requires (!std::is_reference_v<T> || (sizeof...(Args) != 0))
-    optional_item(Args&&... args): value(std::forward<Args>(args)...) {}
+    /*
+    optional_item() = default;
+    optional_item(const optional_item&) = default;
+    optional_item(optional_item&&) = default;
 
+    optional_item& operator=(const optional_item&) = default;
+    optional_item& operator=(optional_item&&) = default;
+    */
+  /* 
+    template<class First, class... Args> 
+      requires (!std::is_same_v<std::remove_cvref_t<First>, optional_item> && (!std::is_reference_v<T> || (sizeof...(Args) != 0)))
+    optional_item(First&& first, Args&&... args): value(std::forward<Args>(args)...) {}
+*/
 // NOTE: the ability to convert an optional_tuple to any of its members is confusing and NOT a good idea
 //    For example: NodeSet L = N.leaves() returns the SeenSet of the DFS traversal and that's NOT what we want
 //
@@ -102,7 +107,7 @@ namespace mstd {
   };
 
   // recursive case: tuple with item of type LastT
-  template<size_t i, class LastT, class... Rest>
+  template<size_t i, class LastT, class... Rest> requires (!std::is_reference_v<LastT>)
   struct _optional_tuple<i, LastT, Rest...>:
     public optional_item<i, LastT>,
     public _optional_tuple<i + 1, Rest...>

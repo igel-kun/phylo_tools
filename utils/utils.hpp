@@ -26,7 +26,7 @@
 #if __linux__
   #include <string.h> // for explicit_bzero
 #else
-  #include <cstring>
+  #include <cstring> // for std::memset
 #endif
 
 #warning "TODO: sanitize namespaces using a subnamespace 'details' or 'impl'"

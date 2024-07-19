@@ -171,6 +171,57 @@ namespace mstd{
   template<iter_verifyable Iter, class T>
   bool operator==(const Iter& other, const GenericEndIteratorS<T>&) { return !other.is_valid(); }
 
+  // wrap a pointer in an iterator shell that has all the required types and can be inherited from
+  template<class Ptr>
+  struct PointerIterWrapper: public std::iterator_traits<Ptr> {
+    using Tptr = Ptr;
+    using TptrRef = Tptr&;
+    using TptrConstRef = const Tptr&;
+    using T = decltype(*Ptr());
+    using Traits = std::iterator_traits<Ptr>;
+    using typename Traits::difference_type;
+
+    Tptr data = nullptr;
+
+    PointerIterWrapper() = default;
+    PointerIterWrapper(const Tptr x): data(x) {}
+
+    auto& operator++() { ++data; return *this; }
+    auto operator++(int) { PointerIterWrapper result{data}; ++data; return result; }
+    auto& operator--() { --data; return *this; }
+    auto operator--(int) { PointerIterWrapper result{data}; --data; return result; }
+    auto& operator+=(const int x) { data += x; return *this; }
+    auto operator+(const difference_type x) const { return PointerIterWrapper{data + x}; }
+    auto& operator-=(const int x) { data -= x; return *this; }
+    auto operator-(const int x) const { return PointerIterWrapper{data - x}; }
+    difference_type operator-(const PointerIterWrapper& other) const { return PointerIterWrapper{data - other.data}; }
+
+    auto& operator[](const int x) const { return data[x]; }
+
+    bool operator==(const PointerIterWrapper& other) const { return other.data == data; }
+    bool operator==(const Tptr other) const { return other == data; }
+
+    bool operator<=>(const PointerIterWrapper& other) const { return other.data <=> data; }
+    bool operator<=>(const Tptr other) const { return other <=> data; }
+    
+    T& operator*() const { return *data; }
+    Tptr operator->() const { return data; }
+    
+    explicit operator TptrRef() { return data; }
+    explicit operator TptrConstRef() const { return data; }
+  };
+  template<class T>
+  PointerIterWrapper<T> operator+(const long int x, const PointerIterWrapper<T>& it) { return it + x; }
+
+  using _Out = PointerIterWrapper<int*>;
+  static_assert(std::weakly_incrementable<_Out>);
+  static_assert(std::random_access_iterator<_Out>);
+
+  template<class T>
+  using InheritableIter = std::conditional_t<std::is_pointer_v<T>, PointerIterWrapper<T>, T>;
+
+  template<class Iterator>
+  using CorrespondingEndIter = std::conditional_t<iter_verifyable<Iterator>, void, Iterator>;
 
 
   // a class that returns itself on dereference 
@@ -242,7 +293,11 @@ namespace mstd{
   bool operator==(const T& i1, const std::reverse_iterator<T>& i2) {  return (next(i1) == i2.base()); }
   template<typename T>
   bool operator==(const std::reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
-  
+
+  // ----------------------- store references in classes without losing operator= ------------------------------
+  // this replaces references with std::reference_wrappers
+  template<class T>
+  using NoRef = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
 
   // ----------------------- container to array (first 'elements' elements)  ----------------------------------
   template<size_t elements, ContainerType Container>
@@ -253,7 +308,6 @@ namespace mstd{
     return result;
   }
   
-
 
   // ----------------------- lookup ----------------------------------
 

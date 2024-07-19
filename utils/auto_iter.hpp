@@ -18,27 +18,6 @@ namespace mstd {
     {a.is_invalid()} -> std::same_as<bool>;
   };
 
-  template<class Ptr>
-  struct PointerIterWrapper: public std::iterator_traits<Ptr> {
-    using Tptr = Ptr;
-    using TptrRef = Tptr&;
-    using TptrConstRef = const Tptr&;
-
-    Tptr data = nullptr;
-
-    PointerIterWrapper() = default;
-    PointerIterWrapper(const Tptr x): data(x) {}
-
-    operator TptrRef() { return data; }
-    operator TptrConstRef() const { return data; }
-  };
-
-  template<class T>
-  using InheritableIter = std::conditional_t<std::is_pointer_v<T>, PointerIterWrapper<T>, T>;
-
-  template<class Iterator>
-  using CorrespondingEndIter = std::conditional_t<iter_verifyable<Iterator>, void, Iterator>;
-
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
   template<class Iterator, class _EndIterator = CorrespondingEndIter<Iterator>>

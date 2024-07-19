@@ -150,10 +150,17 @@ namespace PT{
     DFSIterator(const Phylo& N, Args&&... args):
       DFSIterator(N.root(), std::forward<Args>(args)...)
     {}
-    //DFSIterator(const DFSIterator& other) = default;
-    //DFSIterator(DFSIterator&& other) = default;
-    //DFSIterator& operator=(const DFSIterator& other) = default;
-    //DFSIterator& operator=(DFSIterator&& other) = default;
+    /*
+    DFSIterator(const DFSIterator& other) = default;
+    DFSIterator(DFSIterator&& other) = default; //: Traits{static_cast<Traits&&>(other)}, root{other.root}, child_history{std::move(other.child_history)} {}
+    DFSIterator& operator=(const DFSIterator& other) = default;
+    DFSIterator& operator=(DFSIterator&& other) = default;
+    */
+    /*{
+      static_cast<Traits&>(*this) = static_cast<Traits&&>(other);
+      root = other.root;
+      child_history = std::move(other.child_history);
+    }*/
 
 
     DFSIterator& operator++() {
@@ -561,7 +568,6 @@ namespace PT{
     Container to_container() { Container c; append(c, *this); return c; }
   };
 
-
   // these convenience declarations allow saying EdgeTraversal<postorder, ...> while, normally, "postorder" means node-postorder
   template<TraversalType o,
            PhylogenyType Network,
@@ -582,5 +588,11 @@ namespace PT{
            class Forbidden = void>
   using AllEdgesTraversal = Traversal<TraversalType(o | all_edge_traversal), Network, Roots, SeenSet, Forbidden>;
 
-
 }// namespace
+
+
+// to use C++20 ranges with our traversals, we'll need to tell the range library that they are borrowed ranges
+template<PT::TraversalType o, PT::PhylogenyType Network, class Roots, PT::OptionalNodeSetType SeenSet, class Forbidden>
+constexpr bool std::ranges::enable_borrowed_range<PT::Traversal<o, Network, Roots, SeenSet, Forbidden>> = true;
+
+

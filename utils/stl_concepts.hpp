@@ -209,4 +209,18 @@ namespace mstd {
 
   template<class T>
   concept TupleType = is_tuple_v<T>;
+
+  // ----------------------- deriving from and basing on templates  ----------------------------------
+  template <template <class...> class C, class...Ts>
+  std::true_type is_derived_from_template_impl(const C<Ts...>*);
+
+  template <template <class...> class C>
+  std::false_type is_derived_from_template_impl(...);
+
+  template <class T, template <class...> class C>
+  using is_derived_from_template = decltype(is_derived_from_template_impl<C>(std::declval<T*>()));
+  
+  template <class T, template <class...> class C>
+  static constexpr bool is_derived_from_template_v = is_derived_from_template<T, C>::value;
+
 }

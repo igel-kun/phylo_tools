@@ -3,6 +3,7 @@
 
 #include <iterator>
 #include <random>
+#include <ranges> // for iota_view
 #include "utils.hpp"
 #include "iter_bitset.hpp"
 
@@ -85,7 +86,7 @@ namespace PT{
   }
   template<class T, mstd::IterableType Container>
   void sample(Container&& c, const size_t k, T* const result) {
-    std::ranges::sample(c, std::begin(result), k, std::mt19937{std::random_device{}()});
+    std::ranges::sample(c, mstd::PointerIterWrapper<T*>(result), k, std::mt19937{std::random_device{}()});
   }
 
 /*

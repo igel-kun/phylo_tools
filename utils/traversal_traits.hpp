@@ -60,15 +60,27 @@ namespace PT {
            OptionalNodeSetType _SeenSet,
            class _Forbidden>
   struct TraversalTraits:
-    public mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>,
+    public mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, mstd::NoRef<_SeenSet>>, 
     public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
   {
-    using Parent = mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, _SeenSet>;
+    // NOTE: if _SeenSet is a reference, we replace it with a reference_wrapper in order to not lose operator=
+    using Parent = mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, mstd::NoRef<_SeenSet>>;
     using Parent::Parent;
 
     // NOTE: this forwarding constructor is necessary to construct TraversalTraits from optional_tuples
-    template<class... Args>
-    TraversalTraits(Args&&... args): Parent(std::forward<Args>(args)...) {}
+    template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, TraversalTraits>)
+    TraversalTraits(First&& first, Args&&... args): Parent(std::forward<First>(first), std::forward<Args>(args)...) {}
+    template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, TraversalTraits>)
+    TraversalTraits& operator=(First&& first) {
+      Parent::operator=(std::forward<First>(first));
+    }
+    /*
+    TraversalTraits() = default;
+    TraversalTraits(const TraversalTraits&) = default;
+    TraversalTraits(TraversalTraits&&) = default;
+    TraversalTraits& operator=(const TraversalTraits&) = default;
+    TraversalTraits& operator=(TraversalTraits&&) = default;
+    */
 
     static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
     static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
@@ -87,10 +99,21 @@ namespace PT {
     // we consider a node 'seen' if it's either seen or forbidden
     bool is_seen(const NodeDesc u) const {
       bool result = is_forbidden(u);
-      if constexpr (has_seen) result |= mstd::test(this->template get<1>(), u);
+      if constexpr (has_seen) {
+        if constexpr (std::is_reference_v<_SeenSet>)
+          result |= mstd::test(this->template get<1>().get(), u);
+        else
+          result |= mstd::test(this->template get<1>(), u);
+      }
       return result;
     }
-    void mark_seen(const NodeDesc u) { mstd::append(this->template get<1>(), u); }
+    void mark_seen(const NodeDesc u) requires has_seen {
+      if constexpr (std::is_reference_v<_SeenSet>)
+        mstd::append(this->template get<1>().get(), u);
+      else
+        mstd::append(this->template get<1>(), u);
+
+    }
   };
 
 
@@ -218,14 +241,10 @@ namespace PT {
   };
 
   template<class T>
-  concept TraversalTraitsType = requires(T t, const typename T::value_type u, const NodeDesc& v) {
-    typename T::Network;
-    typename T::ItemContainer;
-    T::track_nodes;
-    T::min_stacksize;
-    t.mark_seen(v);
-    { t.is_seen(u) } -> std::same_as<bool>;
-  };
+  static constexpr bool is_traversal_traits_v = mstd::is_derived_from_template_v<T, TraversalTraits>;
+
+  template<class T>
+  concept TraversalTraitsType = is_traversal_traits_v<T>;
 
 
 }

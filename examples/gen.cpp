@@ -103,11 +103,6 @@ auto read_network(auto&& in) {
   }
 }
 
-MyEdge advance_and_return(auto& iter, const size_t dist) {
-  std::advance(iter);
-  return *iter;
-}
-
 int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
@@ -143,28 +138,26 @@ int main(const int argc, const char** argv) {
       // step 1.3: choose uv among the edges reachable from the root of N-st
       const NodeDesc t_root = N.is_root(t) ? t : N.root();
       do {
-        uv = sample<NodeSingleton>(N.edges(), 1).front();
+        sample(N.edges(), 1, &uv);
         // NOTE: we'll be in trouble if there is only 1 edge below t and we choose that one for uv, since then, we can't choose anything for xy
       } while((N.out_degree(t_root) == 1) || (uv.tail() == t_root));
 
       // step 1.4: choose xy among the edges reachalbe from the root above t in N-st
       while(1) {
-        xy = sample<NodeSingleton>(N.edges_below(t_root), 1).front();
+        sample(N.edges_below(t_root), 1, &xy);
         if(xy != uv) {
+#warning "TODO: continue here"
         }
       }
-
-      const auto st = advance_and_return(edge_it, three_ints[0]);
-      auto _uv = advance_and_return(edge_it, three_ints[1] - three_ints[0]);
-      auto _xy = advance_and_return(edge_it, three_ints[2] - three_ints[1]);
-
+      throw(std::logic_error{"unimplemented"});
+/*
       // step 1.5: check whether x is below v and swap if necessary
-      const bool needs_swap = N.has_path(xy.tail(), uv.head());
-      const MyEdge xy = needs_swap ? std::move(_uv) : std::move(_xy);
-      const MyEdge uv = needs_swap ? std::move(_xy) : std::move(_uv);
+      if(N.has_path(xy.tail(), uv.head()))
+        std::swap(uv, xy);
 
       // step 2: apply the TBR-move
       apply_TBR_move(N, st, uv, xy);
+*/
     }
   } else {
     long num_nodes, num_retis, num_leaves;
@@ -182,8 +175,8 @@ int main(const int argc, const char** argv) {
     generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0);
   }
 
-  if(mstd::test(options,"-a"))
-    generate_labels(leaf_labels_only_tag(), N,);
+  if(mstd::test(options,"-L"))
+    generate_labels(leaf_labels_only_tag{}, N);
 
   if(mstd::test(options, "-v"))
     std::cout << N << std::endl;
