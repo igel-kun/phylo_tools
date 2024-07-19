@@ -18,11 +18,16 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
-#include <string.h> // for explicit_bzero
 
 #include "platform.hpp"
 #include "debug_utils.hpp"
 #include "stl_utils.hpp"
+
+#if __linux__
+  #include <string.h> // for explicit_bzero
+#else
+  #include <cstring>
+#endif
 
 #warning "TODO: sanitize namespaces using a subnamespace 'details' or 'impl'"
 
