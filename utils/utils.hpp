@@ -18,15 +18,17 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <string.h> // for explicit_bzero
 
 #include "platform.hpp"
 #include "debug_utils.hpp"
 #include "stl_utils.hpp"
 
-#warning TODO: sanitize namespaces using a subnamespace "details"
+#warning "TODO: sanitize namespaces using a subnamespace 'details' or 'impl'"
 
 // we reuire gcc-11.3 here since that version fixes some bugs in gcc that we'll be hit with :/
-#if __GNUC__ && (GCC_VERSION < 110300)
+// EDIT: for some reason AppleClang sets __GNUC__ and GCC_VERSION to something silly
+#if !__clang__ && __GNUC__ && (GCC_VERSION < 110300)
 #   error "You'll need at least gcc-11.3 to compile this project"
 #endif
 
@@ -77,6 +79,17 @@ constexpr x(Tuple&& t): x(std::forward<Tuple>(t), std::make_index_sequence<std::
 #define return_map_lookup(x,y,z) {const auto __iter = mstd::find((x), (y)); return (__iter == std::end((x))) ? (z) : __iter->second; }
 // a pointer-lookup that returns nullptr on unsuccessful lookups
 #define return_pointer_lookup(x,y) {const auto __iter = mstd::find((x), (y)); return (__iter == std::end((x))) ? nullptr : &(*__iter); }
+
+// zero-fill
+  void clear_memory(void* const start, const size_t num_bytes) {
+#if __linux__
+    explicit_bzero(start, num_bytes);
+#else
+    std::memset(start, 0, num_bytes);
+#endif
+  }
+
+
 
 // rotation
 uint32_t rotl32(uint32_t x, uint32_t n){

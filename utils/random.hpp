@@ -79,9 +79,13 @@ namespace PT{
   }
 
 
-  template<mstd::IndexibleType Vec, mstd::IterableType Container>
+  template<mstd::IndexibleType Vec, mstd::IterableType Container> requires (!std::is_pointer_v<Vec>)
   void sample(Container&& c, const size_t k, Vec& result) {
     std::ranges::sample(c, std::back_inserter(result), k, std::mt19937{std::random_device{}()});
+  }
+  template<class T, mstd::IterableType Container>
+  void sample(Container&& c, const size_t k, T* const result) {
+    std::ranges::sample(c, std::begin(result), k, std::mt19937{std::random_device{}()});
   }
 
 /*

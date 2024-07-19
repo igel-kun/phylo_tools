@@ -2,7 +2,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string.h> // for explicit_bzero
 #include <set>
 #include <initializer_list>
 #include "utils.hpp"
@@ -425,7 +424,7 @@ namespace mstd {
 
     void clear() { clear_all(); }
     void clear_all() {
-      explicit_bzero(storage.data(), num_buckets() * BITSET_BYTES_IN_BUCKET);
+      clear_memory(storage.data(), num_buckets() * BITSET_BYTES_IN_BUCKET);
       _count = 0;
     }
 

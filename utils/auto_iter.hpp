@@ -26,6 +26,9 @@ namespace mstd {
 
     Tptr data = nullptr;
 
+    PointerIterWrapper() = default;
+    PointerIterWrapper(const Tptr x): data(x) {}
+
     operator TptrRef() { return data; }
     operator TptrConstRef() const { return data; }
   };
@@ -53,20 +56,20 @@ namespace mstd {
 
     // when default-constructed, end_it == *this, so is_valid() will be false
     template<class = void> requires (std::is_default_constructible_v<Iterator>)
-    _auto_iter(): Parent(), end_it(*this) {}
+    _auto_iter(): Parent(), end_it{*this} {}
 
     // construct from two iterators (begin and end)
     template<class _Iterator, class _EndIter>
       requires (std::is_convertible_v<std::remove_cvref_t<_Iterator>,Iterator> && std::is_convertible_v<std::remove_cvref_t<_EndIter>, EndIterator>)
-    constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end): Parent(std::forward<_Iterator>(_it)), end_it(std::forward<_EndIter>(_end)) {}
+    constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end): Parent{std::forward<_Iterator>(_it)}, end_it{std::forward<_EndIter>(_end)} {}
     // construct from a container
     template<IterableType Container> requires (std::is_convertible_v<iterator_of_t<Container>, Iterator>)
-    _auto_iter(Container&& c): _auto_iter(std::begin(c), std::end(c)) {}
+    _auto_iter(Container&& c): _auto_iter{std::begin(c), std::end(c)} {}
     // piecewise construct
     template<class IterTuple, class EndTuple>
     _auto_iter(const std::piecewise_construct_t, IterTuple&& iter_init, EndTuple&& end_init):
-      Parent(make_from_tuple<Iterator>(std::forward<IterTuple>(iter_init))),
-      end_it(make_from_tuple<EndIterator>(std::forward<EndTuple>(end_init)))
+      Parent{make_from_tuple<Iterator>(std::forward<IterTuple>(iter_init))},
+      end_it{make_from_tuple<EndIterator>(std::forward<EndTuple>(end_init))}
     {}
 
     // copy and move-construction & assignment are default

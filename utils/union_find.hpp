@@ -271,10 +271,10 @@ namespace mstd{
       Parent(),
       merge_payloads(std::forward<Args>(args)...)
     {}
-   
+    DisjointSetForest() = default;
+
     /*
     // we'll need a custom copy and move constructor... do we?
-    DisjointSetForest() = default;
     DisjointSetForest(const DisjointSetForest& _dsf) = default;
     DisjointSetForest(DisjointSetForest&& _dsf) = default;
 
