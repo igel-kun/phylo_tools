@@ -2,6 +2,7 @@
 #pragma once
 
 #include <iterator>
+#include <random>
 #include "utils.hpp"
 #include "iter_bitset.hpp"
 
@@ -43,11 +44,11 @@ namespace PT{
           iter->second = i;
         } else append(result, index);
       }
-    } else append(result, std::ranges::iota_view{0,n-1});
+    } else append(result, std::ranges::iota_view{0u,n-1});
   }
 
   // probs to Paul Crowley for this one: https://stackoverflow.com/questions/311703/algorithm-for-sampling-without-replacement/67850443#67850443
-  template<VectorType Set = std::vector<uint32_t>>
+  template<mstd::VectorType Set = std::vector<uint32_t>>
   void cardchoose(const uint32_t k, const uint32_t n, Set& result) {
     const uint32_t t = n - k + 1;
     result.reserve(k);
@@ -62,7 +63,7 @@ namespace PT{
 
   template<class Set = std::vector<uint32_t>>
   void draw(const uint32_t k, const uint32_t n, Set& result) {
-    if constexpr (VectorType<Set>) {
+    if constexpr (mstd::VectorType<Set>) {
       if(k < config::cardchoose_threshold)
         cardchoose(k, n, result);
       else

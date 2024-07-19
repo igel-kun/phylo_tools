@@ -531,23 +531,19 @@ namespace std {
   // also, apple is, shall we say, less than optimal
 
   // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
-  template<mstd::ArithmeticType T, class Converter>
-  T _stoX(const std::string_view s) {
+  template<class Converter>
+  auto _stoX(const std::string_view s, Converter&& convert = Converter()) {
     const char* const c_str = s.data();
     if(*(c_str + s.size()) != 0) {
       const std::string my_s(s);
-      return Converter(my_s.c_str());
-    } else return Converter(c_str);
+      return convert(my_s.c_str());
+    } else return convert(c_str);
   }
   template<mstd::ArithmeticType T>
   T stoX(const std::string_view s) {
-    if constexpr (std::is_same_v<T, int>)
-      return _stoX<int, std::atoi>(s);
-    else if constexpr (std::is_same_v<T, long>)
-      return _stoX<int, std::atol>(s);
-    else if constexpr (std::is_same_v<T, float>)
-      return _stoX<float, std::atof>(s);
-    else return _stoX<double, std::atod>(s);
+    if constexpr (std::is_integral_v<T>) {
+      return static_cast<T>(_stoX(s, std::atoll));
+    } else return static_cast<T>(_stoX(s, std::atof));
   }
 
 #else

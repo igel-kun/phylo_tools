@@ -89,7 +89,7 @@ namespace PT{
 
 
   //! generate labels
-  template<StrictPhylogeny Net, bool leaf_labels_only = false> requires (Net::has_node_labels)
+  template<StrictPhylogenyType Net, bool leaf_labels_only = false> requires (Net::has_node_labels)
   void generate_labels(Net& T, const float multilabel_density = 0.0f) {
 #warning "TODO: implement multi-labels"
     assert(multilabel_density >= 0.0f   && multilabel_density < 1.0f);
