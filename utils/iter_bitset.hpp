@@ -677,19 +677,19 @@ namespace mstd {
 
 
 
-  template<class bucket_map>
+  template<MapType bucket_map>
   bitset_iterator<bucket_map> iterable_bitset<bucket_map>::begin() const
   {
     return bitset_iterator<bucket_map>(storage);
   }
 
-  template<class bucket_map>
+  template<MapType bucket_map>
   bitset_iterator<bucket_map> iterable_bitset<bucket_map>::end() const
   {
     return bitset_iterator<bucket_map>(storage, storage.end());
   }
 
-  template<class bucket_map>
+  template<MapType bucket_map>
   bitset_iterator<bucket_map> iterable_bitset<bucket_map>::find(const value_type x) const
   {
     if(test(x))
