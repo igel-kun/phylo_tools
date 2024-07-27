@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types.hpp"
 #include "tags.hpp"
 #include "adjacency.hpp"
 
@@ -45,6 +46,34 @@ namespace PT{
   using EdgeVec = std::vector<Edge<EdgeData>>;
   template<class EdgeData = void>
   using EdgeSet = std::unordered_set<Edge<EdgeData>>;
+
+/*
+  // an Edge is something whose head and tail are Nodes
+  template<class T>
+  concept EdgeType = requires(T e) {
+    { e.head() } -> std::convertible_to<NodeDesc>;
+    { e.tail() } -> std::convertible_to<NodeDesc>;
+  };
+*/
+  template<class T>
+  concept StrictEdgeType = mstd::is_derived_from_template_v<T, ProtoEdge>;
+  template<class T>
+  concept EdgeType = StrictEdgeType<std::remove_cvref_t<T>>;
+
+  // a 'loose' edge type is either an edge or a pair of AdjacencyTypes
+  template<class T>
+  concept LooseEdgeType = EdgeType<T> || AdjPairType<T>;
+
+  template<class F, class Edge>
+  concept EdgeFunctionType = LooseEdgeType<Edge> && std::invocable<F, Edge>;
+  template<class F, class Edge>
+  concept OptionalEdgeFunctionType = EdgeFunctionType<F, Edge> || std::is_void_v<F>;
+
+  template<class T>
+  concept EdgeIterableType = (mstd::IterableType<T> && EdgeType<typename T::value_type>);
+  template<class T>
+  concept EdgeContainerType = (mstd::ContainerType<T> && EdgeType<typename T::value_type>);
+
 
 }
 

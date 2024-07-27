@@ -1,35 +1,37 @@
 
 #pragma once
 
+#include "switchings.hpp"
 
 namespace PT {
 
+  // ===================== diversity (classic formulation) ==========================
   template<StrictPhylogenyType Net, NodeContainerType Nodes, class UtilityFunctors>
-  void compute_gammas(const Net& N, const Nodes& nodes_to_save, UtilityFunctors&& f){
+  void compute_gammas(const Net& N, const Nodes& leaves_to_save, UtilityFunctors&& f){
     using Gamma = typename std::remove_reference_t<UtilityFunctors>::Gamma;
     for(const auto uv: N.edges_postorder()) {
       auto& current_gamma = f.gamma(uv);
       const NodeDesc v = uv.head();
-      const float p_val = (N.is_leaf(v) && !test(nodes_to_save, v)) ? 0.0f : f.iprob(uv);
+      const Gamma p_val = (N.is_leaf(v) && !test(leaves_to_save, v)) ? 0 : f.iprob(uv);
       
-      Gamma tmp = 1.0f;
+      Gamma tmp = 1;
       if(!N.is_leaf(v)) {
         for(const auto vw: N.out_edges(v)) {
-          const auto g_vw = f.gamma(vw);
-          if(g_vw == 1.0f) {
-            tmp = 0.0f;
+          const Gamma g_vw = static_cast<Gamma>(f.gamma(vw));
+          if(g_vw == 1) {
+            tmp = 0;
             break;
-          } else tmp *= 1.0f - f.gamma(vw);
+          } else tmp *= 1 - static_cast<Gamma>(f.gamma(vw));
         }
-        tmp = 1.0f - tmp;
+        tmp = 1 - tmp;
       } 
-      current_gamma = tmp * p_val;
+      current_gamma = tmp * static_cast<Gamma>(p_val);
     }
   }
 
   template<StrictPhylogenyType Net, NodeContainerType Nodes, class UtilityFunctors>
-  double pd_score(const Net& N, const Nodes& nodes_to_save, UtilityFunctors&& f) {
-    compute_gammas(N, nodes_to_save, std::forward<UtilityFunctors>(f));
+  double pd_score_classic(const Net& N, const Nodes& leaves_to_save, UtilityFunctors&& f) {
+    compute_gammas(N, leaves_to_save, std::forward<UtilityFunctors>(f));
     // NOTE: (note: we're not using std::accumulate since N.edges().end() has different type than it's begin())
     // TODO: in C++23, use std::ranges::fold_left
     double D = 0.0;
@@ -80,8 +82,8 @@ namespace PT {
     apply_for_all_subsets(leaves.begin(), leaves.end(), S, subset_size, f);
   }
 
-  template<StrictPhylogenyType Net, class UtilityFunctors>
-  auto optimize_diversity_brute_force(const Net& N, const size_t k, UtilityFunctors&& f) {
+  template<StrictPhylogenyType Net, class UtilityFunctors, class PDScore>
+  auto optimize_diversity_brute_force(const Net& N, const size_t k, UtilityFunctors&& f, PDScore&& pd_score) {
     std::pair<NodeSet, double> max;
     const auto L = N.leaves();
     std::cout << "leaves: "<<L << '\n';
@@ -92,15 +94,47 @@ namespace PT {
     std::cout << "testing all size-"<<k<<" subsets of "<<leaves<<'\n';
 #warning "TODO: make a subset-iterator"
     apply_for_all_subsets(leaves, k, [&](const auto& S){
-        const auto score = pd_score(N, S, f);
+        const auto score = pd_score(N, S, std::forward<UtilityFunctors>(f));
         if(score > max.second) max = {S, score}; });
     return max;
   }
 
-  template<StrictPhylogenyType Net, class UtilityFunctors>
-  auto optimize_diversity(const Net& N, const size_t k, UtilityFunctors&& f) {
+  template<StrictPhylogenyType Net, class... Args>
+  auto optimize_diversity(const Net& N, const size_t k, Args&&... args) {
     // NOTE: for now, we brute-force this
-    return optimize_diversity_brute_force(N, k, std::forward<UtilityFunctors>(f));
+    return optimize_diversity_classic_brute_force(N, k, std::forward<Args>(args)...);
   }
+  
+
+  // ===================== diversity (contained-tree formulation) ==========================
+
+  template<StrictPhylogenyType Net, class UtilityFunctors, class EdgeContainer>
+  double pd_score_for_switching(const Net& N, NodeSet saved_nodes, const EdgeContainer& active_edges, UtilityFunctors&& f) {
+    double switching_weight = 0;
+    double switching_prob = 1;
+    // NOTE: the switching-iter guarantees us to present the edges in pre-order, so if we reverse the order, it'll be a post-order
+    for(const auto& uv: std::ranges::reverse_view{active_edges}) {
+      const auto [u, v] = uv.as_pair();
+      if(test(saved_nodes, v)) {
+        append(saved_nodes, u);
+        // update weight and prob
+        switching_weight += static_cast<double>(f.weight(uv));
+        if(Net::is_reti(v))
+          switching_prob *= static_cast<double>(f.iprob(uv));
+      }
+    }
+    return switching_weight * switching_prob;
+  }
+
+  template<StrictPhylogenyType Net, NodeContainerType Nodes, class UtilityFunctors>
+  double pd_score_ct(const Net& N, const Nodes& leaves_to_save, UtilityFunctors&& f) {
+    double result = 0;
+    for(const auto s: SwitchingFactory<Net>{N}) {
+      result += pd_score_for_switching(N, leaves_to_save, s, f);
+    }
+    return result;
+  }
+ 
+
 }
 

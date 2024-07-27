@@ -498,6 +498,11 @@ namespace mstd {
     }
   }
 
+
+  template<VectorType V>
+  void vector_shrink_to_size(V&& vec, const size_t new_size) {
+    vec.erase(vec.begin() + new_size, vec.end());
+  }
 }
 
 namespace std {

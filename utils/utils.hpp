@@ -52,7 +52,14 @@
 #define NUM_ZEROS_IN(x) (NUM_BITS_IN_INT - NUM_ONES_IN(x))
 #define NUM_ZEROS_INL(x) (NUM_BITS_IN_LONG - NUM_ONES_INL(x))
 #define NUM_ONES_IN_LOWEST_K_BITL(k,x) (NUM_ONES_INL( (x) << (NUM_BITS_IN_LONG - (k)) ))
-#define NUM_ZEROS_IN_LOWEST_K_BITL(k,x) ((k) - NUM_ONES_IN_LOWEST_K_BITL(k, x))
+#define NUM_ZEROS_IN_LOWEST_K_BITL(k,x) ((k) - NUM_ONES_IN_LOWEST_K_BITL((k), (x)))
+#define ISOLATE_LOWEST_BIT(x) ((x) & -(x))
+#define CLEAR_LOWEST_BIT(x) ((x) & ((x)-1))
+#define SET_LOWEST_BITS(x) ((x) |= ((x)-1))
+#define SET_LOWEST_BIT(x) ((x) |= ((x)+1))
+
+#define WITH_LOWEST_BITS_SET(x) ((x) | ((x)-1))
+#define WITH_LOWEST_BIT_SET(x) ((x) | ((x)+1))
 
 // thanks to Chandler Carruth
 #define UNLIKELY(x) __builtin_expect((x), 0)
@@ -95,6 +102,14 @@ constexpr x(Tuple&& t): x(std::forward<Tuple>(t), std::make_index_sequence<std::
   }
 
 
+// produce next permutation with equal amount of 1s set, thanks to http://graphics.stanford.edu/~seander/bithacks.html#NextBitPermutation
+unsigned long bit_twiddle_permute(const unsigned long v) {
+  const unsigned long t = WITH_LOWEST_BITS_SET(v); // t gets v's least significant 0 bits set to 1
+  // Next set to 1 the most significant bit to change, 
+  // set to 0 the least significant ones, and add the necessary 1 bits.
+  const unsigned long w = (t + 1) | ((ISOLATE_LOWEST_BIT(~t) - 1) >> (NUM_TRAILING_ZEROSL(v) + 1));  
+  return w;
+}
 
 // rotation
 uint32_t rotl32(uint32_t x, uint32_t n){

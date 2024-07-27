@@ -51,16 +51,20 @@ OptionMap options;
 void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
+  description["-m"] = {0,0};
   description["-l"] = {1,1};
   description[""] = {1,2};
-  const std::string help_message(std::string(argv[0]) + " <file> <<k> | -l <leaf list>>\n\
-      \tLet N be the network described in file, where each leaf is annotated with its taxon name, and each edge uv is annotated with 1-2 floating-point values\
+  const std::string help_message(std::string(argv[0]) + " [FLAGS] <file> <<k> | -l <leaf list>>\n\
+      \tLet N be the network described in file, where each leaf is annotated with its taxon name,\n\
+      and each edge uv is annotated with 1-2 floating-point values\n\
       the first indicating the weight, the (possible) second indicating its inheritence probability p, if any.\n\
-      This programm either computes the diversity score of the given leaves (if -l option is present),\
-      or computes a set of k leaves maximizing the diversity score (add % to k in order to express a number relative to the total number of leaves, e.g. 25%).\
+      This programm either computes the diversity score of the given leaves (if -l option is present),\n\
+      or computes a set of k leaves maximizing the diversity score\n\
+      (add % to k in order to express a number relative to the total number of leaves, e.g. 25%).\n\
       See whitepaper [TODO] for definitions.\n\
       FLAGS:\n\
       \t-v\tverbose output, prints network\n\
+      \t-m\tuse alternative diversity definition (via switchings)\n\
       \t-l\tcompute the score diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n");
 
   parse_options(argc, argv, description, help_message, options);
@@ -124,13 +128,19 @@ int main(const int argc, const char** argv) {
   if(test(options, "-l")) {
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
     const auto leaves_range = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
-    const NodeVec leaves{leaves_range.begin(), leaves_range.end()};
+    const NodeSet leaves{leaves_range.begin(), leaves_range.end()};
     std::cout << "computing diversity score of leaves " << leaves << '\n';
-    std::cout << "score = "<<pd_score(N, leaves, UtilityFunctors())<<'\n';
+    const auto score = test(options, "-m") ? 
+      pd_score_ct(N, leaves, UtilityFunctors()) :
+      pd_score_classic(N, leaves, UtilityFunctors());
+    std::cout << "score = "<<score<<'\n';
   } else {
+    //using T = decltype(pd_score_ct<MyNetwork, NodeSet, UtilityFunctors>);
     const size_t k = stol(options[""][1]);
     std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
-    const auto [sol, score] = optimize_diversity_brute_force(N, k, UtilityFunctors());
+    const auto [sol, score] = test(options, "-m") ? 
+      optimize_diversity_brute_force(N, k, UtilityFunctors(), pd_score_ct<MyNetwork, NodeSet, UtilityFunctors>) :
+      optimize_diversity_brute_force(N, k, UtilityFunctors(), pd_score_classic<MyNetwork, NodeSet, UtilityFunctors>);
     std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<'\n';
   }
 }

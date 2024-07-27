@@ -116,7 +116,7 @@ namespace mstd {
   // we do not need to store the end-iterator if the iterator type has "bool is_valid() const"
   // (for example, the _auto_iter itself -- imagine an _auto_iter of _auto_iters)
   template<class Iter>
-  concept iter_verifyable = requires(const Iter i) {
+  concept iter_verifyable = HasIterTraits<std::remove_cvref_t<Iter>> && requires(const Iter i) {
     { i.is_valid() } -> std::convertible_to<bool>;
   };
 

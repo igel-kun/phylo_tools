@@ -26,6 +26,7 @@ namespace PT{
       c(_c), bits(_c.size())
     {}
     // construction with an initialization set
+
 /*    template<class _InitSet>
     SubsetIterator(_Container& _c, const _InitSet& init_set):
       c(_c), bits(init_set.begin(), init_set.end(), _c.size())
@@ -53,7 +54,7 @@ namespace PT{
       auto container_iter = c.begin();
       uint64_t last = 0;
       // emplace the items of 
-      std::cout << "collecting items with mask "<< bits << " of "<<c<<"\n";
+      DEBUG4(std::cout << "collecting items with mask "<< bits << " of "<<c<<"\n");
       for(auto b_iter = bits.begin(); b_iter; ++b_iter){
         const uint64_t current = *b_iter;
         std::advance(container_iter, current - last);
@@ -65,12 +66,41 @@ namespace PT{
       return out;
     }
     pointer operator->() { return operator*(); }
-
   };
 
+
+#warning "TODO: allow iterating over all subsets of with size in a given interval [a,b] (use the bit_twiddle_permute in utils/utils.hpp on bitsets)"
+/*
+  // iterate over all subsets with size in the given interval [lower,upper]
+  // NOTE: if lower > container size, we'll produce the end-iterator
+  template<class _Container, class _OutputContainer = _Container>
+  class BoundedSubsetIterator: public SubsetIterator<_Container, _OutputContainer> {
+    using Parent = SubsetIterator<_Container, _OutputContainer>;
+    using Parent::Parent;
+    using Parent::c;
+
+    size_t current_size; // set this to > container size to indicate the end-iterator
+    size_t upper_bound;
+  public:
+    bool is_valid() const { return current_size <= c.size(); }
+    operator bool() const { return is_valid(); }
+
+    template<class T>
+    BoundedSubsetIterator(_Container& _c, const mstd::linear_interval<T> bounds):
+      BoundedSubsetIterator(_c, bounds.low(), bounds.high()
+    {}
+    BoundedSubsetIterator(_Container& _c, const ssize_t low, const size_t high):
+      Parent(_c), current_size{low}, upper_bound{high}
+    {
+      assert(false);
+      // TODO: continue here
+    }
+    BoundedSubsetIterator() = delete;
+
+  };
+*/
   template<class Container, class _OutputContainer = Container>
-  struct SubsetBeginEndIters
-  {
+  struct SubsetBeginEndIters {
     using iterator = SubsetIterator<Container, _OutputContainer>;
     using const_iterator = SubsetIterator<const Container, _OutputContainer>;
     static iterator begin(remove_cv_t<Container>& c) { return c; }

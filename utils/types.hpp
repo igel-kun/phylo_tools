@@ -198,22 +198,8 @@ namespace PT {
   template<class N> concept NodeType = StrictNodeType<std::remove_cvref_t<N>>;
   template<class N> concept TreeNodeType = (NodeType<N> && (N::is_tree_node));
 
-  // an Edge is something whose head and tail are Nodes
-  template<class T>
-  concept EdgeType = requires(T e) {
-    { e.head() } -> std::convertible_to<NodeDesc>;
-    { e.tail() } -> std::convertible_to<NodeDesc>;
-  };
   template<class T>
   concept AdjPairType = AdjacencyType<typename std::remove_reference_t<T>::first_type> && AdjacencyType<typename std::remove_reference_t<T>::second_type>;
-  // a 'loose' edge type is either an edge or a pair of AdjacencyTypes
-  template<class T>
-  concept LooseEdgeType = EdgeType<T> || AdjPairType<T>;
-
-  template<class F, class Edge>
-  concept EdgeFunctionType = LooseEdgeType<Edge> && std::invocable<F, Edge>;
-  template<class F, class Edge>
-  concept OptionalEdgeFunctionType = EdgeFunctionType<F, Edge> || std::is_void_v<F>;
 
 
   template<class P> 
@@ -248,12 +234,12 @@ namespace PT {
   template<PhylogenyType Network>
   using NetEdgeSet = HashSet<EdgeOf<Network>>;
 
-
-  template<class T>
-  concept EdgeIterableType = (mstd::IterableType<T> && EdgeType<typename T::value_type>);
-  template<class T>
-  concept EdgeContainerType = (mstd::ContainerType<T> && EdgeType<typename T::value_type>);
-
+  template<PhylogenyType Network>
+  using AdjacencyOf = typename std::remove_reference_t<Network>::Adjacency;
+  template<PhylogenyType Network>
+  using NetAdjVec = std::vector<AdjacencyOf<Network>>;
+  template<PhylogenyType Network>
+  using NetAdjSet = HashSet<AdjacencyOf<Network>>;
 
   template<class T>
   constexpr bool has_data = std::remove_reference_t<T>::has_data;
