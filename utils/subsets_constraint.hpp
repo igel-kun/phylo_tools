@@ -136,7 +136,7 @@ namespace PT{
     }
 
     bool is_valid() const { return !branched.empty(); }
-    //inline operator bool() { return is_valid(); }
+    explicit operator bool() { return is_valid(); }
  
     bool operator==(const NetworkConstraintSubsetIterator& it) const {
       if(!is_valid()) return !it.is_valid();

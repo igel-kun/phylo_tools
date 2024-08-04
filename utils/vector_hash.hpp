@@ -25,26 +25,8 @@
 
 namespace mstd{
 
-  template<class Container, bool invert = false>
-  struct VacantPredicate {
-    constexpr bool value(const auto& it) const { return (it.has_value()) != invert; }
-    constexpr bool operator()(const auto& it) const { return value(it); }
-  };
-  template<class Container>
-  using OccupiedPredicate = VacantPredicate<Container, true>;
-
-  template<IterableType Container, class Iterator = iterator_of_t<Container>>
-  using linear_vector_hash_iterator = filtered_iterator<Iterator, VacantPredicate<Container>>;
-
-  template<class T> struct _OptFor { };
-  template<Optional T> struct _OptFor<T> { using type = T; };
-  template<class T> requires (!Optional<T>) struct _OptFor<T> { using type = mstd::optional_by_invalid<T>; };
-  template<class T> using OptFor = typename _OptFor<T>::type;
- 
-  template<class T> struct _ValFor { using type = T; };
-  template<Optional T> struct _ValFor<T> { using type = typename T::value_type; };
-  template<class T> using ValFor = typename _ValFor<T>::type;
-
+  template<class Iterator>
+  using vector_hash_iterator = filtered_iterator<Iterator, HasValuePredicate>;
 
   template<
     class _Key,
@@ -81,10 +63,10 @@ namespace mstd{
     using reverse_vector_iterator = typename Parent::reverse_iterator;
     using const_reverse_vector_iterator = typename Parent::const_reverse_iterator;
 
-    using iterator          = linear_vector_hash_iterator<Parent>;
-    using const_iterator    = linear_vector_hash_iterator<const Parent>;
-    using reverse_iterator  = linear_vector_hash_iterator<Parent, reverse_iterator_of_t<Parent>>;
-    using const_reverse_iterator = linear_vector_hash_iterator<const Parent, reverse_iterator_of_t<const Parent>>;
+    using iterator          = vector_hash_iterator<vector_iterator>;
+    using const_iterator    = vector_hash_iterator<const_vector_iterator>;
+    using reverse_iterator  = vector_hash_iterator<reverse_vector_iterator>;
+    using const_reverse_iterator = vector_hash_iterator<const_reverse_vector_iterator>;
     
     using insert_result       = std::pair<vector_iterator, bool>;
     using const_insert_result = std::pair<const_vector_iterator, bool>;
@@ -231,7 +213,7 @@ namespace mstd{
       do{
         advance_index(end_index);
         next_slot = slot_at(end_index);
-      } while((do_hash(*next_slot) != end_index) && !vacant(*next_slot));
+      } while((do_hash(*next_slot) != end_index) && !is_vacant(*next_slot));
       revert_index(end_index);
       DEBUG5(std::cout << "shifting up to (including) index "<<end_index<<" (key "<<*next_slot<<")\n");
       // end_index points to the last slot to move
@@ -381,7 +363,6 @@ namespace mstd{
       STAT(_count = 0);
       const bool result = find_slot(key).second == FindStatus::FS_found_key;
       STAT(++hist[_count]);
-      STAT(std::cout << _count << "hops\n");
       return result;
     }
 
@@ -392,7 +373,6 @@ namespace mstd{
       STAT(_count = 0);
       const auto [iter, status] = find_slot(key);
       STAT(++hist[_count]);
-      STAT(std::cout << _count << "hops\n");
       return (status == FindStatus::FS_found_key) ? make_iterator(iter) : end();
     }
 
@@ -401,7 +381,6 @@ namespace mstd{
       STAT(_count = 0);
       const auto [iter, status] = find_slot(key);
       STAT(++hist[_count]);
-      STAT(std::cout << _count << "hops\n");
       return (status == FindStatus::FS_found_key) ? make_iterator(iter) : end();
     }
 

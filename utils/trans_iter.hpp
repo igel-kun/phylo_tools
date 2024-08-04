@@ -13,9 +13,8 @@ namespace mstd {
   template<class _Iter, class _Transformation, bool pass_iterator = false>
     requires (std::is_invocable_v<_Transformation, std::conditional_t<pass_iterator, _Iter, reference_of_t<_Iter>>>)
   class proto_transforming_iterator: public InheritableIter<_Iter> {
-    using Parent = InheritableIter<_Iter>;
-    
-    mstd::mutableT<_Transformation> trans;
+    using Parent = InheritableIter<_Iter>; 
+    [[no_unique_address]] mstd::mutableT<_Transformation> trans;
     
     decltype(auto) deref() const {
       const InheritableIter<_Iter>& intermediate = static_cast<const InheritableIter<_Iter>&>(*this);
@@ -57,6 +56,7 @@ namespace mstd {
     template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, proto_transforming_iterator>) &&
         std::is_default_constructible_v<Transformation> && std::is_constructible_v<Parent, T&&>)
     proto_transforming_iterator(T&& iter): Parent(std::forward<T>(iter)), trans() {}
+
     // construct from iter and transformaiton
     template<class T, class F> requires (std::is_constructible_v<Parent, T&&> && std::is_constructible_v<Transformation, F&&>)
     proto_transforming_iterator(T&& iter, F&& f): Parent(std::forward<T>(iter)), trans{std::forward<F>(f)} {}

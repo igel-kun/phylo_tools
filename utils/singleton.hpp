@@ -1,13 +1,15 @@
 
 #pragma once
 
+#include "stl_utils.hpp"
 #include "optional.hpp"
 
 namespace mstd{
 
   // a set holding at most one element, but having a set-interface
   template<Optional Container>
-  class singleton_set: public iter_traits_from_reference<typename Container::value_type&> {
+  class singleton_set: public iter_traits_from_reference<typename Container::value_type&> 
+  {
     using traits = iter_traits_from_reference<typename Container::value_type&>;
     Container storage;
   public:
@@ -28,11 +30,11 @@ namespace mstd{
     void clear() { storage.reset(); }
 
     void push_back(value_type&& el) {
-      assert((non_empty(), "trying to add second element to singleton set"));
+      if(non_empty()) throw std::out_of_range("trying to add second element to singleton set");
       storage.emplace(std::move(el));
     }
     void push_back(const value_type& el) {
-      assert((non_empty(), "trying to add second element to singleton set"));
+      if(non_empty()) throw std::out_of_range("trying to add second element to singleton set");
       storage.emplace(el);
     }
 
@@ -61,26 +63,22 @@ namespace mstd{
       if(empty()){
         value_type& emplace_result = storage.emplace(std::forward<Args>(args)...);
         return {&emplace_result, true};
-      } else {
-        assert(false && "trying to add second element to singleton set");
-        exit(-1);
-      }
+      } else throw std::out_of_range("trying to add second element to singleton set");
     }
 
     template<class... Args>
     std::pair<iterator, bool> emplace_back(Args&&... args) { return emplace(std::forward<Args>(args)...); }
  
     template<class Iter>
-    void insert(const Iter& src_begin, const Iter& src_end)
-    { 
+    void insert(const Iter& src_begin, const Iter& src_end) { 
       if(src_begin != src_end) emplace(*src_begin);
-      assert((next(src_begin) == src_end) && "trying to add second element to singleton set");
+      if(next(src_begin) != src_end) throw std::out_of_range("trying to add second element to singleton set");
     }
 
     template<class Iter>
     void insert(const iterator& _ins, const Iter& src_begin, const Iter& src_end)
     {
-      assert(("trying to add second element to singleton set", _ins == begin()));
+      if(_ins != begin()) throw std::out_of_range("trying to add second element to singleton set");
       insert(src_begin, src_end);
     }
     

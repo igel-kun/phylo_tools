@@ -93,6 +93,7 @@ else()
 endif()
 
 
+ADD_EXECUTABLE( tests examples/tests.cpp )
 ADD_EXECUTABLE( iso examples/iso.cpp )
 ADD_EXECUTABLE( tc examples/tc.cpp )
 ADD_EXECUTABLE( gen examples/gen.cpp )

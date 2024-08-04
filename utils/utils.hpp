@@ -47,6 +47,8 @@
 #define NUM_LEADING_ZEROSL(x) __builtin_clzl(x)
 #define NUM_TRAILING_ZEROS(x) __builtin_ctz(x)
 #define NUM_TRAILING_ZEROSL(x) __builtin_ctzl(x)
+#define NUM_TRAILING_ONES(x) __builtin_ctz(~x)
+#define NUM_TRAILING_ONESL(x) __builtin_ctzl(~x)
 #define NUM_ONES_IN(x) __builtin_popcount(x)
 #define NUM_ONES_INL(x) __builtin_popcountl(x)
 #define NUM_ZEROS_IN(x) (NUM_BITS_IN_INT - NUM_ONES_IN(x))

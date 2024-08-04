@@ -256,8 +256,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
   template<MapType M>
   bool test(const M& _map, const key_type_of_t<M>& key) { return _map.count(key); }
-  template<VectorType V>
-  bool test(const V& vec, const auto& key) { return mstd::find(vec, key) != std::end(vec); }
+  template<VectorType V, class Key> requires (!MapType<V>)
+  bool test(const V& vec, const Key& key) { return mstd::find(vec, key) != std::end(vec); }
   template<class T>
   bool test(const T& x, const T& y) { return x == y; }
 

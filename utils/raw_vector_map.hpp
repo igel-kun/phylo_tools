@@ -5,9 +5,13 @@
 
 #include "utils.hpp"
 #include "stl_utils.hpp"
+#include "trans_iter.hpp"
 
 namespace mstd {
+  template<std::unsigned_integral _Key, class _Element, class Allocator>
+  class raw_vector_map;
 
+/*
   // proxy classes for value_type and reference in vector-map-iterators
   template<std::unsigned_integral _Key, class _Value>
   struct value_type_proxy: public std::pair<_Key, _Value> {
@@ -30,7 +34,7 @@ namespace mstd {
     reference_proxy(const value_type_proxy<_Key, _Value>& val_proxy):
       Parent(val_proxy.first, val_proxy.second) {}
   };
-
+*/
   /*
   template<std::unsigned_integral _Key, class _Value>
   struct common_reference<reference_proxy<_Key, _Value>&&, value_type_proxy<_Key, _Value>&>{
@@ -50,9 +54,7 @@ namespace mstd {
   };
   */
 
-  template<std::unsigned_integral _Key, class _Element>
-  class raw_vector_map;
-
+/*
   template<std::unsigned_integral _Key, class _Element>
   class raw_vector_map_iterator
   {
@@ -61,15 +63,19 @@ namespace mstd {
   public:
     // NOTE: reference cannot be value_type& since a (key, value) pair does not physically exist in memory
     //       however: this breaks the std::forward_iterator concept!
-    using value_type  = value_type_proxy<_Key, _Element>;
-    using reference   = reference_proxy<_Key, _Element>;
-    using const_reference = reference_proxy<_Key, const _Element>;
+    //using value_type  = value_type_proxy<_Key, _Element>;
+    //using reference   = reference_proxy<_Key, _Element>;
+    //using const_reference = reference_proxy<_Key, const _Element>;
+    using value_type    = std::pair<_Key, _Element>;
+    using reference     = std::pair<const _Key, _Element&>;
+    using const_reference = std::pair<const _Key, const _Element&>;
+
     using pointer       = self_deref<reference>;
     using const_pointer = self_deref<const_reference>;
     using difference_type = ptrdiff_t;
     using iterator_category = std::random_access_iterator_tag;
 
-    raw_vector_map_iterator(_Element* const & _start, size_t _index = 0): 
+    raw_vector_map_iterator(_Element* _start, size_t _index = 0): 
       start(_start),
       index(_index)
     {}
@@ -106,121 +112,138 @@ namespace mstd {
 
     template<std::unsigned_integral __Key, class __Element>
     bool operator==(const raw_vector_map_iterator<__Key, __Element>& x) const { return index == x.index; }
-    template<std::unsigned_integral __Key, class __Element>
-    friend class raw_vector_map_iterator;
+    //template<std::unsigned_integral __Key, class __Element>
+    //friend class raw_vector_map_iterator;
   };
-
-
+*/
+  
   // NOTE: to forbid implicit casting of raw_vector_map to vector, we use this intermediate class which forbids copy construction from raw_vector_map
   // (see https://stackoverflow.com/questions/36473354/prevent-derived-class-from-casting-to-base)
-  template<class T>
-  class _vector: public std::vector<T>
-  {
-  public:
+  template<class T, class Allocator>
+  struct _vector: public std::vector<T, Allocator> {
     using std::vector<T>::vector;
 
-    template<std::unsigned_integral _Key, class _Element>
-    _vector(const raw_vector_map<_Key, _Element>&) = delete;
+    template<std::unsigned_integral _Key, class _Element, class _Allocator>
+    _vector(const raw_vector_map<_Key, _Element, _Allocator>&) = delete;
   };
 
 
-  template<std::unsigned_integral _Key, class _Element>
-  class raw_vector_map: public _vector<_Element>
+  // the transformation takes a vector iterator and outputs the distance to the start of the vector and a reference to the cell
+  template<std::unsigned_integral Key, class Iter>
+  struct PairFromVectorIter { 
+    using IterRef = reference_of_t<Iter>;
+    static_assert(std::is_reference_v<IterRef>);
+
+    using iter_ptr = pointer_from_reference<IterRef>;
+    using ret_val = std::pair<Key, IterRef>;
+
+    iter_ptr start;
+
+    ret_val operator()(const auto& it) const { return {&(*it) - start, *it}; }
+  };
+
+
+  template<class _Key, class _Iter>
+  using raw_vector_map_iterator = transforming_iterator<_Iter, PairFromVectorIter<_Key, _Iter>, true>;
+
+  template<std::unsigned_integral _Key,
+           class _Element,
+           class Allocator = std::allocator<_Element>>
+  class raw_vector_map: public _vector<_Element, Allocator>
   {
-    using Parent = _vector<_Element>;
+  protected:
+    using Vector = _vector<_Element, Allocator>;
   public:
     using key_type = const _Key;
     using mapped_type = _Element;
     using value_type = std::pair<key_type, _Element>;
 
-    using iterator = raw_vector_map_iterator<_Key, _Element>;
-    using const_iterator = raw_vector_map_iterator<_Key, const _Element>;
+    using VectorIter = typename Vector::iterator;
+    using VectorConstIter = typename Vector::const_iterator;
+    using iterator = raw_vector_map_iterator<_Key, VectorIter>;
+    using const_iterator = raw_vector_map_iterator<_Key, VectorConstIter>;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using reverse_const_iterator = std::reverse_iterator<const_iterator>;
 
     using insert_result = std::pair<iterator, bool>;
 
-    using Parent::data;
-    using Parent::size;
-  protected:
-    friend iterator;
+    using Vector::data;
+    using Vector::size;
 
   public:
     // inherit some, but not all constructors
-    raw_vector_map(): Parent() {}
-    raw_vector_map(const raw_vector_map& x): Parent(static_cast<const Parent&>(x)) {}
-    raw_vector_map(raw_vector_map&& x): Parent(static_cast<Parent&&>(x)) {}
-    raw_vector_map& operator=(const raw_vector_map& x) { return Parent::operator=(static_cast<const Parent&>(x)); }
-    raw_vector_map& operator=(raw_vector_map&& x) { return Parent::operator=(static_cast<Parent&&>(x)); }
-   
+    raw_vector_map() = default;
+    //raw_vector_map(const raw_vector_map& x) = default;
+    //raw_vector_map(raw_vector_map&& x) = default;
 
     template<class InputIt>
-    raw_vector_map(InputIt first, const InputIt& last): Parent()
-    {
+    raw_vector_map(const InputIt& first, const InputIt& last) {
       DEBUG4(std::cout << "constructing raw vector map from range...\n");
       if(std::is_same_v<typename iterator_traits<InputIt>::iterator_category, std::random_access_iterator_tag>)
-        Parent::reserve(distance(first, last));
+        Vector::reserve(distance(first, last));
       insert(first, last);
     }
 
     // ATTENTION: ERASE DOES NOT NECCESSARILY DO WHAT YOU EXPECT!
     // erase will just reinisialize x to the default element
-    // if this is not what you want, you probably want to use vector_map from vector_map2.hpp
+    // if this is not what you want, you probably want to use a vector_map
     void erase(const key_type x) { data()[x] = _Element(); }
     void erase(const iterator& it) { it->second = _Element(); } 
 
     template<class InputIt>
-    void insert(InputIt first, const InputIt& last)
-    {
+    void insert(InputIt first, const InputIt& last) {
       while(first != last){
         if(first->first >= size()) {
-          Parent::reserve(first->first + 1);
-          Parent::resize(first->first);
-          Parent::emplace_back(first->second);
+          Vector::reserve(first->first + 1);
+          Vector::resize(first->first);
+          Vector::emplace_back(first->second);
         } else operator[](first->first) = first->second;
         ++first;
       }
     }
     // ATTENTION: THIS EMPLACE DOES NOT ALWAYS DO WHAT YOU WOULD EXPECT!
     // in particular, if you first emplace(10, ...), then emplace(8, ...) will refuse to emplace since it assumes that all below 10 are already emplaced
-    // if this is not what you want, use the vector_map<> in vector_map2.hpp instead!
+    // if this is not what you want, use vector_map instead!
     template<class ...Args>
-	  insert_result try_emplace(const key_type x, Args&&... args)
-    {
+	  insert_result try_emplace(const key_type x, Args&&... args) {
       const size_t x_idx = static_cast<size_t>(x);
       if(x_idx >= size()) {
-        Parent::reserve(x_idx + 1);
-        Parent::resize(x_idx);
-        Parent::emplace_back(std::forward<Args>(args)...);
-        return { {data(), x_idx}, true };
-      } else return { {data(), x_idx}, false };
+        Vector::reserve(x_idx + 1);
+        Vector::resize(x_idx);
+        Vector::emplace_back(std::forward<Args>(args)...);
+        return {data() + x_idx, true };
+      } else return {data() + x_idx, false };
     }
+
     template<class ...Args>
 	  insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, std::forward<Args>(args)...); }
+    
     // emplace_hint, ignoring the hint
     template<class Iter, class ...Args>
 	  iterator emplace_hint(const Iter&, const key_type x, Args&&... args) { return try_emplace(x, std::forward<Args>(args)...).first; }
 	  
     insert_result insert(const std::pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
-    mapped_type& operator[](const key_type& key) { assert(key < size()); return Parent::operator[](static_cast<size_t>(key)); }
-    const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Parent::operator[](static_cast<size_t>(key)); }
-    mapped_type& at(const key_type& key) { return Parent::at(static_cast<size_t>(key)); }
-    const mapped_type& at(const key_type& key) const { return Parent::at(static_cast<size_t>(key)); }
+    using Vector::operator[];
+    using Vector::at;
+    //mapped_type& operator[](const key_type& key) { assert(key < size()); return Vector::operator[](static_cast<size_t>(key)); }
+    //const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Vector::operator[](static_cast<size_t>(key)); }
+    //mapped_type& at(const key_type& key) { return Vector::at(static_cast<size_t>(key)); }
+    //const mapped_type& at(const key_type& key) const { return Vector::at(static_cast<size_t>(key)); }
 
-    iterator begin() { return {data()}; }
-    iterator end() { return {data(), size()}; }
-    const_iterator begin() const { return {data()}; }
-    const_iterator end() const { return {data(), size()}; }
-    const_iterator cbegin() const { return {data()}; }
-    const_iterator cend() const { return {data(), size()}; }
+    iterator begin() { return data(); }
+    iterator end() { return data() + size(); }
+    const_iterator begin() const { return data(); }
+    const_iterator end() const { return data() + size(); }
+    const_iterator cbegin() const { return data(); }
+    const_iterator cend() const { return data() + size(); }
     reverse_iterator rbegin() { return make_reverse_iterator(end()); }
     reverse_iterator rend() { return make_reverse_iterator(begin()); }
     reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }
     reverse_const_iterator rend() const { return make_reverse_iterator(begin()); }
 
-    iterator find(const key_type x) { if(contains(x)) return {data(), x}; else return end(); }
-    const_iterator find(const key_type x) const { if(contains(x)) return {data(), x}; else return end(); }
+    iterator find(const key_type x) { if(contains(x)) return data() + x; else return end(); }
+    const_iterator find(const key_type x) const { if(contains(x)) return data() + x; else return end(); }
     
     bool contains(const key_type x) const { return static_cast<size_t>(x) < size(); }
     bool count(const key_type x) const { return contains(x); }

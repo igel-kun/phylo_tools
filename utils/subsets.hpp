@@ -1,29 +1,32 @@
 
 // infrastructure for enumerating subsets of a set X such that all subsets of an enumerated set have already been enumerated before
 
+#include "stl_utils.hpp"
 #include "set_interface.hpp"
+#include "iter_bitset.hpp"
+#include "linear_interval.hpp"
 
 #pragma once
 
-namespace PT{
+namespace mstd {
 
   //! note: if you want to modify the original container, set the _OutputContainer to contain std::reference_wrapper<_Container::value_type> 
   //NOTE: this assumes that the underlying container's order does not change!
   template<class _Container, class _OutputContainer = _Container>
   class SubsetIterator {
   protected:
-    _Container& c;
-    std::ordered_bitset bits;
+    const _Container* c;
+    ordered_bitset bits;
 
   public:
     using difference_type = ptrdiff_t;
     using value_type = _OutputContainer;
     using reference  = value_type;
     using const_reference = const value_type;
-    using pointer    = std::self_deref<_OutputContainer>;
+    using pointer    = self_deref<_OutputContainer>;
 
-    SubsetIterator(_Container& _c):
-      c(_c), bits(_c.size())
+    SubsetIterator(const _Container& _c):
+      c(&_c), bits(_c.size())
     {}
     // construction with an initialization set
 
@@ -38,28 +41,32 @@ namespace PT{
       c(_c), bits(init_set)
     {}
 */
-    SubsetIterator(_Container& _c, const uint64_t item):
-      c(_c), bits(_c.size())
+    SubsetIterator(const _Container& _c, const uint64_t item):
+      c(&_c), bits(_c.size())
     { bits.set(item); }
 
     //! increment operator
     SubsetIterator& operator++() { ++bits; return *this; }
+    SubsetIterator operator++(int) { SubsetIterator result = *this; ++bits; return result; }
     SubsetIterator& operator--() { --bits; return *this; }
+    SubsetIterator operator--(int) { SubsetIterator result = *this; --bits; return result; }
+
+    SubsetIterator& operator=(const SubsetIterator&) = default;
 
     bool operator==(const SubsetIterator& it) const { return bits == it.bits; }
 
     // dereference
     value_type operator*() {
       value_type out;
-      auto container_iter = c.begin();
+      auto container_iter = std::begin(*c);
       uint64_t last = 0;
       // emplace the items of 
-      DEBUG4(std::cout << "collecting items with mask "<< bits << " of "<<c<<"\n");
+      DEBUG4(std::cout << "collecting items with mask "<< bits << " of "<<*c<<"\n");
       for(auto b_iter = bits.begin(); b_iter; ++b_iter){
         const uint64_t current = *b_iter;
         std::advance(container_iter, current - last);
 
-        assert(container_iter != c.end());
+        assert(container_iter != std::end(*c));
         append(out, *container_iter);
         last = current;
       }
@@ -68,9 +75,30 @@ namespace PT{
     pointer operator->() { return operator*(); }
   };
 
+  static_assert(__LegacyInputIterator<SubsetIterator<int*>>);
+  static_assert(HasIterTraits<SubsetIterator<int*>>);
 
-#warning "TODO: allow iterating over all subsets of with size in a given interval [a,b] (use the bit_twiddle_permute in utils/utils.hpp on bitsets)"
-/*
+  template<class Container, class _OutputContainer = Container>
+  struct SubsetBeginEndIters {
+    using iterator = SubsetIterator<Container, _OutputContainer>;
+    using const_iterator = SubsetIterator<const Container, _OutputContainer>;
+    static iterator begin(std::remove_cv_t<Container>& c) { return c; }
+    static iterator end(std::remove_cv_t<Container>& c) { return {c, c.size() }; }
+    static const_iterator begin(const Container& c) { return c; }
+    static const_iterator end(const Container& c) { return {c, c.size() }; }
+  };
+
+
+
+  /* iterating over all subsets S of X with |S| in the interval [a,b]
+   * theory:
+   *  1. we iterate from smaller sets to larger sets, starting with all subsets of size a
+   *  2. given a set 000110101101011111000, the next set is obtained by
+   *    (a) adding 1000 - that is: adding 1 << x where x = #trailing zeros
+   *    (b) flipping 0000 - that is: flipping n-1 trailing zeros where n = size of last 1s block
+   *  3. when we arrive at 1111....11110000....0000, then we go to the next set-size, or turn ourselves invalid
+   */
+
   // iterate over all subsets with size in the given interval [lower,upper]
   // NOTE: if lower > container size, we'll produce the end-iterator
   template<class _Container, class _OutputContainer = _Container>
@@ -78,38 +106,60 @@ namespace PT{
     using Parent = SubsetIterator<_Container, _OutputContainer>;
     using Parent::Parent;
     using Parent::c;
+    using Parent::bits;
 
-    size_t current_size; // set this to > container size to indicate the end-iterator
-    size_t upper_bound;
+    ssize_t upper_bound;
+
+    void next_set() {
+      const size_t trailing_zeros = bits.num_trailing_zeros();
+      // NOTE: flip_upwards will also flip (and count!) the 0 to the left to the 1s-block, unless there is none(!)
+      const ssize_t ones_block = bits.flip_upwards_until_kth_zero(trailing_zeros, 1);
+      if(bits.empty()) {
+        // if bits had the format 111...11000...00 before, then it's now empty (after flipping); thus, we're going to the next set-size...
+        if(ones_block == upper_bound) {
+          // ...unless we already hit upper_bound, in which case, we're now invalid
+          upper_bound = -1;
+        } else bits.flip_lowest_k(ones_block);
+      } else bits.flip_lowest_k(ones_block - 2);
+    }
   public:
-    bool is_valid() const { return current_size <= c.size(); }
-    operator bool() const { return is_valid(); }
+    void set_invalid() { upper_bound = -1; }
+    size_t current_size() const { return bits.size(); }
+    bool is_valid() const { return upper_bound != -1; }
+    explicit operator bool() const { return is_valid(); }
 
     template<class T>
-    BoundedSubsetIterator(_Container& _c, const mstd::linear_interval<T> bounds):
-      BoundedSubsetIterator(_c, bounds.low(), bounds.high()
+    BoundedSubsetIterator(const _Container& _c, const mstd::linear_interval<T> bounds):
+      BoundedSubsetIterator(_c, bounds.low(), bounds.high())
     {}
-    BoundedSubsetIterator(_Container& _c, const ssize_t low, const size_t high):
-      Parent(_c), current_size{low}, upper_bound{high}
+
+    BoundedSubsetIterator(const _Container& _c, const ssize_t low = -1, const ssize_t high = 0):
+      Parent(_c), upper_bound{std::min(high, static_cast<ssize_t>(c->size()))}
     {
-      assert(false);
-      // TODO: continue here
+      assert(low <= high);
+      if((low >= 0) && (low <= upper_bound)) {
+        // for initialization, set the first 'low' bits
+        bits.flip_lowest_k(low);
+      } else set_invalid(); // if low is out of bounds, mark the iterator invlid
     }
+
     BoundedSubsetIterator() = delete;
 
-  };
-*/
-  template<class Container, class _OutputContainer = Container>
-  struct SubsetBeginEndIters {
-    using iterator = SubsetIterator<Container, _OutputContainer>;
-    using const_iterator = SubsetIterator<const Container, _OutputContainer>;
-    static iterator begin(remove_cv_t<Container>& c) { return c; }
-    static iterator end(remove_cv_t<Container>& c) { return {c, c.size() }; }
-    static const_iterator begin(const Container& c) { return c; }
-    static const_iterator end(const Container& c) { return {c, c.size() }; }
+    BoundedSubsetIterator& operator++() { next_set(); return *this; }
+    BoundedSubsetIterator operator++(int) { BoundedSubsetIterator result = *this; next_set(); return result; }
+    
+    BoundedSubsetIterator& operator--() = delete;
+    BoundedSubsetIterator operator--(int) = delete;
   };
 
+  static_assert(HasIterTraits<SubsetIterator<int*>>);
+
+
   template<class _Container, class _OutputContainer = _Container>
-  using SubsetFactory = IterFactory<_Container, void, SubsetBeginEndIters<_Container, _OutputContainer>>;
+  using SubsetFactory = IterFactory<_Container, SubsetBeginEndIters<_Container, _OutputContainer>>;
+
+  template<class _Container, class _OutputContainer = _Container>
+  using BoundedSubsetFactory = IterFactory<BoundedSubsetIterator<_Container, _OutputContainer>>;
+
 
 }// namespace

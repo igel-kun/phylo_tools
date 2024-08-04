@@ -4,7 +4,6 @@
 #include <limits>
 #include <optional>
 
-
 namespace mstd {
   // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (aka a 'tombstone')
   template<class T, auto _invalid = std::numeric_limits<T>::max()>
@@ -75,7 +74,7 @@ namespace mstd {
     const T& value_or(U&& default_value) const { return has_value() ? element : static_cast<T>(std::forward<U>(default_value)); }
 
     void reset() { emplace(_invalid); }
-    operator bool() const { return has_value(); }
+    explicit operator bool() const { return has_value(); }
     bool has_value() const { return element != _invalid; }
 
     friend std::ostream& operator<<(std::ostream& os, const optional_by_invalid& opt) {
@@ -104,6 +103,27 @@ namespace mstd {
   static_assert(std::is_trivially_copyable_v<optional_by_invalid<int>>);
   static_assert(std::is_trivially_copy_assignable_v<optional_by_invalid<int>>);
   static_assert(std::is_trivially_move_assignable_v<optional_by_invalid<int>>);
+
+
+
+  template<class T> struct _OptFor { };
+  template<Optional T> struct _OptFor<T> { using type = T; };
+  template<class T> requires (!Optional<T>) struct _OptFor<T> { using type = mstd::optional_by_invalid<T>; };
+  template<class T> using OptFor = typename _OptFor<T>::type;
+ 
+  template<class T> struct _ValFor { using type = T; };
+  template<Optional T> struct _ValFor<T> { using type = typename T::value_type; };
+  template<class T> using ValFor = typename _ValFor<T>::type;
+
+
+  template<bool invert = false>
+  struct _HasValuePredicate {
+    static constexpr bool value(const auto& x) { return (x.has_value()) != invert; }
+    constexpr bool operator()(const auto& x) const { return value(x); }
+  };
+  using HasValuePredicate = _HasValuePredicate<false>;
+  using HasNoValuePredicate = _HasValuePredicate<true>;
+
 }
 
 namespace std {

@@ -14,6 +14,7 @@ namespace mstd {
   struct filter_only_tag {};
 
   // skip all items in a container for which the predicate is false (that is, list all items for which the predicate is true)
+  // NOTE: when pass_iterator is true, then the predicate will get the iterator as argument, instead of the value that the iter points to
   // NOTE: while we could just always use lambda functions as predicate, the current way is more flexible
   //       since it allows default initializing the _filtered_iterator if our Predicate is static
   // NOTE: _filtered_iterators cannot be replaced by C++20's filtered_view because
@@ -23,7 +24,7 @@ namespace mstd {
   template<class NormalIterator, class _Predicate, bool pass_iterator = false>
   class _filtered_iterator: public auto_iter<NormalIterator> {
     using Parent = auto_iter<NormalIterator>;
-    mstd::mutableT<_Predicate> pred;
+    [[no_unique_address]] mstd::mutableT<_Predicate> pred;
 
     bool apply_pred() const {
       _Predicate& p = pred;
@@ -102,6 +103,7 @@ namespace mstd {
     template<class PredInit = Predicate>
     _filtered_iterator(_filtered_iterator&& iter, PredInit&& pred_init):
       Parent{std::move(iter)}, pred{std::forward<PredInit>(pred_init)} {}
+
 
     _filtered_iterator& operator=(const _filtered_iterator& iter) = default;
     _filtered_iterator& operator=(_filtered_iterator&& iter) = default;

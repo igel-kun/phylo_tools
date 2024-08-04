@@ -118,7 +118,9 @@ namespace mstd{
     using value_type = copy_cv_t<correctT, std::remove_reference_t<Ref>>;
     using type = std::conditional_t<returning_rvalue, value_type, std::add_lvalue_reference_t<value_type>>;
   };
-  template<class T> requires (std::ranges::range<std::remove_const_t<T>> && !has_reference<T>) struct reference_of<T> {
+  template<class T>
+    requires (std::ranges::range<std::remove_const_t<T>> && !has_reference<T>)
+  struct reference_of<T> {
     using _type = std::ranges::range_reference_t<std::remove_const_t<T>>;
     using type = std::conditional_t<std::is_const_v<T>, std::add_const_t<_type>, _type>;
   };
@@ -146,6 +148,28 @@ namespace mstd{
 
 
   // ------------------ ITERATORS -----------------------------------
+
+  // for reasons that escape me, std::iterator_traits depend on satisfaction of the followign concepts, but it's not defined by the STL...
+  // however it is indispensible for debugging to know why std::iterator_traits will not work for a self-defined iterator...
+  template<class T>
+  concept __Referenceable = requires { typename std::type_identity_t<T&>; };
+
+  template<class I>
+  concept __LegacyIterator = requires(I i) {
+      {   *i } -> __Referenceable;
+      {  ++i } -> std::same_as<I&>;
+      { *i++ } -> __Referenceable;
+  } && std::copyable<I>;
+
+  template<class I>
+  concept __LegacyInputIterator = __LegacyIterator<I> && std::equality_comparable<I> && requires(I i) {
+    typename std::incrementable_traits<I>::difference_type;
+    typename std::indirectly_readable_traits<I>::value_type;
+    typename std::common_reference_t<std::iter_reference_t<I>&&, typename std::indirectly_readable_traits<I>::value_type&>;
+    *i++;
+    typename std::common_reference_t<decltype(*i++)&&, typename std::indirectly_readable_traits<I>::value_type&>;
+    requires std::signed_integral<typename std::incrementable_traits<I>::difference_type>;
+  };
 
   // a lightweight end-iterator dummy that can be returned by calls to end() and compared to by other iterators
   template<class> class _GenericEndIterator;

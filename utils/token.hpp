@@ -26,7 +26,7 @@ namespace mstd{
     {}
 
     bool is_valid() const { return front != std::string::npos; }
-    operator bool() const { return is_valid(); } 
+    explicit operator bool() const { return is_valid(); } 
     reference operator*() const { return s.substr(front, next - front); }
 
     //! increment operator

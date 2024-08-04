@@ -67,8 +67,8 @@ namespace mstd {
 
     bool is_valid() const { return end_it != get_iter(); }
     bool is_invalid() const { return !is_valid(); }
-    operator bool() const { return is_valid(); }
-    operator bool() { return is_valid(); }
+    explicit operator bool() const { return is_valid(); }
+    explicit operator bool() { return is_valid(); }
 
     Iterator& get_iter() & { return static_cast<Iterator&>(*this); }
     Iterator&& get_iter() && { return static_cast<Iterator&&>(*this); }

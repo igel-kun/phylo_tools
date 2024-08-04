@@ -70,7 +70,7 @@ namespace mstd {
   concept StrictIndexibleType = IndexibleType<T, I>  && !std::is_reference_v<T>;
 
   template<class T>
-  concept HasIterTraits = requires { typename std::iterator_traits<T>; };
+  concept HasIterTraits = requires { typename std::iterator_traits<T>::reference; };
 
   template<class Iter, class T>
   concept dereferencable_to = requires(Iter it) {
