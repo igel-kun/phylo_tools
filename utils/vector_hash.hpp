@@ -232,7 +232,7 @@ namespace mstd{
     template<typename KeyRef>
     insert_result _insert(KeyRef&& key) {
       DEBUG5(std::cout << "===> inserting "<<key<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
-      DEBUG5(std::cout << "===> current layout: "<<(const Parent&)(*this)<<'\n');
+      DEBUG5(std::cout << "===> current layout: "<< static_cast<const Parent&>(*this)<<'\n');
       // find the slot where we would place the key
       const auto [index, status] = find_slot(key);
       DEBUG5(std::cout << "===> got index "<<index<<" from find_slot\n");
@@ -270,11 +270,11 @@ namespace mstd{
             key_at(0) = key_at(vector_size() - 1);
             shift_forward(index, vector_size() - index - 1, 1);
           } else shift_forward(index, next_free - index, 1);
-          DEBUG5(std::cout << "===> layout after shift: "<<(const Parent&)(*this)<<'\n');
+          DEBUG5(std::cout << "===> layout after shift: "<<static_cast<const Parent&>(*this)<<'\n');
           // the slot at resukt.first should not be free to receive the key
           key_at(index) = std::forward<KeyRef>(key);
           ++active_values;
-          DEBUG5(std::cout << "===> resulting layout: "<<(const Parent&)(*this)<<'\n');
+          DEBUG5(std::cout << "===> resulting layout: "<<static_cast<const Parent&>(*this)<<'\n');
           return {make_vector_iterator(index), true};
         }
         default: throw std::logic_error("unexpected find-status out of eval");
@@ -306,7 +306,7 @@ namespace mstd{
         *this = std::move(tmp_vec);
         DEBUG5(std::cout << "after:\n"<<*this<<" (size "<<size()<<")\n");
         DEBUG5(std::cout << "set: " << *this << '\n');
-        DEBUG5(std::cout << "vec: " << (const Parent&)(*this) << '\n');
+        DEBUG5(std::cout << "vec: " << static_cast<const Parent&>(*this) << '\n');
       }
     }
 
@@ -418,7 +418,7 @@ namespace mstd{
       return _insert(Key(std::forward<Args>(args)...));
     }
 
-    inline bool erase(const Key& key) {
+    bool erase(const Key& key) {
       const auto [index, status] = find_slot(key);
       if(status == FindStatus::FS_found_key){
         _erase(index);

@@ -27,12 +27,26 @@ namespace mstd{
     using Parent = raw_vector_map<_Key, Element>;
     using typename Parent::Vector;
     using Parent::data;
+
+    size_t _count = 0;
+
+    bool is_valid(const Element& x) const { 
+      return HasValuePredicate::value(x);
+    }
+
+    bool erase(Element& x) {
+      if(is_valid(x)) {
+        x.reset();
+        --_count;
+        return true;
+      } else return false;
+    }
+
   public:
     using Parent::Parent;
     using typename Parent::key_type;
     using typename Parent::VectorIter;
     using typename Parent::VectorConstIter;
-    using Parent::size;
 
     using FilterIter = proto_vector_map_iterator<VectorIter>;
     using FilterConstIter = proto_vector_map_iterator<VectorConstIter>;
@@ -43,28 +57,37 @@ namespace mstd{
     using const_iterator = vector_map_iterator<_Key, VectorConstIter>;
     using insert_result = std::pair<iterator, bool>;
 
-    bool contains(const key_type x) const { return HasValuePredicate::value(data()[x]); }
+    size_t size() const { return count(); }
+    bool contains(const key_type x) const { return is_valid(data()[x]); }
+    
+    size_t count() const { return _count; }
     bool count(const key_type x) const { return contains(x); }
     
     template<class... Args>
     auto make_iterator(const VectorIter raw_it, Args&&... args)
-    { return iterator(FilterIter{std::forward<Args>(args)..., AutoIter{raw_it, Parent::end()}}); }
+    { return iterator(FilterIter{std::forward<Args>(args)..., AutoIter{raw_it, Parent::end()}}, data()); }
 
     template<class... Args>
     auto make_iterator(const VectorConstIter raw_it, Args&&... args) const
-    { return const_iterator(FilterConstIter{std::forward<Args>(args)..., AutoConstIter{raw_it, Parent::end()}}); }
+    { return const_iterator(FilterConstIter{std::forward<Args>(args)..., AutoConstIter{raw_it, Parent::end()}}, data()); }
    
 
     template<class... Args>
 	  insert_result try_emplace(const key_type key, Args&&... args) {
-      if(key >= size()) {
+      DEBUG5(std::cout << "inserting "<<key<< " into vector_map of size "<<size()<<" (vector size: "<<Parent::size()<<")\n");
+      if(key >= Parent::size()) {
         Parent::reserve(key + 1);
         Parent::resize(key);
         Parent::emplace_back(std::forward<Args>(args)...);
+        ++_count;
+        DEBUG5(std::cout << "emplaced element " << Parent::back() << " at key "<<key<<", size is now "<<size()<<"\n");
       } else if(!contains(key)){
+        DEBUG5(std::cout << key<< " is not in the map, so we'll construct it\n");
         auto* const val = data() + key;
         val->~Element();  // destruct default-created element
         new (val) Element(std::forward<Args>(args)...); // construct new Element in place
+        ++_count;
+        DEBUG5(std::cout << "constructed element " << *val << " at key "<<key<<"\n");
       } else return { make_iterator(Vector::begin() + key, do_not_fix_index_tag()), false };
       //Containment::set_present(key);
       return { make_iterator(Vector::begin() + key, do_not_fix_index_tag()), true };
@@ -74,6 +97,19 @@ namespace mstd{
     template<class... Args>
     insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, std::forward<Args>(args)...); }
     insert_result insert(const std::pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
+
+    bool erase(const key_type key) {
+      if(key < Parent::size()) {
+        return erase(data()[key]);
+      } else return false;
+    }
+    bool erase(const AutoIter it) { return erase(*it); }
+
+
+    void clear() {
+      Parent::clear();
+      _count = 0;
+    }
 
     iterator begin() { return make_iterator(Vector::begin()); }
     const_iterator begin() const { return make_iterator(Vector::begin()); }

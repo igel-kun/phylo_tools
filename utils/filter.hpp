@@ -37,7 +37,13 @@ namespace mstd {
     void fix_index() {
       while(is_valid() && !apply_pred())
         if constexpr (rev) Parent::operator--(); else Parent::operator++();
-    }
+/*      DEBUG5(
+          if(is_valid())
+            std::cout << "after fixing, we're at "<<**this<<"\n";
+          else
+            std::cout << "after fixing, we're invalid\n";
+          );
+*/    }
   public:
     using Predicate = _Predicate;
     using Iterator = Parent;

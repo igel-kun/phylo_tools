@@ -16,8 +16,8 @@ namespace PT{
   // for each option, a vector of option parameters, the empty string collects all non-option parameters (arguments)
   typedef std::unordered_map<std::string, std::vector<std::string>> OptionMap;
 
-  void parse_options(const int &argc, const char **argv, const OptionDesc& description, const std::string& help_message, OptionMap& options)
-  {
+  void parse_options(const int &argc, const char **argv, const OptionDesc& description, const std::string& help_message, OptionMap& options) {
+    assert(test(description, ""));
     std::vector<std::string>* current_option_vec = &(options[""]);
     uint32_t current_max = UINT32_MAX;
 
