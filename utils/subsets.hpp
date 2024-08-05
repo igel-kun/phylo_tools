@@ -64,7 +64,6 @@ namespace mstd {
       DEBUG4(std::cout << "collecting items of "<<*c<<" with mask "; bits.print(std::cout); std::cout << "\n");
       for(auto b_iter = bits.begin(); b_iter; ++b_iter){
         const uint64_t current = *b_iter;
-        std::cout << "next item: "<<current<<'\n';
         std::advance(container_iter, current - last);
 
         assert(container_iter != std::end(*c));
@@ -106,23 +105,26 @@ namespace mstd {
   template<class _Container, class _OutputContainer = _Container>
   class BoundedSubsetIterator: public SubsetIterator<_Container, _OutputContainer> {
     using Parent = SubsetIterator<_Container, _OutputContainer>;
-    using Parent::Parent;
     using Parent::c;
     using Parent::bits;
 
     ssize_t upper_bound;
 
     void next_set() {
-      const size_t trailing_zeros = bits.num_trailing_zeros();
-      // NOTE: flip_upwards will also flip (and count!) the 0 to the left to the 1s-block, unless there is none(!)
-      const ssize_t ones_block = bits.flip_upwards_until_kth_zero(trailing_zeros, 1);
-      if(bits.empty()) {
-        // if bits had the format 111...11000...00 before, then it's now empty (after flipping); thus, we're going to the next set-size...
-        if(ones_block == upper_bound) {
-          // ...unless we already hit upper_bound, in which case, we're now invalid
-          upper_bound = -1;
-        } else bits.flip_lowest_k(ones_block);
-      } else bits.flip_lowest_k(ones_block - 2);
+      if(!bits.empty()) {
+        const size_t trailing_zeros = bits.num_trailing_zeros();
+        // NOTE: flip_upwards will also flip (and count!) the 0 to the left to the 1s-block, unless there is none(!)
+        const ssize_t ones_block = bits.flip_upwards_until_kth_zero(trailing_zeros, 1);
+        if(bits.empty()) {
+          // if bits had the format 111...11000...00 before, then it's now empty (after flipping); thus, we're going to the next set-size...
+          if(ones_block == upper_bound) {
+            // ...unless we already hit upper_bound, in which case, we're now invalid
+            upper_bound = -1;
+          } else bits.flip_lowest_k(ones_block + 1);
+        } else bits.flip_lowest_k(ones_block - 2);
+      } else if(upper_bound > 0) {
+        bits.set(0);
+      } else upper_bound = -1;
     }
   public:
     void set_invalid() { upper_bound = -1; }
@@ -134,25 +136,28 @@ namespace mstd {
     BoundedSubsetIterator(const _Container& _c, const mstd::linear_interval<T> bounds):
       BoundedSubsetIterator(_c, bounds.low(), bounds.high())
     {}
+    BoundedSubsetIterator(const _Container& _c, const ssize_t low = -1):
+      BoundedSubsetIterator(_c, low, low)
+    {}
 
-    BoundedSubsetIterator(const _Container& _c, const ssize_t low = -1, const ssize_t high = 0):
+    BoundedSubsetIterator(const _Container& _c, const ssize_t low, const ssize_t high):
       Parent(_c), upper_bound{std::min(high, static_cast<ssize_t>(c->size()))}
     {
+      DEBUG5(std::cout << "iterating size-["<<low<<", "<<high<<"] subsets of "<<_c<<"\n");
       assert(low <= high);
       if((low >= 0) && (low <= upper_bound)) {
         // for initialization, set the first 'low' bits
         bits.flip_lowest_k(low);
-        std::cout << "after setting lowest "<<low<<" bits: "; bits.print(std::cout);
-      } else set_invalid(); // if low is out of bounds, mark the iterator invlid
+      } else set_invalid(); // if low is out of bounds, mark the iterator invalid
     }
 
     BoundedSubsetIterator() = delete;
 
-    BoundedSubsetIterator& operator++() { next_set(); return *this; }
-    BoundedSubsetIterator operator++(int) { BoundedSubsetIterator result = *this; next_set(); return result; }
+    auto& operator++() { next_set(); return *this; }
+    auto operator++(int) { BoundedSubsetIterator result = *this; next_set(); return result; }
     
-    BoundedSubsetIterator& operator--() = delete;
-    BoundedSubsetIterator operator--(int) = delete;
+    auto& operator--() = delete;
+    auto operator--(int) = delete;
   };
 
   static_assert(HasIterTraits<SubsetIterator<int*>>);

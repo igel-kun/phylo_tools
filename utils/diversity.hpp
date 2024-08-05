@@ -2,6 +2,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "subsets.hpp"
 #include "switchings.hpp"
 
 namespace PT {
@@ -66,37 +67,18 @@ namespace PT {
     return result;
   }
 
-  void apply_for_all_subsets(auto it, const auto end_it, NodeSet& S, const unsigned int subset_size, const auto& f) {
-    while(it != end_it){
-      const NodeDesc u = *it;
-      append(S, u);
-      if(subset_size > 1)
-        apply_for_all_subsets(std::next(it), end_it, S, subset_size - 1, f);
-      else f(S);
-      erase(S, u);
-      ++it;
-    }
-  }
-
-  void apply_for_all_subsets(const auto& leaves, const unsigned int subset_size, const auto& f) {
-    NodeSet S;
-    apply_for_all_subsets(leaves.begin(), leaves.end(), S, subset_size, f);
-  }
-
   template<StrictPhylogenyType Net, class UtilityFunctors, class PDScore>
   auto optimize_diversity_brute_force(const Net& N, const size_t k, UtilityFunctors&& f, PDScore&& pd_score) {
     std::pair<NodeSet, double> max;
     const auto L = N.leaves();
     std::cout << "leaves: "<<L << '\n';
-    std::cout << mstd::type_name<decltype(L)>() << '\n';
     //const NodeSet leaves = L.template to_container<NodeSet>();
     const NodeSet leaves = L;
     std::cout << "N = "<<N<<'\n';
-    std::cout << "testing all size-"<<k<<" subsets of "<<leaves<<'\n';
-#warning "TODO: make a subset-iterator"
-    apply_for_all_subsets(leaves, k, [&](const auto& S){
-        const auto score = pd_score(N, S, std::forward<UtilityFunctors>(f));
-        if(score > max.second) max = {S, score}; });
+    for(const auto S: mstd::BoundedSubsetFactory<NodeSet>{leaves, k}) {
+      const auto score = pd_score(N, S, std::forward<UtilityFunctors>(f));
+      if(score > max.second) max = {S, score};
+    }
     return max;
   }
 

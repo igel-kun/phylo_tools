@@ -10,6 +10,10 @@
 
 namespace mstd {
 
+  using iter_bitset_default_key = size_t;
+  using iter_bitset_default_bucket = uint_fast64_t; //uint64_t;
+  using iter_bitset_default_bucket_map = mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>;
+
   template<class T>
   concept StrictIterBitsetType = requires(T t){
     typename T::bucket_map;
@@ -19,17 +23,17 @@ namespace mstd {
   template<class T> concept IterBitsetType = StrictIterBitsetType<std::remove_reference_t<T>>;
 
 
-  template<MapType bucket_map = mstd::raw_vector_map<size_t, uint64_t> >
+  template<MapType bucket_map = iter_bitset_default_bucket_map>
   class bitset_iterator;
 
   class ordered_bitset;
   class unordered_bitset;
 
   // ATTENTION: this does not do error checking if NDEBUG is on (except front())
-  template<MapType _bucket_map = mstd::raw_vector_map<size_t, uint64_t> >
-  class iterable_bitset: public iter_traits_from_reference<uintptr_t> {
+  template<MapType _bucket_map = iter_bitset_default_bucket_map>
+  class iterable_bitset: public iter_traits_from_reference<mapped_type_of_t<_bucket_map>> {
     // NOTE: bitsets cannot provide meaningful references to their members
-    using traits = iter_traits_from_reference<uintptr_t>;
+    using traits = iter_traits_from_reference<mapped_type_of_t<_bucket_map>>;
   public:
     using bucket_map = _bucket_map;
     using bucket_type = typename bucket_map::mapped_type;
@@ -143,7 +147,7 @@ namespace mstd {
         if(bucket & bit_set) return false; else bucket |= bit_set;
       }
       ++_count;
-      num_bits = std::max(num_bits, x + 1);
+      if(num_bits <= x) num_bits = x + 1;
       return true;
     }
 
@@ -299,7 +303,7 @@ namespace mstd {
       return true;
     }
 
-    template<class T = mstd::raw_vector_map<size_t, uint64_t> >
+    template<class T>
     bool operator==(const iterable_bitset<T>& bs) const {
       if(_count != bs._count) return false;
       return storage == bs.storage;
@@ -411,9 +415,10 @@ namespace mstd {
 
   // ------------------ vector-based bitset ----------------------------
 
-  class ordered_bitset: public iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>
+
+  class ordered_bitset: public iterable_bitset<iter_bitset_default_bucket_map>
   {
-    using Parent = iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>;
+    using Parent = iterable_bitset<iter_bitset_default_bucket_map>;
     using Parent::bucket_of;
     using Parent::pos_of;
     using Parent::storage;
@@ -537,7 +542,7 @@ namespace mstd {
 
     //! flip lowest k bits
     void flip_lowest_k(value_type k) {
-      num_bits = std::max(num_bits, k);
+      if(k > num_bits) num_bits = k;
       size_t i = 0;
       while(k >= num_bits_in_bucket){
         bucket_type& buffer = storage[i];
@@ -546,15 +551,12 @@ namespace mstd {
         k -= num_bits_in_bucket;
         ++i;
       }
-      std::cout << "mark1 (i = "<<i<<" k = "<<k<<")\n";
-      std::cout << static_cast<const Parent&>(*this) << "\n";
       if(k > 0) {
         bucket_type& buffer = storage[i];
         const bucket_type xor_op = ~(full_bucket << k); // xor_op = 2^k-1
         _count += k;
         _count -= 2 * NUM_ONES_INL(buffer & xor_op);
         buffer ^= xor_op;
-        std::cout << std::bitset<64>(buffer) << " (size: "<<size()<<")\n";
       }
     }
 
@@ -572,29 +574,42 @@ namespace mstd {
     //! flip bits starting from x upwards until k'th zero encountered
     //! return number of flipped bits
     size_t flip_upwards_until_kth_zero(const value_type x, size_t k = 1) {
-      if((x <= num_bits) && (k > 0)) {
+      DEBUG5(std::cout << "flipping from index "<< static_cast<int>(x)<<" ("<<k<<" more zeros)\n");
+      if((x < num_bits) && (k > 0)) {
         const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
         auto& bucket = storage.at(first_bucket);
         const auto first_bucket_shifted = (bucket >> first_offset);
         size_t num_trailing_ones = NUM_TRAILING_ONES(first_bucket_shifted);
         if(num_trailing_ones + first_offset == num_bits_in_bucket) {
+          DEBUG5(std::cout << "all remainging bits are set, continueing to next bucket (if there is any)\n");
+          // step 1: clear upper 'num_trailing_ones' bits in the bucket
           size_t accu = num_trailing_ones;
+          bucket ^= first_bucket_shifted << first_offset;
+          // step 2: treat the other buckets
           for(size_t i = first_bucket + 1; i < num_buckets(); ++i) {
-            bucket = storage.at(i);
-            num_trailing_ones = NUM_TRAILING_ONES(bucket);
+            auto& new_bucket = storage.at(i);
+            num_trailing_ones = NUM_TRAILING_ONES(new_bucket);
             accu += num_trailing_ones;
+            DEBUG5(std::cout << "bucket "<<i<<": "<<std::bitset<num_bits_in_bucket>(new_bucket)<<" ("<<num_trailing_ones<<" trailing ones; now "<<accu<<" bits flipped)\n");
             if(num_trailing_ones != num_bits_in_bucket) {
-              const size_t first_zero = num_trailing_ones + 1;
-              bucket ^= (1ul << first_zero) - 1;
-              return accu + 1 + flip_upwards_until_kth_zero(x + accu + 1, k - 1);
-            } else bucket = 0ul;
+              const bool not_beyond_capacity = (x + accu < num_bits);
+              const size_t first_zero = num_trailing_ones + not_beyond_capacity;
+              // flip the lowest bits including the first zero
+              new_bucket ^= (1ul << first_zero) - 1;
+              _count -= accu - not_beyond_capacity;
+              // recurse for k-1 zeros
+              return accu + not_beyond_capacity + flip_upwards_until_kth_zero(x + accu + not_beyond_capacity, k - 1);
+            } else new_bucket = 0ul;
           }
+          _count -= accu;
           return accu;
         } else {
-          const size_t first_zero = num_trailing_ones + 1;
-          // flip all ones AND the first encountered zero
-          bucket ^= ((1ul << first_zero) - 1) << first_offset;
-          return num_trailing_ones + 1 + flip_upwards_until_kth_zero(x + num_trailing_ones + 1, k - 1);
+          // flip all ones AND the first encountered zero, unless the zero is beyond capacity
+          const bool not_beyond_capacity = (x + num_trailing_ones < num_bits);
+          const size_t to_flip = num_trailing_ones + not_beyond_capacity;
+          bucket ^= ((1ul << to_flip) - 1) << first_offset;
+          _count -= num_trailing_ones - not_beyond_capacity;
+          return to_flip + flip_upwards_until_kth_zero(x + to_flip, k - 1);
         }
       } else return 0;
     }
@@ -636,8 +651,7 @@ namespace mstd {
       const std::vector<bucket_type>& vec = storage;
       for(auto it = vec.rbegin(); it != vec.rend(); ++it) {
         auto x = *it;
-        //ostr << std::bitset<num_bits_in_bucket>(x) << ' ';
-        ostr << std::bitset<8>(x) << ' ';
+        ostr << std::bitset<num_bits_in_bucket>(x) << ' ';
       }
       ostr << "(size "<<size()<<" capacity "<<capacity()<<")\n";
     }
@@ -677,9 +691,11 @@ namespace mstd {
     // advance the index while its buffer is empty
     // NOTE: this overwrites the current buffer, so make sure it's zero before
     void advance_while_empty() {
-      std::cout << "advancing from index " << *index << '\n';
-      while(is_valid()) 
-        if((buffer = (*index).second)) break; else ++index;
+      while(is_valid()) {
+        buffer = (*index).second;
+        if(buffer) return;
+        ++index;
+      }
     }
 
   public:

@@ -192,31 +192,32 @@ void test_vector_map() {
 }
 
 
-
-
 size_t choose(const size_t n, const size_t k) {
   assert(n >= k);
   size_t result = 1;
-  for(size_t i = n; i != k; --i)
-    result *= i;
+  for(size_t i = 0; i < k; ++i) result *= (n-i);
+  for(size_t i = 2; i <= k; ++i) result /= i;
   return result;
 }
 
 template<mstd::ContainerType Container>
-void test_subsets_sub(const Container& c, const size_t low, const size_t high) {
+void test_subsets_sub(const Container& c, const ssize_t low, const ssize_t high) {
+  std::cout << "\nsubsets of "<< c << " with size between "<<low<<" & "<< high <<'\n';
   const mstd::BoundedSubsetFactory<Container> fac{c, low, high};
   size_t count = 0;
-  std::cout << "\nsubsets of "<< c << " with size between "<<low<<" & "<< high <<'\n';
   for(auto s: fac) {
     ++count;
     std::cout << s << '\n';
-    assert(s.size() >= low);
-    assert(s.size() <= high);
+    assert(static_cast<ssize_t>(s.size()) >= low);
+    assert(static_cast<ssize_t>(s.size()) <= high);
   }
   size_t expected_size = 0;
-  for(size_t i = low; i < high; ++i)
-    expected_size += choose(c.size(), i);
-  
+  if((low >= 0) && (high >= 0)) {
+    for(ssize_t i = low; i <= high; ++i)
+      expected_size += choose(c.size(), i);
+  }
+
+  std::cout << "count = "<<count << " vs. expected = "<<expected_size<<'\n';
   assert(count == expected_size);
 }
 
@@ -231,6 +232,11 @@ void test_subsets() {
 
   const std::vector<std::string> set2{"one", "two", "three", "four", "five"};
   test_subsets_sub(set2, 0, 2);
+
+
+  std::vector<int> set3;
+  for(int i = 0; i < 70; ++i) append(set3, 2*i);
+  test_subsets_sub(set3, 3, 3);
 }
 
 
