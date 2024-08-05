@@ -7,6 +7,7 @@
 #include "stl_utils.hpp"
 #include "trans_iter.hpp"
 
+
 namespace mstd {
   template<std::unsigned_integral _Key, class _Element, class Allocator>
   class raw_vector_map;
@@ -36,9 +37,9 @@ namespace mstd {
     ret_val operator()(const auto& it) const { return {&(*it) - start, *it}; }
   };
 
-
   template<class _Key, class _Iter>
   using raw_vector_map_iterator = transforming_iterator<_Iter, PairFromVectorIter<_Key, _Iter>, true>;
+
 
   template<std::unsigned_integral _Key,
            class _Element,
@@ -60,11 +61,24 @@ namespace mstd {
     using reverse_const_iterator = std::reverse_iterator<const_iterator>;
 
     using insert_result = std::pair<iterator, bool>;
-
-    using Vector::data;
     using Vector::size;
 
+    static_assert(std::is_constructible_v<VectorIter, _Element*>);
+    static_assert(std::is_constructible_v<PairFromVectorIter<_Key, VectorIter>, _Element*>);
+    static_assert(std::is_constructible_v<iterator, _Element*, _Element*>);
+
+    auto make_iter(_Element* x) { return iterator{x, data()}; }
+    auto make_const_iter(const _Element* x) const { return const_iterator{x, data()}; }
+
   public:
+    using Vector::data;
+    using Vector::operator[];
+    using Vector::at;
+    //mapped_type& operator[](const key_type& key) { assert(key < size()); return Vector::operator[](static_cast<size_t>(key)); }
+    //const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Vector::operator[](static_cast<size_t>(key)); }
+    //mapped_type& at(const key_type& key) { return Vector::at(static_cast<size_t>(key)); }
+    //const mapped_type& at(const key_type& key) const { return Vector::at(static_cast<size_t>(key)); }
+
     // inherit some, but not all constructors
     raw_vector_map() = default;
     //raw_vector_map(const raw_vector_map& x) = default;
@@ -118,19 +132,13 @@ namespace mstd {
 	  
     insert_result insert(const std::pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
 
-    using Vector::operator[];
-    using Vector::at;
-    //mapped_type& operator[](const key_type& key) { assert(key < size()); return Vector::operator[](static_cast<size_t>(key)); }
-    //const mapped_type& operator[](const key_type& key) const { assert(key < size()); return Vector::operator[](static_cast<size_t>(key)); }
-    //mapped_type& at(const key_type& key) { return Vector::at(static_cast<size_t>(key)); }
-    //const mapped_type& at(const key_type& key) const { return Vector::at(static_cast<size_t>(key)); }
 
-    iterator begin() { return data(); }
-    iterator end() { return data() + size(); }
-    const_iterator begin() const { return data(); }
-    const_iterator end() const { return data() + size(); }
-    const_iterator cbegin() const { return data(); }
-    const_iterator cend() const { return data() + size(); }
+    iterator begin() { return make_iter(data()); }
+    iterator end() { return make_iter(data() + size()); }
+    const_iterator cbegin() const { return make_const_iter(data()); }
+    const_iterator cend() const { return make_const_iter(data() + size()); }
+    const_iterator begin() const { return cbegin(); }
+    const_iterator end() const { return cend(); }
     reverse_iterator rbegin() { return make_reverse_iterator(end()); }
     reverse_iterator rend() { return make_reverse_iterator(begin()); }
     reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }
@@ -143,3 +151,4 @@ namespace mstd {
     bool count(const key_type x) const { return contains(x); }
   };
 }
+

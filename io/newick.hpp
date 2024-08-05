@@ -5,8 +5,9 @@
 #include <string_view>
 #include <charconv>
 #include "utils/types.hpp"
-#include "utils/set_interface.hpp"
+
 #include "utils/iter_bitset.hpp"
+#include "utils/set_interface.hpp"
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
 
@@ -369,4 +370,5 @@ namespace PT{
     return parse_newick<Network>(in_line, std::forward<Args>(args)...);
   }
 }
+
 

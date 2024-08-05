@@ -5,6 +5,7 @@
 #include "stl_utils.hpp"
 #include "iter_factory.hpp"
 
+
 namespace mstd {
   // this is an iterator that transforms items of a range on the fly
   // NOTE: you can choose to pass the iterator to the transformation instead of its dereference
@@ -55,17 +56,17 @@ namespace mstd {
     // construct from an iterator alone, default-construct the transformation
     template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, proto_transforming_iterator>) &&
         std::is_default_constructible_v<Transformation> && std::is_constructible_v<Parent, T&&>)
-    proto_transforming_iterator(T&& iter): Parent(std::forward<T>(iter)), trans() {}
+    proto_transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{} {}
 
     // construct from iter and transformaiton
     template<class T, class F> requires (std::is_constructible_v<Parent, T&&> && std::is_constructible_v<Transformation, F&&>)
-    proto_transforming_iterator(T&& iter, F&& f): Parent(std::forward<T>(iter)), trans{std::forward<F>(f)} {}
+    proto_transforming_iterator(T&& iter, F&& f): Parent{std::forward<T>(iter)}, trans{std::forward<F>(f)} {}
 
 
     // std::piecewise construction of the iter and the transformation
     template<class IterTuple, class TransTuple>
     constexpr proto_transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init):
-      Parent(make_from_tuple<Parent>(std::forward<IterTuple>(iter_init))),
+      Parent{make_from_tuple<Parent>(std::forward<IterTuple>(iter_init))},
       trans{make_from_tuple<Transformation>(std::forward<TransTuple>(trans_init))}
     {}
 
@@ -103,22 +104,6 @@ namespace mstd {
 
   };
 
-  /*
-  // the second argument is either a transformation function or, if the second template argument ("T") is not std::invocable,
-  // then we interpret it as target_value_type and the transformation function will be std::function<target_value_type(Iter::reference)>
-  template<class Iter, class Result, bool pass_iterator>
-  struct _transforming_iterator {
-    using F = std::function<Result(mstd::reference_of_t<Iter>)>;
-    using type = proto_transforming_iterator<Iter, F, pass_iterator>;
-  };  
-  template<class Iter, class Transformation, bool pass_iterator>
-    requires (std::is_invocable_v<Transformation, std::conditional_t<pass_iterator, Iter, reference_of_t<Iter>>>)
-  struct _transforming_iterator<Iter, Transformation, pass_iterator> {
-    using type = proto_transforming_iterator<Iter, Transformation, pass_iterator>;
-  };
-  template<class Iter, class T, bool pass_iterator = false>
-  using transforming_iterator = typename _transforming_iterator<iterator_of_t<Iter>, T, pass_iterator>::type;
-  */
   template<class Iter, class T, bool pass_iterator = false>
   using transforming_iterator = proto_transforming_iterator<Iter, T, pass_iterator>;
 
@@ -153,6 +138,6 @@ namespace mstd {
   constexpr auto firsts(TupleContainer&& c) { return FirstsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
   template<class TupleContainer>
   constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
-
-
 }
+
+

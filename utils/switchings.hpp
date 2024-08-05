@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "types.hpp"
 #include "iter_factory.hpp"
 
 namespace PT {

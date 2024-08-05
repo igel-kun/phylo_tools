@@ -61,15 +61,17 @@ namespace mstd {
       auto container_iter = std::begin(*c);
       uint64_t last = 0;
       // emplace the items of 
-      DEBUG4(std::cout << "collecting items with mask "<< bits << " of "<<*c<<"\n");
+      DEBUG4(std::cout << "collecting items of "<<*c<<" with mask "; bits.print(std::cout); std::cout << "\n");
       for(auto b_iter = bits.begin(); b_iter; ++b_iter){
         const uint64_t current = *b_iter;
+        std::cout << "next item: "<<current<<'\n';
         std::advance(container_iter, current - last);
 
         assert(container_iter != std::end(*c));
         append(out, *container_iter);
         last = current;
       }
+      DEBUG4(std::cout << "collection: "<<out<<'\n');
       return out;
     }
     pointer operator->() { return operator*(); }
@@ -140,6 +142,7 @@ namespace mstd {
       if((low >= 0) && (low <= upper_bound)) {
         // for initialization, set the first 'low' bits
         bits.flip_lowest_k(low);
+        std::cout << "after setting lowest "<<low<<" bits: "; bits.print(std::cout);
       } else set_invalid(); // if low is out of bounds, mark the iterator invlid
     }
 

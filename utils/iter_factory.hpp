@@ -70,3 +70,4 @@ namespace mstd {
   template<class IterOrContainer, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<iterator_of_t<IterOrContainer>>>
   using IterFactory = typename _IterFactory<iterator_of_t<IterOrContainer>, BeginEndTransformation, EndIter>::type;
 }
+

@@ -2,15 +2,11 @@
 #pragma once
 
 #include "stl_utils.hpp"
+#include "append.hpp"
 
 // NOTE: set_interface needs auto_iter's so we're forward-declaring it here
 namespace mstd {
   template<class T, class EndIterator = std::conditional_t<iter_verifyable<iterator_of_t<T>>, void, iterator_of_t<T>>> class auto_iter;
-}
-
-#include "set_interface.hpp" // for mstd::append
-
-namespace mstd {
 
   template<class T>
   concept is_auto_iter = requires(T a) {
@@ -149,7 +145,5 @@ namespace mstd {
            class KeyType,
            class Iterator = iterator_of_t<Container>>
   auto_iter<Iterator> auto_find(Container&& c, const KeyType& key) { return {c.find(key), end(c)}; }
-
-
 
 } //namespace

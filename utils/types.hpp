@@ -11,6 +11,7 @@
 
 #include "utils.hpp"
 #include "iter_bitset.hpp"
+
 #include "sorted_vector.hpp"
 #include "vector_hash.hpp"
 #include "vector_map.hpp"
@@ -243,5 +244,6 @@ namespace PT {
 
   template<class T>
   constexpr bool has_data = std::remove_reference_t<T>::has_data;
-
 }
+
+

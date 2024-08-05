@@ -109,11 +109,6 @@ namespace mstd {
     iterable_bitset(iterable_bitset&&) = default;
     iterable_bitset& operator=(iterable_bitset&& bs) = default;
     iterable_bitset& operator=(const iterable_bitset& bs) = default;
-    /*{
-      num_bits = bs.num_bits;
-      _count = bs._count;
-      storage = bs.storage;
-    }*/
 
     const bucket_map& data() const { return storage; }
     std::pair<iterator,bool> emplace(const value_type x) { const bool res = set(x); return {find(x), res}; }
@@ -372,6 +367,9 @@ namespace mstd {
 
     iterator begin() const;
     iterator end() const;
+    iterator cbegin() const { return begin(); }
+    iterator cend() const { return end(); }
+
     iterator find(const value_type x) const;
   };
 }
@@ -435,6 +433,7 @@ namespace mstd {
         // clear the unused bits of the highest bucket
         storage[num_buckets() - 1] ^= (full_bucket << pos_of(_num_bits));
       }
+      DEBUG5(std::cout << "made ordered_bitset with "<<size()<<" bits set and "<<capacity()<<" bits capacity\n");
     }
 
     void clear() { clear_all(); }
@@ -547,11 +546,15 @@ namespace mstd {
         k -= num_bits_in_bucket;
         ++i;
       }
+      std::cout << "mark1 (i = "<<i<<" k = "<<k<<")\n";
+      std::cout << static_cast<const Parent&>(*this) << "\n";
       if(k > 0) {
         bucket_type& buffer = storage[i];
         const bucket_type xor_op = ~(full_bucket << k); // xor_op = 2^k-1
-        _count = _count + k - 2 * NUM_ONES_INL(buffer & xor_op);
+        _count += k;
+        _count -= 2 * NUM_ONES_INL(buffer & xor_op);
         buffer ^= xor_op;
+        std::cout << std::bitset<64>(buffer) << " (size: "<<size()<<")\n";
       }
     }
 
@@ -629,30 +632,29 @@ namespace mstd {
     }
     ordered_bitset operator--(int) { ordered_bitset result = *this; ++(*this); return result; }
 
-    friend class unordered_bitset;
-  };
+    void print(auto& ostr) const {
+      const std::vector<bucket_type>& vec = storage;
+      for(auto it = vec.rbegin(); it != vec.rend(); ++it) {
+        auto x = *it;
+        //ostr << std::bitset<num_bits_in_bucket>(x) << ' ';
+        ostr << std::bitset<8>(x) << ' ';
+      }
+      ostr << "(size "<<size()<<" capacity "<<capacity()<<")\n";
+    }
 
-  unordered_bitset& unordered_bitset::operator=(const ordered_bitset& bs)
-  {
+    friend class unordered_bitset; 
+  };
+  
+
+  unordered_bitset& unordered_bitset::operator=(const ordered_bitset& bs) {
     clear();
     for(const auto& xy: bs.data())
       storage.emplace(xy.first, xy.second);      
     return *this;
   }
 
-
-  template<class bucket_map>
-  std::ostream& operator<<(std::ostream& os, const iterable_bitset<bucket_map>& bs)
-  {
-    for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
-    return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
-  }
-
-
   // ========================= iterators =====================================
   
-
-
   // NOTE: we do not correspond to the official standard since we do not abide by the following condition:
   // "if a and b compare equal then either they are both non-dereferenceable or *a and *b are references bound to the same object"
   // since our *-operation does not return a reference, but an integer
@@ -668,21 +670,21 @@ namespace mstd {
     using typename Parent::value_type;
     using typename Parent::reference;
   protected:
-    const bucket_map& storage;
+    const bucket_map* storage;
     bucket_iter index;
     bucket_type buffer;
 
     // advance the index while its buffer is empty
     // NOTE: this overwrites the current buffer, so make sure it's zero before
-    inline void advance_while_empty()
-    {
+    void advance_while_empty() {
+      std::cout << "advancing from index " << *index << '\n';
       while(is_valid()) 
         if((buffer = (*index).second)) break; else ++index;
     }
 
   public:
     bitset_iterator(const bucket_map& _storage, const bucket_iter& _index):
-      storage(_storage), index(_index)
+      storage(&_storage), index(_index)
     {
       advance_while_empty();
     }
@@ -700,7 +702,7 @@ namespace mstd {
         buffer &= (Bitset::full_bucket << sub_index);
     }
 
-    bool is_valid() const { return index != storage.end(); }
+    bool is_valid() const { return index != storage->end(); }
     explicit operator bool() const { return is_valid(); }
     reference operator*() const { return (*index).first * Bitset::num_bits_in_bucket + NUM_TRAILING_ZEROSL(buffer); }
 
@@ -728,25 +730,34 @@ namespace mstd {
 
 
   template<MapType bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::begin() const
-  {
+  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::begin() const {
     return bitset_iterator<bucket_map>(storage);
   }
 
   template<MapType bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::end() const
-  {
+  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::end() const {
     return bitset_iterator<bucket_map>(storage, storage.end());
   }
 
   template<MapType bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::find(const value_type x) const
-  {
+  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::find(const value_type x) const {
     if(test(x)) {
       const auto [bucket_num, bucket_offset] = bucket_and_pos_of(x);
       return bitset_iterator<bucket_map>(storage, storage.find(bucket_num), bucket_offset);
     } else return end();
   }
+
+  //static_assert(IterableType<ordered_bitset>);
+
+  template<class bucket_map>
+  std::ostream& operator<<(std::ostream& os, const iterable_bitset<bucket_map>& bs) {
+    for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
+    return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
+  }
+
+//  std::ostream& operator<<(std::ostream& os, const ordered_bitset& bs) {
+//    return os << static_cast<const iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>>(bs);
+//  }
 
 
   template<class C, class = void> struct is_bitset: public std::false_type {};
@@ -754,6 +765,5 @@ namespace mstd {
   template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_cvref_t<C>>::value;
 
 }
-
 
 
