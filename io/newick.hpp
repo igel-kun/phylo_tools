@@ -44,7 +44,7 @@ namespace PT{
     using Extracter = std::remove_cvref_t<_Extracter>;
     ssize_t hn = -1;
     bool register_node = true;
-    if(!N.is_leaf(sub_root)) {
+    if(not N.is_leaf(sub_root)) {
       if(N.in_degree(sub_root) > 1) {
         const auto [iter, success] = hybrid_number.try_emplace(sub_root, hybrid_number.size());
         register_node = success;
@@ -54,28 +54,28 @@ namespace PT{
         os << '(';
         bool not_first = false;
         for(const auto& w: N.children(sub_root)) {
-          if(!not_first) not_first = true; else os << ',';
+          if(not not_first) not_first = true; else os << ',';
           write_extended_newick_below(os, N, static_cast<const NodeDesc>(w), extracter, hybrid_number);
         
           // first, write the edge-data
           std::ostringstream data_oss;
-          if constexpr (!Extracter::ignoring_edge_data) {
+          if constexpr (not Extracter::ignoring_edge_data) {
             const std::string out = std::to_string(extracter(Ex_edge_data{}, w));
-            if(!out.empty() || config::write_empty_edge_data)
+            if(not out.empty() || config::write_empty_edge_data)
               data_oss << config::NW_delimeters.start_of_edge_data << out;
           }
           // then write the node data
-          if constexpr (!Extracter::ignoring_node_data) {
+          if constexpr (not Extracter::ignoring_node_data) {
             const std::string out = std::to_string(extracter(Ex_node_data{}, sub_root));
-            if(!out.empty() || config::write_empty_node_data)
+            if(not out.empty() || config::write_empty_node_data)
               data_oss << config::NW_delimeters.start_of_node_data << out;
           }
           os << data_oss.str();
         }
-        if(!N.is_leaf(sub_root)) os << ')';
+        if(not N.is_leaf(sub_root)) os << ')';
       }
     }
-    if constexpr (!Extracter::ignoring_node_labels)
+    if constexpr (not Extracter::ignoring_node_labels)
       if(register_node) // if we already printed the label in the past, there is no reason to reprint it
         os << extracter(Ex_node_label{}, sub_root);
     if(hn != -1) os << config::NW_start_of_hybrid_spec << 'H' << hn;
@@ -87,7 +87,7 @@ namespace PT{
     write_extended_newick_below(os, N, N.root(), std::forward<Extracter>(extracter));
 
     // finally, write the node-data of the root
-    if constexpr (!Extracter::ignoring_node_data) {
+    if constexpr (not Extracter::ignoring_node_data) {
       auto node_data = extracter(Ex_node_data{}, N.root());
       if(node_data) {
         os << config::NW_delimeters.start_of_node_data << node_data;
@@ -186,7 +186,7 @@ namespace PT{
 
     // check if this is a hybrid and return name and hybrid number
     uint32_t get_hybrid_num(std::string_view s) {
-      if(!s.empty()) {
+      if(not s.empty()) {
         size_t first_unconverted;
         if(s[0] == 'H') s.remove_prefix(1);
         uint32_t hn = std::stoX<uint32_t>(s, first_unconverted);
@@ -209,25 +209,25 @@ namespace PT{
       int i = 0;
       if(mstd::split_prefix_at_next(root_data, data[i], config::NW_start_of_hybrid_spec)) i = 1;
       if(mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_edge_data)) i = 2;
-      if(!mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_node_data)) std::swap(data[2], root_data);
+      if(not mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_node_data)) std::swap(data[2], root_data);
 
       DEBUG4(std::cout << "split data into label:'"<<data[0]<<"' hybrid_num:'"<<data[1]<<"' edge_data:'"<<data[2]<<"' node_data:'"<<root_data<<"'\n");
-      if(!data[1].empty()) {
+      if(not data[1].empty()) {
         // if root is a hybrid, register it
         const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1]), NoNode, 0);
         auto& stored = iter->second;
-        if(!success) {
+        if(not success) {
           // if root is a known hybrid, then lookup its index in 'hybrids' and increase registered in-degree
           // we've already seen a hybrid with this index - so replace 'root' by the other node's index
           // increase the registered in-degree of 'root'
-          if constexpr (!allow_non_binary)
+          if constexpr (not allow_non_binary)
             if(++stored.get_degree() == 3)
               throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
           root = stored.get_node();
         } else root = stored.get_node() = emplacer.create_copy_of_raw(root_data); // if root was an unknown hybrid, then register it
         
         // allow giving the hybrid a label at any time it is referenced
-        if(!data[0].empty()) 
+        if(not data[0].empty()) 
           emplacer.set_label(root, data[0]);
        
         // if the subtree dangling from root is non-empty, then recurse
@@ -236,7 +236,7 @@ namespace PT{
         // if root is not a hybrid, then just register it
         DEBUG5(std::cout << root_data << " is not a hybrid, so create it with data '"<<root_data<<"'\n");
         root = emplacer.create_copy_of_raw(root_data);
-        if(!data[0].empty()) emplacer.set_label(root, data[0]);
+        if(not data[0].empty()) emplacer.set_label(root, data[0]);
         if((back > 0) && newick_string.at(back) == ')') read_internal<false>(root);
       }
       return {root, data[2]};
@@ -263,18 +263,18 @@ namespace PT{
       children_seen.insert(read_branch(root));
       while(newick_string.at(back) == ',') {
         if constexpr (root_is_hybrid){
-          if constexpr (!allow_non_binary)
+          if constexpr (not allow_non_binary)
             throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
-          if constexpr (!allow_junctions)
+          if constexpr (not allow_junctions)
             throw MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
         }
         --back;
         const NodeDesc new_child = read_branch(root);
-        if(!children_seen.emplace(new_child).second)
+        if(not children_seen.emplace(new_child).second)
           throw MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
         if(back < 0) throw MalformedInput(newick_string, back, "unmatched ')'");
       }
-      if constexpr (!allow_non_binary)
+      if constexpr (not allow_non_binary)
         if(children_seen.size() == 3)
           throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
     }

@@ -379,11 +379,11 @@ int main(const int argc, const char** argv) {
   if(mstd::test(options, "-v"))
     std::cout << N << std::endl;
 
-  const std::string nw_string = get_extended_newick(N);
+  std::string output_string = mstd::test(options, "-el") ? get_edgelist(N) : get_extended_newick(N);
   if(!options[""].empty()){
     std::ofstream out(options[""][0], (mstd::test(options,"-a") ? std::ios::app : std::ios::out));
-    out << nw_string << '\n';
-  } else std::cout << nw_string << '\n';
+    out << output_string << '\n';
+  } else std::cout << output_string << '\n';
 
 }
 

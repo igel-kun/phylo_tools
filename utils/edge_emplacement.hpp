@@ -182,13 +182,13 @@ namespace PT {
 
     template<class... MoreArgs>
     void emplace_edge_raw(const NodeDesc u, const NodeDesc v, MoreArgs&&... args) {
-      DEBUG5(std::cout << "only adding edge "<< u <<" --> "<< v <<"\n");
+      DEBUG5(std::cout << "only adding edge "<< u <<" ----> "<< v <<"\n");
       helper.add_an_edge(u, v, std::forward<MoreArgs>(args)...);
     }
 
     template<class... MoreArgs>
     void emplace_edge(const auto& other_u, const auto& other_v, MoreArgs&&... args) {
-      DEBUG5(std::cout << "  treating edge "<<other_u<<" --> "<<other_v<<"\n");
+      DEBUG5(std::cout << "treating ("<<other_u<<" "<<other_v<<")\n");
       emplace_edge_raw(create_copy_of(other_u), create_copy_of(other_v), std::forward<MoreArgs>(args)...);
     }
 
@@ -214,14 +214,6 @@ namespace PT {
     }
     // commit the root-candidates to N
     void commit_roots() { helper.commit_roots(); }
-
-    template<class... Args>
-    void finalize(Args&&... args) {
-      if constexpr (track_roots)
-        commit_roots();
-      else if constexpr (!std::is_void_v<std::remove_cvref_t<SourcePhylo>>)
-        mark_roots(std::forward<Args>(args)...);
-    }
 
     NodeDesc at(const NodeDesc u) const { assert(contains(u)); return helper.old_to_new.at(u); }
     bool contains(const NodeDesc u) const { return helper.old_to_new.contains(u); }
