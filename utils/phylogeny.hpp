@@ -221,9 +221,9 @@ namespace PT {
     template<class... Args>
       requires ((sizeof...(Args) != 1) || (!NodeFunctionType<mstd::FirstTypeOf<Args...>> && !DataExtracterType<mstd::FirstTypeOf<Args...>>))
     static constexpr NodeDesc create_node(Args&&... args) {
-      DEBUG5(std::cout << "creating node of type "<<mstd::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
+      //DEBUG5(std::cout << "creating node of type "<<mstd::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
       Node* result = new Node(std::forward<Args>(args)...);
-      DEBUG5(std::cout << "created node at " << result << " (" << reinterpret_cast<uintptr_t>(result) << ")\n");
+      //DEBUG5(std::cout << "created node at " << result << " (" << reinterpret_cast<uintptr_t>(result) << ")\n");
       return reinterpret_cast<uintptr_t>(result);
     }
     // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
@@ -395,9 +395,14 @@ namespace PT {
 
     // this marks a node as new root
     bool mark_root(const NodeDesc u) {
-      assert(in_degree(u) == 0);
-      const bool result = mstd::append(_roots, u).second;
-      return result;
+      if(in_degree(u) > 0) throw std::logic_error("trying to mark a node with in-degree as root");
+      return mstd::append(_roots, u).second;
+    };
+    // this marks nodes as new roots
+    template<NodeIterableType Roots>
+    void mark_roots(const Roots& roots) {
+      for(const NodeDesc r: roots)
+        mark_root(r);
     };
 
     NodeDesc add_root(const NodeDesc new_root) {
@@ -903,7 +908,7 @@ namespace PT {
         auto& rt = front(_roots);
         if(x == rt) {
           rt = r;
-        } else throw Unimplemented("rerooting at a descendant of a reticulation");
+        } else throw mstd::Unimplemented("rerooting at a descendant of a reticulation");
 #warning "TODO: implement rooting strategy"
       // TODO: idea: 
       // binary strategy: "reversal network"
@@ -914,7 +919,7 @@ namespace PT {
       //  1. use the binary strategy
       //  2. for each node with indeg > 1 AND outdeg > 1, "pull apart" the node (turn the node into 2 nodes, one with all in-edges, and one with all out-edges)
       // TODO: add a callback that ist called for all nodes with indeg > 1 and outdeg > 1 to resolve them (or exit throwing exceptions etc)
-      } else throw Unimplemented("rerooting of multi-root phylogenies");
+      } else throw mstd::Unimplemented("rerooting of multi-root phylogenies");
     }
 
 
@@ -1108,8 +1113,8 @@ namespace PT {
     //       (in particular if you use an EdgeEmplacer with 'track_roots = false' and forget to mark the roots afterwards)
     //       however, this power enables certain use cases where we want to "directly" access the edges of a network...
     //       just, promise to be careful with your EdgeEmplacers
-    template<bool, StrictPhylogenyType, OptionalPhylogenyType, NodeTranslationType> friend struct ProtoEdgeEmplacementHelper;
-    template<bool, StrictPhylogenyType, OptionalPhylogenyType, NodeTranslationType> friend struct EdgeEmplacementHelper;
+    template<bool, StrictPhylogenyType, OptionalPhylogenyType, MapsToNode> friend struct ProtoEdgeEmplacementHelper;
+    template<bool, StrictPhylogenyType, OptionalPhylogenyType, MapsToNode> friend struct EdgeEmplacementHelper;
 
 
     // emplace a set of new edges into *this
@@ -1124,7 +1129,7 @@ namespace PT {
       // step 1: copy other_x
       // step 2: copy everything below other_x
       for(auto&& e: std::forward<Edges>(edges))
-        emplacer.emplace_edge(std::move(e));
+        emplacer.emplace_edge(static_cast<mstd::copy_cvref_t<Edges&&, decltype(e)>>(e));
     }
 
 
@@ -1301,7 +1306,7 @@ namespace PT {
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
     Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const RContainer& in_roots) {
 #warning "TODO: write me"
-      throw Unimplemented("move-construction of phylogenies with different root containers");
+      throw mstd::Unimplemented("move-construction of phylogenies with different root containers");
     }
 
     template<StrictPhylogenyType Phylo, class... Args>
@@ -1386,7 +1391,7 @@ namespace PT {
       const Node& u_node = node_of(u);
       const bool u_reti = u_node.is_reti();
 
-      std::string u_name = config::locale.char_no_branch_hori;
+      std::string u_name = mstd::config::locale.char_no_branch_hori;
       const size_t old_len = u_name.size();
       u_name += std::to_string(name(u));
 
@@ -1403,9 +1408,9 @@ namespace PT {
       if(u_name.size() == old_len) {
         if(u_reti)
           u_name += std::string('(' + std::to_string(u) + ')');
-        else if(out_degree(u) > 1) u_name += config::locale.char_branch_low;
+        else if(out_degree(u) > 1) u_name += mstd::config::locale.char_branch_low;
       }
-      if(u_reti) u_name += config::locale.char_reti;
+      if(u_reti) u_name += mstd::config::locale.char_reti;
       os << u_name;
       
       bool u_seen = true;
@@ -1414,7 +1419,7 @@ namespace PT {
         if(u_reti) mstd::append(seen, u);
         switch(u_childs.size()){
           case 0:
-            os << std::endl;
+            os << '\n';
             break;
           case 1:
             prefix += std::string(utf8_len(u_name), ' ');
@@ -1425,14 +1430,14 @@ namespace PT {
 
             uint32_t count = u_childs.size();
             for(const NodeDesc c: u_childs){
-              const char* last_char = (count >= 2) ? config::locale.char_no_branch_vert : " ";
+              const char* last_char = (count >= 2) ? mstd::config::locale.char_no_branch_vert : " ";
               print_subtree(os, c, prefix + last_char, seen, node_data_to_string);
-              if(count >= 3) last_char = config::locale.char_branch_right;
-              if(count == 2) last_char = config::locale.char_last_child;
+              if(count >= 3) last_char = mstd::config::locale.char_branch_right;
+              if(count == 2) last_char = mstd::config::locale.char_last_child;
               if(--count > 0) os << prefix << last_char;
             }
         }
-      } else os << std::endl;
+      } else os << '\n';
     }
 
     template<class NodeDataToString = mstd::IgnoreFunction<std::string>>

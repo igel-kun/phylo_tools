@@ -522,7 +522,7 @@ namespace PT{
 
 
   template<class _Roots, PhylogenyType _Net>
-  using RootsOr = std::remove_cvref_t<mstd::VoidOr<_Roots, typename _Net::RootContainer>>;
+  using RootsOr = std::remove_cvref_t<mstd::FirstNonVoid<_Roots, typename _Net::RootContainer>>;
 
   // this guy is our factory; begin()/end() can be called on it
   //NOTE: Traversal has its own _SeenSet so that multiple calls to begin() can be given the same set of forbidden nodes

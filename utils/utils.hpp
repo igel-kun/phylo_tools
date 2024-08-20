@@ -42,6 +42,8 @@
 #define NUM_BITS_IN_INT (CHAR_BIT * NUM_BYTES_IN_INT)
 #define NUM_BYTES_IN_LONG (sizeof(unsigned long))
 #define NUM_BITS_IN_LONG (CHAR_BIT * NUM_BYTES_IN_LONG)
+#define NUM_BYTES_IN_PTR (sizeof(char*))
+#define NUM_BITS_IN_PTR (CHAR_BIT * NUM_BYTES_IN_PTR)
 
 #define NUM_LEADING_ZEROS(x) __builtin_clz(x)
 #define NUM_LEADING_ZEROSL(x) __builtin_clzl(x)

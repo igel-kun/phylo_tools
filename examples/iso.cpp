@@ -14,7 +14,7 @@ Phylo read_from_stream(std::ifstream& in) {
   try{
     DEBUG3(std::cout << "trying to read newick..." <<std::endl);
     return PT::parse_newick<Phylo>(in);
-  } catch(const PT::MalformedNewick& nw_err){
+  } catch(const PT::MalformedInput& nw_err){
     std::cout << "reading newick failed: "<<nw_err.what()<<std::endl;
     exit(1);
   }

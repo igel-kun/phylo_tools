@@ -23,9 +23,16 @@ namespace mstd {
 	template<> constexpr bool is_stringlike_v<std::string_view> = true;
 	template<> constexpr bool is_stringlike_v<char*> = true;
 	template<> constexpr bool is_stringlike_v<char[]> = true;
+	template<int i> constexpr bool is_stringlike_v<char[i]> = true;
 	template<> constexpr bool is_stringlike_v<const char*> = true;
 	template<> constexpr bool is_stringlike_v<const char[]> = true;
-	template<class T> concept Stringlike = is_stringlike_v<T>;
+	template<int i> constexpr bool is_stringlike_v<const char[i]> = true;
+	
+  template<class T> concept StrictStringlike = is_stringlike_v<std::remove_const_t<T>>;
+	template<class T> concept Stringlike = StrictStringlike<std::remove_cvref_t<T>>;
+
+  template<class T> concept StrictStringlikeOrChar = StrictStringlike<T> || std::is_same_v<std::remove_const_t<T>, char>;
+	template<class T> concept StringlikeOrChar = StrictStringlikeOrChar<std::remove_cvref_t<T>>;
 
   template<class T> concept has_iterator = requires { typename T::iterator;};
   // for reasons, C++20's std::span has no const_iterator yet (added in C++23)
@@ -207,8 +214,8 @@ namespace mstd {
   template<class T>
   constexpr bool is_tuple_v = is_tuple<T>::value;
 
-  template<class T>
-  concept TupleType = is_tuple_v<T>;
+  template<class T> concept StrictTupleType = is_tuple_v<T>;
+  template<class T> concept TupleType = StrictTupleType<std::remove_cvref_t<T>>;
 
   // ----------------------- deriving from and basing on templates  ----------------------------------
   template <template <class...> class C, class...Ts>

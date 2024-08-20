@@ -184,7 +184,7 @@ namespace PT{
       apply_to_subtree([&](const auto&){ ++result; });
       return result;
     }
-    std::pair<size_t,size_t> count_nodes_and_edges_below() const {
+    auto count_nodes_and_edges_below() const {
       std::pair<size_t, size_t> result{0,0};
       if constexpr (is_defined_tree_node) {
         result.first = count_nodes_below();

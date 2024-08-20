@@ -32,6 +32,15 @@ namespace mstd {
     return emplace_result<V>{x.begin(), true};
   }
 
+  template<ContainerType C1, IterableType C2> requires (ConvertibleValueTypes<C1,C2> && !IterableTypeWithSameIterators<C2>)
+  auto append(C1& x, C2&& y) {
+    using ItemRef = copy_cvref_t<C2&&, value_type_of_t<C2>>;
+    for(ItemRef i: std::forward<C2>(y))
+      append(x, static_cast<ItemRef>(i)); // so, right, I know i should already have that type, but not if ItemRef is an rvalue-reference because... reasons
+    return emplace_result<C1>{x.begin(), true};
+  }
+
+
   // on non-map containers, append = emplace
   template<IterableType C, class First, class ...Args>
     requires (!MapType<C> && !VectorOrStringType<C> && !CompatibleValueTypes<C, First> &&
@@ -69,13 +78,9 @@ namespace mstd {
     return emplace_result<M>{iter, success};
   }
 
-  template<ContainerType C1, IterableType C2> requires (ConvertibleValueTypes<C1,C2> && !IterableTypeWithSameIterators<C2>)
-  auto append(C1& x, C2&& y) {
-    using ItemRef = copy_cvref_t<C2&&, value_type_of_t<C2>>;
-    for(ItemRef i: std::forward<C2>(y))
-      append(x, static_cast<ItemRef>(i)); // so, right, I know i should already have that type, but not if ItemRef is an rvalue-reference because... reasons
-    return emplace_result<C1>{x.begin(), true};
-  }
-
+  template<class T, class... Args>
+  concept Appendable = requires(T t, Args&&... args) {
+    append(t, args...);
+  };
 
 }

@@ -101,10 +101,9 @@ NetAndTree create_net_and_tree() {
   return result;
 }
 
-template<class Input>
-MyNet read_network(Input&& in_file){
+MyNet read_network(auto&& in){
   try{
-    return parse_newick<MyNet>(std::forward<Input>(in_file));
+    return parse_newick<MyNet>(in);
   } catch(const std::exception& err){
     std::cerr << "could not read network: "<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
@@ -115,7 +114,9 @@ NetPair read_networks() {
   const auto& input_files = options[""];
   if(!input_files.empty()) {
     std::ifstream in0(input_files[0]);
-    return (input_files.size() == 1) ? NetPair{read_network(in0), read_network(in0)} : NetPair{read_network(in0), read_network(input_files[1])};
+    return (input_files.size() == 1) ?
+      NetPair{read_network(in0), read_network(in0)} :
+      NetPair{read_network(in0), read_network(std::ifstream{input_files[1]})};
   } else throw std::invalid_argument("no input files");
 }
 

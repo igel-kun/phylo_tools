@@ -7,7 +7,7 @@
 namespace mstd {
   // from a container Iterator and a possible factory, get the iterator of the items in the container/factory
   template<class ContainerIter, class Factory = void>
-  using ItemIterFromContainerAndFactory = iterator_of_t<VoidOr<Factory, value_type_of_t<ContainerIter>>>;
+  using ItemIterFromContainerAndFactory = iterator_of_t<FirstNonVoid<Factory, value_type_of_t<ContainerIter>>>;
 
   // this is an iterator over multiple iterable objects, passing over each of them in turn, effectively concatenating them
   // NOTE: all iterable objects must admit the same iterator type 'ItemIter'
@@ -20,8 +20,8 @@ namespace mstd {
   class _concatenating_iterator: public auto_iter<ContainerIter> {
     using Parent = auto_iter<ContainerIter>;
     using Container = value_type_of_t<ContainerIter>;
-    using ContainerRef = VoidOr<Factory, reference_of_t<ContainerIter>>;
-    using ContainerConstRef = VoidOr<Factory, const_reference_of_t<ContainerIter>>;
+    using ContainerRef = FirstNonVoid<Factory, reference_of_t<ContainerIter>>;
+    using ContainerConstRef = FirstNonVoid<Factory, const_reference_of_t<ContainerIter>>;
 
     ContainerRef get_container() { return Parent::operator*(); }
     ContainerConstRef get_container() const { return Parent::operator*(); }

@@ -7,7 +7,7 @@
 namespace PT{
 
   // an edge is a node (head) with another node (->tail)
-  template<class EdgeData = void>
+  template<class EdgeData = void> //requires std::is_default_constructible_v<PT::Adjacency<EdgeData>>
   struct ProtoEdge: public std::pair<NodeDesc, PT::Adjacency<EdgeData>> {
     using Data = EdgeData;
     using Adjacency = PT::Adjacency<EdgeData>;
@@ -27,7 +27,7 @@ namespace PT{
     bool is_invalid() const { return tail() == NoNode; }
   };
 
-  template<class EdgeData = void>
+  template<class EdgeData>
   struct Edge: public ProtoEdge<EdgeData> {
     using Parent = ProtoEdge<EdgeData>;
     using Parent::Parent;

@@ -216,7 +216,7 @@ namespace PT{
            StrictPhylogenyType Network,
            class... ExtracterArgs>
   auto get_biconnected_components(const Network& N, OldToNewTranslation&& old_to_new = OldToNewTranslation(), ExtracterArgs&&... ex_args) {
-    using Component = mstd::VoidOr<_Component, Network>;
+    using Component = mstd::FirstNonVoid<_Component, Network>;
     using Extracter = decltype(make_data_extracter<Network, Component>(std::forward<ExtracterArgs>(ex_args)...));
     return BiconnectedComponents<Network, Component, allow_trivial, OldToNewTranslation, Extracter>(
         N,
@@ -231,7 +231,7 @@ namespace PT{
            class... ExtracterArgs>
              requires (!NodeTranslationType<First>)
   auto get_biconnected_components(const Network& N, First&& first, ExtracterArgs&&... ex_args) {
-    using Component = mstd::VoidOr<_Component, Network>;
+    using Component = mstd::FirstNonVoid<_Component, Network>;
     using Extracter = decltype(make_data_extracter<Network, Component>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...));
     return BiconnectedComponents<Network, Component, allow_trivial, NodeTranslation, Extracter>(
         N,

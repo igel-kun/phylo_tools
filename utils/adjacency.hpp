@@ -28,8 +28,8 @@ namespace PT {
   protected:
 #warning "TODO: check if shared_ptr performs"
     std::shared_ptr<EdgeData> data_ptr = nullptr;
-    Adjacency() = default;
   public:
+    Adjacency(): Parent{NoNode}, data_ptr(std::make_shared<EdgeData>()) {}
     
     // make an Adjacency from a different Adjacency by (possibly move-) constructing our data from theirs
     template<class EData> requires (!std::is_void_v<EData> && !std::is_same_v<EdgeData, EData>)
@@ -44,7 +44,7 @@ namespace PT {
     Adjacency(const NodeDesc _nd, First&& first, Args&&... args):
       Parent(_nd), data_ptr(std::make_shared<EdgeData>(std::forward<First>(first), std::forward<Args>(args)...)) {}
     Adjacency(const NodeDesc _nd, const Adjacency& adj): Parent{_nd}, data_ptr(adj.data_ptr) {}
-    Adjacency(const NodeDesc _nd): Parent{_nd} {}
+    Adjacency(const NodeDesc _nd): Parent{_nd}, data_ptr{std::make_shared<EdgeData>()} {}
 
     //Adjacency(const Adjacency&) = default;
     //Adjacency(Adjacency&& other) = default;

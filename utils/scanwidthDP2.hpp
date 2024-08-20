@@ -19,7 +19,7 @@ namespace PT {
     static constexpr mstd::set_hash<Extension> Hasher{};
     
     template<class Entry> requires (!mstd::IterableType<Entry>)
-    size_t operator()(const std::unique_ptr<Entry>& entry) const { return entry->hash(); }
+    size_t operator()(const std::unique_ptr<Entry>& entry) const { return Hasher(*entry); }
     
     template<NodeIterableType Nodes>
     size_t operator()(const Nodes& nodes) const { return Hasher(nodes); }
@@ -41,7 +41,7 @@ namespace PT {
     using NormalEntry = _DPEntry<Network, DegreeExtracter>;
     using DPEntry = typename std::conditional_t<low_memory_version, LowMemEntry, NormalEntry>;
     // NOTE: we're storing pointers to DPEntries so that we can store the 'best' entry consistently over many hashtable inserts
-    using DPTable = mstd::vector_hash<std::unique_ptr<DPEntry>, DP_Entry_Hash>;
+    using DPTable = mstd::vector_hash<DPEntry, DP_Entry_Hash>;
     //using WeakComps = mstd::DisjointSetForest<NodeDesc>;
     
   protected:
@@ -114,6 +114,7 @@ namespace PT {
       // --------------------------- querying -----------------------------------
       size_t num_components() const { return comps.num_components(); }
 
+      auto make_entry() { return DPEntry{nodes, hash}; }
       auto make_entry() && { return DPEntry{std::move(nodes), hash}; }
 
       // --------------------------- construction -----------------------------------
@@ -415,20 +416,20 @@ namespace PT {
 
   public:
 
-    ScanwidthDP2(Network& _N): N(_N) {}
-
-    const DPEntry& query() {
-      Query Q(N);
-      Q.init();
-      return query(Q);
-    }
+    ScanwidthDP2(Network& _N): N{_N} {}
 
     const DPEntry& emplace_in_table(Query<Extension>&& Q) {
       return dp_table.emplace(Q.make_entry()).first;
     }
 
     auto dp_entry_by_hash(const size_t hash) const {
-      return dp_table.find(std::make_unique<DPEntry>(NodeVec{}, hash));
+      return dp_table.find(DPEntry{NodeVec{}, hash});
+    }
+
+    const DPEntry& query() {
+      Query Q{N};
+      Q.init();
+      return query(Q);
     }
 
     // query a downwards-closed list X of nodes

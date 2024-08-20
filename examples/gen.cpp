@@ -1,12 +1,17 @@
 
+#include "utils/charp.hpp"
+#include "utils/token.hpp"
+
 #include "io/newick.hpp"
+#include "io/edgelist.hpp"
 
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
 #include "utils/net_gen.hpp"
 
 using namespace PT;
-  
+
+enum class DataTarget { Node, Edge };
 
 OptionMap options;
 
@@ -14,32 +19,58 @@ void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
   description["-n"] = {1,1};
+  description["-el"] = {0,0};
   description["-r"] = {1,1};
   description["-l"] = {1,1};
   description["-s"] = {1,1};
   description["-a"] = {0,0};
   description["-L"] = {0,0};
   description["-TBR"] = {2,2};
+  description["-ad"] = {1,1};
+  description["-nd"] = {1,1};
+  description["-ed"] = {1,1};
   description[""] = {0,1};
-  const std::string help_message(std::string(argv[0]) + " [file]\n\
-      generate a random binary network and write it to file (stdout if omitted) in extended newick format\n\
+  const std::string help_message(std::string(argv[0]) + " <out-file>\n\
+      generate or modify a network and write it to out-file in extended newick format (unless -el specified)\n\
       FLAGS:\n\
-      \t[network properties]\n\
+      \t[random binary network generation]\n\
       \t-r <#reti>\tnumber of reticulations in the network\n\
       \t-l <#leaf>\tnumber of leaves in the network\n\
       \t-n <#node>\tnumber of vertices in the network (this is ignored if -r and -l are present)\n\
+      NOTE: if, of -n, -r, and -l, less than 2 are present, the network is assumed to have ~10% reticulations\n\
+      NOTE: -n, -r, and -l are ignored if -TBR or -ad is present\n\
+      NOTE: n = 99 is assumed if none are present\n\n\
+      \t[network modification]\n\
+      \t-TBR <file> <TBR-dist>\tgenerate a network by applying 'TBR-dist' TBR-moves to the network in 'file'\n\n\
+      \t[add random data to a network]\n\
+      \t-ad <file>\tgenerate node and/or edge-data for the nodes & edges of the network in <file>\n\
+      \t-nd [node-data]\tgenerate node data described in 'node-data' with the format below\n\
+      \t-ed [edge-data]\tgenerate edge data described in 'edge-data' with the following format:\n\
+      \t\t\t UDx:y - uniformly distributed doubles between x and y\n\
+      \t\t\t NDx:y - normal distributed doubles with mean x and std.deviation y\n\
+      \t\t\t UIx:y - uniformly distributed ints between x and y\n\
+      \t\t\t NIx:y - normal distributed ints with mean x and std.deviation y\n\
+      \t\t\t BIx:y:p - binomial distribution (#successes) of ints between x and y with success probability p\n\
+      \t\t\t GIx:y:p - geometric distribution (#tries before success) of ints between x and y with success probability p\n\
+      \t\t\t Sx:y:k - string of chars between 'x' and 'y' of length k\n\
+      \t\t example: \"-ed BI0:10:0.4,UD0.5:0.5,S:a:z:3\" adds to each edge\n\
+      \t\t     (1) a binomially distributed integer between 0 & 10 with p=0.4  \n\
+      \t\t     (2) a uniformly distributed double between 0.5 and 0.5 (which is always 0.5)\n\
+      \t\t     (3) a length-3 string of uniformly random lower-case letters\n\
       \n\t[general]\n\
       \t-v\tverbose output, prints networks\n\
       \t-a\tappend to file1 instead of replacing its contents\n\
       \t-s <seed>\tset random seed to 'seed'\n\
-      \t-L\tput labels on the leaves (small-letter strings in lexicographic order)\n\
-      \t-TBR <file> <TBR-dist>\tgenerate a network by applying 'TBR-dist' TBR-moves to the network in 'file' (extended newick)\
-      NOTE: if, of -n, -r, and -l, less than 2 are present, the network is assumed to have ~10% reticulations\n\
-      NOTE: n = 99 is assumed if none are present\n");
+      \t-el\toutput in edgelist format instead of eNewick\n\
+      \t-L\tput labels on the leaves (small-letter strings in lexicographic order)\n");
 
   parse_options(argc, argv, description, help_message, options);
-}
 
+  // sanity check
+  if((test(options, "-nd") || test(options, "-ed")) && !test(options, "-ad")) {
+    throw std::logic_error("request to modify data requires an input file (via -ad)");
+  }
+}
 
 void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
   //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
@@ -91,17 +122,173 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
   }
 }
 
-using MyNetwork = DefaultLabeledNetwork<>;
-using MyEdge = typename MyNetwork::Edge;
+// =============== READING Networks =====================
 
-auto read_network(auto&& in) {
-  try{
-    return parse_newick<MyNetwork>(in);
+using StringNoLength = mstd::charp<0>;
+//using StringNoLength = std::string;
+using floatptr_t = std::conditional_t<sizeof(double) <= sizeof(void*), double, float>;
+using DataUnion = std::variant<intptr_t, floatptr_t, StringNoLength>;
+
+static_assert(mstd::Stringlike<std::string_view>);
+
+struct DataVec: public std::vector<DataUnion> {
+  using Parent = std::vector<DataUnion>;
+  
+  DataVec() = default;
+
+  template<class First, class... Args> requires (!mstd::Stringlike<First>)
+  DataVec(First&& first, Args&&... args): Parent(std::forward<First>(first), std::forward<Args>(args)...) {}
+  template<class First, class... Args> requires (mstd::Stringlike<First>)
+  DataVec(First&& first, Args&&... args): Parent(std::forward<Args>(args)...)
+  {
+    DEBUG4(std::cout << "making generic data by splitting the string '"<<first<<"'\n");
+    for(const auto x: mstd::tokenize(std::forward<First>(first), config::data_delimeters)) {
+      DEBUG4(std::cout << "data: '"<<x<<"'\n");
+      Parent::emplace_back(read_data(x));
+    }
+    Parent::shrink_to_fit();
+  }
+
+  template<class T, class... Args>
+  bool try_reading(const std::string_view s, std::variant<Args...>& target) {
+    if(!s.empty()) {
+      size_t first_unconverted;
+      target = stoX<T>(s, first_unconverted);
+      return first_unconverted == s.size();
+    } else return false;
+  }
+
+  auto read_data(const std::string_view s) {
+    DataUnion result;
+    if(!try_reading<intptr_t>(s, result))
+      if(!try_reading<floatptr_t>(s, result))
+        result = StringNoLength(s);
+    return result;
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const DataVec& dv) {
+    bool has_non_empty = false;
+    std::ostringstream accu;
+    for(auto& x: dv) {
+      accu << x << ':';
+      if(!std::holds_alternative<StringNoLength>(x) || (std::get<StringNoLength>(x).size() != 0))
+        has_non_empty = true;
+    }
+    if(has_non_empty) {
+      std::string_view accu_buffer{accu.rdbuf()->view()};
+      accu_buffer.remove_suffix(1); // remove last comma
+      os << accu_buffer;
+    }
+    return os;
+  }
+};
+
+
+using MyNetwork = DefaultLabeledNetwork<DataVec, DataVec>;
+using MyEdge = typename MyNetwork::Edge;
+static_assert(std::is_default_constructible_v<std::shared_ptr<DataVec>>);
+static_assert(std::is_default_constructible_v<Adjacency<DataVec>>);
+static_assert(std::is_default_constructible_v<MyEdge>);
+
+auto read_network(const std::string& filename) {
+  try {
+    return parse_newick<MyNetwork>(std::ifstream{filename});
   } catch(const std::exception& err){
-    std::cerr << "could not read a network from "<<options[""][0]<<":\n"<<err.what()<<std::endl;
+    std::cerr << "Failed reading eNewick from "<< filename <<":\n"<<err.what()<<"\n trying edgelist...\n";
+  }
+  try {
+    return parse_edgelist<MyNetwork>(std::ifstream{filename});
+  } catch(const std::exception& err){
+    std::cerr << "could not read a network from "<< filename <<":\n"<<err.what()<<'\n';
     exit(EXIT_FAILURE);
   }
 }
+
+
+
+// ============ RNG ===============
+
+template<class StdDist, bool rounding, class... DistConstructArgs>
+struct generic_dist {
+  std::mt19937 _rng{std::random_device{}()};
+  StdDist dist;
+
+  template<class First, class... Args> requires (!mstd::Stringlike<First> && !mstd::TupleType<First>)
+  generic_dist(First&& first, Args&&... args): dist{std::forward<First>(first), std::forward<Args>(args)...} {}
+
+  template<mstd::TupleType Tup>
+  generic_dist(Tup&& t): generic_dist(std::make_from_tuple<generic_dist>(std::forward<Tup>(t))) {}
+  
+  generic_dist(const std::string_view s): generic_dist(mstd::read_tuple<DistConstructArgs...>(s, ':')) {}
+  
+  auto operator()() {
+    if constexpr (rounding)
+      return std::round(dist(_rng));
+    else return dist(_rng);
+  }
+};
+template<class T>
+using uniform_rng = generic_dist<std::conditional_t<std::is_integral_v<T>, std::uniform_int_distribution<T>, std::uniform_real_distribution<T>>, false, T, T>;
+template<class T>
+using normal_rng = generic_dist<std::normal_distribution<double>, std::is_integral_v<T>, double, double>;
+template<class T>
+using binomial_rng = generic_dist<std::binomial_distribution<int64_t>, false, int64_t, double>;
+template<class T>
+using geometric_rng = generic_dist<std::geometric_distribution<int64_t>, false, double>;
+
+
+template<StrictPhylogenyType Phylo, class T>
+void append_data(Phylo& N, const NodeDesc u, T&& data) { append(N[u].data(), std::forward<T>(data)); }
+template<StrictPhylogenyType Phylo, class T>
+void append_data(Phylo& N, const typename Phylo::Edge& uv, T&& data) { append(uv.data(), std::forward<T>(data)); }
+
+template<DataTarget target, StrictPhylogenyType Phylo>
+auto get_targets(Phylo& N) {
+  if constexpr (target == DataTarget::Node) {
+    return N.nodes();
+  } else {
+    return N.edges();
+  }
+}
+
+template<DataTarget target, StrictPhylogenyType Phylo, class Distribution> requires (!mstd::Stringlike<Distribution>)
+void add_random_data(Phylo& N, Distribution&& dist) {
+  for(auto x: get_targets<target>(N))
+    append_data(N, x, dist());
+}
+
+template<DataTarget target, template<class> class Distribution, StrictPhylogenyType Phylo>
+void add_random_data(Phylo& N, char val_select, std::string_view s) {
+  switch(val_select) {
+    case 'I': add_random_data<target>(N, Distribution<int64_t>(s)); break;
+    case 'D': add_random_data<target>(N, Distribution<double>(s)); break;
+    default: throw MalformedInput{std::string{"'"} + val_select + "' does not correspond to a valid type; see -h or --help for help"};
+  }
+}
+
+template<DataTarget target, StrictPhylogenyType Phylo>
+void add_random_data(Phylo& N, std::string_view s) {
+  if(s.size() < 2) throw MalformedInput{std::string{"cannot interpret data '"} + s + "'. Please see --help or -h for help"};
+  switch(s[0]) {
+    case 'U': add_random_data<target, uniform_rng>(N, s[1], s.substr(2)); break;
+    case 'N': add_random_data<target, normal_rng>(N, s[1], s.substr(2)); break;
+    case 'B': add_random_data<target, binomial_rng>(N, s[1], s.substr(2));; break;
+    case 'G': add_random_data<target, geometric_rng>(N, s[1], s.substr(2)); break;
+    case 'S': {
+                const auto [x, y, k] = mstd::read_tuple<char, char, int>(s.substr(1));
+                uniform_rng<char> dist(x,y);
+                std::string accu;
+                for(auto node_or_edge: get_targets<target>(N)) {
+                  accu.clear();
+                  for(int i = 0; i < k; ++i) accu += dist();
+                  append_data(N, node_or_edge, std::move(accu));
+                }
+              }
+              break;
+    default: throw MalformedInput{std::string{"'"} + s[0] + "' does not correspond to a valid type; see -h or --help for help"};
+  }
+}
+
 
 int main(const int argc, const char** argv) {
   parse_options(argc, argv);
@@ -114,7 +301,7 @@ int main(const int argc, const char** argv) {
   if(test(options, "-TBR")) {
     size_t TBR_dist = arg_from_string(options["-TBR"][1]);
     
-    N = read_network(std::ifstream(options["-TBR"][0]));
+    N = read_network(options["-TBR"][0]);
     while(TBR_dist--) {
       if(N.num_edges() < 3) 
         throw std::logic_error("cannot make TBR-moves on a network with less than 3 edges");
@@ -149,7 +336,7 @@ int main(const int argc, const char** argv) {
 #warning "TODO: continue here"
         }
       }
-      throw(std::logic_error{"unimplemented"});
+      throw(mstd::Unimplemented{"sampling method not yet implemented"});
 /*
       // step 1.5: check whether x is below v and swap if necessary
       if(N.has_path(xy.tail(), uv.head()))
@@ -159,6 +346,17 @@ int main(const int argc, const char** argv) {
       apply_TBR_move(N, st, uv, xy);
 */
     }
+  } else if(test(options, "-ad")) {
+    N = read_network(options["-ad"][0]);
+    // node data
+    if(test(options, "-nd"))
+      for(const std::string_view s: mstd::tokenize(options["-nd"][0], ','))
+        add_random_data<DataTarget::Node>(N, s);
+    // edge data
+    if(test(options, "-ed"))
+      for(const std::string_view s: mstd::tokenize(options["-ed"][0], ','))
+        add_random_data<DataTarget::Edge>(N, s); 
+
   } else {
     long num_nodes, num_retis, num_leaves;
     get_node_numbers(num_nodes, num_retis, num_leaves);
@@ -185,7 +383,7 @@ int main(const int argc, const char** argv) {
   if(!options[""].empty()){
     std::ofstream out(options[""][0], (mstd::test(options,"-a") ? std::ios::app : std::ios::out));
     out << nw_string << '\n';
-  } else std::cout << nw_string;
+  } else std::cout << nw_string << '\n';
 
 }
 

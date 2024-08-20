@@ -130,6 +130,8 @@ namespace PT {
   template<class C>
   concept HasNodeKey = std::is_convertible_v<typename std::remove_cvref_t<C>::key_type, NodeDesc>;
   template<class C>
+  concept MapsToNode = std::is_convertible_v<typename std::remove_cvref_t<C>::mapped_type, NodeDesc>;
+  template<class C>
   concept NodeIterableType = (mstd::IterableType<C> && HasNodeValue<C>);
   template<class C>
   concept NodeContainerType = (mstd::ContainerType<C> && HasNodeValue<C>);
@@ -138,11 +140,14 @@ namespace PT {
   template<class C>
   concept NodeMapType = (mstd::MapType<C> && HasNodeKey<C>);
   template<class C>
-  concept OptionalNodeContainerType = (std::is_void_v<C> || (mstd::ContainerType<C> && HasNodeValue<C>));
+  concept OptionalNodeContainerType = (std::is_void_v<C> || NodeContainerType<C>);
   template<class C>
-  concept OptionalNodeSetType = (std::is_void_v<C> || (mstd::SetType<C> && HasNodeValue<C>));
+  concept OptionalNodeSetType = (std::is_void_v<C> || NodeSetType<C>);
   template<class C>
-  concept OptionalNodeMapType = (std::is_void_v<C> || (mstd::MapType<C> && HasNodeKey<C>));
+  concept OptionalNodeMapType = (std::is_void_v<C> || NodeMapType<C>);
+  template<class C>
+  concept OptionalMapsToNode = (std::is_void_v<C> || MapsToNode<C>);
+
   template<class C>
   concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<mstd::mapped_type_of_t<C>, NodeDesc>);
 

@@ -3,120 +3,152 @@
 #pragma once
 
 #include <unordered_map>
-#include "utils/types.hpp"
 #include "utils/set_interface.hpp"
+#include "utils/PTconfig.hpp"
+#include "utils/types.hpp"
+
+#include "common.hpp"
 
 namespace PT{
-  struct MalformedEdgeVec : public std::exception 
-  {
-    const char* what() const throw() {
-      return "error reading edgelist";
-    }
-  };
 
   // ------ WRITE OUTPUT --------
-  template<PhylogenyType _Network>
-  void write_label(std::ostream& os, const NodeDesc x) {
-    if constexpr (_Network::has_node_labels){
-      const auto x_node = _Network::node_of(x);
-      if(!x_node.label().empty()) os << '_' << x_node.label();
-    }
-  }
-
-  template<PhylogenyType _Network>
-  void write_edgelist(std::ostream& os, const _Network& N, const NodeDesc sub_root) {
+  template<PhylogenyType _Network, DataExtracterType Extracter>
+  void write_edgelist(std::ostream& os,
+                      const _Network& N,
+                      const NodeDesc sub_root,
+                      Extracter&& extracter = Extracter())
+  {
     NodeMap<size_t> node_number;
+    // step 1: write all nodes with node-data
+    if constexpr (!Extracter::ignore_node_data) {
+      for(const NodeDesc u: N.nodes()) {
+        std::ostringstream tmp;
+        if constexpr (!Extracter::ignore_node_labels) {
+          const auto& label = extracter(Ex_node_label{}, u);
+          if(!label.empty()) tmp << "\t:" << label;
+        }
+        if constexpr (!Extracter::ignore_node_data) {
+          const auto& node_data = extracter(Ex_node_data{}, u);
+          if(node_data) {
+            if(tmp.str().empty()) tmp << "\t:"; else tmp << ',';
+            tmp << node_data;
+          }
+        }
+        if(!tmp.str().empty())
+          os << node_number.emplace(u, node_number.size()).first->second << tmp.str() <<'\n';
+      }
+    }
+    // step 2: write all edges with their edge-data
     for(const auto uv: N.edges_below_preorder(sub_root)) {
       const NodeDesc u = uv.tail();
       const NodeDesc v = uv.head();
       const auto& u_num = node_number.emplace(u, node_number.size()).first->second;
       const auto& v_num = node_number.emplace(v, node_number.size()).first->second;
-      os << u_num;
-      write_label<_Network>(os, u);
-      os << '\t' << v_num;
-      write_label<_Network>(os, v);
+      os << u_num << '\t' << v_num;
+      if constexpr (!Extracter::ignore_edge_data) {
+        const auto& edge_data = extracter(Ex_edge_data{}, uv);
+        if(edge_data) os << "\t:" << edge_data;
+      }
       os << '\n';
     }
   }
 
   // compute the extended newick string for a network N
-  template<PhylogenyType _Network>
-  void write_edgelist(std::ostream& os, const _Network& N) { write_edgelist(os, N, N.root()); }
+  template<PhylogenyType _Network, class... Args>
+  void write_edgelist(std::ostream& os, const _Network& N, Args&&... args) { write_edgelist(os, N, N.root(), std::forward<Args>(args)...); }
 
 
 
-
-#warning TODO: teach it to parse weighted edges
 
   // ------ READ INPUT --------
-  // read an edgelist
-  template<class EdgeList, class LabelMap>
-  class EdgeVecParser
+  // edgelist format is:
+  // 1. list of nodes with node-data (does not necessarily contain all nodes):
+  //    <node name> [edge data]
+  //    example:
+  //      12 0.1,abcd,-1e12
+  //      13 0.2
+  //      10
+  //      11 0.3
+  //      ...
+  //
+  // 2. list of all edges with edge data:
+  //    <parent> <child> [edge data]
+  //    example:
+  //      5 9 0.1,0.2,100,foo
+  //      5 1 0.31
+  //      0 5 0.4192,bar
+  //      0 9
+  //      0 1
+  template<StrictEdgeEmplacerType Emplacer, bool allow_non_binary = true, bool allow_junctions = true>
+  class EdgeListParser
   {
-    std::istream& edgestream;
-    EdgeList& edges;
-    LabelMap& names;
-    std::unordered_map<std::string, NodeDesc> name_to_node;
-
-    EdgeVecParser();
+    std::istream* edgestream;
+    Emplacer emplacer;
   public:
-    using Edge = typename EdgeList::value_type;
 
-    EdgeVecParser(std::istream& _edgestream, EdgeList& _edges, LabelMap& _names):
-      edgestream(_edgestream),
-      edges(_edges),
-      names(_names),
-      name_to_node()
-    {
-      names.clear();
-      edges.clear();
+    template<class... Args>
+    EdgeListParser(std::istream& _edgestream, Args&&... args):
+      edgestream(&_edgestream),
+      emplacer(std::forward<Args>(args)...)
+    {}
+
+    template<class... Args>
+    NodeDesc make_node(const std::string_view label, const std::string_view name, Args&&... args) {
+      std::cout << "making new node with label '"<<label<<"' and name '"<<name<<"' and "<<sizeof...(Args)<<" further arg(s)\n";
+      const NodeDesc result = emplacer.create_copy_of(name, std::forward<Args>(args)...);
+      emplacer.set_label(result, label);
+      return result;
     }
 
-    NodeDesc get_id(const std::string& name)
-    {
-      auto emp_res = mstd::append(name_to_node, name);
-      if(emp_res.second){
-        const NodeDesc id = NodeDesc(names.size());
-        emp_res.first->second = id;
-        mstd::append(names, id, name);
-        return id;
-      } else return emp_res.first->second;
+    NodeDesc get_id(const std::string& name, std::string_view data = std::string_view{}) {
+      std::cout << "getting id for name "<<name<<" with data '"<<data<<"'\n";
+      if(!data.empty()) {
+        std::string_view label;
+        if(mstd::split_prefix_at_next(data, label, config::EL_delimeters.start_of_node_data)) {
+          return make_node(label, name, data);
+        } else return make_node(data, name);
+      } else return make_node(data, name);
     }
 
     //! read edges and return the number of nodes used by them
-    size_t read_tree()
-    {
-      while(!edgestream.eof()){
-        std::string name;
-        
-        edgestream >> name;
-        const NodeDesc u = get_id(name);
-        if(edgestream.bad() || edgestream.eof() || edgestream.fail() || !std::isblank(edgestream.peek()))
-          throw MalformedEdgeVec();
+    void read_tree() {
+      ssize_t line_no = 0;
+      std::string line, names, data, s1, s2;
 
-        edgestream >> name;
-        const NodeDesc v = get_id(name);
-        if(edgestream.bad() || (!edgestream.eof() && edgestream.fail()) || !std::isspace(edgestream.peek()))
-          throw MalformedEdgeVec();
+      // step 1: read nodes and their node-data
+      while(!edgestream->eof()){
+        std::getline(*edgestream, line); ++line_no;
+        std::istringstream linestream{line};
+        std::getline(linestream, names, config::EL_delimeters.start_of_node_label);
+        std::getline(linestream, data);
+        DEBUG4(
+            if(!data.empty() && (data.back() == 13)) data.pop_back(); // TODO: remove this
+            std::cout << "split line '"<<line.substr(0,line.size()-1)<<"' into names: '"<<names<<"' and data: '"<<data<<"'\n"
+        );
         
-        edges.emplace_back(u, v);
-        while(edgestream.peek() == 10) edgestream.get();
+        std::istringstream namestream{names};
+        namestream >> s1;
+        namestream >> s2;
+        DEBUG4(std::cout << "got names '"<<s1<<"' and '"<<s2<<"'\n");
+
+
+        if(!s2.empty()) {
+          // if s2 is not empty, then the line is an edge declaration, possibly with edge-data
+          emplacer.emplace_edge(s1, s2, data);
+        } else get_id(s1, data); // if s2 is empty, then the line is a node-data declaration for node 's1'
       }
-      return name_to_node.size();
     }
 
+    void parse() { read_tree(); }
   };
 
+  template<EdgeEmplacerType Emplacer>
+  EdgeListParser(std::istream&, Emplacer&&) -> EdgeListParser<std::remove_cvref_t<Emplacer>>;
 
-  template<class EdgeList, class LabelMap>
-  size_t parse_edgelist(std::istream& in, EdgeList& el, LabelMap& names)
-  {
-    return EdgeVecParser<EdgeList, LabelMap>(in, el, names).read_tree();
-  }
-  template<class EdgeList, class LabelMap>
-  size_t parse_edgelist(std::istream& in, EdgeList& el, std::shared_ptr<LabelMap>& names)
-  {
-    return EdgeVecParser<EdgeList, LabelMap>(in, el, *names).read_tree();
+  template<class Network, class First, class... Args>
+  Network parse_edgelist(First&& first, Args&&... args) {
+    using EL_Translation = HashMap<std::string, NodeDesc>;
+    return parse_network<Network, EdgeListParser>(std::forward<First>(first), EL_Translation{}, std::forward<Args>(args)...);
   }
 
 }

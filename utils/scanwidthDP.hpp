@@ -23,7 +23,7 @@ namespace PT {
 
   protected:
     mutable Extension ex;
-    size_t hash_cache = 0;
+    size_t hash_cache;
 
     // copy the other entry's Extension, replacing our own prefix
     // NOTE: only friends can do this since they know what they are doing
@@ -35,15 +35,15 @@ namespace PT {
     void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
     void recompute_hash() { hash_cache = hash(ex); }
 
-    template<NodeIterableType Nodes>
-    _DPEntryLowMem(Nodes&& nodes, const size_t hash_value):
-      ex(std::forward<Nodes>(nodes)), hash_cache(hash_value)
+//    template<NodeIterableType Nodes>
+//    _DPEntryLowMem(Nodes&& nodes, const size_t hash_value):
+//      ex(std::forward<Nodes>(nodes)), hash_cache(hash_value)
     {}
   public:
     using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
     using SWInfo = std::pair<sw_t, DynamicSW>;
 
-    _DPEntryLowMem() = default;
+//    _DPEntryLowMem() = default;
     
     template<NodeIterableType Nodes>
     _DPEntryLowMem(Nodes&& nodes):

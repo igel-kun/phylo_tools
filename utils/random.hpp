@@ -65,7 +65,7 @@ namespace PT{
   template<class Set = std::vector<uint32_t>>
   void draw(const uint32_t k, const uint32_t n, Set& result) {
     if constexpr (mstd::VectorType<Set>) {
-      if(k < config::cardchoose_threshold)
+      if(k < mstd::config::cardchoose_threshold)
         cardchoose(k, n, result);
       else
         fisher_yates_choose(k, n, result);

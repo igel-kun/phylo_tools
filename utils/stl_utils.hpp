@@ -6,6 +6,7 @@
 #include<memory>
 #include<sstream>
 #include<deque>
+#include<variant> // for cout << std::variant
 #include<vector> // appending to vectors
 #include<stack> // deal with container-adaptors not being iterable...
 #include<type_traits> // deal with STL's missing type checks
@@ -25,6 +26,13 @@
 namespace mstd{
 
   // --------------------- FUNDAMENTALS -------------------------------------
+  template<int width> struct _fixed_width_uint {};
+  template<> struct _fixed_width_uint<8> { using type = uint8_t; };
+  template<> struct _fixed_width_uint<16> { using type = uint16_t; };
+  template<> struct _fixed_width_uint<32> { using type = uint32_t; };
+  template<> struct _fixed_width_uint<64> { using type = uint64_t; };
+  template<int width> using fixed_width_uint = typename _fixed_width_uint<width>::type;
+
 
   // interpret pointer as fixed-width array
   template<size_t dim, class T>
@@ -467,6 +475,8 @@ namespace mstd {
   // a functional that ignores everything (and hopefully gets optimized out)
   template<class ReturnType = void>
   struct IgnoreFunction {
+    template<class... Args> IgnoreFunction(Args&&... args) {}
+
     template<class... Args>
     constexpr ReturnType operator()(Args&&... args) const { if constexpr (!std::is_void_v<ReturnType>) return ReturnType{}; };
   };
@@ -527,34 +537,6 @@ namespace mstd {
   void vector_shrink_to_size(V&& vec, const size_t new_size) {
     vec.erase(vec.begin() + new_size, vec.end());
   }
-}
-
-namespace std {
-  // ----------------------- OUTPUT ---------------------------------------
-  template<mstd::IterableType C> requires (!mstd::is_stringlike_v<C>)
-  inline std::ostream& operator<<(std::ostream& os, const C& objs) {
-    os << '[';
-    for(const auto& obj : objs) {
-      using Item = std::remove_cvref_t<decltype(obj)>;
-      if constexpr (mstd::PointerType<Item>) {
-        os << hex << obj << ' ';
-      } else if constexpr (mstd::ArithmeticType<Item>) {
-        os << +obj << ' ';
-      } else os << obj << ' ';
-    }
-    return os << ']';
-  }
-
-  template<class T> std::string to_string(const T& x) { std::stringstream out; out << x; return std::move(out).str(); }
-  template<class T> long to_int(const T& x) { std::stringstream out; out << x; const auto s = std::move(out).str(); return strtol(s.c_str(), nullptr, 10); }
-
-  template <typename A, typename B>
-  std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p) { return os << '('<<p.first<<','<<p.second<<')'; }
-  template <typename A>
-  std::ostream& operator<<(std::ostream& os, const std::reference_wrapper<A>& r) { return os << r.get(); }
-}
-
-namespace mstd {
 
   // --------------------- PAIR OPERATIONS -------------------------------
 
@@ -569,48 +551,82 @@ namespace mstd {
   template<typename A, typename B>
   inline std::pair<B,A> reverse(const std::pair<A,B>& p) { return {p.second, p.first}; }
 
-
-  // ---------------------- BINARY SEARCH -----------------------------------
-
-  //! find a number in a sorted list of numbers between lower_bound and upper_bound
-  //if target is not in c, then return the index of the next larger item in c (or upper_bound if there is no larger item)
-  template<class T, class A>
-  uint32_t binary_search(const std::vector<T, A>& c, const uint32_t target, uint32_t lower_bound, uint32_t upper_bound)
-  {
-    while(lower_bound < upper_bound){
-      const uint32_t middle = (lower_bound + upper_bound) / 2;
-      const auto& c_middle = c[middle];
-      if(c_middle == target) 
-        return middle;
-      else if(c_middle < target)
-        lower_bound = middle + 1;
-      else 
-        upper_bound = middle;
+  // read tuples from Stringlike
+  template<size_t index, class... Ts>
+  void read_tuple(const std::string_view s, std::tuple<Ts...>& t, const char delim = ' ') {
+    if constexpr (index < std::tuple_size_v<std::tuple<Ts...>>) {
+      if(!s.empty()) {
+        const size_t pos = s.find(delim);
+        std::string_view tmp{s.substr(0, pos)};
+        std::istringstream{std::string{tmp}} >> std::get<index>(t);
+#warning "TODO: in C++23, use ispanstream, which can be constructed with a string_view"
+        if(pos != std::string::npos)
+          read_tuple<index + 1>(s.substr(pos + 1), t, delim );
+      }
     }
-    assert(target <= c[lower_bound]);
-    return lower_bound;
   }
-  //! one-bound version of binary search: if only one bound is given, it is interpreted as lower bound
-  template<class T, class A>
-  uint32_t binary_search(const std::vector<T, A>& c, const uint32_t target, uint32_t lower_bound = 0)
-  {
-    return binary_search(c, target, lower_bound, c.size());
+  template<class... Ts>
+  auto read_tuple(const std::string_view s, const char delim = ' ') {
+    std::tuple<Ts...> t;
+    read_tuple<0, Ts...>(s, t, delim);
+    return t;
   }
 
 }
 
 namespace std {
+  // ----------------------- OUTPUT ---------------------------------------
+  template<class First, class... Ts>
+  std::ostream& operator<<(std::ostream& os, const std::variant<First, Ts...>& var) {
+    std::visit([&os](const auto& v) { os << v; }, var);
+    return os;
+  }
+
+  template<mstd::IterableType C> requires (!mstd::is_stringlike_v<C>)
+  inline std::ostream& operator<<(std::ostream& os, const C& objs) {
+    os << '[';
+    for(const auto& obj : objs) {
+      using Item = std::remove_cvref_t<decltype(obj)>;
+      if constexpr (mstd::PointerType<Item>) {
+        os << hex << obj << ' ';
+      } else if constexpr (mstd::ArithmeticType<Item>) {
+        os << +obj << ' ';
+      } else os << obj << ' ';
+    }
+    return os << ']';
+  }
+
+  template<class T> std::string to_string(const T& x) { std::ostringstream out; out << x; return std::move(out).str(); }
+  template<class T> long to_int(const T& x) { return strtol(to_string(x), nullptr, 10); }
+
+  template <typename A, typename B>
+  std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p) { return os << '('<<p.first<<','<<p.second<<')'; }
+  template <typename A>
+  std::ostream& operator<<(std::ostream& os, const std::reference_wrapper<A>& r) { return os << r.get(); }
+
+
   // --------------------- STRINGS & STRING_VIEW ------------------------------
-  std::string operator+(const std::string& s1, const std::string_view s2) { return std::string(s1).append(s2); }
-  std::string operator+(const std::string_view s1, const std::string& s2) { return std::string(s1).append(s2); }
-  std::string operator+(const std::string_view s1, const std::string_view s2) { return std::string(s1).append(s2); }
-  std::string operator+(const char* s1, const std::string_view s2) { return std::string(s1).append(s2); }
-  std::string operator+(const std::string_view s1, const char* s2) { return std::string(s1).append(s2); }
-  std::string operator+(const std::string_view s1, const char s2) { return std::string(s1) += s2; }
-  std::string operator+(const std::string& s1, const char s2) { return std::string(s1) += s2; }
+  size_t length(const std::string& s) { return s.size(); }
+  size_t length(const std::string_view& s) { return s.size(); }
+  size_t length(const char* s) { return std::strlen(s); }
+  size_t length(const char s) { return 1; }
+
+  template<mstd::StringlikeOrChar STR1, mstd::StringlikeOrChar STR2>
+  std::string operator+(const STR1& s1, const STR2& s2) {
+    std::string result;
+    result.reserve(length(s1) + length(s2) + 1);
+    if constexpr (sizeof(STR1) == 1)
+      result.push_back(s1);
+    else result.append(s1);
+    if constexpr (sizeof(STR2) == 1)
+      result.push_back(s2);
+    else result.append(s2);
+    return result;
+  }
+
 
 #if __APPLE__ || (__clang__ && (CLANG_VERSION < 130000))
-  // clang before version 13 doesn't have from_chars, so
+  // clang before version 13 doesn't have from_chars
   // also, apple is, shall we say, less than optimal
 
   // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
@@ -629,15 +645,28 @@ namespace std {
     } else return static_cast<T>(_stoX(s, std::atof));
   }
 
+  template<mstd::ArithmeticType T>
+  T stoX(const std::string_view s, size_t& first_unconverted) {
+    if constexpr (std::is_integral_v<T>) {
+      return static_cast<T>(std::stol(std::string(s), &first_unconverted));
+    } else return static_cast<T>(std::stod(std::string(s), &first_unconverted));
+  }
+
 #else
   // std::string_view conversion
+  template<mstd::ArithmeticType T>
+  T stoX(const std::string_view sv, size_t& first_unconverted) {
+    T result;
+    first_unconverted = std::from_chars(sv.data(), sv.data() + sv.size(), result).ptr - sv.data();
+    return result;
+  }
   template<mstd::ArithmeticType T>
   T stoX(const std::string_view sv) {
     T result;
     std::from_chars(sv.data(), sv.data() + sv.size(), result);
     return result;
   }
- 
+
   //int    stoi(const std::string_view sv) { int result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
   //long   stol(const std::string_view sv) { long result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
   //float  stof(const std::string_view sv) { float result = 0.0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
@@ -649,10 +678,23 @@ namespace std {
   float  stof(const std::string_view s) { return stoX<float>(s); }
   double stod(const std::string_view s) { return stoX<double>(s); }
 
-
 }
 
 namespace mstd {
+  // --------------------- splitting prefixes off string_views ------------------------------
+  
+  auto split_prefix_from(std::string_view& s, const size_t pos) {
+    std::string_view result = s.substr(0, pos);
+    s.remove_prefix(pos + 1);
+    return result;
+  }
+  bool split_prefix_at_next(std::string_view& s, std::string_view& prefix, const auto& delims, bool invert = false) {
+    const size_t pos = invert ? s.find_first_not_of(delims) : s.find_first_of(delims);
+    if(pos != std::string::npos) {
+      prefix = split_prefix_from(s, pos);
+      return true;
+    } else return false;
+  }
 
   // -------------------- ranges --------------------------------
   // this is the biggest sillyness yet: a c++-ranges const filtered-view cannot be iterated-over... why? why? WHY!!!!
@@ -694,11 +736,12 @@ namespace mstd {
 
 
   // functions returning void are treated differently from functions returning anything, even if that anything is then ignored; we unify the two here
-  template<class T, class Else> struct _VoidOr { using type = T; };
-  template<class Else> struct _VoidOr<void, Else> { using type = Else; };
-  template<class T, class Else> using VoidOr = typename _VoidOr<T, Else>::type;
-  template<class T, class Else = uint_fast8_t> using ReturnableType = VoidOr<T, Else>;
+  template<class... T> struct _FirstNonVoid {};
+  template<class T, class... Else> requires (!std::is_void_v<T>) struct _FirstNonVoid<T, Else...> { using type = T; };
+  template<class T, class... Else> requires (std::is_void_v<T>) struct _FirstNonVoid<T, Else...>: public _FirstNonVoid<Else...> {};
+  template<class... T> using FirstNonVoid = _FirstNonVoid<T...>::type;
 
+  template<class T, class Else = uint_fast8_t> using ReturnableType = FirstNonVoid<T, Else>;
 
   // an operator that appends anything to a given container
   template<ContainerType C>
@@ -729,5 +772,16 @@ namespace mstd {
     using type = std::conditional_t<is_basically_arithmetic_v<T>, minus_one<T>, void>;
   };
   template<class T> using default_invalid_t = typename default_invalid<T>::type;
+
+
+
+  // -------------------- variants --------------------------------
+
+  template<class... Args>
+  std::ostream& operator<<(std::ostream& os, const std::variant<Args...>& var) {
+    return os << std::visit([](const auto& x) { std::cout << x; }, var);
+  }
 }
+
+
 

@@ -4,13 +4,19 @@
 #include <string>
 #include <string_view>
 
-namespace mstd{
+#include "iter_factory.hpp"
+
+namespace mstd {
 
   // this iterator 
+  // NOTE: if you use a char[] to store your delimeters, then please make sure it's zero-terminated! (char bla[] = "abc"; will be zero-terminated)
   template<class DelimRef = char>
   class TokenIter {
-    using Delim = std::remove_cvref_t<DelimRef>;
-    static constexpr bool single_delim = std::is_same_v<std::remove_cvref_t<Delim>, char>;
+    // if Delim is basically a char*, then make it a const char* instead
+    using _Delim = std::remove_cvref_t<DelimRef>;
+    using Delim = std::conditional_t<std::is_pointer_v<_Delim> || std::is_array_v<_Delim>,
+                    const std::remove_pointer_t<std::decay_t<_Delim>>*, _Delim>;
+    static constexpr bool single_delim = std::is_same_v<Delim, char>;
 
     std::string_view s;
     Delim delim;
@@ -20,7 +26,7 @@ namespace mstd{
     using reference  = value_type;
     using const_reference = const value_type;
     using pointer    = mstd::pointer_from_reference<reference>;
-   
+  
     TokenIter(const std::string_view input_string, const Delim& delimeter, const size_t _front = 0, const size_t _next = 0):
       s(input_string), delim(delimeter), front(_front), next(_next == 0 ? input_string.find_first_of(delimeter) : _next)
     {}

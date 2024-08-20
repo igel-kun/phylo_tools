@@ -4,61 +4,109 @@
 #include <vector>
 #include <string_view>
 #include <charconv>
-#include "utils/types.hpp"
 
 #include "utils/iter_bitset.hpp"
 #include "utils/set_interface.hpp"
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
 
+#include "utils/types.hpp"
+#include "utils/PTconfig.hpp"
+#include "io/common.hpp"
+
+
+/* Specification
+ * 1. extended newick always ends with ';'
+ * 2. each subtree is (...)[label][hybrid][data], where
+ *    [label] is an optional label that cannot contain any of "#:,();" (f.ex.: arabidopsis from the neighbor's garden)
+ *    [hybrid] is an optional hybrid specifier that must start with '#' and be a single number fitting in 64bit (f.ex.: #H34)
+ *    [data] = [:edge-data][|node-data] where
+ *        each of [:edge-data] and [|node-data] is a string from which edge/node-data can be constructed
+ *            the string must start with ':' (edge-data) or '|' (node-data)
+ *            the strings cannot contain any of ",()" (and "|" for edge-data)
+ *            if you have multiple node/edge data items, I suggest separating the items with ':' and split the string in the constructor of your data class
+ */
+
+
 namespace PT{
-  //! an exception for problems with the input string
-  struct MalformedNewick : public std::exception {
-    const ssize_t pos;
-    const std::string msg;
-
-    MalformedNewick(const std::string_view newick_string, const ssize_t _pos, const std::string _msg = "unknown error"):
-      pos(_pos), msg(_msg + " (position " + std::to_string(_pos) + ")" + DEBUG3(" - relevant substring: "+newick_string.substr(_pos)) + "") {}
-
-    const char* what() const throw() {
-      return msg.c_str();
-    }
-  };
 
   // ------ WRITE OUTPUT --------
   // compute the extended newick string for a subnetwork rooted at sub_root of a network N with retis_seen reticulations considered as treated
-  template<class _Network, class Container = PT::NodeSet>
-  void write_extended_newick(std::ostream& os, const _Network& N, const NodeDesc sub_root, Container&& retis_seen = Container()) {
-    if((N.in_degree(sub_root) <= 1) || !mstd::test(retis_seen, sub_root)){
-      os << '(';
-      bool not_first = false;
-      for(const auto& w: N.children(sub_root)) {
-        if(not_first) not_first = true; else os << ',';
-        write_extended_newick(os, N, w, retis_seen);
+  template<StrictPhylogenyType _Network,
+           DataExtracterType _Extracter = DefaultDataExtracter<_Network>,
+           NodeMapType HybNum = NodeMap<uint32_t>>
+  void write_extended_newick_below(std::ostream& os,
+                             const _Network& N,
+                             const auto sub_root,
+                             _Extracter&& extracter = _Extracter(),
+                             HybNum&& hybrid_number = HybNum())
+  {
+    using Extracter = std::remove_cvref_t<_Extracter>;
+    ssize_t hn = -1;
+    bool register_node = true;
+    if(!N.is_leaf(sub_root)) {
+      if(N.in_degree(sub_root) > 1) {
+        const auto [iter, success] = hybrid_number.try_emplace(sub_root, hybrid_number.size());
+        register_node = success;
+        hn = iter->second;
       }
-      if(!N.is_leaf(sub_root)) os << ')';
+      if(register_node) {
+        os << '(';
+        bool not_first = false;
+        for(const auto& w: N.children(sub_root)) {
+          if(!not_first) not_first = true; else os << ',';
+          write_extended_newick_below(os, N, static_cast<const NodeDesc>(w), extracter, hybrid_number);
+        
+          // first, write the edge-data
+          std::ostringstream data_oss;
+          if constexpr (!Extracter::ignoring_edge_data) {
+            const std::string out = std::to_string(extracter(Ex_edge_data{}, w));
+            if(!out.empty() || config::write_empty_edge_data)
+              data_oss << config::NW_delimeters.start_of_edge_data << out;
+          }
+          // then write the node data
+          if constexpr (!Extracter::ignoring_node_data) {
+            const std::string out = std::to_string(extracter(Ex_node_data{}, sub_root));
+            if(!out.empty() || config::write_empty_node_data)
+              data_oss << config::NW_delimeters.start_of_node_data << out;
+          }
+          os << data_oss.str();
+        }
+        if(!N.is_leaf(sub_root)) os << ')';
+      }
     }
-    if constexpr (_Network::Node::has_label) os << N.label(sub_root);
-    if(N.in_degree(sub_root) > 1) {
-      os << "#H" + std::to_string(sub_root);
-      mstd::append(retis_seen, sub_root);
-    }
+    if constexpr (!Extracter::ignoring_node_labels)
+      if(register_node) // if we already printed the label in the past, there is no reason to reprint it
+        os << extracter(Ex_node_label{}, sub_root);
+    if(hn != -1) os << config::NW_start_of_hybrid_spec << 'H' << hn;
   }
 
   // write the extended newick string for a network N onto a stream
-  template<class _Network>
-  void write_extended_newick(std::ostream& os, const _Network& N) { write_extended_newick(os, N, N.root()) += ';'; }
+  template<StrictPhylogenyType _Network, DataExtracterType Extracter = DefaultDataExtracter<_Network>>
+  void write_extended_newick(std::ostream& os, const _Network& N, Extracter&& extracter = Extracter()) {
+    write_extended_newick_below(os, N, N.root(), std::forward<Extracter>(extracter));
+
+    // finally, write the node-data of the root
+    if constexpr (!Extracter::ignoring_node_data) {
+      auto node_data = extracter(Ex_node_data{}, N.root());
+      if(node_data) {
+        os << config::NW_delimeters.start_of_node_data << node_data;
+      }
+    }
+    os << ';';
+  }
 
   // compute the extended newick string for a network N (only the part below sub_root)
-  template<class _Network>
-  std::string get_extended_newick(const _Network& N, const NodeDesc sub_root) {
+  template<StrictPhylogenyType _Network, class... Args>
+  std::string get_extended_newick(const _Network& N, const NodeDesc sub_root, Args&&... args) {
     std::stringstream os;
-    write_extended_newick(os, N, sub_root);
+    write_extended_newick_below(os, N, sub_root, std::forward<Args>(args)...);
+    os << ';';
     return os.str();
   }
 
   // compute the extended newick string for a network N
-  template<class _Network>
+  template<StrictPhylogenyType _Network>
   std::string get_extended_newick(const _Network& N) { return get_extended_newick(N, N.root()); }
 
 
@@ -87,14 +135,13 @@ namespace PT{
   //NOTE: node numbers will be consecutive (0 = root) and follow a pre-order numbering of a spanning-tree
   //      this allows you to use RONetworks and anything needing pre-order numbers
   //NOTE: output is done via a functor with 'void operator()(NodeDesc, NodeDesc, std::string&&)' - edge data has to be parsed from the 3rd argument
-#warning TODO: turn this into an iterator in order to avoid carrying around edgesets!
-  template<class NodeCreationFunctor, class EdgeCreationFunctor, bool allow_non_binary = true, bool allow_junctions = true>
+  template<StrictEdgeEmplacerType Emplacer, bool allow_non_binary = true, bool allow_junctions = true>
   class NewickParser {
     // a HybridInfo is a name of a hybrid together with it's hybrid-index
     using HybridIndex = uint32_t;
     using HybridInfo = std::pair<std::string_view, HybridIndex>;
 
-    const std::string_view newick_string;
+    std::string newick_string;
 
     // map a hybrid-index to a node index (and in-degree) so that we can find the corresponding hybrid when reading a hybrid number
     std::unordered_map<HybridIndex, NodeDescAndDegree<allow_non_binary>> hybrids;
@@ -103,34 +150,30 @@ namespace PT{
     ssize_t back;
 
     bool parsed = false;
-
-    [[no_unique_address]] NodeCreationFunctor create_node;
-    [[no_unique_address]] EdgeCreationFunctor create_edge;
-
+    Emplacer emplacer;
   public:
-
-    NewickParser(const std::string& _newick_string,
-                 NodeCreationFunctor& _create_node,
-                 EdgeCreationFunctor& _create_edge):
-      newick_string(_newick_string),
-      back(_newick_string.length() - 1),
-      create_node(_create_node),
-      create_edge(_create_edge)
-    {}
-
+  
+    template<class... Args>
+    NewickParser(std::istream& _newick_stream, Args&&... args):
+      emplacer(std::forward<Args>(args)...)
+    {
+      std::getline(_newick_stream, newick_string);
+      back = newick_string.length() - 1;
+    }
+    
     bool is_tree() const { return hybrids.empty(); }
-    NodeDesc parse() { return read_tree(); }
-
+    NodeSingleton parse() { return read_tree(); }
+    
     // a tree is a branch followed by a semicolon
     NodeDesc read_tree() {
       NodeDesc root = NoNode;
       skip_whitespaces();
       if(back >= 0) {
-        if(newick_string.at(back) == ';')
+        if(newick_string.at(back) == ';') {
           --back;
-        else throw MalformedNewick(newick_string, back, "expected ';' but got \"" + newick_string.substr(back) + "\"\n");
+        } else throw MalformedInput(newick_string, back, "expected ';' but got \"" + newick_string.substr(back) + "\"\n");
         DEBUG5(std::cout << "parsing \"" << newick_string << "\""<<std::endl);
-        root = read_subtree();
+        root = read_subtree().first;
       }
       parsed = true;
       DEBUG3(std::cout << "done parsing, root is "<<root<<"\n");
@@ -142,54 +185,61 @@ namespace PT{
     void skip_whitespaces() { while((back >= 0) && std::isspace(newick_string.at(back))) --back; }
 
     // check if this is a hybrid and return name and hybrid number
-    HybridInfo get_hybrid_info(const std::string_view name) {
-      HybridInfo result = {{}, UINT32_MAX};
-      const size_t sharp = name.rfind('#');
-      if(sharp != std::string::npos){ // if name contains '#', then it's a hybrid
-        result.first = name.substr(0, sharp); // the part before the '#' is the name of that hybrid
-        const size_t hybrid_num_start = name.find_first_of("0123456789", sharp); // the part after the '#' is it's hybrid index, used to reference it later
-        if(hybrid_num_start != std::string::npos) {
-          std::from_chars(name.data() + hybrid_num_start, name.data() + name.size(), result.second);
-          //const std::string hybrid_type = name.substr(sharp + 1, hybrid_num_start - sharp - 1);
-        } else throw MalformedNewick(newick_string, back, "found '#' but no hybrid number: \"" + name + "\"\n");
-      }
-      return result;
+    uint32_t get_hybrid_num(std::string_view s) {
+      if(!s.empty()) {
+        size_t first_unconverted;
+        if(s[0] == 'H') s.remove_prefix(1);
+        uint32_t hn = std::stoX<uint32_t>(s, first_unconverted);
+        DEBUG5(std::cout << "converted '"<<s<<"' into "<<hn<< " with first unconverted char at "<<first_unconverted<<'\n');
+        if(first_unconverted != s.size())
+          throw MalformedInput(newick_string, back, "found '#' but no hybrid number: \"" + s + "\"\n");
+        return hn;
+      } else return UINT_MAX;
     }
 
     // a subtree is a leaf or an internal vertex
-    NodeDesc read_subtree() {
+    // return the created node as well as a string_view to its incoming edge-data
+    std::pair<NodeDesc, std::string_view> read_subtree() {
       NodeDesc root;
-      skip_whitespaces();
-      
-      // read the name of the root, any non-trailing whitespaces are considered part of the name
-      std::string_view root_name = read_name();
+      std::array<std::string_view, 3> data; //  label, hybrid_num, edge_data;
+      std::string_view root_data = read_annotation();
 
-      // find if root is a hybrid and, if so, it's number
-      HybridInfo hyb_info = get_hybrid_info(root_name);
-      
-      if(hyb_info.second != UINT32_MAX){
-        const auto [iter, success] = hybrids.try_emplace(hyb_info.second, NoNode, 0);
+      DEBUG5(std::cout << "splitting root_data '"<<root_data<<"'\n");
+      // split node-label from hybrid-specifier
+      int i = 0;
+      if(mstd::split_prefix_at_next(root_data, data[i], config::NW_start_of_hybrid_spec)) i = 1;
+      if(mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_edge_data)) i = 2;
+      if(!mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_node_data)) std::swap(data[2], root_data);
+
+      DEBUG4(std::cout << "split data into label:'"<<data[0]<<"' hybrid_num:'"<<data[1]<<"' edge_data:'"<<data[2]<<"' node_data:'"<<root_data<<"'\n");
+      if(!data[1].empty()) {
+        // if root is a hybrid, register it
+        const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1]), NoNode, 0);
         auto& stored = iter->second;
-        if(!success){
+        if(!success) {
           // if root is a known hybrid, then lookup its index in 'hybrids' and increase registered in-degree
           // we've already seen a hybrid with this index - so replace 'root' by the other node's index
           // increase the registered in-degree of 'root'
           if constexpr (!allow_non_binary)
             if(++stored.get_degree() == 3)
-              throw MalformedNewick(newick_string, back, "found non-binary node, which has been explicitly disallowed");
-        } else stored.get_node() = create_node(hyb_info.first); // if root was an unknown hybrid, then register it
-        root = stored.get_node();
+              throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+          root = stored.get_node();
+        } else root = stored.get_node() = emplacer.create_copy_of_raw(root_data); // if root was an unknown hybrid, then register it
+        
+        // allow giving the hybrid a label at any time it is referenced
+        if(!data[0].empty()) 
+          emplacer.set_label(root, data[0]);
        
         // if the subtree dangling from root is non-empty, then recurse
         if((back > 0) && newick_string.at(back) == ')') read_internal<true>(root);
       } else {
         // if root is not a hybrid, then just register it
-        root = create_node(root_name);
+        DEBUG5(std::cout << root_data << " is not a hybrid, so create it with data '"<<root_data<<"'\n");
+        root = emplacer.create_copy_of_raw(root_data);
+        if(!data[0].empty()) emplacer.set_label(root, data[0]);
         if((back > 0) && newick_string.at(back) == ')') read_internal<false>(root);
       }
-
-      skip_whitespaces();
-      return root;
+      return {root, data[2]};
     }
 
     // an internal vertex is ( + branchlist + )
@@ -198,177 +248,66 @@ namespace PT{
       assert(back >= 2);
       
       if(newick_string.at(back) == ')') --back;
-      else throw MalformedNewick(newick_string, back, std::string_view("expected ')' but got '") + newick_string.at(back) + "'");
+      else throw MalformedInput(newick_string, back, std::string_view("expected ')' but got '") + newick_string.at(back) + "'");
 
       read_branchset<root_is_hybrid>(root);
       
       if(newick_string.at(back) == '(') --back;
-      else throw MalformedNewick(newick_string, back, std::string_view("expected '(' but got '") + newick_string.at(back) + "'");
+      else throw MalformedInput(newick_string, back, std::string_view("expected '(' but got '") + newick_string.at(back) + "'");
     }
 
     // a branchset is a comma-separated list of branches
     template<bool root_is_hybrid = false>
     void read_branchset(const NodeDesc root) {
-      std::unordered_set<NodeDesc> children_seen;
+      NodeSet children_seen;
       children_seen.insert(read_branch(root));
       while(newick_string.at(back) == ',') {
         if constexpr (root_is_hybrid){
           if constexpr (!allow_non_binary)
-            throw MalformedNewick(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+            throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
           if constexpr (!allow_junctions)
-            throw MalformedNewick(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
+            throw MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
         }
         --back;
         const NodeDesc new_child = read_branch(root);
         if(!children_seen.emplace(new_child).second)
-          throw MalformedNewick(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
-        if(back < 0) throw MalformedNewick(newick_string, back, "unmatched ')'");
+          throw MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
+        if(back < 0) throw MalformedInput(newick_string, back, "unmatched ')'");
       }
       if constexpr (!allow_non_binary)
         if(children_seen.size() == 3)
-          throw MalformedNewick(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+          throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
     }
 
     // a branch is a subtree + a length
     // return the head of the read branch
     NodeDesc read_branch(const NodeDesc root) {
-      std::string_view data = read_data();
-      const NodeDesc child = read_subtree();
-      create_edge(root, child, data);
+      const auto [child, edge_data] = read_subtree();
+      emplacer.emplace_edge_raw(root, child, edge_data);
       return child;
     }
 
-    // read edge data as string
-    std::string_view read_data() {
+    // read all annotations (label, hybrid, edge-data, node-data) as string_view
+    auto read_annotation() {
       std::string_view result;
-      const size_t sep = newick_string.find_last_of(",():", back);
-      if((sep != std::string::npos) && (newick_string.at(sep) == ':')){
-        result = newick_string.substr(sep + 1, back - sep);
-        back = sep - 1;
+      const size_t sep = newick_string.find_last_of(",()", back);
+      if(sep != std::string::npos) {
+        result = std::string_view{newick_string}.substr(sep + 1, back - sep);
+        back = sep;
       }
       return result;
     }
 
-
-    // read the root's name
-    std::string_view read_name() {
-      size_t next = newick_string.find_last_of("(),", back);
-      // if we cannot find any of "()," before back, then the name stars at newick_string[0]
-      if(next == std::string::npos) next = 0;
-      const size_t length = back - next;
-      back = next;
-      return newick_string.substr(next + 1, length);
-    }
-
   };
 
-
-  using NodeFromString = std::function<NodeDesc(const std::string_view)>;
-  template<StrictPhylogenyType Phylo>
-  using AdjacencyFromString = std::function<typename Phylo::Adjacency(const NodeDesc d, const std::string_view)>;
-  template<StrictPhylogenyType Phylo>
-  using AdjacencyFromTwoNodesAndString = std::function<typename Phylo::Adjacency(const NodeDesc u, const NodeDesc v, const std::string_view)>;
-
-  template<class F>
-  concept NodeFromStringFunction = std::invocable<F, const std::string_view>;
-  template<class F>
-  concept AdjacencyFromStringFunction = std::invocable<F, const NodeDesc, const std::string_view>;
-  template<class F>
-  concept AdjacencyFromTwoNodesAndStringFunction = std::invocable<F, const NodeDesc, const NodeDesc, const std::string_view>;
-
-  template<StrictPhylogenyType Phylo>
-  struct DefaultNodeCreation {
-    using Node = typename Phylo::Node;
-
-    NodeDesc operator()(std::string_view s) const {
-      // if the network's nodes have data, then s is first passed into the node-creation (which may modify s)
-      NodeDesc result;
-      if constexpr (Phylo::has_node_data && std::is_constructible_v<typename Phylo::NodeData, std::string_view>)
-        result = Phylo::create_node(s);
-      else result = Phylo::create_node();
-      // if the network's nodes have labels, then whatever remains of s is assigned as label
-      if constexpr (Phylo::has_node_labels) Phylo::node_of(result).label() = s;
-      return result;
-    }
-  };
-  template<StrictPhylogenyType Phylo>
-  struct DefaultAdjCreation {
-    using Adjacency = typename Phylo::Adjacency;
-
-    auto operator()(const NodeDesc d, std::string_view s) const {
-      if constexpr (Phylo::has_edge_data && std::is_constructible_v<typename Phylo::EdgeData, std::string_view>) {
-        return Adjacency(d, s);
-      } else return d;
-    }
-  };
-  template<StrictPhylogenyType Phylo>
-  struct DefaultAdjTwoNodesCreation {
-    using Adjacency = typename Phylo::Adjacency;
-
-    auto operator()(const NodeDesc u, const NodeDesc v, std::string_view s) const {
-      if constexpr (Phylo::has_edge_data && std::is_constructible_v<typename Phylo::EdgeData, std::string_view>) {
-        return Adjacency(v, s);
-      } else return v;
-    }
-  };
-
-  // define const references to these global functions
-  template<PhylogenyType Phylo>
-  using DefaultNodeCreationRef = const DefaultNodeCreation<Phylo>&;
-  template<PhylogenyType Phylo>
-  using DefaultAdjCreationRef = const DefaultAdjCreation<Phylo>&;
-  template<PhylogenyType Phylo>
-  using DefaultAdjTwoNodesCreationRef = const DefaultAdjTwoNodesCreation<Phylo>&;
-
-  // build phylogeny from a string and, optionally, a node- and edge- creation functions (adjacency creation with 1 node!)
-  template<PhylogenyType Phylo,
-           NodeFromStringFunction CreateNode = DefaultNodeCreation<Phylo>,
-           AdjacencyFromStringFunction CreateAdjacency = DefaultAdjCreation<Phylo>>
-  Phylo parse_newick(const std::string& in,
-                     CreateNode&& _create_node = CreateNode(),
-                     CreateAdjacency&& _create_adjacency = CreateAdjacency())
-  {
-    Phylo N; // this allows NRVO
-    const auto create_node = [&](const std::string_view data){ N.count_node(); return _create_node(data); };
-    const auto create_edge = [&](const NodeDesc u, const NodeDesc v, const std::string_view data){ N.add_edge(u, _create_adjacency(v, data)); };
-    const NodeDesc root = NewickParser(in, create_node, create_edge).parse();
-    N.mark_root(root);
-    return N;
-  }
-
-  // build phylogeny from a string and, optionally, a node- and edge- creation functions (adjacency creation with 2 nodes!)
-  template<PhylogenyType Phylo,
-           NodeFromStringFunction CreateNode,
-           AdjacencyFromTwoNodesAndStringFunction CreateAdjacency>
-  Phylo parse_newick(const std::string& in,
-                     CreateNode&& _create_node,
-                     CreateAdjacency&& _create_adjacency)
-  {
-    Phylo N; // this allows NRVO
-    const auto create_node = [&](const std::string_view data){ N.count_node(); return _create_node(data); };
-    const auto create_edge = [&](const NodeDesc u, const NodeDesc v, const std::string_view data){ N.add_edge(u, _create_adjacency(u, v, data)); };
-    const NodeDesc root = NewickParser(in, create_node, create_edge).parse();
-    N.mark_root(root);
-    return N;
-  }
-
-  // build a phylogeny from a string and, possibly, an edge-creation function, but neither given phylogeny nor node-creation function
-  template<PhylogenyType Phylo, AdjacencyFromTwoNodesAndStringFunction CreateAdjacency>
-  Phylo parse_newick(const std::string& in, CreateAdjacency&& create_adjacency) {
-    return parse_newick<Phylo>(in, DefaultNodeCreation<Phylo>(), std::forward<CreateAdjacency>(create_adjacency));
-  }
-   // build a phylogeny from a string and, possibly, an edge-creation function, but neither given phylogeny nor node-creation function
-  template<PhylogenyType Phylo, AdjacencyFromStringFunction CreateAdjacency>
-  Phylo parse_newick(const std::string& in, CreateAdjacency&& create_adjacency) {
-    return parse_newick<Phylo>(in, DefaultNodeCreation<Phylo>(), std::forward<CreateAdjacency>(create_adjacency));
-  }
+  template<EdgeEmplacerType Emplacer>
+  NewickParser(std::istream&, Emplacer&&) -> NewickParser<std::remove_cvref_t<Emplacer>>;
 
   template<class Network, class... Args>
-  Network parse_newick(std::istream& in, Args&&... args) {
-    std::string in_line;
-    std::getline(in, in_line);
-    return parse_newick<Network>(in_line, std::forward<Args>(args)...);
+  Network parse_newick(Args&&... args) {
+    return parse_network<Network, NewickParser>(std::forward<Args>(args)...);
   }
+
 }
 
 

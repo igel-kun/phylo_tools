@@ -3,6 +3,7 @@
 
 #include "union_find.hpp"
 #include "types.hpp"
+#include "except.hpp"
 #include "network.hpp"
 #include "edge_emplacement.hpp"
 #include "static_capacity_vector.hpp"
@@ -338,13 +339,13 @@ namespace PT{
               DEBUG4(std::cout << "cDAG after component update:\n";comp_DAG.print_subtree_with_data();)
             } else {
               if constexpr (v_may_become_comp_root) {
-                throw Unimplemented("v becoming the component root");
+                throw mstd::Unimplemented("v becoming the component root");
 #warning "TODO: write me"
               }
             }
           } else {
             if constexpr (v_may_become_comp_root) {
-                throw Unimplemented("v becoming the component root");
+                throw mstd::Unimplemented("v becoming the component root");
 #warning "TODO: write me"
             } else {
               const NodeDesc v_parent_rt = comp_root_of(v_parent);

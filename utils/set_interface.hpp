@@ -203,15 +203,24 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     return y;
   }
 
-  template<OptionalContainerType Target = void, class Source, class _Target = VoidOr<Target, std::unordered_set<value_type_of_t<Source>>>>
-    requires (!SetType<Source>)
+  template<OptionalContainerType Target = void, class Source, class _Target = FirstNonVoid<Target, std::unordered_set<value_type_of_t<Source>>>>
+    requires (!std::is_same_v<std::remove_cvref_t<Source>, std::remove_cvref_t<_Target>>)
   _Target to_set(Source&& source) {
     _Target result;
-    return copy(source, result);
+    for(auto&& x: source) {
+      if constexpr (std::is_rvalue_reference_v<Source&&>) {
+        append(result, std::move(x));
+      } else {
+        append(result, x);
+      }
+    }
+    return result;
   }
-  // default to no-op for SetTypes
-  template<SetType Source>
-  decltype(auto) to_set(Source&& source) { return std::forward<Source>(source); }
+
+  // default to no-op for Source == Target
+  template<OptionalContainerType Target = void, class Source, class _Target = FirstNonVoid<Target, std::unordered_set<value_type_of_t<Source>>>>
+    requires (std::is_same_v<std::remove_cvref_t<Source>, std::remove_cvref_t<_Target>>)
+  _Target to_set(Source&& source) { return std::forward<Source>(source); }
 
   //! a hash computation for a set, XORing its members
   template<IterableType C, class Val = value_type_of_t<C>> requires std::is_convertible_v<value_type_of_t<C>, Val>
@@ -464,6 +473,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   };
 
+  template<ContainerType Container, IterableType T>
+  Container to_container(T&& x) {
+    Container result;
+    append(result, std::forward<T>(x));
+    return result;
+  }
 }
 
 

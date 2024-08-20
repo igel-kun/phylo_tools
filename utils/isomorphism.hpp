@@ -81,8 +81,7 @@ namespace PT{
 
 
 
-    inline void mark_update(const NodeDesc x, const size_t nr_poss)
-    {
+    void mark_update(const NodeDesc x, const size_t nr_poss) {
       if(nr_poss == 1) ++nr_fix;
       if(update_set.set(x))
         update_order.emplace(nr_poss, x);
