@@ -1,6 +1,7 @@
 
 #include "utils/charp.hpp"
 #include "utils/token.hpp"
+#include "utils/generic_data.hpp"
 
 #include "io/newick.hpp"
 #include "io/edgelist.hpp"
@@ -124,70 +125,10 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
 
 // =============== READING Networks =====================
 
-using StringNoLength = mstd::charp<0>;
-//using StringNoLength = std::string;
-using floatptr_t = std::conditional_t<sizeof(double) <= sizeof(void*), double, float>;
-using DataUnion = std::variant<intptr_t, floatptr_t, StringNoLength>;
 
-static_assert(mstd::Stringlike<std::string_view>);
-
-struct DataVec: public std::vector<DataUnion> {
-  using Parent = std::vector<DataUnion>;
-  
-  DataVec() = default;
-
-  template<class First, class... Args> requires (!mstd::Stringlike<First>)
-  DataVec(First&& first, Args&&... args): Parent(std::forward<First>(first), std::forward<Args>(args)...) {}
-  template<class First, class... Args> requires (mstd::Stringlike<First>)
-  DataVec(First&& first, Args&&... args): Parent(std::forward<Args>(args)...)
-  {
-    DEBUG4(std::cout << "making generic data by splitting the string '"<<first<<"'\n");
-    for(const auto x: mstd::tokenize(std::forward<First>(first), config::data_delimeters)) {
-      DEBUG4(std::cout << "data: '"<<x<<"'\n");
-      Parent::emplace_back(read_data(x));
-    }
-    Parent::shrink_to_fit();
-  }
-
-  template<class T, class... Args>
-  bool try_reading(const std::string_view s, std::variant<Args...>& target) {
-    if(!s.empty()) {
-      size_t first_unconverted;
-      target = stoX<T>(s, first_unconverted);
-      return first_unconverted == s.size();
-    } else return false;
-  }
-
-  auto read_data(const std::string_view s) {
-    DataUnion result;
-    if(!try_reading<intptr_t>(s, result))
-      if(!try_reading<floatptr_t>(s, result))
-        result = StringNoLength(s);
-    return result;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const DataVec& dv) {
-    bool has_non_empty = false;
-    std::ostringstream accu;
-    for(auto& x: dv) {
-      accu << x << ':';
-      if(!std::holds_alternative<StringNoLength>(x) || (std::get<StringNoLength>(x).size() != 0))
-        has_non_empty = true;
-    }
-    if(has_non_empty) {
-      std::string_view accu_buffer{accu.rdbuf()->view()};
-      accu_buffer.remove_suffix(1); // remove last comma
-      os << accu_buffer;
-    }
-    return os;
-  }
-};
-
-
-using MyNetwork = DefaultLabeledNetwork<DataVec, DataVec>;
+using MyNetwork = DefaultLabeledNetwork<DefaultDataVec, DefaultDataVec>;
 using MyEdge = typename MyNetwork::Edge;
-static_assert(std::is_default_constructible_v<std::shared_ptr<DataVec>>);
-static_assert(std::is_default_constructible_v<Adjacency<DataVec>>);
+static_assert(std::is_default_constructible_v<Adjacency<DefaultDataVec>>);
 static_assert(std::is_default_constructible_v<MyEdge>);
 
 auto read_network(const std::string& filename) {
@@ -217,9 +158,15 @@ struct generic_dist {
   generic_dist(First&& first, Args&&... args): dist{std::forward<First>(first), std::forward<Args>(args)...} {}
 
   template<mstd::TupleType Tup>
-  generic_dist(Tup&& t): generic_dist(std::make_from_tuple<generic_dist>(std::forward<Tup>(t))) {}
+  generic_dist(Tup&& t): generic_dist(std::make_from_tuple<generic_dist>(std::forward<Tup>(t))) 
+  {
+    std::cout << "made dist with args "<<std::get<0>(t) << "\n";
+  }
   
-  generic_dist(const std::string_view s): generic_dist(mstd::read_tuple<DistConstructArgs...>(s, ':')) {}
+  generic_dist(const std::string_view s): generic_dist(mstd::read_tuple<DistConstructArgs...>(s, ':')) 
+  {
+    std::cout << "made dist from string "<<s<<"\n";
+  }
   
   auto operator()() {
     if constexpr (rounding)
@@ -238,9 +185,14 @@ using geometric_rng = generic_dist<std::geometric_distribution<int64_t>, false, 
 
 
 template<StrictPhylogenyType Phylo, class T>
-void append_data(Phylo& N, const NodeDesc u, T&& data) { append(N[u].data(), std::forward<T>(data)); }
+void append_data(Phylo& N, const NodeDesc u, T&& data) {
+  std::cout << "making data from '"<<data<<"'\n";
+  N[u].data().emplace_items(std::piecewise_construct_t{}, std::forward<T>(data));
+}
 template<StrictPhylogenyType Phylo, class T>
-void append_data(Phylo& N, const typename Phylo::Edge& uv, T&& data) { append(uv.data(), std::forward<T>(data)); }
+void append_data(Phylo& N, const typename Phylo::Edge& uv, T&& data) {
+  uv.data().emplace_items(std::piecewise_construct_t{}, std::forward<T>(data));
+}
 
 template<DataTarget target, StrictPhylogenyType Phylo>
 auto get_targets(Phylo& N) {
@@ -253,12 +205,15 @@ auto get_targets(Phylo& N) {
 
 template<DataTarget target, StrictPhylogenyType Phylo, class Distribution> requires (!mstd::Stringlike<Distribution>)
 void add_random_data(Phylo& N, Distribution&& dist) {
+  std::cout << "some samples: "<<dist()<<'\t'<<dist()<<'\t'<<dist()<<'\n';
   for(auto x: get_targets<target>(N))
     append_data(N, x, dist());
 }
 
 template<DataTarget target, template<class> class Distribution, StrictPhylogenyType Phylo>
 void add_random_data(Phylo& N, char val_select, std::string_view s) {
+  if(std::string{"0123456789."}.find(s[0]) == std::string::npos)
+    throw MalformedInput{std::string{"Cound not parse distribution information from '"} + s + "'"};
   switch(val_select) {
     case 'I': add_random_data<target>(N, Distribution<int64_t>(s)); break;
     case 'D': add_random_data<target>(N, Distribution<double>(s)); break;
@@ -268,6 +223,7 @@ void add_random_data(Phylo& N, char val_select, std::string_view s) {
 
 template<DataTarget target, StrictPhylogenyType Phylo>
 void add_random_data(Phylo& N, std::string_view s) {
+  std::cout << "adding data described by '"<<s<<"'\n";
   if(s.size() < 2) throw MalformedInput{std::string{"cannot interpret data '"} + s + "'. Please see --help or -h for help"};
   switch(s[0]) {
     case 'U': add_random_data<target, uniform_rng>(N, s[1], s.substr(2)); break;
@@ -275,8 +231,9 @@ void add_random_data(Phylo& N, std::string_view s) {
     case 'B': add_random_data<target, binomial_rng>(N, s[1], s.substr(2));; break;
     case 'G': add_random_data<target, geometric_rng>(N, s[1], s.substr(2)); break;
     case 'S': {
-                const auto [x, y, k] = mstd::read_tuple<char, char, int>(s.substr(1));
+                const auto [x, y, k] = mstd::read_tuple<char, char, int>(s.substr(1), ':');
                 uniform_rng<char> dist(x,y);
+                std::cout << "generating "<<k<<" chars between "<<x << " & " << y <<" -- like this: "<<dist()<<dist()<<dist()<<"\n";
                 std::string accu;
                 for(auto node_or_edge: get_targets<target>(N)) {
                   accu.clear();
@@ -377,13 +334,14 @@ int main(const int argc, const char** argv) {
     generate_labels(leaf_labels_only_tag{}, N);
 
   if(mstd::test(options, "-v"))
-    std::cout << N << std::endl;
+    std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
+
+  std::cout << "root data: '"<<N[N.root()].data()<<"'\n";
 
   std::string output_string = mstd::test(options, "-el") ? get_edgelist(N) : get_extended_newick(N);
   if(!options[""].empty()){
     std::ofstream out(options[""][0], (mstd::test(options,"-a") ? std::ios::app : std::ios::out));
     out << output_string << '\n';
   } else std::cout << output_string << '\n';
-
 }
 

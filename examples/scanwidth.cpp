@@ -180,7 +180,7 @@ int main(const int argc, const char** argv) {
   std::cout << "reading network...\n";
   MyNetwork N(read_network(std::ifstream(options[""][0])));
   if(mstd::test(options, "-v"))
-    std::cout << "N: " << std::endl << N << std::endl;
+    std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
 
   if(N.has_cycle()) {
     std::cerr << "input not a network (has a directed cycle)!\n";

@@ -44,12 +44,12 @@ namespace mstd {
   template<class T> requires std::ranges::range<T>  struct _iterator_of<T> {
     using type = decltype(std::ranges::begin(std::declval<T&>()));
   };
-  template<class T> requires (!std::ranges::range<T> && std::is_const_v<T> && has_const_iterator<T>)  struct _iterator_of<T> {
-    using type = typename T::const_iterator;
-  };
-  template<class T> requires (!std::ranges::range<T> && has_iterator<T> && (!std::is_const_v<T> || !has_const_iterator<T>))  struct _iterator_of<T> {
-    using type = typename T::iterator;
-  };
+  template<class T>
+    requires (!std::ranges::range<T> && std::is_const_v<T> && has_const_iterator<T>)
+  struct _iterator_of<T> { using type = typename T::const_iterator; };
+  template<class T>
+    requires (!std::ranges::range<T> && has_iterator<T> && (!std::is_const_v<T> || !has_const_iterator<T>))
+  struct _iterator_of<T> { using type = typename T::iterator; };
   template<class T> struct _iterator_of<T*> { using type = T*; };
   template<class T, std::size_t N> struct _iterator_of<T (&)[N]> { using type = T*; };
 
@@ -76,13 +76,6 @@ namespace mstd {
   template<class T, class I = size_t>
   concept StrictIndexibleType = IndexibleType<T, I>  && !std::is_reference_v<T>;
 
-  template<class T>
-  concept HasIterTraits = requires { typename std::iterator_traits<T>::reference; };
-
-  template<class Iter, class T>
-  concept dereferencable_to = requires(Iter it) {
-    { *it } -> std::convertible_to<T>;
-  };
 
   template<class T> 
   concept IterableType = requires(T a) {
@@ -107,17 +100,28 @@ namespace mstd {
     { a.empty() }   -> std::same_as<bool>;
 	};
 
-  template<class T> struct iterator_of { using type = T; };
-  template<IterableType T> struct iterator_of<T>: public _iterator_of<T> {};
-  template<class T> using iterator_of_t = typename iterator_of<std::remove_reference_t<T>>::type;
-  template<class T> using reverse_iterator_of_t = std::reverse_iterator<iterator_of_t<T>>;
-  template<class T> using const_iterator_of_t = typename iterator_of<const std::remove_reference_t<T>>::type;
-
   template<IterableType T> using BeginType = decltype(std::begin(std::declval<T>()));
   template<IterableType T> using EndType = decltype(std::end(std::declval<T>()));
   // a concept for iterable types in which begin() and end() have the same type (this is apparently needed for some STL stuff like std::vector::insert)
   template<class T>
   concept IterableTypeWithSameIterators = IterableType<T> && std::is_same_v<BeginType<T>, EndType<T>>;
+
+
+  template<class T> struct iterator_of { using type = T; };
+  template<IterableType T> struct iterator_of<T>: public _iterator_of<T> {};
+  template<class T> using iterator_of_t = typename iterator_of<std::remove_reference_t<T>>::type;
+  template<class T> using reverse_iterator_of_t = std::reverse_iterator<iterator_of_t<T>>;
+  template<class T> using const_iterator_of_t = iterator_of_t<const std::remove_reference_t<T>>;
+
+
+  template<class T>
+  concept HasIterTraits = requires { typename std::iterator_traits<iterator_of_t<T>>::reference; };
+
+  template<class Iter, class T>
+  concept dereferencable_to = requires(Iter it) {
+    { *it } -> std::convertible_to<T>;
+  };
+
 
   // NOTE: 
   // we do not need to store the end-iterator if the iterator type has "bool is_valid() const"

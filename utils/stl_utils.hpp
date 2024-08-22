@@ -33,6 +33,17 @@ namespace mstd{
   template<> struct _fixed_width_uint<64> { using type = uint64_t; };
   template<int width> using fixed_width_uint = typename _fixed_width_uint<width>::type;
 
+  template<int width>
+  constexpr auto _fixed_width_float_helper() {
+    if constexpr (width == sizeof(float)) return float{};
+    if constexpr (width == sizeof(double)) return double{};
+    if constexpr (width == sizeof(long double)) return static_cast<long double>(0);
+    assert("no floating point of given width available on this platform" && false);
+  }
+  template<int width>
+  using _fixed_width_float = decltype(_fixed_width_float_helper<width>());
+
+  using floatptr_t = _fixed_width_float<sizeof(char*)>;
 
   // interpret pointer as fixed-width array
   template<size_t dim, class T>
@@ -287,14 +298,17 @@ namespace mstd{
 
   // not all std::iterator_traits of the STL provide "const_pointer" and "const_reference", so I'll do that for them
   template<typename T> requires HasIterTraits<T>
-  struct iterator_traits: public std::iterator_traits<T> {
+  struct _iterator_traits: public std::iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just std::remove_reference_t from it
     using value_type = std::conditional_t<!std::is_pointer_v<T>,
                                           typename std::iterator_traits<T>::value_type,
                                           std::remove_reference_t<typename std::iterator_traits<T>::reference>>;
     using const_reference = const_reference_of_t<T>;
     using const_pointer   = const_pointer_of_t<T>;
+    using iterator = T;
   };
+  template<typename T>
+  using iterator_traits = _iterator_traits<iterator_of_t<T>>;
 
   template<MapType M> using key_type_of_t = typename std::remove_reference_t<M>::key_type;
   template<MapType M> using mapped_type_of_t = typename std::remove_reference_t<M>::mapped_type;
@@ -631,25 +645,24 @@ namespace std {
 
   // note: a string_view is not guaranteed to be zero-terminated and, if it's not, we _have_to_ copy it :(
   template<class Converter>
-  auto _stoX(const std::string_view s, Converter&& convert = Converter()) {
+  auto _stoX(const std::string_view s, size_t& first_unconverted, Converter&& convert = Converter()) {
     const char* const c_str = s.data();
-    if(*(c_str + s.size()) != 0) {
+    if(c_str[s.size()] != 0) {
       const std::string my_s(s);
-      return convert(my_s.c_str());
-    } else return convert(c_str);
+      return convert(my_s.c_str(), &first_unconverted);
+    } else return convert(c_str, &first_unconverted);
   }
-  template<mstd::ArithmeticType T>
-  T stoX(const std::string_view s) {
-    if constexpr (std::is_integral_v<T>) {
-      return static_cast<T>(_stoX(s, std::atoll));
-    } else return static_cast<T>(_stoX(s, std::atof));
-  }
-
   template<mstd::ArithmeticType T>
   T stoX(const std::string_view s, size_t& first_unconverted) {
     if constexpr (std::is_integral_v<T>) {
-      return static_cast<T>(std::stol(std::string(s), &first_unconverted));
-    } else return static_cast<T>(std::stod(std::string(s), &first_unconverted));
+      if constexpr (is_signed_v<T>) {
+        return static_cast<T>(_stoX(s, first_unconverted, std::stoll));
+      } else return static_cast<T>(_stoX(s, first_unconverted, std::stoull));
+    } else if constexpr (sizeof(T) == sizeof(float)) {
+      return static_cast<T>(_stoX(s, first_unconverted, std::stof));
+    } else if constexpr (sizeof(T) == sizeof(double)) {
+      return static_cast<T>(_stoX(s, first_unconverted, std::stod));
+    } else return static_cast<T>(_stoX(s, first_unconverted, std::stold));
   }
 
 #else
@@ -660,18 +673,18 @@ namespace std {
     first_unconverted = std::from_chars(sv.data(), sv.data() + sv.size(), result).ptr - sv.data();
     return result;
   }
-  template<mstd::ArithmeticType T>
-  T stoX(const std::string_view sv) {
-    T result;
-    std::from_chars(sv.data(), sv.data() + sv.size(), result);
-    return result;
-  }
 
   //int    stoi(const std::string_view sv) { int result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
   //long   stol(const std::string_view sv) { long result = 0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
   //float  stof(const std::string_view sv) { float result = 0.0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
   //double stod(const std::string_view sv) { double result = 0.0; std::from_chars(sv.data(), sv.data() + sv.size(), result); return result; }
 #endif
+
+  template<mstd::ArithmeticType T>
+  T stoX(const std::string_view s) {
+    size_t ignore_me;
+    return stoX<T>(s, ignore_me);
+  }
 
   int    stoi(const std::string_view s) { return stoX<int>(s); }
   long   stol(const std::string_view s) { return stoX<long>(s); }
@@ -688,7 +701,7 @@ namespace mstd {
     s.remove_prefix(pos + 1);
     return result;
   }
-  bool split_prefix_at_next(std::string_view& s, std::string_view& prefix, const auto& delims, bool invert = false) {
+  bool split_prefix_at_next(std::string_view& s, auto& prefix, const auto& delims, bool invert = false) {
     const size_t pos = invert ? s.find_first_not_of(delims) : s.find_first_of(delims);
     if(pos != std::string::npos) {
       prefix = split_prefix_from(s, pos);

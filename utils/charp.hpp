@@ -19,7 +19,7 @@ namespace mstd {
     static constexpr int reserved_bytes = _size - small_bytes;
     static constexpr int reserved_bits = CHAR_BIT * small_bytes;
 
-    char* _data;
+    char* _data = 0;
     char internal[_size];
 
     bool valid_ptr() const {
@@ -57,6 +57,9 @@ namespace mstd {
         std::copy_n(s.data(), s.size(), internal);
       }
     }
+    charp(const std::string& s):
+      charp(std::string_view{s})
+    {}
 
     charp(charp&& other): _data{other._data} { other._data = 0; }
 
@@ -82,17 +85,13 @@ namespace mstd {
 
     bool empty() const { return _data == 0; }
 
-    void swap(charp& other) { std::swap(_data, other._data); } // this should work also when we're using the unique_ptr
+    void swap(charp& other) { std::swap(_data, other._data); }
 
     charp& operator=(const charp& other) { charp tmp(other); swap(tmp); return *this; }
     charp& operator=(charp&&) = default;
 
     size_t size() const { return length(); }
     size_t length() const { return std::string_view(*this).size(); }
-//      if(valid_ptr()) {
-//        return std::strlen(_data.get());
-//      } else return std::strlen(internal);
-//    }
 
     explicit operator std::string_view() const {
       if(valid_ptr()) {
@@ -107,6 +106,16 @@ namespace mstd {
 
   template<int small_bytes>
   auto& operator<<(std::ostream& os, const charp<small_bytes>& c) {
+//    std::cout << '(' << c.valid_ptr() << " @"<<static_cast<void*>(c._data)<<")\n";
+//    return os << '(' << c.valid_ptr() << " @"<<static_cast<void*>(c._data)<<')';
     return os << std::string_view(c);
   }
+
+
+  // 8-bytes (on x64) string with no small-string optimization
+  using StringNoLength = mstd::charp<0>;
+
+  // 8-bytes (on x64) string with small string optimization (default: 6 bytes SSO, 2 bytes reserved for SSO detection)
+  template<int small_bytes = -2>
+  using StringNoLengthSSO = mstd::charp<small_bytes>;
 }

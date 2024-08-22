@@ -26,6 +26,9 @@ namespace PT {
     };
     char data_delimeters[] = ":,;";
 
+    // if this is set to true, then generic_data will be printed even if all items produce the empty string when printed
+    bool print_empty_generic_data = false;
+
     // newick needs an extra hybrid specifier
     char NW_start_of_hybrid_spec = '#';
 }}

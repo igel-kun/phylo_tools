@@ -199,9 +199,9 @@ namespace PT{
 
     // a subtree is a leaf or an internal vertex
     // return the created node as well as a string_view to its incoming edge-data
-    std::pair<NodeDesc, std::string_view> read_subtree() {
+    std::pair<NodeDesc, std::optional<std::string_view>> read_subtree() {
       NodeDesc root;
-      std::array<std::string_view, 3> data; //  label, hybrid_num, edge_data;
+      std::array<std::optional<std::string_view>, 4> data; //  label, hybrid_num, edge_data, node_data
       std::string_view root_data = read_annotation();
 
       DEBUG5(std::cout << "splitting root_data '"<<root_data<<"'\n");
@@ -209,12 +209,15 @@ namespace PT{
       int i = 0;
       if(mstd::split_prefix_at_next(root_data, data[i], config::NW_start_of_hybrid_spec)) i = 1;
       if(mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_edge_data)) i = 2;
-      if(not mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_node_data)) std::swap(data[2], root_data);
+      if(mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_node_data)) {
+        data[3] = root_data;
+      } else data[2] = root_data;
 
-      DEBUG4(std::cout << "split data into label:'"<<data[0]<<"' hybrid_num:'"<<data[1]<<"' edge_data:'"<<data[2]<<"' node_data:'"<<root_data<<"'\n");
-      if(not data[1].empty()) {
+      DEBUG4(std::cout << "split data into label:'"<<data[0].value_or("")<<"' hybrid_num:'"<<data[1].value_or("")<<"' edge_data:'"<<data[2].value_or("")<<"' node_data:'"<<data[3].value_or("")<<"'\n");
+      if(data[1].has_value()) {
+        assert(!data[1]->empty());
         // if root is a hybrid, register it
-        const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1]), NoNode, 0);
+        const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1].value()), NoNode, 0);
         auto& stored = iter->second;
         if(not success) {
           // if root is a known hybrid, then lookup its index in 'hybrids' and increase registered in-degree
@@ -224,19 +227,23 @@ namespace PT{
             if(++stored.get_degree() == 3)
               throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
           root = stored.get_node();
-        } else root = stored.get_node() = emplacer.create_copy_of_raw(root_data); // if root was an unknown hybrid, then register it
+        } else if(data[3].has_value()) { // if root was an unknown hybrid, then register it
+          root = stored.get_node() = emplacer.create_copy_of_raw(data[3].value());
+        } else root = stored.get_node() = emplacer.create_copy_of_raw();
         
         // allow giving the hybrid a label at any time it is referenced
-        if(not data[0].empty()) 
-          emplacer.set_label(root, data[0]);
+        if(data[0].has_value())
+          emplacer.set_label(root, data[0].value());
        
         // if the subtree dangling from root is non-empty, then recurse
         if((back > 0) && newick_string.at(back) == ')') read_internal<true>(root);
       } else {
         // if root is not a hybrid, then just register it
-        DEBUG5(std::cout << root_data << " is not a hybrid, so create it with data '"<<root_data<<"'\n");
-        root = emplacer.create_copy_of_raw(root_data);
-        if(not data[0].empty()) emplacer.set_label(root, data[0]);
+        DEBUG5(std::cout << " it's not a hybrid, so create it with data '"<<data[3].value_or("")<<"'\n");
+        if(data[3].has_value()) {
+          root = emplacer.create_copy_of_raw(data[3].value());
+        } else root = emplacer.create_copy_of_raw();
+        if(data[0].has_value()) emplacer.set_label(root, data[0].value());
         if((back > 0) && newick_string.at(back) == ')') read_internal<false>(root);
       }
       return {root, data[2]};
@@ -283,7 +290,9 @@ namespace PT{
     // return the head of the read branch
     NodeDesc read_branch(const NodeDesc root) {
       const auto [child, edge_data] = read_subtree();
-      emplacer.emplace_edge_raw(root, child, edge_data);
+      if(edge_data.has_value()) {
+        emplacer.emplace_edge_raw(root, child, edge_data.value());
+      } else emplacer.emplace_edge_raw(root, child);
       return child;
     }
 
