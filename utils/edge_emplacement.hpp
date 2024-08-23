@@ -21,12 +21,14 @@ namespace PT {
     using StrictTranslation = std::remove_reference_t<OldToNewTranslation>;
 
     static constexpr bool track_roots = _track_roots;
-    TargetPhylo* N;
+    TargetPhylo* N = nullptr;
     OldToNewTranslation old_to_new;
+
 
     template<class... Args>
     EdgeEmplacementHelper(TargetPhylo& _N, Args&&... args): N(&_N), old_to_new(std::forward<Args>(args)...) {}
 
+    EdgeEmplacementHelper() = default;
     EdgeEmplacementHelper(const EdgeEmplacementHelper&) = default;
     EdgeEmplacementHelper(EdgeEmplacementHelper&&) = default;
 
@@ -41,10 +43,13 @@ namespace PT {
 
     template<class... Args>
     NodeDesc create_node(Args&&... args) {
-      N->count_node();
-      const NodeDesc v = N->create_node(std::forward<Args>(args)...);
-      if constexpr (track_roots) mstd::append(root_candidates(), v);
-      return v;
+      if constexpr ((not TargetPhylo::has_node_data) || (std::is_constructible_v<typename TargetPhylo::NodeData, Args&&...>)) {
+        N->count_node();
+        const NodeDesc v = N->create_node(std::forward<Args>(args)...);
+        if constexpr (track_roots)
+          mstd::append(root_candidates(), v);
+        return v;
+      } else throw mstd::MalformedInput{"cannot construct node-data with provided parameters"};
     }
 
     void set_label(const NodeDesc u, auto&& label) {
@@ -55,9 +60,11 @@ namespace PT {
 
     template<class... Args>
     void add_an_edge(const NodeDesc u, const NodeDesc v, Args&&... args) {
-      if constexpr (track_roots)
-        mstd::erase(root_candidates(), v); 
-      N->add_edge(u,v, std::forward<Args>(args)...);
+      if constexpr ((not TargetPhylo::has_edge_data) || (std::is_constructible_v<typename TargetPhylo::EdgeData, Args&&...>)) {
+        if constexpr (track_roots)
+          mstd::erase(root_candidates(), v); 
+        N->add_edge(u,v, std::forward<Args>(args)...);
+      } else throw mstd::MalformedInput{"cannot construct edge-data with provided parameters"};
     }
    
 
@@ -261,21 +268,30 @@ namespace PT {
           make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
     }
 
-    template<StrictPhylogenyType TargetPhylo, class T, class... Args> requires (!MapsToNode<T>)
+    // allow giving a custom emplacement helper
+    // NOTE: we will overwrite the Network* inside the helper with a pointer to the correct network
+    template<StrictPhylogenyType TargetPhylo, EmplacementHelperType Helper, class... Args>
+    static auto make_emplacer(TargetPhylo& N, Helper&& helper, Args&&... args) {
+      using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
+      helper.N = &N; // set the network of the helper
+      return EdgeEmplacer<Helper, Extracter>(
+          std::forward<Helper>(helper),
+          make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
+    }
+
+    template<StrictPhylogenyType TargetPhylo, class T, class... Args> requires (!MapsToNode<T> && !EmplacementHelperType<T>)
     static auto make_emplacer(TargetPhylo& N, T&& t, Args&&... args) {
       using Helper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, NodeTranslation>;
       using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<T>(t), std::forward<Args>(args)...));
       return EdgeEmplacer<Helper, Extracter>(
-          Helper(N),
+          Helper{N},
           make_data_extracter<SourcePhylo>(std::forward<T>(t), std::forward<Args>(args)...));
     }
     template<StrictPhylogenyType TargetPhylo>
     static auto make_emplacer(TargetPhylo& N) {
       using Helper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, NodeTranslation>;
       using Extracter = decltype(make_data_extracter<SourcePhylo>());
-      return EdgeEmplacer<Helper, Extracter>(
-          Helper(N),
-          Extracter());
+      return EdgeEmplacer<Helper, Extracter>(Helper{N}, Extracter{});
     }
   };
 

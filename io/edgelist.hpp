@@ -9,6 +9,7 @@
 #include "utils/set_interface.hpp"
 #include "utils/PTconfig.hpp"
 #include "utils/types.hpp"
+#include "utils/except.hpp"
 
 #include "common.hpp"
 

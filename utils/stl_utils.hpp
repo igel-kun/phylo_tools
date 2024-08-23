@@ -3,6 +3,8 @@
 
 #include<cassert>
 #include<climits>
+#include<cstring>
+
 #include<memory>
 #include<sstream>
 #include<deque>
@@ -10,8 +12,8 @@
 #include<vector> // appending to vectors
 #include<stack> // deal with container-adaptors not being iterable...
 #include<type_traits> // deal with STL's missing type checks
-#include<algorithm> // deal with STL's sort problems
 #include<functional>
+#include<algorithm> // deal with STL's sort problems
 
 #if __clang__ && (CLANG_VERSION < 150000)
 #   include<cstdlib> // for strtof

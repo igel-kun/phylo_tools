@@ -9,6 +9,7 @@
 #include "utils/set_interface.hpp"
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
+#include "utils/except.hpp"
 
 #include "utils/types.hpp"
 #include "utils/PTconfig.hpp"
@@ -171,7 +172,7 @@ namespace PT{
       if(back >= 0) {
         if(newick_string.at(back) == ';') {
           --back;
-        } else throw MalformedInput(newick_string, back, "expected ';' but got \"" + newick_string.substr(back) + "\"\n");
+        } else throw mstd::MalformedInput(newick_string, back, "expected ';' but got \"" + newick_string.substr(back) + "\"\n");
         DEBUG5(std::cout << "parsing \"" << newick_string << "\""<<std::endl);
         root = read_subtree().first;
       }
@@ -192,7 +193,7 @@ namespace PT{
         uint32_t hn = std::stoX<uint32_t>(s, first_unconverted);
         DEBUG5(std::cout << "converted '"<<s<<"' into "<<hn<< " with first unconverted char at "<<first_unconverted<<'\n');
         if(first_unconverted != s.size())
-          throw MalformedInput(newick_string, back, "found '#' but no hybrid number: \"" + s + "\"\n");
+          throw mstd::MalformedInput(newick_string, back, "found '#' but no hybrid number: \"" + s + "\"\n");
         return hn;
       } else return UINT_MAX;
     }
@@ -225,7 +226,7 @@ namespace PT{
           // increase the registered in-degree of 'root'
           if constexpr (not allow_non_binary)
             if(++stored.get_degree() == 3)
-              throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+              throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
           root = stored.get_node();
         } else if(data[3].has_value()) { // if root was an unknown hybrid, then register it
           root = stored.get_node() = emplacer.create_copy_of_raw(data[3].value());
@@ -255,12 +256,12 @@ namespace PT{
       assert(back >= 2);
       
       if(newick_string.at(back) == ')') --back;
-      else throw MalformedInput(newick_string, back, std::string_view("expected ')' but got '") + newick_string.at(back) + "'");
+      else throw mstd::MalformedInput(newick_string, back, std::string_view("expected ')' but got '") + newick_string.at(back) + "'");
 
       read_branchset<root_is_hybrid>(root);
       
       if(newick_string.at(back) == '(') --back;
-      else throw MalformedInput(newick_string, back, std::string_view("expected '(' but got '") + newick_string.at(back) + "'");
+      else throw mstd::MalformedInput(newick_string, back, std::string_view("expected '(' but got '") + newick_string.at(back) + "'");
     }
 
     // a branchset is a comma-separated list of branches
@@ -271,19 +272,19 @@ namespace PT{
       while(newick_string.at(back) == ',') {
         if constexpr (root_is_hybrid){
           if constexpr (not allow_non_binary)
-            throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+            throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
           if constexpr (not allow_junctions)
-            throw MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
+            throw mstd::MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
         }
         --back;
         const NodeDesc new_child = read_branch(root);
         if(not children_seen.emplace(new_child).second)
-          throw MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
-        if(back < 0) throw MalformedInput(newick_string, back, "unmatched ')'");
+          throw mstd::MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
+        if(back < 0) throw mstd::MalformedInput(newick_string, back, "unmatched ')'");
       }
       if constexpr (not allow_non_binary)
         if(children_seen.size() == 3)
-          throw MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+          throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
     }
 
     // a branch is a subtree + a length

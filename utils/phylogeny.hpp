@@ -293,6 +293,7 @@ namespace PT {
       }
       return {*iter, success};
     }
+    /*
     template<AdjacencyType Adj, DataExtracterType DataMaker>
     std::pair<Adjacency, bool> add_edge(const NodeDesc u, Adj&& v, DataMaker&& data_maker) {
       using StrictDataMaker = std::remove_reference_t<DataMaker>;
@@ -300,6 +301,7 @@ namespace PT {
         return add_edge(u, std::forward<Adj>(v), data_maker.get_edge_data(u, v));
       else return add_edge(u, std::forward<Adj>(v));
     }
+    */
 
     // remove an edge, updating edge numbers but not roots
     bool remove_edge_no_cleanup(const NodeDesc u, const NodeDesc v) {

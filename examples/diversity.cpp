@@ -98,15 +98,22 @@ NameVec parse_leaves(const std::string_view in) {
   return result;
 }
 
+// overwrite the emplacement-helper set_label function to store the Label-->NodeDesc mapping in name_to_node
+struct MyHelper: public EdgeEmplacementHelper<true, MyNetwork> {
+  using Parent = EdgeEmplacementHelper<true, MyNetwork>;
+  using Parent::Parent;
+
+  template<class Label>
+  void set_label(const NodeDesc u, Label&& label) {
+    name_to_node.emplace(label, u);
+    Parent::set_label(u, std::forward<Label>(label));
+  }
+};
+
 MyNetwork read_network(const std::string& in) {
   try{
     std::ifstream in_stream{std::string{in}};
-    // use the node-creation functor to store the Label-->NodeDesc mapping in name_to_node
-    return parse_newick<MyNetwork>(in_stream,
-                                    [&](const std::string_view s){
-                                      const NodeDesc x = MyNetwork::create_node(std::piecewise_construct_t{}, std::tuple{s});
-                                      if(!s.empty()) name_to_node.emplace(s, x);
-                                      return x; });
+    return parse_newick<MyNetwork>(in_stream, MyHelper{});
   } catch(const std::exception& err){
     std::cerr << "could not read a network from "<<in<<":\n"<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
