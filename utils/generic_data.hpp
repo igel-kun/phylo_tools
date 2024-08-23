@@ -53,13 +53,13 @@ namespace PT {
     
     template<class Last, class... Args>
     void emplace_items(std::piecewise_construct_t, Args&&... args, Last&& last) {
-      std::cout << "adding to data of length "<<Parent::size()<<'\n';
+      DEBUG5(std::cout << "adding to data of length "<<Parent::size()<<'\n');
       emplace_items(std::piecewise_construct_t{}, std::forward<Args>(args)...);
       emplace_item(std::piecewise_construct_t{}, std::forward<Last>(last));
     }
 
     decltype(auto) emplace_item(const std::string_view s) {
-      std::cout << "adding to data of length "<<Parent::size()<<'\n';
+      DEBUG5(std::cout << "adding to data of length "<<Parent::size()<<'\n');
       Data result;
       if constexpr (std::is_constructible_v<Data, uint64_t>) {
         if(try_reading<uint64_t>(s, result))

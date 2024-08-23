@@ -130,14 +130,24 @@ namespace PT{
   //NOTE: the item following/preceeding the forbidden item is twice as likely to be picked...
   template<mstd::IterableType Container>
   auto get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size) {
-    assert((container_size >= 2) || (_except != std::begin(c)));
-    auto result = std::begin(std::forward<Container>(c));
-    std::advance(result, throw_die(container_size - 1));
-    // if we hit _except, then take the next item
-    if(result == _except) ++result;
-    // if _except was the last item and we hit it, then take the item before _except
-    if(result == std::end(c)) result = std::next(_except, -1);
-    return result;
+    if((container_size >= 2) || (_except != std::begin(c))) {
+      auto result = std::begin(std::forward<Container>(c));
+      const size_t dist = throw_die(container_size - 1);
+      if(dist > 0) {
+        std::advance(result, dist - 1);
+        const auto old_result = result++;
+        // if we hit _except, then take the next item
+        if(result == _except) ++result;
+        // if _except was the last item and we hit it, then take the item before _except
+        if(result == std::end(c)) {
+          return old_result;
+        } else return result;
+      } else {
+        if(result == _except) ++result;
+        assert(result != std::end(c));
+        return result;
+      }
+    } else throw std::logic_error{"no choosable item in container"};
   }
 
   template<mstd::IterableTypeWithSize Container>

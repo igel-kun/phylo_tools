@@ -159,14 +159,10 @@ struct generic_dist {
 
   template<mstd::TupleType Tup>
   generic_dist(Tup&& t): generic_dist(std::make_from_tuple<generic_dist>(std::forward<Tup>(t))) 
-  {
-    std::cout << "made dist with args "<<std::get<0>(t) << "\n";
-  }
+  {}
   
   generic_dist(const std::string_view s): generic_dist(mstd::read_tuple<DistConstructArgs...>(s, ':')) 
-  {
-    std::cout << "made dist from string "<<s<<"\n";
-  }
+  {}
   
   auto operator()() {
     if constexpr (rounding)
@@ -186,7 +182,6 @@ using geometric_rng = generic_dist<std::geometric_distribution<int64_t>, false, 
 
 template<StrictPhylogenyType Phylo, class T>
 void append_data(Phylo& N, const NodeDesc u, T&& data) {
-  std::cout << "making data from '"<<data<<"'\n";
   N[u].data().emplace_items(std::piecewise_construct_t{}, std::forward<T>(data));
 }
 template<StrictPhylogenyType Phylo, class T>
@@ -205,7 +200,6 @@ auto get_targets(Phylo& N) {
 
 template<DataTarget target, StrictPhylogenyType Phylo, class Distribution> requires (!mstd::Stringlike<Distribution>)
 void add_random_data(Phylo& N, Distribution&& dist) {
-  std::cout << "some samples: "<<dist()<<'\t'<<dist()<<'\t'<<dist()<<'\n';
   for(auto x: get_targets<target>(N))
     append_data(N, x, dist());
 }
@@ -223,7 +217,7 @@ void add_random_data(Phylo& N, char val_select, std::string_view s) {
 
 template<DataTarget target, StrictPhylogenyType Phylo>
 void add_random_data(Phylo& N, std::string_view s) {
-  std::cout << "adding data described by '"<<s<<"'\n";
+  DEBUG4(std::cout << "adding data described by '"<<s<<"'\n");
   if(s.size() < 2) throw MalformedInput{std::string{"cannot interpret data '"} + s + "'. Please see --help or -h for help"};
   switch(s[0]) {
     case 'U': add_random_data<target, uniform_rng>(N, s[1], s.substr(2)); break;
@@ -335,8 +329,6 @@ int main(const int argc, const char** argv) {
 
   if(mstd::test(options, "-v"))
     std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
-
-  std::cout << "root data: '"<<N[N.root()].data()<<"'\n";
 
   std::string output_string = mstd::test(options, "-el") ? get_edgelist(N) : get_extended_newick(N);
   if(!options[""].empty()){
