@@ -15,7 +15,7 @@ namespace mstd {
     using Parent::get_end;
 
     bool empty() const { return begin() == end(); }
-    size_t size() const { return std::distance(begin(), end()); }
+    size_t size() const { return end() - begin(); }
 
     Iterator begin() const & { return get_iter(); }
     Iterator begin() & { return get_iter(); }

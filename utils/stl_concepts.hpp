@@ -7,7 +7,10 @@
 
 namespace mstd {
 
-  // NOTE: my concepts do not differentiate between T and T&. For example ContainerType<T> is true for T = std::vector<int>&. This is so you can write "ContainerType C" and use C as universal reference
+  // NOTE: my concepts do not differentiate between T and T&. For example ContainerType<T> is true for T = std::vector<int>&.
+  //        This is so you can write "ContainerType C" and use C as universal reference
+
+  template<class T, class ... U> concept IsAnyOf = (std::same_as<T, U> || ...);
 
   // std::is_arithmetic is false for pointers.... why?
   template<class T> constexpr bool is_really_arithmetic_v = std::is_arithmetic_v<T> || std::is_pointer_v<T>;
@@ -16,6 +19,7 @@ namespace mstd {
   // std::weakly_incrementable has a whole sack full of other iterator-related requirements like default-constructibility and difference_type...
   template<class T> concept really_pre_incrementable = requires(T t){++t;};
   template<class T> concept really_post_incrementable = requires(T t){t++;};
+  template<class T> concept really_int_incrementable = requires(T t, int x){t += x;};
 
   // containers can be output to std::cout in the form [a b c ], unless they are strings or char* or string_view or....
 	template<class T> constexpr bool is_stringlike_v = false;
@@ -60,9 +64,18 @@ namespace mstd {
   template<class T> concept PointerType = std::is_pointer_v<std::remove_cvref_t<T>>;
 
   template<class T>
-  concept VectorType = std::is_convertible_v<std::remove_cvref_t<T>, std::vector<typename std::remove_reference_t<T>::value_type, typename std::remove_reference_t<T>::allocator_type>>;
+  concept HasAllocator = requires (T t) { typename T::allocator_type; };
+
   template<class T>
-  concept StrictVectorType = (VectorType<T> && !std::is_reference_v<T>);
+  constexpr bool is_vector_v = std::is_convertible_v<T, std::vector<typename T::value_type, typename T::allocator_type>>;
+  template<class T> requires (!HasAllocator<T>)
+  constexpr bool is_vector_v<T> = false;
+
+
+  template<class T>
+  concept StrictVectorType = is_vector_v<T>;
+  template<class T>
+  concept VectorType = StrictVectorType<std::remove_cvref_t<T>>;
 
   template<class T>
   concept VectorOrStringType = VectorType<T> || std::is_same_v<std::remove_cvref_t<T>, std::string>;

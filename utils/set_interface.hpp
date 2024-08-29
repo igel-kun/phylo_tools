@@ -260,7 +260,9 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       return c.erase(key);
     else if constexpr (std::is_same_v<std::remove_cvref_t<Key>, const_iterator_of_t<C>>)
       return c.erase(key);
-    else if constexpr (VectorType<C>) { // erasing keys usually returns the number of keys removed, so we need to massage vector::erase a little
+    else if constexpr (SetType<C>) {
+      return c.erase(key);
+    } else if constexpr (VectorType<C>) { // erasing keys usually returns the number of keys removed, so we need to massage vector::erase a little
       const auto iter = std::remove(c.begin(), c.end(), key);
       const auto result = std::distance(iter, c.end());
       c.erase(iter, c.end());

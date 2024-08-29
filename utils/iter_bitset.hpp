@@ -50,7 +50,7 @@ namespace mstd {
     using iterator = bitset_iterator<bucket_map>;
     using const_iterator = iterator;
   protected:
-    size_t num_bits;
+    size_t _capacity = 0;
     size_t _count = 0;
     bucket_map storage;
 
@@ -85,7 +85,7 @@ namespace mstd {
   public:
 
     iterable_bitset(const size_t _num_bits, const bool _set_all):
-      num_bits(_num_bits), storage()
+      _capacity(_num_bits), storage()
     {
       if(_set_all) set_all();
     }
@@ -115,20 +115,21 @@ namespace mstd {
     iterable_bitset& operator=(const iterable_bitset& bs) = default;
 
     const bucket_map& data() const { return storage; }
+    void emplace_back(const bool bit) { if(bit) emplace(capacity()); else ++_capacity; }
     std::pair<iterator,bool> emplace(const value_type x) { const bool res = set(x); return {find(x), res}; }
     std::pair<iterator,bool> insert(const value_type x) { return emplace(x); }
     bool erase(const value_type x) { return clear(x); }
     bool unset(const value_type x) { return clear(x); }
     bool set(const value_type x, const bool value) { if(value) return set(x); else return clear(x); }
     void invert() { flip_all(); }
-    size_t capacity() const { return num_bits; }
+    size_t capacity() const { return _capacity; }
     size_t count() const { return _count; }    
     bool count(const value_type x) const { return test(x); }
     bool contains(const value_type x) const { return test(x); }
     size_t size() const { return count(); }
     bool empty() const { return _count == 0; }
     value_type front() const { return *begin(); }
-    bool full() const { return num_bits == _count; }
+    bool full() const { return _capacity == _count; }
 
     bool test(const value_type x) const {
       const auto it = storage.find(bucket_of(x));
@@ -147,13 +148,13 @@ namespace mstd {
         if(bucket & bit_set) return false; else bucket |= bit_set;
       }
       ++_count;
-      if(num_bits <= x) num_bits = x + 1;
+      if(_capacity <= x) _capacity = x + 1;
       return true;
     }
 
     // clear a bit and return whether the size changed (that is, if it was set before)
     bool clear(const value_type x) {
-      if(x < num_bits){
+      if(x < _capacity){
         const bucket_iter it = storage.find(bucket_of(x));
         if(it != storage.end()){
           bucket_type& buffer = (*it).second;
@@ -171,7 +172,7 @@ namespace mstd {
 
     // flip a bit & return whether it is now set
     bool flip(const value_type x) {
-      if(x < num_bits){
+      if(x < _capacity){
         bucket_type& buffer = storage[bucket_of(x)];
         bucket_type bit_set = (1ul << pos_of(x));
         
@@ -183,10 +184,10 @@ namespace mstd {
       } else return set(x);
     }
 
-    // set all num_bits bits of the set: 0...num_bits-1
+    // set all _capacity bits of the set: 0..._capacity-1
     void set_all() {
-      _count = num_bits;
-      size_t bits = num_bits;
+      _count = _capacity;
+      size_t bits = _capacity;
       size_t i = 0;
       while(bits > num_bits_in_bucket){
         storage[i++] = full_bucket;
@@ -197,8 +198,8 @@ namespace mstd {
     }
 
     void flip_all() {
-      _count = num_bits - _count;
-      size_t bits = num_bits;
+      _count = _capacity - _count;
+      size_t bits = _capacity;
       size_t i = 0;
       while(bits > num_bits_in_bucket){
         bucket_type& buffer = storage[i];
@@ -407,6 +408,25 @@ namespace mstd {
       _count = 0;
     }
 
+    size_t set_capacity(const size_t new_capacity) {
+      if(new_capacity < _capacity) {
+        for(auto it = storage.begin(); it != storage.end();) {
+          auto [index, bucket] = *it;
+          auto [target_i, target_pos] = bucket_and_pos_of(new_capacity);
+          if((target_i < index) || ((target_i == index) && (target_pos == 0))) {
+            _count -= NUM_ONES_INL(bucket);
+            it = storage.erase(it);
+          } else if(target_i == index) {
+            assert(target_pos != 0);
+            const auto mask = full_bucket << target_pos;
+            _count -= NUM_ONES_INL(bucket & mask);
+            bucket &= ~mask;
+          }
+        }
+      }
+      _capacity = new_capacity;
+    }
+
     unordered_bitset& operator=(const ordered_bitset& bs);
 
     friend class ordered_bitset;
@@ -416,9 +436,9 @@ namespace mstd {
   // ------------------ vector-based bitset ----------------------------
 
 
-  class ordered_bitset: public iterable_bitset<iter_bitset_default_bucket_map>
+  class ordered_bitset: public iterable_bitset<mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>>
   {
-    using Parent = iterable_bitset<iter_bitset_default_bucket_map>;
+    using Parent = iterable_bitset<mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>>;
     using Parent::bucket_of;
     using Parent::pos_of;
     using Parent::storage;
@@ -458,7 +478,7 @@ namespace mstd {
     }
 
     value_type max() const {
-      if(num_bits == 0) throw std::out_of_range("max() on empty bitset");
+      if(_capacity == 0) throw std::out_of_range("max() on empty bitset");
       size_t i = num_buckets();
       while(i ? storage.at(--i) == 0 : false);
       assert(storage.at(i) != 0); // need to assert this as NUM_LEADING_ZEROS() is undefined for 0
@@ -542,7 +562,7 @@ namespace mstd {
 
     //! flip lowest k bits
     void flip_lowest_k(value_type k) {
-      if(k > num_bits) num_bits = k;
+      if(k > _capacity) _capacity = k;
       size_t i = 0;
       while(k >= num_bits_in_bucket){
         bucket_type& buffer = storage[i];
@@ -561,8 +581,8 @@ namespace mstd {
     }
 
     //! count the items whose value is at least x
-    size_t count_larger(const value_type x) const {
-      if(x <= num_bits){
+    size_t count_larger_or_equal(const value_type x) const {
+      if(x < _capacity){
         const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
         size_t accu = NUM_ONES_INL(storage[first_bucket] >> first_offset);
         for(size_t i = first_bucket + 1; i < num_buckets(); ++i)
@@ -571,11 +591,23 @@ namespace mstd {
       } else return 0;
     }
 
+    void set_capacity(const size_t new_capacity) {
+      if(new_capacity < _capacity) {
+        _count -= count_larger_or_equal(new_capacity);
+        auto [c_bucket, c_pos] = bucket_and_pos_of(new_capacity);
+        storage.resize(c_bucket + (c_pos != 0));
+        if(c_pos != 0)
+          storage[c_bucket] &= ~(full_bucket << c_pos);
+      }
+      _capacity = new_capacity;
+    }
+
+
     //! flip bits starting from x upwards until k'th zero encountered
     //! return number of flipped bits
     size_t flip_upwards_until_kth_zero(const value_type x, size_t k = 1) {
       DEBUG5(std::cout << "flipping from index "<< static_cast<int>(x)<<" ("<<k<<" more zeros)\n");
-      if((x < num_bits) && (k > 0)) {
+      if((x < _capacity) && (k > 0)) {
         const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
         auto& bucket = storage.at(first_bucket);
         const auto first_bucket_shifted = (bucket >> first_offset);
@@ -592,7 +624,7 @@ namespace mstd {
             accu += num_trailing_ones;
             DEBUG5(std::cout << "bucket "<<i<<": "<<std::bitset<num_bits_in_bucket>(new_bucket)<<" ("<<num_trailing_ones<<" trailing ones; now "<<accu<<" bits flipped)\n");
             if(num_trailing_ones != num_bits_in_bucket) {
-              const bool not_beyond_capacity = (x + accu < num_bits);
+              const bool not_beyond_capacity = (x + accu < _capacity);
               const size_t first_zero = num_trailing_ones + not_beyond_capacity;
               // flip the lowest bits including the first zero
               new_bucket ^= (1ul << first_zero) - 1;
@@ -605,7 +637,7 @@ namespace mstd {
           return accu;
         } else {
           // flip all ones AND the first encountered zero, unless the zero is beyond capacity
-          const bool not_beyond_capacity = (x + num_trailing_ones < num_bits);
+          const bool not_beyond_capacity = (x + num_trailing_ones < _capacity);
           const size_t to_flip = num_trailing_ones + not_beyond_capacity;
           bucket ^= ((1ul << to_flip) - 1) << first_offset;
           _count -= num_trailing_ones - not_beyond_capacity;
@@ -616,7 +648,7 @@ namespace mstd {
    
     //! count the items whose value is at most x
     size_t count_smaller(const value_type x) const {
-      if(x < num_bits){
+      if(x < _capacity){
         const auto [last_bucket, bits_in_last_bucket] = bucket_and_pos_of(x);
         size_t accu = 0;
         for(size_t i = 0; i < last_bucket; ++i)
@@ -634,14 +666,14 @@ namespace mstd {
     }
 
     ordered_bitset& operator++() {
-      const size_t lowest_zero = std::min(num_trailing_ones() + 1, num_bits);
+      const size_t lowest_zero = std::min(num_trailing_ones() + 1, _capacity);
       flip_lowest_k(lowest_zero);
       return *this;
     }
     ordered_bitset operator++(int) { ordered_bitset result = *this; ++(*this); return result; }
 
     ordered_bitset& operator--() {
-      const size_t lowest_one = std::min(num_trailing_zeros() + 1, num_bits);
+      const size_t lowest_one = std::min(num_trailing_zeros() + 1, _capacity);
       flip_lowest_k(lowest_one);
       return *this;
     }

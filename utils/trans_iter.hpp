@@ -13,7 +13,7 @@ namespace mstd {
   //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
   template<class _Iter, class _Transformation, bool pass_iterator = false>
     requires (std::is_invocable_v<_Transformation, std::conditional_t<pass_iterator, _Iter, reference_of_t<_Iter>>>)
-  class proto_transforming_iterator: public InheritableIter<_Iter> {
+  class transforming_iterator: public InheritableIter<_Iter> {
     using Parent = InheritableIter<_Iter>; 
     [[no_unique_address]] mstd::mutableT<_Transformation> trans;
     
@@ -23,17 +23,21 @@ namespace mstd {
 		  if constexpr (pass_iterator) return p; else return *p;
     }
 
-    void increment_trans() {
-      if constexpr (mstd::really_pre_incrementable<Transformation>)
-        ++(trans.value);
+    void increment_trans(int x = 1) {
+      if constexpr (mstd::really_int_incrementable<Transformation>) {
+        trans.value += x;
+      } else if constexpr (mstd::really_pre_incrementable<Transformation>) {
+        if(x == 1) ++trans;
+        if(x == -1) --trans;
+      }
     }
   public:
     using Transformation = _Transformation;
     using Iterator = _Iter;
     using UnderlyingIterator = _Iter;
     using ParentDeref = typename std::iterator_traits<_Iter>::reference;
-    using TransInput = std::conditional_t<pass_iterator, proto_transforming_iterator, ParentDeref>;
-    // this will not compile if pass_iter == true, since proto_transforming_iterator is not fully defined yet
+    using TransInput = std::conditional_t<pass_iterator, transforming_iterator, ParentDeref>;
+    // this will not compile if pass_iter == true, since transforming_iterator is not fully defined yet
     //static_assert(std::is_invocable_v<Transformation, TransInput>); 
     //using TransOutput = std::invoke_result_t<Transformation, TransInput>;
     //using ConstTransOutput = std::invoke_result_t<Transformation, const TransInput>;
@@ -49,36 +53,47 @@ namespace mstd {
     using iterator_category = typename mstd::iterator_traits<Iterator>::iterator_category;
     static constexpr bool reference_is_rvalue = !std::is_reference_v<reference>;
 
-    proto_transforming_iterator() = default;
-    proto_transforming_iterator(proto_transforming_iterator&&) = default;
-    proto_transforming_iterator(const proto_transforming_iterator&) = default;
+    transforming_iterator() = default;
+    transforming_iterator(transforming_iterator&&) = default;
+    transforming_iterator(const transforming_iterator&) = default;
 
     // construct from an iterator alone, default-construct the transformation
-    template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, proto_transforming_iterator>) &&
+    template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, transforming_iterator>) &&
         std::is_default_constructible_v<Transformation> && std::is_constructible_v<Parent, T&&>)
-    proto_transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{} {}
+    transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{} {}
 
     // construct from iter and transformaiton
     template<class T, class F> requires (std::is_constructible_v<Parent, T&&> && std::is_constructible_v<Transformation, F&&>)
-    proto_transforming_iterator(T&& iter, F&& f): Parent{std::forward<T>(iter)}, trans{std::forward<F>(f)} {}
+    transforming_iterator(T&& iter, F&& f): Parent{std::forward<T>(iter)}, trans{std::forward<F>(f)} {}
 
 
     // std::piecewise construction of the iter and the transformation
     template<class IterTuple, class TransTuple>
-    constexpr proto_transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init):
+    constexpr transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init):
       Parent{make_from_tuple<Parent>(std::forward<IterTuple>(iter_init))},
       trans{make_from_tuple<Transformation>(std::forward<TransTuple>(trans_init))}
     {}
 
 
     // we have operator= and operator== for our iterator type (Iter) setting only the iterator, but not the transformation function
-    proto_transforming_iterator& operator=(const proto_transforming_iterator&) = default;
-    proto_transforming_iterator& operator=(proto_transforming_iterator&&) = default;
-    proto_transforming_iterator& operator=(const Iterator& other) { static_cast<Parent&>(*this) = other; }
-    proto_transforming_iterator& operator=(Iterator&& other) { static_cast<Parent&>(*this) = std::move(other); }
+    transforming_iterator& operator=(const transforming_iterator&) = default;
+    transforming_iterator& operator=(transforming_iterator&&) = default;
+    transforming_iterator& operator=(const Iterator& other) { static_cast<Parent&>(*this) = other; }
+    transforming_iterator& operator=(Iterator&& other) { static_cast<Parent&>(*this) = std::move(other); }
 
-    proto_transforming_iterator& operator++() { ++(static_cast<Parent&>(*this)); increment_trans(); return *this; }
-    proto_transforming_iterator operator++(int) { proto_transforming_iterator result(*this); ++(*this); return result; }
+    transforming_iterator& operator++() { ++(static_cast<Parent&>(*this)); increment_trans(); return *this; }
+    transforming_iterator operator++(int) { transforming_iterator result(*this); ++(*this); return result; }
+    transforming_iterator& operator--() { --(static_cast<Parent&>(*this)); increment_trans(-1); return *this; }
+    transforming_iterator operator--(int) { transforming_iterator result(*this); --(*this); return result; }
+    transforming_iterator& operator+=(const int x) { (static_cast<Parent&>(*this)) += x; increment_trans(x); return *this; }
+    transforming_iterator& operator-=(const int x) { (static_cast<Parent&>(*this)) -= x; increment_trans(x); return *this; }
+    transforming_iterator operator+(const long int x) const { transforming_iterator result{*this}; result += x; return result; }
+    transforming_iterator operator-(const long int x) const { transforming_iterator result{*this}; result -= x; return result; }
+    friend transforming_iterator operator+(const difference_type x, const transforming_iterator& it) { return it + x; }
+
+    difference_type operator-(const Parent& it) const { return std::distance(static_cast<const Parent&>(*this), it); }
+    difference_type operator-(const transforming_iterator& it) const { return *this - static_cast<const Parent&>(it); }
+    friend difference_type operator-(const Parent& it1, const transforming_iterator& it2) { return it2 - it1; }
 
     decltype(auto) operator*() & { return trans.value(deref()); }
     decltype(auto) operator*() const & { return trans.value(deref()); }
@@ -104,8 +119,9 @@ namespace mstd {
 
   };
 
-  template<class Iter, class T, bool pass_iterator = false>
-  using transforming_iterator = proto_transforming_iterator<Iter, T, pass_iterator>;
+
+  // test that random-access iterators still are random access when transformed
+  static_assert(std::random_access_iterator<transforming_iterator<typename std::vector<int>::iterator, std::identity>>);
 
   // factories
   template<class Iter, class T, bool pass_iterator = false, class BeginEndTransformation = void, class EndIterator = iterator_of_t<Iter>>

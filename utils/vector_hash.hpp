@@ -49,6 +49,10 @@ namespace mstd{
     using Parent::resize;
 
   public:
+    // forbid implicit conversion
+    explicit operator Parent() { return static_cast<Parent&>(*this); }
+    explicit operator const Parent() const { return static_cast<const Parent&>(*this); }
+
     using allocator_type  = Allocator;
     using typename Parent::value_type;
     using typename Parent::difference_type;
@@ -325,9 +329,10 @@ namespace mstd{
       assert(max_load_factor < 1);
     }
 
-    template<class InputIt>
-    vector_hash(const InputIt& _begin,
-                const InputIt& _end,
+    template<HasIterTraits InputIt1, HasIterTraits InputIt2>
+    vector_hash(const InputIt1& _begin,
+                const InputIt2& _end,
+                const size_t _num_new_elements = 0,
                 const float _max_load_factor = default_load_factor,
                 const Hash& _hasher = Hash(),
                 const Allocator& alloc = Allocator()):
@@ -336,7 +341,7 @@ namespace mstd{
       hasher{_hasher}
     {
       // prepare the container such that vector[i] = i+1, that is, all slots are unoccupied
-      insert(_begin, _end);
+      insert(_begin, _end, _num_new_elements);
     }
 
     inline void set_max_load_factor(const float _max_load_factor)
@@ -348,7 +353,9 @@ namespace mstd{
 
     inline size_t size() const noexcept { return active_values; }
     inline size_t vector_size() const noexcept { return Parent::size(); }
-    inline float load_factor() const noexcept { return vector_size() ? (1.0 * active_values) / vector_size() : 2.0; }
+    inline float load_factor(const size_t additional_values = 0) const noexcept {
+      return vector_size() ? (static_cast<double>(active_values + additional_values) / vector_size()) : 2.0;
+    }
 
     void swap(vector_hash&& other) noexcept
     {
@@ -391,12 +398,17 @@ namespace mstd{
       return _insert(std::forward<T>(key));
     }
 
-    template<class InputIt>
-    void insert(InputIt _from, const InputIt& _to, const bool do_rehash = true) {
-      if(do_rehash){
-        const size_t num_new_items = distance(_from, _to);
-        const size_t prospected_size = (size() + num_new_items) * 1.0 / max_load_factor;
-        if(vector_size() < prospected_size) rehash(prospected_size);
+    template<HasIterTraits InputIt1, HasIterTraits InputIt2, size_t num_new_items = 0>
+    void insert(InputIt1 _from, const InputIt2& _to) {
+      using Cat1 = typename iterator_traits<InputIt1>::iterator_category;
+      using Cat2 = typename iterator_traits<InputIt2>::iterator_category;
+      if constexpr ((std::is_same_v<Cat1, std::random_access_iterator_tag>) && (std::is_same_v<Cat2, std::random_access_iterator_tag>)) {
+        num_new_items = distance(_from, _to);
+      }
+      if(num_new_items != 0) {
+        const size_t projected_size = static_cast<double>(size() + num_new_items) / static_cast<double>(max_load_factor);
+        if(vector_size() < projected_size)
+          rehash(projected_size);
       }
       while(_from != _to) {
         insert(*_from);
@@ -405,15 +417,13 @@ namespace mstd{
     }
 
     template<class T>
-    void insert(std::initializer_list<T> _init)
-    {
+    void insert(std::initializer_list<T> _init) {
       insert(_init.begin(), _init.end());
     }
 
     template<class ...Args>
-	  insert_result emplace(Args&&... args)
-    {
-      assert(std::is_move_assignable_v<Key>);
+	  insert_result emplace(Args&&... args) {
+      assert(std::is_move_constructible_v<Key>);
       if(load_factor() > max_load_factor) rehash();
       return _insert(Key(std::forward<Args>(args)...));
     }
@@ -473,4 +483,8 @@ namespace mstd{
 //    friend class filtered_iterator;
   };
 
+  template<class _Key, class Hash, class KeyEqual, class Allocator>
+  constexpr bool is_vector_v<vector_hash<_Key, Hash, KeyEqual, Allocator>> = false;
+
+  static_assert(SetType<vector_hash<int>>);
 }// namespace

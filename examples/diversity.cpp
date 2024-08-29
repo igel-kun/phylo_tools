@@ -1,11 +1,15 @@
 
 #include <ranges>
 
-#include "io/newick.hpp"
+#include "utils/benchmark.hpp"
 #include "utils/command_line.hpp"
-#include "utils/network.hpp"
 #include "utils/token.hpp"
+
+#include "io/newick.hpp"
+#include "utils/network.hpp"
 #include "utils/diversity.hpp"
+#include "utils/features.hpp"
+
 
 namespace ra = std::ranges;
 namespace rv = std::views;
@@ -22,11 +26,14 @@ struct EdgeData {
   // construct from a given string that's been read from the input file
   EdgeData(const std::string_view in) {
     auto iter = mstd::tokenize(in, ",;:"sv).begin();
-    if(iter) {
-      weight = std::stof(*iter);
-      if(++iter)
-        inheritance_prob = std::stof(*iter);
-    } 
+    while(iter && (*iter == "")) ++iter;
+    if(iter) weight = std::stof(*iter);
+    while(++iter && (*iter == ""));
+    if(iter) inheritance_prob = std::stof(*iter);
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const EdgeData& ed) {
+    return os << "{inh: "<<ed.inheritance_prob<<", w: "<<ed.weight<<" gam: "<<ed.gamma<<'}';
   }
 };
 
@@ -53,6 +60,7 @@ void parse_options(const int argc, const char** argv) {
   description["-v"] = {0,0};
   description["-m"] = {0,0};
   description["-l"] = {1,1};
+  description["-f"] = {1,1};
   description[""] = {1,2};
   const std::string help_message(std::string(argv[0]) + " [FLAGS] <file> <<k> | -l <leaf list>>\n\
       \tLet N be the network described in file, where each leaf is annotated with its taxon name,\n\
@@ -65,15 +73,17 @@ void parse_options(const int argc, const char** argv) {
       FLAGS:\n\
       \t-v\tverbose output, prints network\n\
       \t-m\tuse alternative diversity definition (via switchings)\n\
-      \t-l\tcompute the score diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n");
+      \t-l\tcompute the score diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
+      \t-f <file>\tcompute optimal feature-diversity of the features given as a matrix in <file>\n");
 
   parse_options(argc, argv, description, help_message, options);
 
-  const std::string filename = options[""].front();
-  if(!file_exists(filename)) {
-    std::cerr << filename << " cannot be opened for reading" << std::endl;
-    exit(EXIT_FAILURE);
-  }
+  if(not file_exists(options[""].front()))
+    cfail(std::string{"couldn't open file "} + options[""].front());
+  if(test(options, "-f"))
+    if(not file_exists(options["-f"].front()))
+      cfail(std::string{"couldn't open file "} + options["-f"].front());
+
 
   if(!test(options, "-l") && (options[""].size() == 1)) {
     std::cerr << "If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n";
@@ -120,6 +130,19 @@ MyNetwork read_network(const std::string& in) {
   }
 }
 
+using FeatureMap = HashMap<std::string, PT::DefaultFeatureCollection>;
+
+auto read_features(const std::string& filename) {
+  std::ifstream in{filename};
+  FeatureMap feature_map;
+  PT::read_features(in,
+      [&](const std::string& s) -> typename FeatureMap::mapped_type& { return feature_map[s]; },
+//      [&](const std::string& s) { return feature_map[s]; },
+      std::vector{1});
+  return feature_map;
+}
+
+
 int main(const int argc, const char** argv) {
   std::cout << "parsing options...\n";
   parse_options(argc, argv);
@@ -132,8 +155,10 @@ int main(const int argc, const char** argv) {
     N.print_summary(std::cout);
   }
 
+  size_t k = 0;
   if(test(options, "-l")) {
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
+    k = leaf_names.size();
     const auto leaves_range = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
     const NodeSet leaves{leaves_range.begin(), leaves_range.end()};
     std::cout << "computing diversity score of leaves " << leaves << '\n';
@@ -143,12 +168,20 @@ int main(const int argc, const char** argv) {
     std::cout << "score = "<<score<<'\n';
   } else {
     //using T = decltype(pd_score_ct<MyNetwork, NodeSet, UtilityFunctors>);
-    const size_t k = stol(options[""][1]);
+    k = stol(options[""][1]);
     std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
+    const auto before = mstd::get_time();
     const auto [sol, score] = test(options, "-m") ? 
-      optimize_diversity_brute_force(N, k, UtilityFunctors(), pd_score_ct<MyNetwork, NodeSet, UtilityFunctors>) :
-      optimize_diversity_brute_force(N, k, UtilityFunctors(), pd_score_classic<MyNetwork, NodeSet, UtilityFunctors>);
-    std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<'\n';
+      optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_ct{}) :
+      optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{});
+    const auto elapsed = mstd::ms_between(before, mstd::get_time());
+    std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\t("<<elapsed<<"ms)\n";
+  }
+
+  if(test(options, "-f")) {
+    const auto feature_map = read_features(options["-f"].front());
+    const auto [feats, score] = optimize_feature_diversity(k, mstd::seconds(feature_map));
+    std::cout << "maximum feature-diversity = " << score << ":\n" << feats << '\n';
   }
 }
 

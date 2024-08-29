@@ -12,7 +12,7 @@ namespace mstd {
   template<std::unsigned_integral _Key, VectorType _base_container>
   class _raw_vector_map;
 
-  /*
+  /* THIS DOESN'T WORK :( object slicing will occur no matter if I put intermediate classes
   // NOTE: to forbid implicit casting of raw_vector_map to vector, we use this intermediate class which forbids copy construction from raw_vector_map
   // (see https://stackoverflow.com/questions/36473354/prevent-derived-class-from-casting-to-base)
   template<class T>
@@ -22,7 +22,7 @@ namespace mstd {
     template<std::unsigned_integral _Key, VectorType _base_container>
     _vector(const _raw_vector_map<_Key, _base_container>&) = delete;
   };
-*/
+  */
 
   // the transformation takes a vector iterator and outputs the distance to the start of the vector and a reference to the cell
   template<std::unsigned_integral Key, class Iter>
@@ -151,5 +151,8 @@ namespace mstd {
     bool contains(const key_type x) const { return static_cast<size_t>(x) < size(); }
     bool count(const key_type x) const { return contains(x); }
   };
+
+  template<std::unsigned_integral _Key, VectorType _base_container>
+  constexpr bool is_vector_v<_raw_vector_map<_Key, _base_container>> = false;
 }
 

@@ -16,6 +16,11 @@ namespace mstd {
     // how many times to try to get memory when allocating for a charp
     uint32_t charp_allocation_timeout = 1000;
 
+    // generic data delimeters
+    char data_delimeters[] = ":,;";
+    // if this is set to true, then generic_data will be printed even if all items produce the empty string when printed
+    bool print_empty_generic_data = false;
+
     // characters to use for displaying trees/networks on the console
     // the standard ASCII set is a bit daft but only uses ASCII < 128
     // we allow using a much nicer UTF8 set

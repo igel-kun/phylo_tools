@@ -18,7 +18,7 @@ namespace mstd {
     const T& high() const { return (*this)[1]; }
 
     linear_interval(const T& init_lo, const T& init_hi): Parent{init_lo, init_hi} {}
-    linear_interval(const T& init): linear_interval(init, init) {}
+    explicit linear_interval(const T& init): linear_interval(init, init) {}
     
     void merge(const linear_interval& other) {
       update_lo(other.low());

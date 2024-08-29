@@ -24,10 +24,47 @@
  * Of course, you can customize the generic data by passing your own types to DataVec :)
  */
 
-#include "PTconfig.hpp"
+#include "charp.hpp"
+#include "token.hpp"
 
-namespace PT {
-  
+#include "config.hpp"
+
+namespace mstd {
+
+  template<class T, class... Args>
+    requires std::is_arithmetic_v<T>
+  bool try_reading_variant_item(const std::string_view s, std::variant<Args...>& target) {
+    if(!s.empty()) {
+      size_t first_unconverted;
+      target = stoX<T>(s, first_unconverted);
+      return first_unconverted == s.size();
+    } else return false;
+  }
+
+  template<class Var = std::variant<double, int64_t, std::string_view>>
+  Var parse_variant(const std::string_view s) {
+    Var result;
+    if constexpr (std::is_constructible_v<Var, uint64_t>) {
+      if(try_reading_variant_item<uint64_t>(s, result))
+        return result;
+    } else if constexpr (std::is_constructible_v<Var, uint32_t>)
+      if(try_reading_variant_item<uint32_t>(s, result))
+        return result;
+    
+    if constexpr (std::is_constructible_v<Var, double>) {
+      if(try_reading_variant_item<double>(s, result))
+        return result;
+    } else if constexpr (std::is_constructible_v<Var, float>) {
+      if(try_reading_variant_item<float>(s, result))
+        return result;
+    }
+    
+    if constexpr (std::is_constructible_v<Var, std::string_view>)
+      return result;
+
+    throw std::bad_variant_access{};
+  }
+
   template<class... Items>
   struct DataVec: public std::vector<std::variant<Items...>> {
     using Data = std::variant<Items...>;
@@ -35,15 +72,6 @@ namespace PT {
   protected:
     using Parent = std::vector<Data>;
 
-    template<class T, class... Args>
-      requires std::is_arithmetic_v<T>
-    bool try_reading(const std::string_view s, std::variant<Args...>& target) {
-      if(!s.empty()) {
-        size_t first_unconverted;
-        target = stoX<T>(s, first_unconverted);
-        return first_unconverted == s.size();
-      } else return false;
-    }
 
   public:
     template<class T>
@@ -60,31 +88,12 @@ namespace PT {
 
     decltype(auto) emplace_item(const std::string_view s) {
       DEBUG5(std::cout << "adding to data of length "<<Parent::size()<<'\n');
-      Data result;
-      if constexpr (std::is_constructible_v<Data, uint64_t>) {
-        if(try_reading<uint64_t>(s, result))
-          return Parent::emplace_back(std::move(result));
-      } else if constexpr (std::is_constructible_v<Data, uint32_t>)
-        if(try_reading<uint32_t>(s, result))
-          return Parent::emplace_back(std::move(result));
-      
-      if constexpr (std::is_constructible_v<Data, double>) {
-        if(try_reading<double>(s, result))
-          return Parent::emplace_back(std::move(result));
-      } else if constexpr (std::is_constructible_v<Data, float>) {
-        if(try_reading<float>(s, result))
-          return Parent::emplace_back(std::move(result));
-      }
-      
-      if constexpr (std::is_constructible_v<Data, std::string_view>)
-        return Parent::emplace_back(s);
-
-      throw std::bad_variant_access{};
+      return Parent::emplace_back(parse_variant<Data>(s));
     }
 
     void emplace_items(const std::string_view s) {
       DEBUG4(std::cout << "making generic data by splitting the string '"<<s<<"'\n");
-      for(const auto x: mstd::tokenize(s, config::data_delimeters)) {
+      for(const auto x: tokenize(s, config::data_delimeters)) {
         emplace_item(x);
         DEBUG5(std::cout << "\tread generic data '"<<Parent::back()<<"' from '"<<x<<"'\n");
       }
@@ -93,12 +102,12 @@ namespace PT {
     DataVec() = default;
 
     // construct from a bunch of Stringlikes
-    template<class Last> requires (mstd::Stringlike<Last>)
+    template<class Last> requires (Stringlike<Last>)
     DataVec(Last&& last, bool shrink = true) {
       emplace_items(last);
       if(shrink) Parent::shrink_to_fit();
     }
-    template<class FirstString, class LastString, class... Strings> requires (mstd::Stringlike<LastString> && mstd::Stringlike<FirstString>)
+    template<class FirstString, class LastString, class... Strings> requires (Stringlike<LastString> && Stringlike<FirstString>)
     DataVec(FirstString&& first, Strings&&... strings, LastString&& last, bool shrink = true):
       DataVec(std::forward<FirstString>(first), std::forward<Strings>(strings)..., false)
     {
@@ -131,7 +140,7 @@ namespace PT {
     }
   };
 
-  using DefaultDataVec = DataVec<intptr_t, mstd::floatptr_t, mstd::StringNoLength>;
+  using DefaultDataVec = DataVec<intptr_t, floatptr_t, StringNoLength>;
 
 
 }

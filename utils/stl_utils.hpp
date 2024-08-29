@@ -54,6 +54,29 @@ namespace mstd{
   template<class T> constexpr bool is_pair = false;
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
 
+  // first index of a type in a variadic template, or number types if the type does not occur
+  template<class T, class First, class... Others>
+  constexpr size_t var_type_index() {
+    if constexpr (std::is_same_v<T, First>) {
+      return 0;
+    } else if constexpr (sizeof...(Others) != 0) {
+      return 1 + var_type_index<T, Others...>();
+    } else return 1;
+  }
+
+  template<class T, class... Ts>
+  constexpr bool is_in = (var_type_index<T, Ts...>() < sizeof...(Ts));
+
+  template<class T, class... Ts, template<class...> class Var>
+  constexpr bool occurs_in(const Var<Ts...>& v) { return is_in<T, Ts...>; }
+
+
+  template<class T, class... Ts>
+  auto& get_by_type(std::variant<Ts...>& v) { return std::get<var_type_index<T, Ts...>>(v); }
+  template<class T, class... Ts>
+  const auto& get_by_type(const std::variant<Ts...>& v) { return std::get<var_type_index<T, Ts...>>(v); }
+
+
   //NOTE: std::add_rvalue_reference<A&> = A& that's not very intuitive...
   template<class T>
   using make_rvalue_reference = std::add_rvalue_reference_t<std::remove_reference_t<T>>;
@@ -287,7 +310,7 @@ namespace mstd{
 
   template<class Ref>
   struct iter_traits_from_reference {
-    static constexpr bool returning_rvalue = !std::is_reference_v<Ref>;
+    static constexpr bool returning_rvalue = not std::is_reference_v<Ref>;
     using reference = Ref;
     using value_type = std::remove_reference_t<reference>;
     using const_reference = std::conditional_t<returning_rvalue, const value_type, const value_type&>;
@@ -327,14 +350,14 @@ namespace mstd{
   struct _invoke_or_lookup_result<T, Qs...> { using type = std::invoke_result_t<T, Qs...>; };
   template<class T, class... Qs> using invoke_or_lookup_result = typename _invoke_or_lookup_result<T, Qs...>::type;
 
-
+  /*
   template<class _Iterator>
   constexpr bool is_forward_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::forward_iterator_tag>;
   template<class _Iterator>
   constexpr bool is_bidirectional_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::bidirectional_iterator_tag>;
   template<class _Iterator>
   constexpr bool is_random_access_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::random_access_iterator_tag>;
-
+  */
 
   // compare iterators with their reverse versions
   template<typename T>
@@ -422,7 +445,7 @@ namespace mstd{
     merge_sort_fwd(middle, last, N - N/2, cmp);
     assert(std::is_sorted(middle, last, cmp));
     
-    if(is_forward_iterator<FwdIt>){
+    if(std::forward_iterator<FwdIt>){
       //inplace_merge_fwd(first, middle, last, cmp);
       assert(false && "not implemented");
     } else std::inplace_merge(first, middle, last, cmp);
@@ -431,7 +454,7 @@ namespace mstd{
   // N log N sort, no matter what kind of iterator we get...
   template<class Iter, class Compare = std::less<>>
   void flexible_sort(Iter first, const auto& last, Compare cmp = Compare{}) {
-    if constexpr (std::is_same_v<typename iterator_traits<Iter>::iterator_category, std::random_access_iterator_tag>)
+    if constexpr (std::random_access_iterator<Iter>)
       std::sort(first, last, cmp);
     else merge_sort_fwd(first, last, std::distance(first, last), cmp);
   }
@@ -592,6 +615,11 @@ namespace mstd {
 
 namespace std {
   // ----------------------- OUTPUT ---------------------------------------
+  template<class T, bool a, bool b>
+  std::ostream& operator<<(std::ostream& os, const std::__detail::_Node_iterator<T,a,b>& iter) {
+    return os << "iter at "<< &iter;
+  }
+
   template<class First, class... Ts>
   std::ostream& operator<<(std::ostream& os, const std::variant<First, Ts...>& var) {
     std::visit([&os](const auto& v) { os << v; }, var);
@@ -751,10 +779,15 @@ namespace mstd {
 
 
   // functions returning void are treated differently from functions returning anything, even if that anything is then ignored; we unify the two here
+  template<class P, template<class> class Q> struct _UnlessVoid { using type = Q<P>; };
+  template<template<class> class Q> struct _UnlessVoid<void, Q> { using type = void; };
+  template<class P, template<class> class Q> using UnlessVoid = typename _UnlessVoid<P,Q>::type;
+
   template<class... T> struct _FirstNonVoid {};
   template<class T, class... Else> requires (!std::is_void_v<T>) struct _FirstNonVoid<T, Else...> { using type = T; };
   template<class T, class... Else> requires (std::is_void_v<T>) struct _FirstNonVoid<T, Else...>: public _FirstNonVoid<Else...> {};
-  template<class... T> using FirstNonVoid = _FirstNonVoid<T...>::type;
+  template<class... T> using FirstNonVoid = typename _FirstNonVoid<T...>::type;
+
 
   template<class T, class Else = uint_fast8_t> using ReturnableType = FirstNonVoid<T, Else>;
 

@@ -1,13 +1,37 @@
 
 #pragma once
 
+#include <iostream>
+
+#include "utils/stl_utils.hpp"
+
 #include "utils/types.hpp"
 
 namespace PT {
 
+  // NOTE: we'll not give out copies of our buffer, just references; if you need to keep it, make your own copy
+  struct RowIterator: mstd::iter_traits_from_reference<const std::string&>  {
+    using Traits = mstd::iter_traits_from_reference<const std::string&>;
+    std::istream* in = nullptr;
+    std::string buffer;
+
+    bool is_valid() const { return (in != nullptr) && (in->good()); }
+
+    RowIterator() = default;
+    RowIterator(std::istream& is): in{&is} {}
+
+    auto& operator++() { std::getline(*in, buffer); return *this; }
+    auto operator++(int) { auto result{*this}; ++(*this); return result; }
+
+    reference operator*() const { return buffer; }
+  };
+
+  using RowIterFactory = mstd::IterFactory<RowIterator>;
+
+
+
   template<class T>
   concept NetworkParser = requires(T t) { t.parse() -> NodeContainer; };
-
 
   // build phylogeny from a string and, optionally, a set of initial parameters for creating an EdgeEmplacer
   template<PhylogenyType Phylo, template<class, bool, bool> class Parser, class Instream, class... Args>

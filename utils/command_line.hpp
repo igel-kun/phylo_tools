@@ -4,10 +4,12 @@
 #include <unistd.h>
 #include <string>
 #include <vector>
+
 #include "utils.hpp"
 #include "config.hpp"
 #include "linear_interval.hpp"
 #include "stl_concepts.hpp"
+#include "set_interface.hpp"
 
 namespace PT{
 

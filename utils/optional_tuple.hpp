@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "stl_utils.hpp"
+
 namespace mstd {
 /*
 
@@ -196,48 +198,66 @@ namespace mstd {
 
   // member access for the optional tuple
   template<size_t i, class LastT, class... Rest>
-  LastT& _get(_optional_tuple<i, LastT, Rest...>& tuple) {
+  LastT& get(_optional_tuple<i, LastT, Rest...>& tuple) {
     return tuple.optional_item<i, LastT>::value;
   }
 
   template<size_t i, class LastT, class... Rest>
-  const LastT& _get(const _optional_tuple<i, LastT, Rest...>& tuple) {
+  const LastT& get(const _optional_tuple<i, LastT, Rest...>& tuple) {
     return tuple.optional_item<i, LastT>::value;
   }
 
   template<size_t i, class T>
-  struct _has_value { static constexpr bool value = !std::is_void_v<T>; };
+  struct has_value { static constexpr bool value = !std::is_void_v<T>; };
   template<size_t i, class LastT, class... Rest>
-  struct _has_value<i, _optional_tuple<i, LastT, Rest...>> { static constexpr bool value = !std::is_void_v<LastT>; };
+  struct has_value<i, _optional_tuple<i, LastT, Rest...>> { static constexpr bool value = !std::is_void_v<LastT>; };
 
   template<class... Ts>
   struct optional_tuple: public _optional_tuple<0, Ts...> {
-    using _optional_tuple<0, Ts...>::_optional_tuple;
+    using Parent = _optional_tuple<0, Ts...>;
+    using Parent::Parent;
 
     optional_tuple() = default;
     
-    template<size_t i> static constexpr bool has_value = _has_value<i, optional_tuple>::value;
+    template<size_t i> static constexpr bool has_value = mstd::has_value<i, optional_tuple>::value;
 
     template<size_t i> requires (has_value<i>)
-    auto& get() { return _get<i>(*this); }
+    auto& get() { return mstd::get<i>(static_cast<Parent&>(*this)); }
 
     template<size_t i> requires (has_value<i>)
-    const auto& get() const { return _get<i>(*this); }
+    const auto& get() const { return mstd::get<i>(static_cast<const Parent&>(*this)); }
 
     template<size_t i>
     auto& get(auto& other) {
       if constexpr (has_value<i>)
-        return _get<i>(*this);
+        return mstd::get<i>(*this);
       else return other;
     }
 
     template<size_t i>
     const auto& get(auto& other) const {
       if constexpr (has_value<i>)
-        return _get<i>(*this);
+        return mstd::get<i>(*this);
       else return other;
     }
 
   };
+
+  template<class T, class... Ts> requires (var_type_index<T, Ts...>() < sizeof...(Ts))
+  auto& get_by_type(optional_tuple<Ts...>& otuple) {
+    return mstd::get<var_type_index<T, Ts...>>(otuple);
+  }
+  template<class T, class... Ts> requires (var_type_index<T, Ts...>() < sizeof...(Ts))
+  const auto& get_by_type(const optional_tuple<Ts...>& otuple) {
+    return mstd::get<var_type_index<T, Ts...>>(otuple);
+  }
+
+  template<size_t i, class First, class... Ts>
+  std::ostream& operator<<(std::ostream& os, const _optional_tuple<i, First, Ts...>& otuple) {
+    if constexpr (not std::is_void_v<First>) os << get<i>(otuple) << ' ';
+    if constexpr (sizeof...(Ts) > 0)
+      return os << static_cast<_optional_tuple<i+1, Ts...>>(otuple);
+    else return os;
+  }
 
 }
