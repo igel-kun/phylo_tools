@@ -70,7 +70,7 @@ namespace mstd {
         }
       } else bits.push_back(c_it); // bits is empty
     }
-    return false; // upper_bound <= 0
+    return false;
   }
 
 
