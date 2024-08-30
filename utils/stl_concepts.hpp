@@ -93,10 +93,6 @@ namespace mstd {
   template<class T> 
   concept IterableType = requires(T a) {
     typename _iterator_of_t<T>;
-    typename _iterator_of_t<const T>;
-    // NOTE: it seems forward_iterator concept cannot be satisfied by the proxy iterator of raw_std::vector_map :/
-    //requires forward_iterator<typename T::iterator>;
-    //requires forward_iterator<typename T::const_iterator>;
     std::begin(a);
     std::end(a);
 	};
@@ -125,7 +121,6 @@ namespace mstd {
   template<class T> using iterator_of_t = typename iterator_of<std::remove_reference_t<T>>::type;
   template<class T> using reverse_iterator_of_t = std::reverse_iterator<iterator_of_t<T>>;
   template<class T> using const_iterator_of_t = iterator_of_t<const std::remove_reference_t<T>>;
-
 
   template<class T>
   concept HasIterTraits = requires { typename std::iterator_traits<iterator_of_t<T>>::reference; };

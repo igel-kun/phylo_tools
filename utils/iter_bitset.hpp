@@ -408,7 +408,7 @@ namespace mstd {
       _count = 0;
     }
 
-    size_t set_capacity(const size_t new_capacity) {
+    void set_capacity(const size_t new_capacity) {
       if(new_capacity < _capacity) {
         for(auto it = storage.begin(); it != storage.end();) {
           auto [index, bucket] = *it;

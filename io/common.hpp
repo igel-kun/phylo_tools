@@ -18,7 +18,7 @@ namespace PT {
     bool is_valid() const { return (in != nullptr) && (in->good()); }
 
     RowIterator() = default;
-    RowIterator(std::istream& is): in{&is} {}
+    RowIterator(std::istream& is): in{&is} { std::getline(*in, buffer); }
 
     auto& operator++() { std::getline(*in, buffer); return *this; }
     auto operator++(int) { auto result{*this}; ++(*this); return result; }

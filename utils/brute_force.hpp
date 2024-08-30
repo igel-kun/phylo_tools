@@ -18,17 +18,17 @@ namespace mstd {
     using OutputContainer = FirstNonVoid<_OutputContainer, std::remove_const_t<ContainerFromInput>>;
     using SubsetInternal = std::conditional_t<container_ra, OutputContainer, std::vector<Iter>>;
     using Subsets = BoundedSubsetFactory<Container, SubsetInternal>;
-    static constexpr auto my_deref = [](const HasIterTraits auto& iter){ return *iter;};
-    DEBUG5(std::cout << "storing iters? "<< Subsets::store_iters << " internal: "<<type_name<SubsetInternal>()<<'\n');
+    DEBUG5(std::cout << "storing iters? "<< Subsets::store_iters << "\ninternal: "<<type_name<SubsetInternal>()<<'\n');
 
     std::pair<SubsetInternal, int64_t> result{};
     bool first = true;
     for(const auto S: Subsets{container, bounds}) {
-      DEBUG5(std::cout << "subset: "<<(S | std::ranges::views::transform(my_deref))<<'\n');
+      DEBUG5(std::cout << "subset: "<<(S | std::ranges::views::transform(default_deref{}))<<'\n');
       int64_t current;
-      if constexpr (Subsets::store_iters)
-        current = score(S | std::ranges::views::transform(my_deref));
-      else current = score(S);
+      if constexpr (Subsets::store_iters) {
+        static_assert(std::ranges::range<decltype(S | std::ranges::views::transform(default_deref{}))>);
+        current = score(S | std::ranges::views::transform(default_deref{}));
+      } else current = score(S);
 
       if(first || better(current, result.second)) {
         result.first = std::move(S);
@@ -41,7 +41,7 @@ namespace mstd {
       std::pair<OutputContainer, int64_t> res{};
       res.second = result.second;
       if constexpr (Subsets::store_iters)
-        append(res.first, result.first | std::ranges::views::transform(my_deref));
+        append(res.first, result.first | std::ranges::views::transform(default_deref{}));
       else
         append(res.first, result.first);
       return res;

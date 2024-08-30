@@ -100,21 +100,39 @@ namespace PT {
     size_t operator()(Container&& container) {
       // TODO: use std::accumulate here
       FeatureCountFor<mstd::value_type_of_t<Container>> accu;
-      for(const auto& feat: container) 
+      for(const auto& feat: container) {
+        DEBUG5(std::cout << "adding "<<feat<<" to accu " << accu <<'\n');
         accu += feat;
+      }
       return accu.count_features();
     }
+
+    template<mstd::IterableType Map>
+      requires FeatureCollectionType<typename mstd::value_type_of_t<Map>::second_type>
+    size_t operator()(Map&& feat_map) {
+      DEBUG4(std::cout << "computing score for "<<feat_map<<'\n');
+      //return operator()(feat_map | std::ranges::views::transform([](const auto& p){return p.second; }));
+      //return operator()(feat_map | std::ranges::views::transform(mstd::selector<1>{}));
+      return operator()(mstd::seconds(feat_map));
+    }
+
   };
 
   template<mstd::IterableType Container> requires FeatureCollectionType<mstd::value_type_of_t<Container>>
   size_t feature_diversity(Container&& container) { return _feature_diversity()(std::forward<Container>(container)); }
 
 
-  template<mstd::IterableType Container> // container should contain Features or indirections to Features
+  template<mstd::IterableType Container> // container should contain FeatureCollections or indirections to FeatureCollections
     requires (FeatureCollectionType<mstd::value_type_of_t<Container>> or
               FeatureCollectionType<mstd::value_type_of_t<mstd::value_type_of_t<Container>>>)
   auto optimize_feature_diversity(const auto k, const Container& container) {
     return mstd::brute_force(k, container, _feature_diversity{});
+  }
+  template<mstd::MapType Map> // Map should map to FeatureCollections or indirections to FeatureCollections
+    requires (FeatureCollectionType<mstd::mapped_type_of_t<Map>> or
+              FeatureCollectionType<mstd::value_type_of_t<mstd::mapped_type_of_t<Map>>>)
+  auto optimize_feature_diversity(const auto k, const Map& _map) {
+    return mstd::brute_force(k, _map, _feature_diversity{});
   }
 
 }

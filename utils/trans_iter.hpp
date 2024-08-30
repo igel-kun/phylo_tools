@@ -15,7 +15,7 @@ namespace mstd {
     requires (std::is_invocable_v<_Transformation, std::conditional_t<pass_iterator, _Iter, reference_of_t<_Iter>>>)
   class transforming_iterator: public InheritableIter<_Iter> {
     using Parent = InheritableIter<_Iter>; 
-    [[no_unique_address]] mstd::mutableT<_Transformation> trans;
+    [[no_unique_address]] _Transformation trans;
     
     decltype(auto) deref() const {
       const InheritableIter<_Iter>& intermediate = static_cast<const InheritableIter<_Iter>&>(*this);
@@ -23,14 +23,40 @@ namespace mstd {
 		  if constexpr (pass_iterator) return p; else return *p;
     }
 
-    void increment_trans(int x = 1) {
-      if constexpr (mstd::really_int_incrementable<Transformation>) {
-        trans.value += x;
-      } else if constexpr (mstd::really_pre_incrementable<Transformation>) {
-        if(x == 1) ++trans;
-        if(x == -1) --trans;
+    template<class Trans>
+    void increment_trans(Trans& _trans, int x) {
+      if constexpr (not std::is_pointer_v<Trans>) {
+        if constexpr (mstd::really_int_incrementable<Transformation>) {
+          trans.value += x;
+        } else if constexpr (mstd::really_pre_incrementable<Transformation>) {
+          if(x == 1) ++trans;
+          if(x == -1) --trans;
+        }
+      } else {
+        assert(_trans != nullptr);
+        increment_trans(*_trans, x);
       }
     }
+    void increment_trans(int x = 1) { increment_trans(trans, x); }
+
+    template<class T>
+    decltype(auto) apply_trans(T&& t) {
+      if constexpr (std::is_pointer_v<_Transformation>) {
+        assert(trans != nullptr);
+        return (*trans)(std::forward<T>(t));
+      } else return trans(std::forward<T>(t));
+    }
+    template<class T>
+    decltype(auto) apply_trans(T&& t) const {
+      if constexpr (std::is_pointer_v<_Transformation>) {
+        assert(trans != nullptr);
+        return (*trans)(std::forward<T>(t));
+      } else {
+        //std::cout << "mark (trans type is "<<mstd::type_name<_Transformation>()<<"\n";
+        return trans(std::forward<T>(t));
+      }
+    }
+
   public:
     using Transformation = _Transformation;
     using Iterator = _Iter;
@@ -95,25 +121,25 @@ namespace mstd {
     difference_type operator-(const transforming_iterator& it) const { return *this - static_cast<const Parent&>(it); }
     friend difference_type operator-(const Parent& it1, const transforming_iterator& it2) { return it2 - it1; }
 
-    decltype(auto) operator*() & { return trans.value(deref()); }
-    decltype(auto) operator*() const & { return trans.value(deref()); }
-    decltype(auto) operator*() && { return std::move(trans.value)(deref()); }
+    decltype(auto) operator*() & { return apply_trans(deref()); }
+    decltype(auto) operator*() const & { return apply_trans(deref()); }
+    decltype(auto) operator*() && { return std::move(apply_trans(deref())); }
     decltype(auto) operator->() & {
       decltype(auto) retval = operator*();
       if constexpr (std::is_reference_v<decltype(retval)>)
-        return &(trans.value(deref()));
+        return &(apply_trans(deref()));
       else return retval;
     }
     decltype(auto) operator->() const & {
       decltype(auto) retval = operator*();
       if constexpr (std::is_reference_v<decltype(retval)>)
-        return &(trans.value(deref()));
+        return &(apply_trans(deref()));
       else return retval;
     }
     decltype(auto) operator->() && {
       decltype(auto) retval = operator*();
       if constexpr (std::is_reference_v<decltype(retval)>)
-        return &(trans.value(deref()));
+        return &(apply_trans(deref()));
       else return retval;
     }
 
@@ -135,8 +161,10 @@ namespace mstd {
 
   // ----------- special case: selecting first or second element from a pair ---------------
 
-  template<class T, size_t get_num> struct _selecting_iterator { using type = transforming_iterator<T, selector<get_num>>; };
-  template<IterableType T, size_t get_num> struct _selecting_iterator<T,get_num> { using type = transforming_iterator<iterator_of_t<T>, selector<get_num>>; };
+  template<class T, size_t get_num>
+  struct _selecting_iterator { using type = transforming_iterator<T, selector<get_num>>; };
+  template<IterableType T, size_t get_num>
+  struct _selecting_iterator<T,get_num> { using type = transforming_iterator<iterator_of_t<T>, selector<get_num>>; };
   template<class T, size_t get_num> using selecting_iterator = typename _selecting_iterator<T, get_num>::type;
 
   template<class T> using firsts_iterator = selecting_iterator<T, 0>;
@@ -154,6 +182,15 @@ namespace mstd {
   constexpr auto firsts(TupleContainer&& c) { return FirstsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
   template<class TupleContainer>
   constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
+
+  // convenience class for dereference
+  // NOTE: for some oscure reason, lambda's do not return 'decltype(auto)' by default, but only 'auto'
+  //      so, if you want your lambda to return by reference (which is basically _ALWAYS_ what you want), then you'd need to explicitly tell it so
+  //      this deref-class here exists so that I don't accidentally forget that...
+  struct default_deref {
+    template<class T> requires mstd::HasDeref<T>
+    decltype(auto) operator()(T&& t) const { return *t; }
+  };
 }
 
 

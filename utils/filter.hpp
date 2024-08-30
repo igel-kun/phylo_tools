@@ -24,14 +24,29 @@ namespace mstd {
   template<class NormalIterator, class _Predicate, bool pass_iterator = false>
   class _filtered_iterator: public auto_iter<NormalIterator> {
     using Parent = auto_iter<NormalIterator>;
-    [[no_unique_address]] mstd::mutableT<_Predicate> pred;
+    [[no_unique_address]] _Predicate pred;
 
-    bool apply_pred() const {
-      _Predicate& p = pred;
-      if constexpr (pass_iterator)
-        return p(*this);
-      else return p(**this);
+    template<class Pred>
+    bool apply_pred(Pred&& p) const {
+      if constexpr (std::is_pointer_v<Pred>) {
+        assert(pred != nullptr);
+        return apply_pred(*p);
+      } else if constexpr (pass_iterator) {
+          return p(*this);
+      } else return p(**this);
     }
+    template<class Pred>
+    bool apply_pred(Pred&& p) {
+      if constexpr (std::is_pointer_v<Pred>) {
+        assert(pred != nullptr);
+        return apply_pred(*p);
+      } else if constexpr (pass_iterator) {
+          return p(*this);
+      } else return p(**this);
+    }
+    bool apply_pred() const { return apply_pred(pred); }
+    bool apply_pred() { return apply_pred(pred); }
+
 
     template<bool rev = false>
     void fix_index() {
