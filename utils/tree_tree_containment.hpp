@@ -210,7 +210,7 @@ namespace PT {
       if(!guest.is_leaf(u)){
         DEBUG4(std::cout << "merging possibilities of "<<guest.children(u)<<"\n");
         // for degree up to x, merge the child possibilities by linear "inplace_merge", otherwise, merge via iterator-queue in O(n log deg)
-        if(guest.out_degree(u) > config::vector_queue_merge_threshold){
+        if(guest.out_degree(u) > mstd::config::vector_queue_merge_threshold){
           // NOTE: priority_queue outputs the LARGEST element first, so we'll have to reverse sort_by_order by swapping its arguments
           IterQueue iter_queue(sort_by_order<true>{node_infos});
           size_t total_size = 0;

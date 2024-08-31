@@ -77,12 +77,12 @@ bool check_display(MyNet& N, MyTree& T)
 NetAndTree create_net_and_tree() {
   NetAndTree result;
 
-  const uint32_t num_internals = std::stoi(options["-r"][0]);
-  const uint32_t num_leaves = std::stoi(options["-r"][1]);
-  const uint32_t num_new_edges = std::stoi(options["-r"][2]);
+  const int num_internals = std::stoi(options["-r"][0]);
+  const int num_leaves = std::stoi(options["-r"][1]);
+  const int num_new_edges = std::stoi(options["-r"][2]);
 
   std::cout << "generating network with "<<num_leaves<<" leaves, "<<num_internals<<" internal nodes and "<< (num_leaves + num_internals - 1) + num_new_edges<<" edges\n";
-  generate_random_tree(result.second, num_internals, num_leaves);
+  generate_random_tree(result.second, NodeNums{num_internals, 0, num_leaves, 0.0f});
   generate_leaf_labels(result.second);
 
   std::cout << "rolled tree:\n"<<result.second<<"\n";

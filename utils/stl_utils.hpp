@@ -297,6 +297,15 @@ namespace mstd{
   using CorrespondingEndIter = std::conditional_t<iter_verifyable<Iterator>, void, Iterator>;
 
 
+  // convenience class for dereference
+  // NOTE: for some oscure reason, lambda's do not return 'decltype(auto)' by default, but only 'auto'
+  //      so, if you want your lambda to return by reference (which is basically _ALWAYS_ what you want), then you'd need to explicitly tell it so
+  //      this deref-class here exists so that I don't accidentally forget that...
+  struct default_deref {
+    template<class T> requires mstd::HasDeref<T>
+    decltype(auto) operator()(T&& t) const { return *t; }
+  };
+
   // a class that returns itself on dereference 
   // useful for iterators returning rvalues instead of lvalue references
   template<class T>
@@ -312,8 +321,7 @@ namespace mstd{
   template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
   using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, self_deref<R>>;
 
-
-  template<class Ref>
+  template<class Ref, class IteratorTag = std::forward_iterator_tag>
   struct iter_traits_from_reference {
     static constexpr bool returning_rvalue = not std::is_reference_v<Ref>;
     using reference = Ref;
@@ -323,16 +331,16 @@ namespace mstd{
     using const_pointer = pointer_from_reference<const_reference>;
     using difference_type = ptrdiff_t;
     using size_type = size_t;
-    using iterator_category = std::forward_iterator_tag; // by default we're a std::forward_iterator, overwrite this if you do bidirectional or random access
+    using iterator_category = IteratorTag; // by default we're a std::forward_iterator, overwrite this if you do bidirectional or random access
   };
 
   // not all std::iterator_traits of the STL provide "const_pointer" and "const_reference", so I'll do that for them
   template<typename T> requires HasIterTraits<T>
   struct _iterator_traits: public std::iterator_traits<T> {
     // since the ::reference correctly gives "const T&", we'll just std::remove_reference_t from it
-    using value_type = std::conditional_t<!std::is_pointer_v<T>,
-                                          typename std::iterator_traits<T>::value_type,
-                                          std::remove_reference_t<typename std::iterator_traits<T>::reference>>;
+    using value_type = std::conditional_t<std::is_pointer_v<T>,
+                                          std::remove_reference_t<typename std::iterator_traits<T>::reference>,
+                                          typename std::iterator_traits<T>::value_type>;
     using const_reference = const_reference_of_t<T>;
     using const_pointer   = const_pointer_of_t<T>;
     using iterator = T;

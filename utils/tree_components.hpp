@@ -172,7 +172,7 @@ namespace PT{
       DEBUG4(std::cout << "computing component roots\n");
       compute_component_roots(trivial_roots, non_trivial_roots);
       // construct the component DAG from the non-trivial roots
-      DEBUG4(std::cout << "1st pass over component roots\n" << comp_root<<"\nemplacer translation @"<< &(emplacer.helper.old_to_new)<<" our translation @"<<&N_to_comp_DAG<<"\n");
+      DEBUG4(std::cout << "1st pass over component roots\n" << comp_root<<"\nemplacer translation "<< emplacer.helper.old_to_new()<<"\nour translation: "<<N_to_comp_DAG<<"\n");
 
       // construct visibility also from the trivial roots (the leaves), but don't add their edges to the component DAG
       // NOTE: by going through the roots in reverse order, we make sure to spread visible leaves upwards

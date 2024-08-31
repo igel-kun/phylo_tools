@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "optional_tuple.hpp"
+
 #include "types.hpp"
 #include "extract_data.hpp"
 
@@ -13,36 +15,42 @@ namespace PT {
   template<bool _track_roots,
            StrictPhylogenyType _TargetPhylo,
            OptionalPhylogenyType _SourcePhylo = void,
-           MapsToNode _OldToNewTranslation = NodeTranslation>
-  struct EdgeEmplacementHelper: mstd::optional_tuple<std::conditional_t<_track_roots, NodeSet, void>> {
+           OptionalMapsToNode _OldToNewTranslation = NodeTranslation>
+  struct EdgeEmplacementHelper: public mstd::optional_tuple<_OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>
+  {
+    using Parent = mstd::optional_tuple<_OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>;
     using SourcePhylo = _SourcePhylo;
     using TargetPhylo = _TargetPhylo;
     using OldToNewTranslation = _OldToNewTranslation;
     using StrictTranslation = std::remove_reference_t<OldToNewTranslation>;
 
+    static constexpr bool translating = not std::is_void_v<_OldToNewTranslation>;
     static constexpr bool track_roots = _track_roots;
     TargetPhylo* N = nullptr;
-    OldToNewTranslation old_to_new;
-
+    
+    auto& old_to_new() requires (translating) { return this->template get<0>(); }
+    const auto& old_to_new() const requires (translating) { return this->template get<0>(); }
+    auto& root_candidates() requires (track_roots) { return this->template get<1>(); }
+    const auto& root_candidates() const requires (track_roots) { return this->template get<1>(); }
 
     template<class... Args>
-    EdgeEmplacementHelper(TargetPhylo& _N, Args&&... args): N(&_N), old_to_new(std::forward<Args>(args)...) {}
+    EdgeEmplacementHelper(TargetPhylo& _N, Args&&... args): Parent(std::forward<Args>(args)...), N(&_N) {}
 
     EdgeEmplacementHelper() = default;
     EdgeEmplacementHelper(const EdgeEmplacementHelper&) = default;
     EdgeEmplacementHelper(EdgeEmplacementHelper&&) = default;
 
+    EdgeEmplacementHelper& operator=(const EdgeEmplacementHelper&) = default;
+    EdgeEmplacementHelper& operator=(EdgeEmplacementHelper&&) = default;
+
   protected:
-    inline NodeSet& root_candidates() {
-      static_assert(track_roots);
-      return this->template get<0>();
-    }
   public:
 
-    auto register_node(const auto& x) { return old_to_new.emplace(std::piecewise_construct, std::tuple{x}, std::tuple{}); }
+    auto register_node(const auto& x) { return old_to_new().emplace(std::piecewise_construct, std::tuple{x}, std::tuple{}); }
 
     template<class... Args>
     NodeDesc create_node(Args&&... args) {
+      assert(N != nullptr);
       if constexpr ((not TargetPhylo::has_node_data) || (std::is_constructible_v<typename TargetPhylo::NodeData, Args&&...>)) {
         N->count_node();
         const NodeDesc v = N->create_node(std::forward<Args>(args)...);
@@ -60,31 +68,46 @@ namespace PT {
 
     template<class... Args>
     void add_an_edge(const NodeDesc u, const NodeDesc v, Args&&... args) {
+      assert(N != nullptr);
       if constexpr ((not TargetPhylo::has_edge_data) || (std::is_constructible_v<typename TargetPhylo::EdgeData, Args&&...>)) {
         if constexpr (track_roots)
           mstd::erase(root_candidates(), v); 
         N->add_edge(u,v, std::forward<Args>(args)...);
       } else throw mstd::MalformedInput{"cannot construct edge-data with provided parameters"};
     }
-   
+ 
+    // subdivide uv with w
+    template<EdgeType Edge, class Data>
+    void subdivide_edge(Edge&& uv, const NodeDesc w, Data&& data) {
+      assert(N != nullptr);
+      N->subdivide_edge(uv, w, [&](auto&&, auto& wv){ wv._data = std::forward<Data>(data); });
+    }
+    template<EdgeType Edge>
+    void subdivide_edge(Edge&& uv, const NodeDesc w) {
+      assert(N != nullptr);
+      N->subdivide_edge(uv, w);
+    }
+ 
 
-    bool mark_root(const auto& r) {
-      return mark_root_directly(old_to_new.at(r));
+    bool mark_root(const auto& r) requires (translating) {
+      return mark_root_directly(old_to_new().at(r));
     }
     bool mark_root_directly(const NodeDesc r) {
+      assert(N != nullptr);
       assert(N->in_degree(r) == 0);
       return mstd::append(N->_roots, r).second;
     }
 
     void clear() {
       if constexpr (track_roots) root_candidates().clear();
-      old_to_new.clear();
+      if constexpr (translating) old_to_new().clear();
     }
 
     // NOTE: this is not private, so the user can commit roots at any point
     //       However, be aware that roots will also be committed upon destruction!
     // NOTE: only call this if you're tracking roots
     void commit_roots() {
+      assert(N != nullptr);
       if constexpr (track_roots) {
         DEBUG3(std::cout << "committing roots: "<<root_candidates()<<"\n");
         for(const NodeDesc r: root_candidates())
@@ -100,13 +123,20 @@ namespace PT {
 
   };
 
+  // ------- Emplacement Helper: deduction guides ---------
+  // ------- Emplacement Helper: concepts ---------
   // T is an EmplacementHelper iff T::add_an_edge can be invoked with 2 NodeDesc's
   template<class T> concept StrictEmplacementHelperType = requires(T& t, NodeDesc u) { t.add_an_edge(u,u); };
   template<class T> concept EmplacementHelperType = StrictEmplacementHelperType<std::remove_cvref_t<T>>;
 
+  // ------- Emplacement Helper: defaults ---------
+  template<StrictPhylogenyType TargetPhylo, bool track_roots = true, OptionalPhylogenyType SourcePhylo = void, OptionalMapsToNode OldToNew = NodeTranslation>
+  using DefaultEdgeEmplacementHelper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, OldToNew>;
 
+  // ============== Edge Emplacer =================
   template<StrictEmplacementHelperType _Helper, StrictDataExtracterType Extracter>
   struct EdgeEmplacer {
+#warning "TODO: make this inherit from the Helper"
     using Helper = _Helper;
     using SourcePhylo = typename Helper::SourcePhylo;
     using TargetPhylo = typename Helper::TargetPhylo;
@@ -155,17 +185,41 @@ namespace PT {
     EdgeEmplacer(EdgeEmplacer&& other, Phylo&& N):
       helper(std::move(other).helper, std::forward<Phylo>(N)), data_extracter(std::move(other).data_extracter) {}
 
+
+    bool contains(const NodeDesc u) { return helper.old_to_new().contains(u); }
+    NodeDesc at(const NodeDesc u) { assert(contains(u)); return helper.old_to_new().at(u); }
+    NodeDesc lookup(const NodeDesc u, const NodeDesc _default = NoNode) const {
+      return_map_lookup(helper.old_to_new(), u, _default);
+    }
+
+    void clear() { helper.clear(); }
+
+
+    // --------------- labels --------------------
     template<class... Args>
     void set_label(Args&&... args) { helper.set_label(std::forward<Args>(args)...); }
 
+
+    // --------------- nodes --------------------
     template<class... Args>
     NodeDesc create_copy_of_raw(Args&&... args) {
       DEBUG4(std::cout << "extracting node data? "<<extract_node_data<<'\n');
-      return helper.create_node(std::forward<Args>(args)...);
+      if constexpr (extract_node_data && (std::is_invocable_v<Extracter, Ex_node_data, Args&&...>)) {
+        return helper.create_node(data_extracter(Ex_node_data{}, std::forward<Args>(args)...));
+      } else return helper.create_node(std::forward<Args>(args)...);
+    }
+    template<class... Args>
+    NodeDesc create_node(Args&&... args) { return create_copy_of_raw(std::forward<Args>(args)...); }
+    template<class... Args>
+    NodeDesc create_root(Args&&... args) {
+      const NodeDesc result = create_copy_of_raw(std::forward<Args>(args)...);
+      helper.mark_root_directly(result);
+      return result;
     }
 
+
     // call to create a copy of the node other_u and either extract its data & label, or pass the data and ignore the label (set it yourself later)
-    template<class... Args>
+    template<class... Args> requires (Helper::translating)
     NodeDesc create_copy_of(const auto& other_u, Args&&... args) {
       DEBUG5(std::cout << "\ncreating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new)<<'\n');
       // check if other_u is known to the translation
@@ -174,9 +228,9 @@ namespace PT {
       if(u_success) {
         // if other_u has not been seen before, insert it as new root
         if constexpr (extract_node_data) {
-          u_copy = create_copy_of_raw(data_extracter(Ex_node_data{}, other_u), std::forward<Args>(args)...);
+          u_copy = create_copy_of_raw(other_u, std::forward<Args>(args)...);
         } else u_copy = create_copy_of_raw(std::forward<Args>(args)...);
-        DEBUG4(std::cout << "created copy " << u_copy << " of "<< other_u<<" with data "<< (*helper.N)[u_copy].data() << "\n");
+        DEBUG4(std::cout << "created copy " << u_copy << " of "<< other_u<<"\n");
         // copy label from the source 
         if constexpr (extract_labels) {
           auto& u_copy_label = node_of<TargetPhylo>(u_copy).label();
@@ -187,16 +241,22 @@ namespace PT {
       return u_copy;
     }
 
+    
+    // --------------- edges --------------------
     template<class... MoreArgs>
-    void emplace_edge_raw(const NodeDesc u, const NodeDesc v, MoreArgs&&... args) {
+    NodeDesc emplace_edge_raw(const NodeDesc u, const NodeDesc v, MoreArgs&&... args) {
       DEBUG5(std::cout << "only adding edge "<< u <<" ----> "<< v <<"\n");
-      helper.add_an_edge(u, v, std::forward<MoreArgs>(args)...);
+      // if the data-extracter can be called with MoreArgs, then use it to make data, otherwise, just pass MoreArgs to the edge creation
+      if constexpr (extract_edge_data && (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
+        helper.add_an_edge(u, v, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
+      } else helper.add_an_edge(u, v, std::forward<MoreArgs>(args)...);
+      return v;
     }
 
     template<class... MoreArgs>
-    void emplace_edge(const auto& other_u, const auto& other_v, MoreArgs&&... args) {
+    NodeDesc emplace_edge(const auto& other_u, const auto& other_v, MoreArgs&&... args) {
       DEBUG5(std::cout << "treating ("<<other_u<<" "<<other_v<<")\n");
-      emplace_edge_raw(create_copy_of(other_u), create_copy_of(other_v), std::forward<MoreArgs>(args)...);
+      return emplace_edge_raw(create_copy_of(other_u), create_copy_of(other_v), std::forward<MoreArgs>(args)...);
     }
 
     template<class P, class Q, class... MoreArgs>
@@ -207,11 +267,22 @@ namespace PT {
     template<EdgeType Edge, class... MoreArgs>
     NodeDesc emplace_edge(Edge&& uv, MoreArgs&&... args) {
       if constexpr (extract_edge_data)
-        return emplace_edge(uv.as_pair(), data_extracter(Ex_edge_data{}, std::forward<Edge>(uv)), std::forward<MoreArgs>(args)...);
+        return emplace_edge(uv.as_pair(), std::forward<Edge>(uv), std::forward<MoreArgs>(args)...);
       else
         return emplace_edge(uv.as_pair(), std::forward<MoreArgs>(args)...);
     }
 
+    // subdivide uv with w
+    template<EdgeType Edge, class... MoreArgs>
+    void subdivide_edge(Edge&& uv, const NodeDesc w, MoreArgs&&... args) {
+      if constexpr (extract_edge_data && (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
+        helper.subdivide_edge(std::forward<Edge>(uv), w, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
+      } else helper.subdivide_edge(std::forward<Edge>(uv), w, std::forward<MoreArgs>(args)...);
+    }
+
+
+
+    // --------------- roots --------------------
     bool mark_root(const NodeDesc r) { return helper.mark_root(r); }
     bool mark_root_directly(const NodeDesc r) { return helper.mark_root_directly(r); }
 
@@ -221,32 +292,28 @@ namespace PT {
     }
     // commit the root-candidates to N
     void commit_roots() { helper.commit_roots(); }
-
-    NodeDesc at(const NodeDesc u) const { assert(contains(u)); return helper.old_to_new.at(u); }
-    bool contains(const NodeDesc u) const { return helper.old_to_new.contains(u); }
-    NodeDesc lookup(const NodeDesc u, const NodeDesc _default = NoNode) const {
-      return_map_lookup(helper.old_to_new, u, _default);
-    }
-
-    void clear() { helper.clear(); }
   };
 
+  // -------- Edge Emplacer: deduction guides --------------
   // deduction guide for the emplacer
   template<EmplacementHelperType _Helper, DataExtracterType Extracter>
   EdgeEmplacer(_Helper&&, Extracter&&) -> EdgeEmplacer<std::remove_cvref_t<_Helper>, std::remove_cvref_t<Extracter>>;
 
+  // -------- Edge Emplacer: concepts --------------
+  template<class T> concept StrictEdgeEmplacerType = EmplacementHelperType<typename T::Helper>;
+  template<class T> concept EdgeEmplacerType = StrictEdgeEmplacerType<std::remove_cvref_t<T>>;
 
+  // -------- Edge Emplacer: defaults  --------------
+  template<StrictPhylogenyType TargetPhylo, bool track_roots = true, OptionalPhylogenyType SourcePhylo = void, OptionalMapsToNode OldToNew = NodeTranslation>
+  using DefaultEdgeEmplacer = EdgeEmplacer<EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, OldToNew>, DefaultDataExtracter<SourcePhylo>>;
 
   // this saves you from writing 'EdgeEmplacementHelper' if you want to specify the Emplacer directly
   template<bool _track_roots,
            StrictPhylogenyType _TargetPhylo,
            OptionalPhylogenyType _SourcePhylo = void,
-           MapsToNode OldToNewTranslation = NodeTranslation,
+           OptionalMapsToNode OldToNewTranslation = NodeTranslation,
            DataExtracterType Extracter = DataExtracter<_SourcePhylo>>
   using EdgeEmplacerWithHelper = EdgeEmplacer<EdgeEmplacementHelper<_track_roots, _TargetPhylo, _SourcePhylo, OldToNewTranslation>, Extracter>;
-
-  template<class T> concept StrictEdgeEmplacerType = EmplacementHelperType<typename T::Helper>;
-  template<class T> concept EdgeEmplacerType = StrictEdgeEmplacerType<std::remove_cvref_t<T>>;
 
 
   // the rest of this file are convenience functions to not have to write sooo much all the time

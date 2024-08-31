@@ -23,9 +23,9 @@ namespace mstd {
     std::pair<SubsetInternal, int64_t> result{};
     bool first = true;
     for(const auto S: Subsets{container, bounds}) {
-      DEBUG5(std::cout << "subset: "<<(S | std::ranges::views::transform(default_deref{}))<<'\n');
       int64_t current;
       if constexpr (Subsets::store_iters) {
+        DEBUG5(std::cout << "subset: "<<(S | std::ranges::views::transform(default_deref{}))<<'\n');
         static_assert(std::ranges::range<decltype(S | std::ranges::views::transform(default_deref{}))>);
         current = score(S | std::ranges::views::transform(default_deref{}));
       } else current = score(S);
@@ -53,11 +53,9 @@ namespace mstd {
     return brute_force<_OutputContainer>(linear_interval{k,k}, container, std::forward<Score>(score), std::forward<Cmp>(better));
   }
 
-  /*
   template<OptionalIterableType _OutputContainer = void, IterableType Container, class Score, class Cmp = std::greater<>>
   auto brute_force(const Container& container, Score&& score, Cmp&& better = Cmp{}) {
     return brute_force<_OutputContainer>(linear_interval<uint32_t>{0,UINT32_MAX}, container, std::forward<Score>(score), std::forward<Cmp>(better));
   }
-  */
 
 }

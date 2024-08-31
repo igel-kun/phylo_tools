@@ -10,6 +10,7 @@
 #include "utils/vector_map.hpp" //    vector_map
 #include "utils/optional.hpp" //    optional
 #include "utils/subsets.hpp" //    subset iterators
+#include "utils/brute_force.hpp" // brute_force
 
 #include "utils/command_line.hpp"
 
@@ -23,6 +24,7 @@ void parse_given_options(const int argc, const char** argv) {
   description["-h"] = {0,0};
   description["-m"] = {0,0};
   description["-b"] = {0,0};
+  description["-f"] = {0,0};
   description[""] = {0,0};
   const std::string help_message(std::string(argv[0]) + " [-a|<options>]\n\
       FLAGS:\n\
@@ -30,6 +32,7 @@ void parse_given_options(const int argc, const char** argv) {
       \t-s\trun singleton_set test\n\
       \t-h\trun vector_hash test\n\
       \t-m\trun vector_map test\n\
+      \t-f\trun brute-force abstraction test\n\
       \t-b\trun bounded-subset test\n");
 
   PT::parse_options(argc, argv, description, help_message, options);
@@ -118,6 +121,10 @@ using T = mstd::raw_vector_map<size_t, int>;
 using I = typename T::iterator;
 using RT = typename I::reference;
 using VT = typename I::value_type;
+
+static_assert(std::is_same_v<typename T::mapped_type, int>);
+static_assert(std::is_same_v<mstd::mapped_type_of_t<T>, int>);
+
 static_assert(std::copy_constructible<T>);
 static_assert(std::is_object_v<T>);
 static_assert(std::move_constructible<T>);
@@ -160,7 +167,7 @@ static_assert(std::forward_iterator<typename T::const_iterator>);
 static_assert(mstd::IterableType<T>);
 static_assert(mstd::ContainerType<T>);
 static_assert(mstd::MapType<T>);
-
+static_assert(mstd::HasIterTraits<UintVecMap>);
 
 
 void test_vector_map() {
@@ -203,7 +210,7 @@ size_t choose(const size_t n, const size_t k) {
 template<mstd::ContainerType Container>
 void test_subsets_sub(const Container& c, const ssize_t low, const ssize_t high) {
   std::cout << "\nsubsets of "<< c << " with size between "<<low<<" & "<< high <<'\n';
-  const mstd::BoundedSubsetFactory<Container> fac{c, low, high};
+  const mstd::BoundedSubsetFactory<const Container> fac{c, low, high};
   size_t count = 0;
   for(auto s: fac) {
     ++count;
@@ -229,16 +236,32 @@ void test_subsets() {
   test_subsets_sub(set1, 2, 2);
   test_subsets_sub(set1, -1, -1);
 
-
   const std::vector<std::string> set2{"one", "two", "three", "four", "five"};
   test_subsets_sub(set2, 0, 2);
-
 
   std::vector<int> set3;
   for(int i = 0; i < 70; ++i) append(set3, 2*i);
   test_subsets_sub(set3, 3, 3);
 }
 
+void test_brute_force() {
+  // see if nums has a subset summing up to 5 -- spoiler: it does :)
+  std::unordered_set<int> nums{12, -3, 6, 10, -4, 100};
+  const auto [result1, score1] = mstd::brute_force(nums, [](const auto& S){ return (std::ranges::fold_left(S, 0) == 5);} );
+  assert(score1 == 1);
+  assert(not result1.empty());
+  
+  // find the set of at most 3 items whose combined length is maximum
+  std::vector<std::string> strings{"hello", "my", "name", "is", "George"};
+  const auto [result2, score2] = mstd::brute_force(3, strings, [](const auto& S){
+      return std::ranges::fold_left(S | std::ranges::views::transform([](const auto& s){ return s.size();}), 0u);
+  });
+  assert(score2 == 15);
+  assert(result2.size() == 3);
+  assert(test(result2, "hello"));
+  assert(test(result2, "name"));
+  assert(test(result2, "George"));
+}
 
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
 
@@ -249,6 +272,7 @@ int main(const int argc, const char** argv) {
   if(test(options, "-h")) test_vector_hash();
   if(test(options, "-m")) test_vector_map();
   if(test(options, "-b")) test_subsets();
+  if(test(options, "-f")) test_brute_force();
 
 }
 

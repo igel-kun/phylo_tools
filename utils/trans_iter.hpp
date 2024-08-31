@@ -183,14 +183,6 @@ namespace mstd {
   template<class TupleContainer>
   constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
 
-  // convenience class for dereference
-  // NOTE: for some oscure reason, lambda's do not return 'decltype(auto)' by default, but only 'auto'
-  //      so, if you want your lambda to return by reference (which is basically _ALWAYS_ what you want), then you'd need to explicitly tell it so
-  //      this deref-class here exists so that I don't accidentally forget that...
-  struct default_deref {
-    template<class T> requires mstd::HasDeref<T>
-    decltype(auto) operator()(T&& t) const { return *t; }
-  };
 }
 
 

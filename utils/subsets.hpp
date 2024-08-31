@@ -2,6 +2,7 @@
 // infrastructure for enumerating subsets of a set X such that all subsets of an enumerated set have already been enumerated before
 
 #include "stl_utils.hpp"
+#include "optional_tuple.hpp"
 #include "set_interface.hpp"
 #include "iter_bitset.hpp"
 #include "linear_interval.hpp"
@@ -75,7 +76,7 @@ namespace mstd {
 
 
 
-  template<class _Container, bool _partial = false, class _OutputContainer = _Container>
+  template<mstd::StrictIterableType _Container, bool _partial = false, mstd::StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
   struct SubsetIterator: public mstd::optional_tuple<std::conditional_t<_partial, uint32_t, void>>,
                          public mstd::iter_traits_from_reference<_OutputContainer>
   {
@@ -186,13 +187,13 @@ namespace mstd {
     pointer operator->() const { return operator*(); }
   };
 
-  static_assert(__LegacyInputIterator<SubsetIterator<int*>>);
-  static_assert(HasIterTraits<SubsetIterator<int*>>);
+  static_assert(__LegacyInputIterator<SubsetIterator<std::vector<int>>>);
+  static_assert(HasIterTraits<SubsetIterator<std::vector<int>>>);
 
-  template<class _Container, bool partial = false, class _OutputContainer = _Container>
+  template<mstd::StrictIterableType _Container, bool partial = false, mstd::StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
   using SubsetFactory = IterFactory<SubsetIterator<_Container, partial, _OutputContainer>>;
 
-  template<class _Container, class _OutputContainer = _Container>
+  template<mstd::StrictIterableType _Container, mstd::StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
   using BoundedSubsetFactory = IterFactory<SubsetIterator<_Container, true, _OutputContainer>>;
 
 }// namespace

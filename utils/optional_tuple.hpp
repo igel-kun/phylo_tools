@@ -98,9 +98,8 @@ namespace mstd {
   };
 
 
-  // forward declaration of the tuple
   template<size_t i, class... T>
-  struct _optional_tuple;
+  struct _optional_tuple {};
 
   // base case: tuple with no items
   template<size_t i>

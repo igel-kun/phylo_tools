@@ -21,11 +21,10 @@ namespace mstd{
   template<class _Key,
            class _Element,
            class Allocator = std::allocator<OptFor<_Element>>>
-  class vector_map: public raw_vector_map<_Key, std::vector<OptFor<_Element>, Allocator>>
+  class vector_map: public raw_vector_map<_Key, OptFor<_Element>, Allocator>
   {
     using Element = OptFor<_Element>;
-    using Parent = raw_vector_map<_Key, std::vector<OptFor<_Element>, Allocator>>;
-    using typename Parent::Vector;
+    using Parent = raw_vector_map<_Key, OptFor<_Element>, Allocator>;
     using Parent::data;
 
     size_t _count = 0;
@@ -44,9 +43,14 @@ namespace mstd{
 
   public:
     using Parent::Parent;
+    using typename Parent::Vector;
     using typename Parent::key_type;
+    using typename Parent::mapped_type;
     using typename Parent::VectorIter;
     using typename Parent::VectorConstIter;
+
+    static_assert(std::is_same_v<Vector, std::vector<OptFor<_Element>, Allocator>>);
+    static_assert(std::is_same_v<mapped_type, typename Vector::value_type>);
 
     using FilterIter = proto_vector_map_iterator<VectorIter>;
     using FilterConstIter = proto_vector_map_iterator<VectorConstIter>;

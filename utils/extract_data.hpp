@@ -42,13 +42,13 @@ namespace PT {
   struct ProtoDefaultExtractData {};
 
   // NOTE: when passing an rvalue-reference as Phylo, we will call the &&-qualified version of label() and data()
-  template<PhylogenyType Phylo>
+  template<StrictPhylogenyType Phylo> requires (Phylo::has_node_labels)
   struct ProtoDefaultExtractData<Ex_node_label, Phylo> { decltype(auto) operator()(const NodeDesc u) const { return node_of<Phylo>(u).label(); } };
 
-  template<PhylogenyType Phylo>
+  template<StrictPhylogenyType Phylo> requires (Phylo::has_node_data)
   struct ProtoDefaultExtractData<Ex_node_data, Phylo> { decltype(auto) operator()(const NodeDesc u) const { return node_of<Phylo>(u).data(); } };
 
-  template<PhylogenyType Phylo>
+  template<StrictPhylogenyType Phylo> requires (Phylo::has_edge_data)
   struct ProtoDefaultExtractData<Ex_edge_data, Phylo> {
     // NOTE: we have to be able to tell EdgeDataExtractors from NodeDataExtractors
     template<LooseEdgeType Edge>
@@ -71,13 +71,19 @@ namespace PT {
     }
   };
 
-  template<DataTag Tag, OptionalPhylogenyType Phylo = void>
+  template<DataTag Tag, OptionalPhylogenyType Phylo>
   struct _DefaultExtractData { using type = ProtoDefaultExtractData<Tag, Phylo>; };
   template<DataTag Tag>
   struct _DefaultExtractData<Tag, void> { using type = void; };
- 
+  template<StrictPhylogenyType Phylo> requires (not Phylo::has_node_data)
+  struct _DefaultExtractData<Ex_node_data, Phylo> { using type = void; };
+  template<StrictPhylogenyType Phylo> requires (not Phylo::has_edge_data)
+  struct _DefaultExtractData<Ex_edge_data, Phylo> { using type = void; };
+  template<StrictPhylogenyType Phylo> requires (not Phylo::has_node_labels)
+  struct _DefaultExtractData<Ex_node_label, Phylo> { using type = void; };
+
   template<DataTag Tag, OptionalPhylogenyType Phylo = void>
-  using DefaultExtractData = typename _DefaultExtractData<Tag, Phylo>::type;
+  using DefaultExtractData = typename _DefaultExtractData<Tag, std::remove_reference_t<Phylo>>::type;
  
 
   template<DataTag Tag, OptionalPhylogenyType Phylo>
@@ -434,7 +440,7 @@ namespace PT {
     return extracter;
   }
 
-  template<StrictPhylogenyType SourcePhylo>
+  template<OptionalPhylogenyType SourcePhylo>
   using DefaultDataExtracter = DataExtracter<SourcePhylo,
                          DefaultExtractData<Ex_node_data, SourcePhylo>,
                          DefaultExtractData<Ex_edge_data, SourcePhylo>,

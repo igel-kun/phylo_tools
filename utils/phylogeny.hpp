@@ -1115,8 +1115,8 @@ namespace PT {
     //       (in particular if you use an EdgeEmplacer with 'track_roots = false' and forget to mark the roots afterwards)
     //       however, this power enables certain use cases where we want to "directly" access the edges of a network...
     //       just, promise to be careful with your EdgeEmplacers
-    template<bool, StrictPhylogenyType, OptionalPhylogenyType, MapsToNode> friend struct ProtoEdgeEmplacementHelper;
-    template<bool, StrictPhylogenyType, OptionalPhylogenyType, MapsToNode> friend struct EdgeEmplacementHelper;
+    template<bool, StrictPhylogenyType, OptionalPhylogenyType, OptionalMapsToNode> friend struct ProtoEdgeEmplacementHelper;
+    template<bool, StrictPhylogenyType, OptionalPhylogenyType, OptionalMapsToNode> friend struct EdgeEmplacementHelper;
 
 
     // emplace a set of new edges into *this

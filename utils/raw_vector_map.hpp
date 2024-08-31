@@ -41,16 +41,15 @@ namespace mstd {
   template<class _Key, class _Iter>
   using raw_vector_map_iterator = transforming_iterator<_Iter, PairFromVectorIter<_Key, _Iter>, true>;
 
-  template<std::unsigned_integral _Key, class _Element>
-  using raw_vector_map = _raw_vector_map<_Key, std::vector<_Element>>;
+  template<std::unsigned_integral _Key, class _Element, class Allocator = std::allocator<_Element>>
+  using raw_vector_map = _raw_vector_map<_Key, std::vector<_Element, Allocator>>;
 
   template<std::unsigned_integral _Key, VectorType _base_container> 
   class _raw_vector_map: public _base_container
   {
-  protected:
-    using Vector = _base_container;
   public:
 
+    using Vector = _base_container;
     using Traits = iterator_traits<Vector>;
     using VectorIter = iterator_of_t<Vector>;
     using VectorConstIter = const_iterator_of_t<Vector>;

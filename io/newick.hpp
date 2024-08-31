@@ -229,8 +229,8 @@ namespace PT{
               throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
           root = stored.get_node();
         } else if(data[3].has_value()) { // if root was an unknown hybrid, then register it
-          root = stored.get_node() = emplacer.create_copy_of_raw(data[3].value());
-        } else root = stored.get_node() = emplacer.create_copy_of_raw();
+          root = stored.get_node() = emplacer.create_node(data[3].value());
+        } else root = stored.get_node() = emplacer.create_node();
         
         // allow giving the hybrid a label at any time it is referenced
         if(data[0].has_value())
@@ -242,8 +242,8 @@ namespace PT{
         // if root is not a hybrid, then just register it
         DEBUG5(std::cout << " it's not a hybrid, so create it with data '"<<data[3].value_or("")<<"'\n");
         if(data[3].has_value()) {
-          root = emplacer.create_copy_of_raw(data[3].value());
-        } else root = emplacer.create_copy_of_raw();
+          root = emplacer.create_node(data[3].value());
+        } else root = emplacer.create_node();
         if(data[0].has_value()) emplacer.set_label(root, data[0].value());
         if((back > 0) && newick_string.at(back) == ')') read_internal<false>(root);
       }

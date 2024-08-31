@@ -108,6 +108,8 @@ namespace mstd {
     { a.size() }    -> std::same_as<typename std::remove_cvref_t<T>::size_type>;
     { a.empty() }   -> std::same_as<bool>;
 	};
+  template <class T> 
+  concept StrictIterableTypeWithSize = IterableTypeWithSize<T> && !std::is_reference_v<T>;
 
   template<IterableType T> using BeginType = decltype(std::begin(std::declval<T>()));
   template<IterableType T> using EndType = decltype(std::end(std::declval<T>()));
@@ -151,6 +153,8 @@ namespace mstd {
     requires std::same_as<typename std::remove_cvref_t<T>::difference_type, typename std::iterator_traits<typename std::remove_cvref_t<T>::const_iterator>::difference_type>;
   };
   
+  template<class T>
+  concept StrictContainerType = ContainerType<T> && !std::is_reference_v<T>;
   template<class T>
   concept OptionalContainerType = std::is_void_v<T> || ContainerType<T>;
 

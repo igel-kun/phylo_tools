@@ -6,6 +6,7 @@
 #include "utils/stl_utils.hpp"
 
 #include "utils/types.hpp"
+#include "utils/edge_emplacement.hpp"
 
 namespace PT {
 

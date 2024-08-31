@@ -81,10 +81,9 @@ namespace PT{
     Adjacency& child() { return any_successor(); }
 
   protected:
-    template<class... Args>
-    auto add_successor(Args&&... args) { return mstd::append(successors(), std::forward<Args>(args)...); }
-    template<class... Args>
-    auto add_child(Args&&... args) { return add_successor(std::forward<Args>(args)...); }
+    template<class... Args> auto add_successor(Args&&... args) { return mstd::append(successors(), std::forward<Args>(args)...); }
+    template<class... Args> auto add_child(Args&&... args) { return add_successor(std::forward<Args>(args)...); }
+
     size_t remove_successor(const NodeDesc n) { return std::erase(successors(), n); }
     size_t remove_child(const NodeDesc n) { return remove_successor(n); }
     auto remove_any_successor() { return mstd::value_pop(successors()); }

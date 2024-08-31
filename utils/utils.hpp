@@ -84,6 +84,19 @@ constexpr x(Tuple&& t): x(std::forward<Tuple>(t), std::make_index_sequence<std::
 #endif
 */
 
+#if __cplusplus < 202302L
+namespace std::ranges {
+	//! fold left not before C++23 is just face-palm
+  template< std::ranges::input_range R, class T, class F = std::plus<void>>
+  constexpr auto fold_left( R&& r, T init, F f = F{} ) {
+    for(decltype(auto) x: std::forward<R>(r))
+      init = f(init, x);
+    return init;
+  }
+}
+#endif
+
+
 // find x in the container "list" and, ONLY IF NOT FOUND, execute constructor, assign findings to result (which should be a reference to value_type)
 #define FIND_OR_CONSTRUCT(result,x,list,constructor) {auto ___it = list.find(x); if(___it == list.end()) ___it = list.emplace(x, constructor); result = ___it->second;}
 // get a pointer from a vector iterator

@@ -125,10 +125,9 @@ void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
 
 // =============== READING Networks =====================
 
-
-using MyNetwork = DefaultLabeledNetwork<DefaultDataVec, DefaultDataVec>;
+using MyNetwork = DefaultLabeledNetwork<mstd::DefaultDataVec, mstd::DefaultDataVec>;
 using MyEdge = typename MyNetwork::Edge;
-static_assert(std::is_default_constructible_v<Adjacency<DefaultDataVec>>);
+static_assert(std::is_default_constructible_v<Adjacency<mstd::DefaultDataVec>>);
 static_assert(std::is_default_constructible_v<MyEdge>);
 
 auto read_network(const std::string& filename) {
@@ -207,18 +206,18 @@ void add_random_data(Phylo& N, Distribution&& dist) {
 template<DataTarget target, template<class> class Distribution, StrictPhylogenyType Phylo>
 void add_random_data(Phylo& N, char val_select, std::string_view s) {
   if(std::string{"0123456789."}.find(s[0]) == std::string::npos)
-    throw MalformedInput{std::string{"Cound not parse distribution information from '"} + s + "'"};
+    throw mstd::MalformedInput{std::string{"Cound not parse distribution information from '"} + s + "'"};
   switch(val_select) {
     case 'I': add_random_data<target>(N, Distribution<int64_t>(s)); break;
     case 'D': add_random_data<target>(N, Distribution<double>(s)); break;
-    default: throw MalformedInput{std::string{"'"} + val_select + "' does not correspond to a valid type; see -h or --help for help"};
+    default: throw mstd::MalformedInput{std::string{"'"} + val_select + "' does not correspond to a valid type; see -h or --help for help"};
   }
 }
 
 template<DataTarget target, StrictPhylogenyType Phylo>
 void add_random_data(Phylo& N, std::string_view s) {
   DEBUG4(std::cout << "adding data described by '"<<s<<"'\n");
-  if(s.size() < 2) throw MalformedInput{std::string{"cannot interpret data '"} + s + "'. Please see --help or -h for help"};
+  if(s.size() < 2) throw mstd::MalformedInput{std::string{"cannot interpret data '"} + s + "'. Please see --help or -h for help"};
   switch(s[0]) {
     case 'U': add_random_data<target, uniform_rng>(N, s[1], s.substr(2)); break;
     case 'N': add_random_data<target, normal_rng>(N, s[1], s.substr(2)); break;
@@ -236,7 +235,7 @@ void add_random_data(Phylo& N, std::string_view s) {
                 }
               }
               break;
-    default: throw MalformedInput{std::string{"'"} + s[0] + "' does not correspond to a valid type; see -h or --help for help"};
+    default: throw mstd::MalformedInput{std::string{"'"} + s[0] + "' does not correspond to a valid type; see -h or --help for help"};
   }
 }
 
@@ -311,17 +310,7 @@ int main(const int argc, const char** argv) {
   } else {
     long num_nodes, num_retis, num_leaves;
     get_node_numbers(num_nodes, num_retis, num_leaves);
-    const long num_tree_nodes = num_nodes - num_retis - num_leaves;
-
-    if((num_nodes < 0) || (num_retis < 0) || (num_leaves < 0) || (num_tree_nodes < 0))
-      throw std::logic_error("network geometry implied by your parameters is invalid: "+
-          std::to_string(num_tree_nodes)+" tree nodes, "+
-          std::to_string(num_retis)+" reticulations, "+
-          std::to_string(num_leaves)+" leaves = "+
-          std::to_string(num_nodes)+" nodes in total");
-    std::cout << "constructing network with "<<num_nodes<<" vertices: "<<num_tree_nodes<<" tree nodes, "<<num_retis<<" reticulations and "<<num_leaves<<" leaves"<<std::endl;
-
-    generate_random_binary_network_trl(N, num_tree_nodes, num_retis, num_leaves, 0.0);
+    generate_random_binary_network(N, NumNodes(num_nodes, num_retis, num_leaves));
   }
 
   if(mstd::test(options,"-L"))
