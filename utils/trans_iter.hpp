@@ -28,9 +28,13 @@ namespace mstd {
       if constexpr (not std::is_pointer_v<Trans>) {
         if constexpr (mstd::really_int_incrementable<Transformation>) {
           trans.value += x;
-        } else if constexpr (mstd::really_pre_incrementable<Transformation>) {
-          if(x == 1) ++trans;
-          if(x == -1) --trans;
+        } else {
+          if constexpr (mstd::really_pre_incrementable<Transformation>) {
+            while(x > 0) {++trans; --x; }
+          }
+          if constexpr (mstd::really_pre_decrementable<Transformation>) {
+            while(x < 0) {--trans; ++x; }
+          }
         }
       } else {
         assert(_trans != nullptr);

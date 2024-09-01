@@ -321,6 +321,10 @@ namespace mstd{
   template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
   using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, self_deref<R>>;
 
+  // if you want to build a class with some template T in it, but T is a reference, the class will not be assignable; thus it is preferred to use pointers
+  template<class R>
+  using prefer_pointer = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, R>;
+
   template<class Ref, class IteratorTag = std::forward_iterator_tag>
   struct iter_traits_from_reference {
     static constexpr bool returning_rvalue = not std::is_reference_v<Ref>;

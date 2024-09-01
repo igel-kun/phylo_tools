@@ -79,8 +79,8 @@ int main(const int argc, const char** argv) {
   std::cout << "reading network...\n";
   MyNetwork N(read_network(std::ifstream(options[""][0])));
 
-  std::unordered_set<NodeDesc> nodes, leaves, cut_nodes;
-  std::unordered_set<PT::Edge<>> edges, bridges;
+  PT::NodeSet nodes, leaves, cut_nodes;
+  PT::NetEdgeSet<MyNetwork> edges, bridges;
 
   std::cout << "\n" << N << "\n\n";
   std::cout << " ------ leaves -------\n";

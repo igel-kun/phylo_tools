@@ -18,7 +18,9 @@ namespace mstd {
   template<class T> constexpr bool is_basically_arithmetic_v = std::is_convertible_v<int, std::remove_cvref_t<T>> && std::is_convertible_v<std::remove_cvref_t<T>, int>;
   // std::weakly_incrementable has a whole sack full of other iterator-related requirements like default-constructibility and difference_type...
   template<class T> concept really_pre_incrementable = requires(T t){++t;};
+  template<class T> concept really_pre_decrementable = requires(T t){--t;};
   template<class T> concept really_post_incrementable = requires(T t){t++;};
+  template<class T> concept really_post_decrementable = requires(T t){t--;};
   template<class T> concept really_int_incrementable = requires(T t, int x){t += x;};
 
   // containers can be output to std::cout in the form [a b c ], unless they are strings or char* or string_view or....

@@ -22,20 +22,16 @@ namespace PT {
   template<OptionalPhylogenyType Phylo> constexpr bool HasNodeData  = !std::is_void_v<NodeDataOf<Phylo>>;
   template<OptionalPhylogenyType Phylo> constexpr bool HasEdgeData  = !std::is_void_v<EdgeDataOf<Phylo>>;
 
-
+  // ----------------- using tags -----------------------
   template<DataTag Tag, OptionalPhylogenyType Phylo>
   using DataTypeOf = std::conditional_t<is_node_label_tag<Tag>,
                             NodeLabelOf<Phylo>,
                             std::conditional_t<is_node_data_tag<Tag>,
                                     NodeDataOf<Phylo>,
                                     EdgeDataOf<Phylo>>>;
-
   template<DataTag Tag, OptionalPhylogenyType Phylo> constexpr bool HasDataType = !std::is_void_v<DataTypeOf<Tag, Phylo>>;
 
-  // as we cannot return void, we return something (that's going to be ignored) in that case
-  template<DataTag Tag, OptionalPhylogenyType Phylo>
-  using ReturnableDataTypeOf = mstd::ReturnableType<DataTypeOf<Tag, Phylo>>;
- 
+
 
 #warning "TODO: can we turn those into templates of constexpr lambdas?"
   template<DataTag Tag, PhylogenyType Phylo>
@@ -85,21 +81,10 @@ namespace PT {
   template<DataTag Tag, OptionalPhylogenyType Phylo = void>
   using DefaultExtractData = typename _DefaultExtractData<Tag, std::remove_reference_t<Phylo>>::type;
  
-
-  template<DataTag Tag, OptionalPhylogenyType Phylo>
-  struct IgnoreExtractionFunction {
-    auto operator()(const NodeDesc&) const { return ReturnableDataTypeOf<Tag, Phylo>(); }
-  };
-  template<OptionalPhylogenyType Phylo>
-  struct IgnoreExtractionFunction<Ex_edge_data, Phylo> {
-    // NOTE: we have to be able to tell EdgeDataExtractors from NodeDataExtractors, so we use the following requirement:
-    template<class Edge> requires (!std::is_same_v<std::remove_cvref_t<Edge>, NodeDesc>)
-    auto operator()(Edge&& uv) { return ReturnableDataTypeOf<Ex_edge_data, Phylo>(); }
-    auto operator()(const NodeDesc u, const NodeDesc v) { return ReturnableDataTypeOf<Ex_edge_data, Phylo>(); }
-  };
-
-
   
+  // ============== Start of main class hierarchy for data extraction =================
+  
+  // ============== Part 1: extract node labels =================
 
 /*
  * this is a container class storing functions to extract node-data, edge-data, and node-labels
@@ -107,9 +92,8 @@ namespace PT {
  */
   template<OptionalPhylogenyType Network,
            OptionalNodeFunctionType _ExtractNodeLabel  = void>
-  struct _DataExtracter_nl: public _ExtractNodeLabel {
+  struct _DataExtracter_nl {
     using ExtractNodeLabel = _ExtractNodeLabel;
-    using ExtractNodeLabel::ExtractNodeLabel;
 
     static constexpr bool custom_node_label_maker = !std::is_same_v<ExtractNodeLabel, DefaultExtractData<Ex_node_label, Network>>;
     static constexpr bool ignoring_node_labels = false;
@@ -121,8 +105,6 @@ namespace PT {
   template<OptionalPhylogenyType Network>
   struct _DataExtracter_nl<Network, void> {
     using ExtractNodeLabel = void;
-    using NodeLabelReturnType = bool;
-    using ConstNodeLabelReturnType = bool;
 
     bool operator()(const Ex_node_label, const NodeDesc) = delete;
     bool operator()(const Ex_node_label, const NodeDesc) const = delete;
@@ -132,20 +114,16 @@ namespace PT {
   };
 
 
-
-
+  // ============== Part 2: extract edge data =================
 
   template<OptionalPhylogenyType Network,
     class _ExtractEdgeData                    = void,
     OptionalNodeFunctionType ExtractNodeLabel = void>
-  struct _DataExtracter_ed_nl: public _DataExtracter_nl<Network, ExtractNodeLabel>, public _ExtractEdgeData {
+  struct _DataExtracter_ed_nl: public _DataExtracter_nl<Network, ExtractNodeLabel> {
     using Parent = _DataExtracter_nl<Network, ExtractNodeLabel>;
     using ExtractEdgeData = _ExtractEdgeData;
     using Parent::custom_node_label_maker;
     using Parent::operator();
- 
-    template<class... Args>
-    using EdgeDataReturnType = decltype(std::declval<ExtractEdgeData>().operator()(std::declval<Args>()...));
 
     static constexpr bool custom_edge_data_maker  = !std::is_same_v<ExtractEdgeData,  DefaultExtractData<Ex_edge_data, Network>>;
     static constexpr bool ignoring_edge_data = false;
@@ -181,31 +159,31 @@ namespace PT {
     {}
 
 
-    template<AdjacencyType Adj>
+    template<AdjacencyType Adj> // NOTE: if get_edge_data is not invocable with an adjacency, we'll make an edge from the adjacency
     decltype(auto) operator()(const Ex_edge_data, Adj&& v) {
-      if constexpr (!std::invocable<ExtractEdgeData, Adj&&>){
-        return get_edge_data(Network::Edge(NoNode, std::forward<Adj>(v)));
-      } else return get_edge_data(std::forward<Adj>(v));
+      if constexpr (std::is_invocable_v<ExtractEdgeData, Adj&&>){
+        return get_edge_data(std::forward<Adj>(v));
+      } else return get_edge_data(Network::Edge(NoNode, std::forward<Adj>(v)));
     }
 
     template<AdjacencyType Adj>
     decltype(auto) operator()(const Ex_edge_data, Adj&& v) const {
-      if constexpr (!std::invocable<ExtractEdgeData, Adj&&>){
-        return get_edge_data(Network::Edge(NoNode, std::forward<Adj>(v)));
-      } else return get_edge_data(std::forward<Adj>(v));
+      if constexpr (std::is_invocable_v<ExtractEdgeData, Adj&&>){
+        return get_edge_data(std::forward<Adj>(v));
+      } else return get_edge_data(Network::Edge(NoNode, std::forward<Adj>(v)));
     }
 
-    template<EdgeType Edge>
+    template<EdgeType Edge> // NOTE: if get_edge_data is not invocable with an Edge, we'll extract the edge's adjacency
     decltype(auto) operator()(const Ex_edge_data, Edge&& uv) {
-      if constexpr (!std::invocable<ExtractEdgeData, Edge&&>){
-        return get_edge_data(uv.tail(), std::forward<Edge>(uv).head());
-      } else return get_edge_data(std::forward<Edge>(uv));
+      if constexpr (std::is_invocable_v<ExtractEdgeData, Edge&&>){
+        return get_edge_data(std::forward<Edge>(uv));
+      } else return get_edge_data(uv.tail(), std::forward<Edge>(uv).head());
     }
     template<EdgeType Edge>
     decltype(auto) operator()(const Ex_edge_data, Edge&& uv) const {
-      if constexpr (!std::invocable<ExtractEdgeData, Edge&&>){
-        return get_edge_data(uv.tail(), std::forward<Edge>(uv).head());
-      } else return get_edge_data(std::forward<Edge>(uv));
+      if constexpr (std::is_invocable_v<ExtractEdgeData, Edge&&>){
+        return get_edge_data(std::forward<Edge>(uv));
+      } else return get_edge_data(uv.tail(), std::forward<Edge>(uv).head());
     }
   };
 
@@ -213,8 +191,8 @@ namespace PT {
     OptionalNodeFunctionType ExtractNodeLabel>
   struct _DataExtracter_ed_nl<Network, void, ExtractNodeLabel>: public _DataExtracter_nl<Network, ExtractNodeLabel> {
     using Parent = _DataExtracter_nl<Network, ExtractNodeLabel>;
-    using ExtractEdgeData = void;
     using Parent::operator();
+    using ExtractEdgeData = void;
  
     template<class... Args> _DataExtracter_ed_nl(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
@@ -226,17 +204,16 @@ namespace PT {
   };
 
 
-
-
+  // ============== Part 3: extract node data =================
 
   template<OptionalPhylogenyType Network,
            OptionalNodeFunctionType _ExtractNodeData = void,
            class ExtractEdgeData                     = void,
            OptionalNodeFunctionType ExtractNodeLabel = void>
-  struct _DataExtracter: public _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel>, public _ExtractNodeData {
+  struct _DataExtracter: public _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel> {
     using Parent = _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel>;
-    using ExtractNodeData = _ExtractNodeData;
     using Parent::operator();
+    using ExtractNodeData = _ExtractNodeData;
 
     using Parent::custom_node_label_maker;
     using Parent::custom_edge_data_maker;
@@ -281,10 +258,8 @@ namespace PT {
            OptionalNodeFunctionType ExtractNodeLabel>
   struct _DataExtracter<Network, void, ExtractEdgeData, ExtractNodeLabel>: public _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel> {
     using Parent = _DataExtracter_ed_nl<Network, ExtractEdgeData, ExtractNodeLabel>;
-    using ExtractNodeData = void;
-    using NodeDataReturnType = bool;
-    using ConstNodeDataReturnType = bool;
     using Parent::operator();
+    using ExtractNodeData = void;
     
     template<class... Args> _DataExtracter(Args&&... args): Parent(std::forward<Args>(args)...) {}
 
@@ -296,6 +271,7 @@ namespace PT {
   };
 
 
+  // ============== Putting it all together: DataExtracter  =================
   // accumulate the defined classes into one and provide a nice interface
   template<OptionalPhylogenyType Network,
            OptionalNodeFunctionType ExtractNodeData = DefaultExtractData<Ex_node_data, Network>,
@@ -303,6 +279,10 @@ namespace PT {
            OptionalNodeFunctionType ExtractNodeLabel = DefaultExtractData<Ex_node_label, Network>>
   using DataExtracter = _DataExtracter<Network, ExtractNodeData, ExtractEdgeData, ExtractNodeLabel>;
 
+
+  // -------- DataExtracter: deduction guides --------------
+  
+  // -------- DataExtracter: concepts --------------
   template<class T>
   concept StrictDataExtracterType = requires {
     { T::ignoring_node_labels } -> std::convertible_to<const bool>;
@@ -312,6 +292,7 @@ namespace PT {
   template<class T> concept DataExtracterType = StrictDataExtracterType<std::remove_reference_t<T>>;
 
 
+  // -------- DataExtracter: defaults --------------
 
   // NOTE: use make_data_extracter to smartly construct a DataExtracter:
   // make_data_extracter(Ex_node_data, X) and make_data_extracter(Ex_node_label, X)

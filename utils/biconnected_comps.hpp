@@ -67,9 +67,8 @@ namespace PT{
       output_emplacer{output, std::forward<First>(first), std::forward<Args>(args)...} {}
 
     BCCmaker(const BCCmaker& other):
-      seen{other.seen}, output{}, output_emplacer{other.output_emplacer, output} {}
-    BCCmaker(BCCmaker&& other):
-      seen{std::move(other.seen)}, output{std::move(other.output)}, output_emplacer{std::move(other.output_emplacer), output} {}
+      seen{other.seen}, output{}, output_emplacer{other.output_emplacer} {}
+    BCCmaker(BCCmaker&& other) = default;
   
     // construct a biconnected component containing the arc uv and store it in 'output'
     //NOTE: remember to set the root of the output component after calling this!
@@ -217,7 +216,7 @@ namespace PT{
            class... ExtracterArgs>
   auto get_biconnected_components(const Network& N, OldToNewTranslation&& old_to_new = OldToNewTranslation(), ExtracterArgs&&... ex_args) {
     using Component = mstd::FirstNonVoid<_Component, Network>;
-    using Extracter = decltype(make_data_extracter<Network, Component>(std::forward<ExtracterArgs>(ex_args)...));
+    using Extracter = decltype(make_data_extracter<Network>(std::forward<ExtracterArgs>(ex_args)...));
     return BiconnectedComponents<Network, Component, allow_trivial, OldToNewTranslation, Extracter>(
         N,
         std::forward<OldToNewTranslation>(old_to_new),
@@ -232,7 +231,7 @@ namespace PT{
              requires (!NodeTranslationType<First>)
   auto get_biconnected_components(const Network& N, First&& first, ExtracterArgs&&... ex_args) {
     using Component = mstd::FirstNonVoid<_Component, Network>;
-    using Extracter = decltype(make_data_extracter<Network, Component>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...));
+    using Extracter = decltype(make_data_extracter<Network>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...));
     return BiconnectedComponents<Network, Component, allow_trivial, NodeTranslation, Extracter>(
         N,
         std::forward<First>(first),

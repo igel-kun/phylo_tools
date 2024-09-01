@@ -16,20 +16,26 @@ namespace PT {
            StrictPhylogenyType _TargetPhylo,
            OptionalPhylogenyType _SourcePhylo = void,
            OptionalMapsToNode _OldToNewTranslation = NodeTranslation>
-  struct EdgeEmplacementHelper: public mstd::optional_tuple<_OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>
+  struct EdgeEmplacementHelper: public mstd::optional_tuple<mstd::prefer_pointer<_OldToNewTranslation>, std::conditional_t<_track_roots, NodeSet, void>>
   {
-    using Parent = mstd::optional_tuple<_OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>;
+    using OldToNewTranslation = mstd::prefer_pointer<_OldToNewTranslation>;
     using SourcePhylo = _SourcePhylo;
     using TargetPhylo = _TargetPhylo;
-    using OldToNewTranslation = _OldToNewTranslation;
-    using StrictTranslation = std::remove_reference_t<OldToNewTranslation>;
+    using Parent = mstd::optional_tuple<OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>;
 
+    static constexpr bool indirect_translation = std::is_pointer_v<OldToNewTranslation>;
     static constexpr bool translating = not std::is_void_v<_OldToNewTranslation>;
     static constexpr bool track_roots = _track_roots;
     TargetPhylo* N = nullptr;
     
-    auto& old_to_new() requires (translating) { return this->template get<0>(); }
-    const auto& old_to_new() const requires (translating) { return this->template get<0>(); }
+    auto& old_to_new() requires (translating) {
+      auto& result = this->template get<0>();
+      if constexpr (indirect_translation) return *result; else return result;
+    }
+    const auto& old_to_new() const requires (translating) {
+      const auto& result = this->template get<0>();
+      if constexpr (indirect_translation) return *result; else return result;
+    }
     auto& root_candidates() requires (track_roots) { return this->template get<1>(); }
     const auto& root_candidates() const requires (track_roots) { return this->template get<1>(); }
 
@@ -63,6 +69,7 @@ namespace PT {
     void set_label(const NodeDesc u, auto&& label) {
       if constexpr (TargetPhylo::has_node_labels) {
         TargetPhylo::label(u) = label;
+        DEBUG4(std::cout << "set label of node "<< u <<" to '" << label <<'\n');
       }
     }
 
@@ -142,14 +149,17 @@ namespace PT {
     using TargetPhylo = typename Helper::TargetPhylo;
     using OldToNewTranslation = typename Helper::OldToNewTranslation;
     static constexpr bool track_roots = Helper::track_roots;
-    static constexpr bool extract_labels = !Extracter::ignoring_node_labels;
-    static constexpr bool extract_node_data = !Extracter::ignoring_node_data;
-    static constexpr bool extract_edge_data = !Extracter::ignoring_edge_data;
+    static constexpr bool extract_labels = not Extracter::ignoring_node_labels;
+    static constexpr bool extract_node_data = not Extracter::ignoring_node_data;
+    static constexpr bool extract_edge_data = not Extracter::ignoring_edge_data;
 
     Helper helper;
     Extracter data_extracter;
 
-    // passing both Helper and Extracter (note that Extracter might be a reference!)
+    EdgeEmplacer(const EdgeEmplacer& other) = default;
+    EdgeEmplacer(EdgeEmplacer&& other) = default;
+
+    // passing both Helper and Extracter
     template<EmplacementHelperType EH, class... Args>
     EdgeEmplacer(EH&& _helper, Args&&... args): helper(std::forward<EH>(_helper)), data_extracter(std::forward<Args>(args)...) {}
     template<DataExtracterType DET, class... Args>
@@ -221,7 +231,7 @@ namespace PT {
     // call to create a copy of the node other_u and either extract its data & label, or pass the data and ignore the label (set it yourself later)
     template<class... Args> requires (Helper::translating)
     NodeDesc create_copy_of(const auto& other_u, Args&&... args) {
-      DEBUG5(std::cout << "\ncreating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new)<<'\n');
+      DEBUG5(std::cout << "\ncreating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new())<<'\n');
       // check if other_u is known to the translation
       const auto [u_iter, u_success] = helper.register_node(other_u);
       NodeDesc& u_copy = u_iter->second;
@@ -233,9 +243,7 @@ namespace PT {
         DEBUG4(std::cout << "created copy " << u_copy << " of "<< other_u<<"\n");
         // copy label from the source 
         if constexpr (extract_labels) {
-          auto& u_copy_label = node_of<TargetPhylo>(u_copy).label();
-          u_copy_label = data_extracter(Ex_node_label{}, other_u);
-          DEBUG4(std::cout << "set label of node "<<u_copy<<" to '" << u_copy_label <<"' (@"<<&u_copy_label<<")\n");
+          set_label(u_copy, data_extracter(Ex_node_label{}, other_u));
         }
       }
       return u_copy;
@@ -279,7 +287,6 @@ namespace PT {
         helper.subdivide_edge(std::forward<Edge>(uv), w, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
       } else helper.subdivide_edge(std::forward<Edge>(uv), w, std::forward<MoreArgs>(args)...);
     }
-
 
 
     // --------------- roots --------------------
@@ -357,8 +364,8 @@ namespace PT {
     template<StrictPhylogenyType TargetPhylo>
     static auto make_emplacer(TargetPhylo& N) {
       using Helper = EdgeEmplacementHelper<track_roots, TargetPhylo, SourcePhylo, NodeTranslation>;
-      using Extracter = decltype(make_data_extracter<SourcePhylo>());
-      return EdgeEmplacer<Helper, Extracter>(Helper{N}, Extracter{});
+      //using Extracter = decltype(make_data_extracter<SourcePhylo>());
+      return EdgeEmplacer(Helper{N}, make_data_extracter<SourcePhylo>());
     }
   };
 

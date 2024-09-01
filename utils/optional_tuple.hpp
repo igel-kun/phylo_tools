@@ -63,13 +63,9 @@ namespace mstd {
   }
 */
 
-
-
-  template<size_t i, class T> requires (!std::is_reference_v<T>)
+  template<size_t i, class T>
   struct optional_item {
-    using value_type = T;
     T value;
-    static constexpr bool has_value = true;
 
     /*
     optional_item() = default;
@@ -78,8 +74,7 @@ namespace mstd {
 
     optional_item& operator=(const optional_item&) = default;
     optional_item& operator=(optional_item&&) = default;
-    */
-  /* 
+    
     template<class First, class... Args> 
       requires (!std::is_same_v<std::remove_cvref_t<First>, optional_item> && (!std::is_reference_v<T> || (sizeof...(Args) != 0)))
     optional_item(First&& first, Args&&... args): value(std::forward<Args>(args)...) {}
@@ -90,12 +85,19 @@ namespace mstd {
 //    operator T&() { return value; }
 //    operator const T&() const { return value; }
   };
-  template<size_t i>
-  struct optional_item<i, void> {
-    static constexpr bool has_value = false;
-    optional_item(){}
-    template<class T> optional_item(const T&) {}
+  template<size_t i> struct optional_item<i, void> {};
+
+  // optional pointers can be initialized from references
+  template<size_t i, class T> requires (std::is_pointer_v<T>)
+  struct optional_item<i, T> {
+    using BareT = std::remove_pointer_t<T>;
+    T value = nullptr;
+
+    optional_item() = default;
+    optional_item(T t): value{t} {}
+    optional_item(BareT& ref): value{&ref} {}
   };
+
 
 
   template<size_t i, class... T>
@@ -113,7 +115,7 @@ namespace mstd {
     public optional_item<i, LastT>,
     public _optional_tuple<i + 1, Rest...>
   {
-    _optional_tuple(){};
+    _optional_tuple() = default;
 
     template<class _LastT, class... _Rest> requires (!std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>>)
     _optional_tuple(_LastT&& last, _Rest&&... rest):
@@ -211,7 +213,7 @@ namespace mstd {
   template<size_t i, class LastT, class... Rest>
   struct has_value<i, _optional_tuple<i, LastT, Rest...>> { static constexpr bool value = !std::is_void_v<LastT>; };
 
-  template<class... Ts>
+  template<class... Ts> requires (not std::disjunction_v<std::is_reference<Ts>...>) // is_reference istead of is_reference_v is correct here! Why, STL???
   struct optional_tuple: public _optional_tuple<0, Ts...> {
     using Parent = _optional_tuple<0, Ts...>;
     using Parent::Parent;
@@ -241,6 +243,7 @@ namespace mstd {
     }
 
   };
+
 
   template<class T, class... Ts> requires (var_type_index<T, Ts...>() < sizeof...(Ts))
   auto& get_by_type(optional_tuple<Ts...>& otuple) {

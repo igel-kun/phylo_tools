@@ -150,7 +150,7 @@ namespace PT{
               emplacer.emplace_edge(s1, s2, data);
             } else get_id(s1, data); // if s2 is empty, then the line is a node-data declaration for node 's1'
           
-            DEBUG5(std::cout << "translate-map now: "<<emplacer.helper.old_to_new << '\n');
+            DEBUG5(std::cout << "translate-map now: "<<emplacer.helper.old_to_new() << '\n');
           }
         }
       }

@@ -50,8 +50,8 @@ int main(const int argc, const char** argv)
 {
   uint32_t number = 0;
   NumberNetwork N;
-  //generate_random_binary_network_nr(N, 51, 10);
-  generate_random_binary_network_nr(N, 13, 2, 0.0);
+  //generate_random_binary_network(N, 51, 10);
+  generate_random_binary_network(N, NodeNums(NodeNums::From::BinNR, 13, 2));
   std::cout << N;
   std::cout << "\n\ndone generating network\n\n";
 

@@ -73,50 +73,36 @@ void parse_options(const int argc, const char** argv) {
   }
 }
 
-void get_node_numbers(long& num_nodes, long& num_retis, long& num_leaves) {
+PT::NodeNums get_node_numbers() {
+  PT::NodeNums nums;
   //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
   const int total_input = mstd::test(options, "-n") + mstd::test(options, "-r") + mstd::test(options, "-l");
   try{
-    if(total_input == 0){
-      num_nodes = 99;
-      num_retis = 10;
-      num_leaves = l_from_nr(num_nodes, num_retis);
+    if(total_input == 0) {
+      nums.from_nr(99, 10);
     } else if(total_input == 1){
       // if we only have one input, we assume that 10r = n and, thus, 9r = t + l and l + r - 1 = t (togeher 8r = 2l - 1)
       if(mstd::test(options, "-n")){
-        num_nodes = arg_from_string(options["-n"][0]);
-        num_retis = num_nodes / 10;
-        num_leaves = l_from_nr(num_nodes, num_retis);
+        const int n = arg_from_string(options["-n"][0]);
+        nums.from_nr(n, n / 10); // n = number of nodes
       } else if(mstd::test(options, "-r")){
-        num_retis = arg_from_string(options["-r"][0]);
-        num_nodes = 10 * num_retis + 1;
-        num_leaves = l_from_nr(num_nodes, num_retis);
+        const int r = arg_from_string(options["-r"][0]);
+        nums.from_nr(10*r + 1, r); // r = number of reticulations
       } else {
-        num_leaves = arg_from_string(options["-l"][0]);
-        num_retis = (2 * num_leaves - 1) / 8;
-        num_nodes = n_from_rl(num_retis, num_leaves);
+        const int l = arg_from_string(options["-l"][0]);
+        nums.from_rl((2 * l - 1) / 8, l); // l = number of leaves
       }
     } else if(total_input == 2){
-      if(!mstd::test(options, "-l")){
-        num_retis = arg_from_string(options["-r"][0]);
-        num_nodes = arg_from_string(options["-n"][0]);
-        num_leaves = l_from_nr(num_nodes, num_retis);
-      } else if(!mstd::test(options, "-n")){
-        num_retis = arg_from_string(options["-r"][0]);
-        num_leaves = arg_from_string(options["-l"][0]);
-        num_nodes = n_from_rl(num_retis, num_leaves);
+      if(!mstd::test(options, "-l")) {
+        nums.from_nr(arg_from_string(options["-n"][0]), arg_from_string(options["-r"][0]));
+      } else if(!mstd::test(options, "-n")) {
+        nums.from_rl(arg_from_string(options["-r"][0]), arg_from_string(options["-l"][0]));
       } else {
-        num_nodes = arg_from_string(options["-n"][0]);
-        num_leaves = arg_from_string(options["-l"][0]);
-        num_retis  = r_from_nl(num_nodes, num_leaves);
+        nums.from_nl(arg_from_string(options["-n"][0]), arg_from_string(options["-l"][0]));
       }
-    } else {
-      num_retis = arg_from_string(options["-r"][0]);
-      num_nodes = arg_from_string(options["-n"][0]);
-      num_leaves = arg_from_string(options["-l"][0]);
-      if(l_from_nr(num_nodes,  num_retis) != num_leaves)
-        throw std::logic_error("there is no binary network with "+std::to_string(num_nodes)+" vertices, "+std::to_string(num_retis)+" reticulations and "+std::to_string(num_leaves)+" leaves");
-    }
+    } else nums.from_nrl(arg_from_string(options["-n"][0]), arg_from_string(options["-r"][0]), arg_from_string(options["-l"][0]));
+    nums.sanity_check();
+    return nums;
   } catch(const std::logic_error& err) {
     std::cerr << "cannot generate such a network: "<<err.what()<<std::endl;
     exit(EXIT_FAILURE);
@@ -308,9 +294,8 @@ int main(const int argc, const char** argv) {
         add_random_data<DataTarget::Edge>(N, s); 
 
   } else {
-    long num_nodes, num_retis, num_leaves;
-    get_node_numbers(num_nodes, num_retis, num_leaves);
-    generate_random_binary_network(N, NumNodes(num_nodes, num_retis, num_leaves));
+    const PT::NodeNums nums = get_node_numbers();
+    generate_random_binary_network(N, nums);
   }
 
   if(mstd::test(options,"-L"))

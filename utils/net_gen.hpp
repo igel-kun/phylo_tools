@@ -28,10 +28,10 @@ namespace PT{
 
 
   struct NodeNums {
-    int num_tree_nodes;
-    int num_retis;
-    int num_leaves;
-    float multilabel_density;
+    int num_tree_nodes = -1;
+    int num_retis = -1;
+    int num_leaves = -1;
+    float multilabel_density = 0.0f;
 
     //NOTE: in a binary network, we have n = t + r + l, but also l + r - 1 = t (together, n = 2t + 1 and n = 2l + 2r - 1)
     static constexpr int l_from_nr(const int n, const int r) {
@@ -59,6 +59,8 @@ namespace PT{
     void from_nr(const int n, const int r) { from_nrl(n, r, l_from_nr(n, r)); }
     void from_nl(const int n, const int l) { from_nrl(n, r_from_nl(n, l), l); }
     void from_rl(const int r, const int l) { from_nrl(n_from_rl(r, l), r, l); }
+
+    NodeNums() = default;
 
     NodeNums(const int _num_nodes, const int _num_retis, const int _num_leaves, float _ml_density = 0.0f): multilabel_density{_ml_density}
     {
@@ -273,8 +275,8 @@ namespace PT{
 
     std::unordered_map<NodeDesc, uint32_t> dangling;
 
-    uint32_t reti_count = 0;
-    uint32_t tree_count = 0;
+    int reti_count = 0;
+    int tree_count = 0;
     // initialize with a root node
     const NodeDesc new_root = emplacer.create_root();
     DEBUG5(std::cout << "created node "<<new_root<<"\n");
@@ -313,11 +315,11 @@ namespace PT{
       }
     }
     // satisfy all using the leaves
-    for(uint32_t i = num_internal; i < nums.num_nodes(); ++i){
+    for(int i = num_internal; i < nums.num_nodes(); ++i){
       if(dangling.empty()) throw std::logic_error("not enough internal nodes to fit all leaves");
       const auto iter = dangling.begin();
       const NodeDesc u = iter->first;
-      NodeDesc v = emplacer.reate_node();
+      const NodeDesc v = emplacer.create_node();
       emplacer.emplace_edge_raw(u, v);
       mstd::decrease_or_remove(dangling, iter);
       
