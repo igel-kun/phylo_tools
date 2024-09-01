@@ -224,18 +224,22 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   //! a hash computation for a set, XORing its members
   template<IterableType C, class Val = value_type_of_t<C>> requires std::is_convertible_v<value_type_of_t<C>, Val>
-  struct set_hash {
+  struct XOR_hash {
     using value_type = std::remove_cvref_t<Val>;
     static constexpr std::hash<value_type> Hasher{};
+    static constexpr bool is_XOR_hashing = true;
 
     static constexpr size_t hash_one(const size_t _hash, const value_type& element) { return _hash ^ Hasher(element); }
 
     template<IterableType Container> requires std::is_convertible_v<value_type_of_t<Container>, Val>
     size_t operator()(const Container& container, const size_t _hash = 0) const {
-      return std::accumulate(std::begin(container), std::end(container), size_t(_hash), hash_one);
+      return std::ranges::fold_left(container, _hash, hash_one);
     }
 
   };
+  template<IterableType C, class Val = value_type_of_t<C>> requires std::is_convertible_v<value_type_of_t<C>, Val>
+  struct set_hash: public XOR_hash<C, Val> {};
+
   // iterable bitset can be hashed faster
   template<class T> struct set_hash<ordered_bitset, T>: public std::hash<ordered_bitset> {};
   template<class T> struct set_hash<unordered_bitset, T>: public std::hash<unordered_bitset> {};

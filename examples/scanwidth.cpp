@@ -200,7 +200,7 @@ int main(const int argc, const char** argv) {
     break;
   case 3:
   case 4:
-    throw Unimplemented("methods 3 & 4");
+    throw mstd::Unimplemented("can't do methods 3 & 4 yet, sorry");
   case 5:
     std::cout << "\n ==== computing silly post-order extension ===\n";  
     for(const auto& x: N.nodes_postorder()) ex.push_back(x);

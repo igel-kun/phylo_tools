@@ -3,6 +3,7 @@
 #pragma once
 #include <vector>
 #include <functional>
+#include <span>
 #include <unordered_map>
 #include <set>
 #include <map>
@@ -176,6 +177,7 @@ namespace PT {
 
 
   using NodeVec = std::vector<NodeDesc>;
+  using NodeSpan = std::span<NodeDesc>;
   using NodeSet = HashSet<NodeDesc>; // TODO: replace by vector_hash ?
   //using NodeSet = mstd::vector_hash<NodeDesc>; // TODO: replace by vector_hash ?
   template<class T>

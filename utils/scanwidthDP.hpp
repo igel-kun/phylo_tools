@@ -10,47 +10,49 @@
 namespace PT {
 
   // this DP table entry recomputes the scanwidth each time, but only stores the essentials (the extension)
-  template<PhylogenyType Network,
-           class NetworkDegrees = DefaultDegrees<Network>>
+  template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
   struct _DPEntryLowMem {
-    static constexpr mstd::set_hash<Extension> Hasher{};
+    // NOTE: some parts of the code rely on XOR-hashing here, so don't change that willy-nilly!
+    static constexpr mstd::XOR_hash<Extension> Hasher{};
 
-    static void recompute_sw() {}
-    static void update_sw(const NodeDesc u) {}
-
+    static constexpr void recompute_sw() {}
+    static constexpr void update_sw(const NodeDesc u) {}
+    
     template<NodeIterableType Nodes>
-    static size_t hash(const Nodes& nodes) { return Hasher(nodes); }
+    static constexpr size_t hash(const Nodes& nodes) { return Hasher(nodes); }
 
   protected:
     mutable Extension ex;
-    size_t hash_cache;
+    size_t hash_cache = 0;
 
     // copy the other entry's Extension, replacing our own prefix
+    // NOTE: it's important that the prefix contains the same nodes!
     // NOTE: only friends can do this since they know what they are doing
-    void replace_prefix(const _DPEntryLowMem& other){
+    void replace_prefix(const _DPEntryLowMem& other) {
       assert(ex.size() >= other.ex.size());
-      std::copy(other.ex.begin(), other.ex.end(), ex.begin());
+      assert(std::ranges::is_permutation(other.ex, NodeSpan{ex}.subspan(0, other.ex.size())));
+      std::ranges::copy(other.ex, ex.begin());
     }
 
     void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
     void recompute_hash() { hash_cache = hash(ex); }
 
-//    template<NodeIterableType Nodes>
-//    _DPEntryLowMem(Nodes&& nodes, const size_t hash_value):
-//      ex(std::forward<Nodes>(nodes)), hash_cache(hash_value)
-    {}
+    // for friends only: we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
+    _DPEntryLowMem(const size_t hash_value): hash_cache(hash_value) {}
+
+    _DPEntryLowMem(_DPEntryLowMem&&) = default;
+    auto& operator=(_DPEntryLowMem&& other) = default;
+
   public:
     using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
     using SWInfo = std::pair<sw_t, DynamicSW>;
 
-//    _DPEntryLowMem() = default;
+    _DPEntryLowMem() = default;
     
     template<NodeIterableType Nodes>
     _DPEntryLowMem(Nodes&& nodes):
       ex(std::forward<Nodes>(nodes)), hash_cache(hash(ex))
-    {
-      assert(hash_cache == hash(ex));
-    }
+    {}
     bool operator==(const _DPEntryLowMem&) const = default;
 
     SWInfo get_dynamic_scanwidth() const {
@@ -74,13 +76,15 @@ namespace PT {
     }
     void clear() { ex.clear(); hash_cache = 0; }
 
+    // this is for debugging purposes only
+    bool hash_correct() const { return hash() == hash(ex); }
+
     template<bool, PhylogenyType, class>
     friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
-  template<PhylogenyType Network,
-           class NetworkDegrees = DefaultDegrees<Network>>
+  template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
   struct _DPEntry: public _DPEntryLowMem<Network> {
     using Parent = _DPEntryLowMem<Network>;
     using Edge = typename Network::Edge;
@@ -100,13 +104,15 @@ namespace PT {
       Parent::replace_prefix(other);
       ds = other.ds;
       scanwidth = other.scanwidth;
-      for(const NodeDesc u: ex | std::views::drop(other.ex.size())) 
+      for(const NodeDesc u: NodeSpan{ex}.subspan(other.ex.size()))
         update_sw(u);
     }
+
     void recompute_sw() {
       ds.clear(); scanwidth = 0;
       for(const NodeDesc u: ex) update_sw(u);
     }
+
     void update_sw(const NodeDesc u) {
       scanwidth = std::max(scanwidth, ds.update_sw(u));
     }

@@ -416,8 +416,8 @@ namespace mstd{
 
   template<size_t get_num>
   struct selector {
-    template<class Tuple> auto& operator()(Tuple& p) { return std::get<get_num>(p); }
-    template<class Tuple> auto& operator()(const Tuple& p) { return std::get<get_num>(p); }
+    template<class Tuple> auto& operator()(Tuple& p) const { return std::get<get_num>(p); }
+    template<class Tuple> auto& operator()(const Tuple& p) const { return std::get<get_num>(p); }
   };
 
 

@@ -26,15 +26,10 @@ namespace PT{
     using ExtTree = TreeChooser<Network, ExtTreeOrNodeData, EdgeData>;
     using Parent = ExtTree;
 
-    template<bool track_roots = true,
-             NodeTranslationType NetToTree = NodeTranslation,
-             DataExtracterType   Extracter = DataExtracter<Network>>
-    static ExtTree _ext_to_tree(const Extension& ex,
-                                NetToTree&& net_to_tree = NetToTree(),
-                                Extracter&& data_extracter = Extracter())
-    {
+    template<bool track_roots = true, NodeTranslationType NetToTree = NodeTranslation, class... Args>
+    static ExtTree _ext_to_tree(const Extension& ex, NetToTree&& net_to_tree = NetToTree(), Args&&... args) {
       ExtTree T;
-      auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, std::forward<Extracter>(data_extracter));
+      auto emplacer = EdgeEmplacers<track_roots>::make_emplacer(T, net_to_tree, std::forward<Args>(args)...);
       // we can use a disjoint set forest with no-rank union to find the current highest node of the weakly-connected component of a node
       mstd::DisjointSetForest<NodeDesc> highest;
 
@@ -68,7 +63,7 @@ namespace PT{
     // allow calling without a node translation
     template<bool track_roots = true, class First, class... Args> requires (!NodeTranslationType<First>)
     static ExtTree _ext_to_tree(const Extension& ex, First&& first, Args&&... args) {
-      return _ext_to_tree<track_roots>(ex, NodeTranslation(), make_data_extracter<Network, ExtTree>(std::forward<First>(first), std::forward<Args>(args)...));
+      return _ext_to_tree<track_roots>(ex, NodeTranslation(), std::forward<First>(first), std::forward<Args>(args)...);
     }
 
     // check if we have been correctly constructed
@@ -98,7 +93,8 @@ namespace PT{
     //       this can be done by, for example, inverting the net_to_tree translation map filled by ext_to_tree()
     //       or by storing the network NodeDesc's inside the nodes themselves using the make_node_data function passed to ext_to_tree
     // NOTE: this can be used to construct the actual edge- or node- set corresponding to the scanwidth entry by passing a suitable function network_degrees
-    void sw_map_meta(auto&& network_degrees, auto&& out) const {
+    template<class Degrees>
+    void sw_map_meta(Degrees&& network_degrees, auto&& out) const {
       for(const NodeDesc u: this->nodes_postorder()){
         auto [indeg, outdeg] = network_degrees(u);
         auto& sw_u = indeg;

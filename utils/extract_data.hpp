@@ -381,7 +381,7 @@ namespace PT {
   using choose_node_function = typename _choose_node_function<Phylo>::type;
 
   template<OptionalPhylogenyType SourcePhylo, NodeFunctionType ExtractNodeSomething>
-    requires (!DataExtracterType<ExtractNodeSomething>)
+    requires ((not DataExtracterType<ExtractNodeSomething>) && (not DataExtracterType<ExtractNodeSomething>))
   auto make_data_extracter(ExtractNodeSomething&& nds) {
     using tag = choose_node_function<SourcePhylo>;
     return make_data_extracter<SourcePhylo>(tag{}, std::forward<ExtractNodeSomething>(nds));
@@ -398,7 +398,7 @@ namespace PT {
 
   // if only 1 argument is given and it's not a NodeFunctionType, then interpret it as edge-data-extraction
   template<OptionalPhylogenyType SourcePhylo, class ExtractEdgeData>
-      requires (!NodeFunctionType<ExtractEdgeData>)
+      requires (not NodeFunctionType<ExtractEdgeData> && (not DataExtracterType<ExtractEdgeData>))
   auto make_data_extracter(ExtractEdgeData&& get_edge_data) {
     using Extracter = DataExtracter<SourcePhylo,
                          DefaultExtractData<Ex_node_data, SourcePhylo>,
