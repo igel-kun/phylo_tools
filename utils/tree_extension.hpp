@@ -10,7 +10,8 @@
 
 namespace PT{
 
-  template<StrictPhylogenyType Network, class ExtTreeOrNodeData, class EdgeData>
+  // specify a tree, either by giving the tree or by giving a network with node- and edge-data
+  template<StrictPhylogenyType Network, class ExtTreeOrNodeData, class EdgeData = void>
   using TreeChooser = std::conditional_t<PT::StrictTreeType<ExtTreeOrNodeData> && std::is_void_v<EdgeData>,
                   ExtTreeOrNodeData, PT::CompatibleTree<const Network, ExtTreeOrNodeData, EdgeData>>;
 
@@ -96,10 +97,9 @@ namespace PT{
     template<class Degrees>
     void sw_map_meta(Degrees&& network_degrees, auto&& out) const {
       for(const NodeDesc u: this->nodes_postorder()){
-        auto [indeg, outdeg] = network_degrees(u);
-        auto& sw_u = indeg;
+        auto [sw_u, outdeg] = network_degrees(u);
         for(const NodeDesc v: this->children(u))
-          sw_u += out.at(v);
+          append(sw_u, out.at(v));
         sw_u -= outdeg;
         append(out, u, std::move(sw_u));
       }

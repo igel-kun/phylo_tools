@@ -37,9 +37,13 @@ namespace mstd{
 
   template<int width>
   constexpr auto _fixed_width_float_helper() {
-    if constexpr (width == sizeof(float)) return float{};
-    if constexpr (width == sizeof(double)) return double{};
-    if constexpr (width == sizeof(long double)) return static_cast<long double>(0);
+    if constexpr (width == sizeof(float)) {
+      return float{};
+    } else if constexpr (width == sizeof(double)) {
+      return double{};
+    } else if constexpr (width == sizeof(long double)) {
+      return static_cast<long double>(0);
+    }
     assert("no floating point of given width available on this platform" && false);
   }
   template<int width>
@@ -720,13 +724,13 @@ namespace std {
   T stoX(const std::string_view s, size_t& first_unconverted) {
     if constexpr (std::is_integral_v<T>) {
       if constexpr (is_signed_v<T>) {
-        return static_cast<T>(_stoX(s, first_unconverted, std::stoll));
-      } else return static_cast<T>(_stoX(s, first_unconverted, std::stoull));
+        return static_cast<T>(_stoX(s, first_unconverted, [](auto&&... x) {return std::stoll(x...);} ));
+      } else return static_cast<T>(_stoX(s, first_unconverted, [](auto&&... x){ return std::stoull(x...);}));
     } else if constexpr (sizeof(T) == sizeof(float)) {
-      return static_cast<T>(_stoX(s, first_unconverted, std::stof));
+      return static_cast<T>(_stoX(s, first_unconverted, [](auto&&... x){ return std::stof(x...);}));
     } else if constexpr (sizeof(T) == sizeof(double)) {
-      return static_cast<T>(_stoX(s, first_unconverted, std::stod));
-    } else return static_cast<T>(_stoX(s, first_unconverted, std::stold));
+      return static_cast<T>(_stoX(s, first_unconverted, [](auto&&... x){ return std::stod(x...);}));
+    } else return static_cast<T>(_stoX(s, first_unconverted, [](auto&&... x){ return std::stold(x...);}));
   }
 
 #else

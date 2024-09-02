@@ -1,6 +1,16 @@
 
 #pragma once
 
+/* This is a generic interface to add/remove things from containers, where
+ * append(x,y,...) means:
+ *    x + y                 if both x and y are arithmetic
+ *    x(y)                  if x can be invoked with y
+ *    [x1 x2..][y1 y2 ..]   if both x and y are containers of the same type (concatenation)
+ *    x.emplace_back(y)     if x is a vector of y's
+ *    x.try_emplace(y,...)  if x is a map with y's as keys
+ *    x.emplace(y)          if x is a non-vector, non-map container of y's
+ */
+
 #include "stl_utils.hpp"
 
 namespace mstd {
@@ -10,8 +20,6 @@ namespace mstd {
   // on arithmetic types just adds the second to the first
   template<ArithmeticType P, ArithmeticType Q>
   auto append(P& p, Q&& q) { p += std::forward<Q>(q); return std::pair{&p, true}; }
-
-
 
   // on vectors, append = emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
