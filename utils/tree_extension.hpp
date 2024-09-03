@@ -99,9 +99,9 @@ namespace PT{
       for(const NodeDesc u: this->nodes_postorder()){
         auto [sw_u, outdeg] = network_degrees(u);
         for(const NodeDesc v: this->children(u))
-          append(sw_u, out.at(v));
-        sw_u -= outdeg;
-        append(out, u, std::move(sw_u));
+          mstd::append(sw_u, out.at(v));
+        mstd::erase(sw_u, outdeg);
+        mstd::append(out, u, std::move(sw_u));
       }
     }
 

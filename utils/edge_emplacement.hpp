@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <exception>
+
 #include "optional_tuple.hpp"
 
 #include "types.hpp"
@@ -69,7 +71,7 @@ namespace PT {
     void set_label(const NodeDesc u, auto&& label) {
       if constexpr (TargetPhylo::has_node_labels) {
         TargetPhylo::label(u) = label;
-        DEBUG4(std::cout << "set label of node "<< u <<" to '" << label <<'\n');
+        DEBUG4(std::cout << "set label of node "<< u <<" to '" << label <<"'\n");
       }
     }
 
@@ -124,8 +126,12 @@ namespace PT {
       }
     }
 
+    // NOTE: we're only going to commit roots if we're not currently handing an exception
+    //        (since mstd::singleton will throw a new exception on top if we're trying to add multiple roots to it here)
     ~EdgeEmplacementHelper() {
-      if constexpr (track_roots) commit_roots();
+      if constexpr (track_roots)
+        if(std::uncaught_exceptions() == 0)
+          commit_roots();
     }
 
   };

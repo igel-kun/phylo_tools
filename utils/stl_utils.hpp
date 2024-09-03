@@ -2,9 +2,9 @@
 #pragma once
 
 #include<cassert>
-#include<climits>
 #include<cstring>
 
+#include<limits>
 #include<memory>
 #include<sstream>
 #include<deque>
@@ -58,6 +58,18 @@ namespace mstd{
   template<class T> constexpr bool is_pair = false;
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
 
+
+  // Nth type in a list of types
+  template <size_t Index, class First, class... Rest>
+  struct _NthType { using type = First; };
+
+  template <size_t Index, class First, class... Rest> requires (Index > 0)
+  struct _NthType<Index, First, Rest...> { using type = typename _NthType<Index - 1, Rest...>::type; };
+
+  template <size_t Index, class... Ts> requires (Index < sizeof...(Ts))
+  using NthType = typename _NthType<Index, Ts...>::type;
+
+
   // first index of a type in a variadic template, or number types if the type does not occur
   template<class T, class First, class... Others>
   constexpr size_t var_type_index() {
@@ -73,7 +85,6 @@ namespace mstd{
 
   template<class T, class... Ts, template<class...> class Var>
   constexpr bool occurs_in(const Var<Ts...>& v) { return is_in<T, Ts...>; }
-
 
   template<class T, class... Ts>
   auto& get_by_type(std::variant<Ts...>& v) { return std::get<var_type_index<T, Ts...>>(v); }
@@ -387,9 +398,10 @@ namespace mstd{
   bool operator==(const std::reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
 
   // ----------------------- store references in classes without losing operator= ------------------------------
-  // this replaces references with std::reference_wrappers
+  // this replaces references with std::reference_wrappers... maybe better to just store pointers
   template<class T>
-  using NoRef = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
+  using NoRef = std::conditional_t<std::is_reference_v<T>, std::remove_reference_t<T>*, T>;
+  //using NoRef = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
 
   // ----------------------- container to array (first 'elements' elements)  ----------------------------------
   template<size_t elements, ContainerType Container>
@@ -836,17 +848,32 @@ namespace mstd {
 
 
 
-  template<class T = int>
-  struct minus_one { static constexpr T value = -1; };
-
+  // by default, a default constructed thing is invalid
   // specialize to your hearts desire
-  template<class T> struct default_invalid {
-    using type = std::conditional_t<is_basically_arithmetic_v<T>, minus_one<T>, void>;
+  template<class T> struct default_invalid {};
+  template<class T> requires (std::is_pointer_v<T>)
+  struct default_invalid<T> { static constexpr T value = nullptr; };
+  template<class T> requires (std::is_arithmetic_v<T>)
+  struct default_invalid<T> {
+    static constexpr auto _value() {
+      if constexpr (std::numeric_limits<T>::has_quiet_NaN) {
+        return std::numeric_limits<T>::quiet_NaN();
+      } else if constexpr (std::numeric_limits<T>::has_infinity) {
+        return std::numeric_limits<T>::infinity();
+      } else return std::numeric_limits<T>::max();
+    }
+    static constexpr T value = _value();
   };
-  template<class T> using default_invalid_t = typename default_invalid<T>::type;
 
-
-
+  template<class T> constexpr auto default_invalid_v = default_invalid<T>::value;
+ 
+  // this is only used to provide default values to the non-type template parameter for OptFor
+  template<class T, class Test, class In> constexpr auto _get_default_invalid(In x) {
+    if constexpr (std::is_same_v<std::remove_cvref_t<In>, Test>)
+      return default_invalid_v<T>;
+    else return x;
+  }
+  
   // -------------------- variants --------------------------------
 
   template<class... Args>

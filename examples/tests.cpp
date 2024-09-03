@@ -14,6 +14,15 @@
 
 #include "utils/command_line.hpp"
 
+// some static tests
+
+static_assert(std::is_default_constructible_v<mstd::optional_by_invalid<int>>);
+static_assert(std::is_trivially_destructible_v<mstd::optional_by_invalid<int>>);
+static_assert(std::is_trivially_copyable_v<mstd::optional_by_invalid<int>>);
+static_assert(std::is_trivially_copy_assignable_v<mstd::optional_by_invalid<int>>);
+static_assert(std::is_trivially_move_assignable_v<mstd::optional_by_invalid<int>>);
+
+
 
 PT::OptionMap options;
 

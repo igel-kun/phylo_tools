@@ -15,9 +15,8 @@
 
 namespace mstd {
 
-  template<ContainerType C>
-  auto erase(C& c, const const_iterator_of_t<C>& iter) { return c.erase(iter); }
-
+  template<ArithmeticType P, ArithmeticType Q>
+  void erase(P& p, Q&& q) { p -= std::forward<Q>(q); }
 
   template<ContainerType C, class Key>
     requires (std::is_same_v<Key, const_iterator_of_t<C>> || std::is_same_v<Key, iterator_of_t<C>>)

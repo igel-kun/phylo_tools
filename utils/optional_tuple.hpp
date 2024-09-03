@@ -4,65 +4,6 @@
 #include "stl_utils.hpp"
 
 namespace mstd {
-/*
-
-  template<class T1> struct optional_member {
-    static constexpr bool has_first = true;
-    T1 first;
-  }
-  template<class T1> struct optional_tuple1<void> {
-    static constexpr bool has_first = false;
-  }
-
-  template<class T1, class T2> struct optional_tuple2: public optional_tuple1<T1> {
-    static constexpr bool has_second = true;
-    T2 second;
-
-    template<class Tuple1, class Tuple2>
-    optional_tuple2(const std::piecewise_construct_t, Tuple1&& t1, Tuple2&& t2):
-      optional_tuple1(std::forward_as_tuple<Tuple1>(t1)),
-      second{std::forward_as_tuple<Tuple2>(t2)}
-    {}
-  }
-  template<class T1, class T2> struct optional_tuple2<void>: public optional_tuple1<T1> {
-    using optional_tuple1<T1>::optional_tuple1;
-    static constexpr bool has_second = false;
-  }
-
-
-
-
-  template<class T1, class T2, class T3> struct optional_tuple3: public optional_tuple2<T1, T2> {
-    static constexpr bool has_third = true;
-    T3 third;
-
-    template<class Tuple1, class Tuple2, class Tuple3>
-    optional_tuple3(const std::piecewise_construct_t, Tuple1&& t1, Tuple2&& t2, Tuple3&& t3):
-      optional_tuple2(std::piecewise_construct, std::forward<Tuple1>(t1), std::forward<Tuple2>(t2)),
-      third{std::forward_as_tuple<Tuple3>(t3)}
-    {}
-  }
-  template<class T1, class T2, class T3> struct optional_tuple3<void>: public optional_tuple2<T1, T2> {
-    using optional_tuple2<T1, T2>::optional_tuple2;
-    static constexpr bool has_third = false;
-  }
-
-  template<class T1, class T2, class T3, class T4> struct optional_tuple4: public optional_tuple3<T1, T2, T3> {
-    static constexpr bool has_fourth = true;
-    T4 fourth;
-
-    template<class Tuple1, class Tuple2, class Tuple3, class Tuple4>
-    optional_tuple4(const std::piecewise_construct_t, Tuple1&& t1, Tuple2&& t2, Tuple3&& t3, Tuple4&& t4):
-      optional_tuple3(std::piecewise_construct, std::forward<Tuple1>(t1), std::forward<Tuple2>(t2), std::forward<Tuple3>(t3)),
-      fourth{std::forward_as_tuple<Tuple4>(t4)}
-    {}
-  }
-  template<class T1, class T2, class T3, class T5> struct optional_tuple4<void>: public optional_tuple3<T1, T2, T3> {
-    using optional_tuple3<T1, T2, T3>::optional_tuple;
-    static constexpr bool has_fourth = false;
-  }
-*/
-
   template<size_t i, class T>
   struct optional_item {
     T value;
@@ -253,6 +194,9 @@ namespace mstd {
   const auto& get_by_type(const optional_tuple<Ts...>& otuple) {
     return mstd::get<var_type_index<T, Ts...>>(otuple);
   }
+
+  template<size_t i>
+  std::ostream& operator<<(std::ostream& os, const _optional_tuple<i>& otuple) { return os; }
 
   template<size_t i, class First, class... Ts>
   std::ostream& operator<<(std::ostream& os, const _optional_tuple<i, First, Ts...>& otuple) {

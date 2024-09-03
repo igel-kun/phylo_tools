@@ -5,13 +5,27 @@
 #include <optional>
 
 namespace mstd {
-  // a class implementing std::optional but, instead of using an additional byte, we use an invalid value (aka a 'tombstone')
-  template<class T, auto _invalid = std::numeric_limits<T>::max()>
-    requires (std::is_constructible_v<T, const decltype(_invalid)&> && std::is_assignable_v<T&, const decltype(_invalid)&>)
+  // a class implementing std::optional but, instead of using an additional byte, we use a tombstone
+  // NOTE: tombstone can be either
+  //  1. a value that is equal-comparable to T or
+  //  2. a constexpr lambda returning the tombstone on operator()
+  template<class T, auto tombstone = std::numeric_limits<T>::max()>
+    requires ((std::equality_comparable_with<T, decltype(tombstone)>) || (std::is_invocable_v<decltype(tombstone)>))
   struct optional_by_invalid {
-    using Inv = decltype(_invalid);
+
+    static constexpr auto get_tombstone() {
+      if constexpr (std::equality_comparable_with<T, decltype(tombstone)>) {
+        return tombstone;
+      } else if constexpr (std::is_invocable_v<decltype(tombstone)>)
+        return tombstone();
+      else assert(false && "received invalid choice for tombstone");
+    }
+    
+    using Tombstone = decltype(get_tombstone());
+    static_assert(std::is_constructible_v<T, Tombstone&&> && std::is_assignable_v<T&, Tombstone&&>);
+
     static constexpr bool detect_optional = true;
-    T element{_invalid};
+    T element{get_tombstone()};
     
     using value_type = T;
     using reference = T&;
@@ -55,8 +69,8 @@ namespace mstd {
     const T& operator*() const { return element; }
     T& value() { return element; }
     const T& value() const { return element; }
-    operator T() { return element; }
-    operator T() const { return element; }
+    operator T&() { return element; }
+    operator const T&() const { return element; }
 
 
     bool operator==(const optional_by_invalid& other) const { return element == other.element; }
@@ -73,9 +87,9 @@ namespace mstd {
     template<class U>
     const T& value_or(U&& default_value) const { return has_value() ? element : static_cast<T>(std::forward<U>(default_value)); }
 
-    void reset() { emplace(_invalid); }
+    void reset() { emplace(get_tombstone()); }
     explicit operator bool() const { return has_value(); }
-    bool has_value() const { return element != _invalid; }
+    bool has_value() const { return element != get_tombstone(); }
 
     friend std::ostream& operator<<(std::ostream& os, const optional_by_invalid& opt) {
       return os << opt.element;
@@ -96,20 +110,12 @@ namespace mstd {
     constexpr bool operator()(const T& x) const { return x.has_value() != invert; }
   };
 
-#warning "TODO: remove me"
-
-  static_assert(std::is_default_constructible_v<optional_by_invalid<int>>);
-  static_assert(std::is_trivially_destructible_v<optional_by_invalid<int>>);
-  static_assert(std::is_trivially_copyable_v<optional_by_invalid<int>>);
-  static_assert(std::is_trivially_copy_assignable_v<optional_by_invalid<int>>);
-  static_assert(std::is_trivially_move_assignable_v<optional_by_invalid<int>>);
-
-
-
-  template<class T> struct _OptFor { };
-  template<Optional T> struct _OptFor<T> { using type = T; };
-  template<class T> requires (!Optional<T>) struct _OptFor<T> { using type = mstd::optional_by_invalid<T>; };
-  template<class T> using OptFor = typename _OptFor<T>::type;
+  template<class T, auto ts> struct _OptFor { };
+  template<Optional T, auto ts> struct _OptFor<T, ts> { using type = T; };
+  template<class T, auto ts> requires (not Optional<T>) struct _OptFor<T, ts> { using type = mstd::optional_by_invalid<T, ts>; };
+  
+  template<class T, auto ts = default_invalid_v<void*>>
+  using OptFor = typename _OptFor<T, _get_default_invalid<T, void*>(ts)>::type;
  
   template<class T> struct _ValFor { using type = T; };
   template<Optional T> struct _ValFor<T> { using type = typename T::value_type; };

@@ -318,8 +318,9 @@ namespace PT {
         const size_t new_non_roots = non_roots - mark_new_roots_below(root);
         // compute the new hash by combining the old hash with the hash of everything NOT in the new query
         // NOTE: this assumes that the hash is XOR-based!!!
-        static_assert(DPEntry::Hasher::is_XOR_hashing);
-        const size_t new_hash = DPEntry::hash(nodes.subspan(query_size), hash);
+        auto hasher = DPEntry::Hasher;
+        static_assert(decltype(hasher)::is_XOR_hashing);
+        const size_t new_hash = hasher(nodes.subspan(query_size), hash);
         // construct and return the new query
         // NOTE: this also re-initializes the weak components and roots, since both of those may be very different in the new Query
         return Query(nodes.subspan(0, query_size), new_non_roots, new_hash, degrees);
@@ -377,7 +378,7 @@ namespace PT {
 
       const DPEntry& opt_answer = query(Q.prepare_new_query(root_pos));
       
-      DEBUG4(std::cout << "prefix "<< opt_answer <<" is optimal for "<<Q.nodes<<"\n");
+      DEBUG4(std::cout << "prefix "<< opt_answer.get_ex() <<" is optimal for "<<Q.nodes<<"\n");
 
       // copy the dynamic scanwidth of the entry
       auto [sw, ds] = opt_answer.get_dynamic_scanwidth();
@@ -428,7 +429,7 @@ namespace PT {
             const size_t last_root_idx = Q.all_but_fixed_roots - 1;
             const size_t non_roots = Q.non_roots;
             // we consider the last node fix, so the non-fix roots decrease by 1
-            const size_t non_fixed_roots = last_root_idx - non_roots;
+            //const size_t non_fixed_roots = last_root_idx - non_roots;
                       
             // for the first recursive call, there is no need to copy anything
             auto best = recurse_for(Q, last_root_idx);
@@ -442,18 +443,18 @@ namespace PT {
             // overwrite the prefix of *iter (represented by Q.nodes) by the extension of the best entry
             const auto [best_iter, success] = lookup_by_hash(best.first);
             assert(not success); // the hash of best should still be in the DPTable, please
-            iter->replace_prefix(*best);
+            iter->replace_prefix(*best_iter);
           } else { // X is not weakly connected, so recurse for each connected component separately
             DPEntry tmp{iter->hash()};
             for(auto& [u, C_pair]: Q.get_comp_map_except_fixed()) {
               auto& [C, C_non_root] = C_pair;
               DEBUG4(std::cout << "querying connected component "<<C<<" with roots "<<(C | std::views::drop(C_non_root))<<"\n");
-              const DPEntry& C_entry = query(NodeSpan{C}, C_non_root);
+              const DPEntry& C_entry = query(Query{NodeSpan{C}, C_non_root});
               append(tmp.ex, C_entry.ex);
               DEBUG4(std::cout << "resulting extension is now: " << tmp.ex <<'\n');
             }
             // add the fixed roots back in, and recompute scanwidth of the whole thing
-            append(tmp, Q.get_fixed_roots());
+            append(tmp.ex, Q.get_fixed_roots());
             tmp.recompute_sw();
             // the hash of tmp should now be correct
             assert(tmp.hash_correct());
@@ -472,8 +473,8 @@ namespace PT {
       if(N.num_nodes() > 1){
         if(N.num_roots() != 1) throw mstd::Unimplemented{"cannot deal with multiple roots yet"};
         //const NodeVec N_nodes = N.nodes_postorder().template to_container<NodeVec>();
-        const NodeVec N_nodes(N.nodes_postorder());
-        const DPEntry& opt_sol = query(NodeSpan{N_nodes}, N_nodes.size() - 1);
+        NodeVec N_nodes(N.nodes_postorder().template to_container<NodeVec>());
+        const DPEntry& opt_sol = query(Query{NodeSpan{N_nodes}, N_nodes.size() - 1});
         const auto& ex = opt_sol.get_ex();
         DEBUG2(std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(N)<<"\n");
         assert(ex.size() == N.num_nodes());

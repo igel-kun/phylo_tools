@@ -101,7 +101,7 @@ namespace PT {
       bool result = is_forbidden(u);
       if constexpr (has_seen) {
         if constexpr (std::is_reference_v<_SeenSet>)
-          result |= mstd::test(this->template get<1>().get(), u);
+          result |= mstd::test(*(this->template get<1>()), u);
         else
           result |= mstd::test(this->template get<1>(), u);
       }
@@ -109,10 +109,9 @@ namespace PT {
     }
     void mark_seen(const NodeDesc u) requires has_seen {
       if constexpr (std::is_reference_v<_SeenSet>)
-        mstd::append(this->template get<1>().get(), u);
+        mstd::append(*(this->template get<1>()), u);
       else
         mstd::append(this->template get<1>(), u);
-
     }
   };
 

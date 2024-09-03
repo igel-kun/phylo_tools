@@ -34,10 +34,10 @@ namespace mstd {
     using Parent = std::logic_error;
     using Parent::Parent;
 
-    MalformedInput(const std::string_view context, const ssize_t _pos, const std::string _msg = "unknown error"):
+    MalformedInput(const std::string_view context, const ssize_t _pos, const std::string& _msg = "unknown error"):
       Parent(_msg + " (position " + std::to_string(_pos) + ")" + DEBUG3(" - relevant substring: " + context.substr(_pos)) + "") {}
 
-    MalformedInput(const ssize_t _pos, const std::string _msg = "unknown error"):
+    MalformedInput(const ssize_t _pos, const std::string& _msg = "unknown error"):
       Parent(_msg + " (position " + std::to_string(_pos) + ")") {}
   };
 

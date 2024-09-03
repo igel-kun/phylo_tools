@@ -37,20 +37,21 @@ namespace PT {
     void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
     void recompute_hash() { hash_cache = hash(ex); }
 
-    // for friends only: we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
-    _DPEntryLowMem(const size_t hash_value): hash_cache(hash_value) {}
-
-    _DPEntryLowMem(_DPEntryLowMem&&) = default;
-    auto& operator=(_DPEntryLowMem&& other) = default;
-
   public:
     using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
     using SWInfo = std::pair<sw_t, DynamicSW>;
 
     _DPEntryLowMem() = default;
-    
+    _DPEntryLowMem(const _DPEntryLowMem&) = default;
+    _DPEntryLowMem(_DPEntryLowMem&&) = default;
+    _DPEntryLowMem& operator=(_DPEntryLowMem&& other) = default;
+
+     // we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
+     // NOTE: please be careful with this!
+    explicit _DPEntryLowMem(const size_t hash_value): hash_cache(hash_value) {}
+   
     template<NodeIterableType Nodes>
-    _DPEntryLowMem(Nodes&& nodes):
+    explicit _DPEntryLowMem(Nodes&& nodes):
       ex(std::forward<Nodes>(nodes)), hash_cache(hash(ex))
     {}
     bool operator==(const _DPEntryLowMem&) const = default;
@@ -79,8 +80,8 @@ namespace PT {
     // this is for debugging purposes only
     bool hash_correct() const { return hash() == hash(ex); }
 
-    template<bool, PhylogenyType, class>
-    friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
+    // ------------ friends -------------------
+    template<bool, PhylogenyType, class> friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
@@ -132,6 +133,8 @@ namespace PT {
     friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };
 
+  template<PhylogenyType Network, bool low_mem = false, class NetworkDegrees = DefaultDegrees<Network>>
+  using SWDPEntry = std::conditional_t<low_mem, _DPEntryLowMem<Network, NetworkDegrees>, _DPEntry<Network, NetworkDegrees>>;
 
   template<StrictPhylogenyType Network, class EdgeWeightExtracter = void>
   struct WeightedDegrees {
@@ -166,9 +169,7 @@ namespace PT {
   class ScanwidthDP {
   public:
     using DegreeExtracter = WeightedDegrees<Network, EdgeWeightExtracter>;
-    using LowMemEntry = _DPEntryLowMem<Network, DegreeExtracter>;
-    using NormalEntry = _DPEntry<Network, DegreeExtracter>;
-    using DPEntry = typename std::conditional_t<low_memory_version, LowMemEntry, NormalEntry>;
+    using DPEntry = SWDPEntry<Network, low_memory_version, DegreeExtracter>;
     using DPTable = std::unordered_map<NodeSet, DPEntry, mstd::set_hash<NodeSet>>;
  
   protected:
@@ -216,7 +217,7 @@ namespace PT {
           DEBUG5(
               std::cout << "computing best partial extension for node-set "<<last_iter->first<< "\n";
               std::cout << "....::::: best extensions ::::....\n";
-              for(const auto& x: dp_table) std::cout << x.first << ":\t"<<x.second.ex<<" --> sw = "<<x.second.get_scanwidth()<<"\n";
+              for(const auto& x: dp_table) std::cout << x.first << ":\t"<<x.second.get_ex()<<" --> sw = "<<x.second.get_scanwidth()<<"\n";
               );
 #warning "TODO: compute weakly-disconnected parts individually"
           // for each node u in the set, check the sw of the extension (dp_table[nodes-u].ex + u)
@@ -229,7 +230,7 @@ namespace PT {
               // copy the dp-table entry at lookup_set
               DPEntry entry = dp_table.at(lookup_set);
               // add u at the end of it and compute the sw
-              DEBUG5(std::cout << "looked up table for " <<lookup_set<<" (u = "<<u<<"): "<< entry.ex<<std::endl);
+              DEBUG5(std::cout << "looked up table for " <<lookup_set<<" (u = "<<u<<"): "<< entry.get_ex()<<std::endl);
               // append u along with its direct deg-2 ancestors and update the sw-map
               entry.update(u);
               // also append all suppressible ancestors of u
@@ -266,6 +267,18 @@ namespace PT {
       }
     }
   };
-
-
 }
+
+namespace mstd {
+  // in order to use DPEntries with optional_by_invalid's, we'll use the default-constructed DPEntry with hash = 1 as invalid
+  template<class P, class Q> struct default_invalid<PT::_DPEntryLowMem<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntryLowMem<P, Q>{1}; }; };
+  template<class P, class Q> struct default_invalid<PT::_DPEntry<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntry<P, Q>{1}; }; };
+}
+namespace std {
+  template<class P, class Q> struct hash<PT::_DPEntryLowMem<P,Q>> { auto operator()(const PT::_DPEntryLowMem<P,Q>& x) const { return x.hash(); } };
+  template<class P, class Q> struct hash<PT::_DPEntry<P,Q>> { auto operator()(const PT::_DPEntry<P,Q>& x) const { return x.hash(); } };
+}
+
+
+
+

@@ -23,6 +23,8 @@ struct EdgeData {
   float weight = 0;
   float gamma;
 
+  EdgeData() = default;
+
   // construct from a given string that's been read from the input file
   EdgeData(const std::string_view in) {
     auto iter = mstd::tokenize(in, ",;:"sv).begin();

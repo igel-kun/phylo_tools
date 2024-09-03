@@ -25,8 +25,8 @@
 
 namespace mstd{
 
-  template<class Iterator>
-  using vector_hash_iterator = filtered_iterator<Iterator, HasValuePredicate>;
+  template<class Iterator, class Element>
+  using vector_hash_iterator = converting_iterator<filtered_iterator<Iterator, HasValuePredicate>, Element>;
 
   template<
     class _Key,
@@ -67,13 +67,13 @@ namespace mstd{
     using reverse_vector_iterator = typename Parent::reverse_iterator;
     using const_reverse_vector_iterator = typename Parent::const_reverse_iterator;
 
-    using iterator          = vector_hash_iterator<vector_iterator>;
-    using const_iterator    = vector_hash_iterator<const_vector_iterator>;
-    using reverse_iterator  = vector_hash_iterator<reverse_vector_iterator>;
-    using const_reverse_iterator = vector_hash_iterator<const_reverse_vector_iterator>;
-    
-    using insert_result       = std::pair<vector_iterator, bool>;
-    using const_insert_result = std::pair<const_vector_iterator, bool>;
+    using iterator          = vector_hash_iterator<vector_iterator, Key&>;
+    using const_iterator    = vector_hash_iterator<const_vector_iterator, const Key&>;
+    using reverse_iterator  = vector_hash_iterator<reverse_vector_iterator, Key&>;
+    using const_reverse_iterator = vector_hash_iterator<const_reverse_vector_iterator, const Key&>;
+
+    using insert_result       = std::pair<iterator, bool>;
+    using const_insert_result = std::pair<const_iterator, bool>;
   
     // default load factor, right below 7/8
     static constexpr float default_load_factor = 0.8749f;
@@ -459,23 +459,23 @@ namespace mstd{
       } else return false;
     }
  
-    iterator       begin()       { return {std::piecewise_construct, std::forward_as_tuple(vector_begin(), vector_end())}; }
-    const_iterator begin() const { return {std::piecewise_construct, std::forward_as_tuple(vector_begin(), vector_end())}; }
+    iterator       begin()       { return typename iterator::Iterator{std::piecewise_construct, std::forward_as_tuple(vector_begin(), vector_end())}; }
+    const_iterator begin() const { return typename const_iterator::Iterator{std::piecewise_construct, std::forward_as_tuple(vector_begin(), vector_end())}; }
     vector_iterator       vector_begin()       { return Parent::begin(); }
     const_vector_iterator vector_begin() const { return Parent::begin(); }
 
-    iterator       end()       { return {do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
-    const_iterator end() const { return {do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    iterator       end()       { return typename iterator::Iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    const_iterator end() const { return typename const_iterator::Iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
     vector_iterator       vector_end()       { return Parent::end(); }
     const_vector_iterator vector_end() const { return Parent::end(); }
  
-    reverse_iterator       rbegin()       { return {std::piecewise_construct, std::forward_as_tuple(vector_rbegin(), vector_rend())}; }
-    const_reverse_iterator rbegin() const { return {std::piecewise_construct, std::forward_as_tuple(vector_rbegin(), vector_rend())}; }
+    reverse_iterator       rbegin()       { return reverse_iterator{std::piecewise_construct, std::forward_as_tuple(vector_rbegin(), vector_rend())}; }
+    const_reverse_iterator rbegin() const { return const_reverse_iterator{std::piecewise_construct, std::forward_as_tuple(vector_rbegin(), vector_rend())}; }
     reverse_vector_iterator       vector_rbegin()       { return Parent::rbegin(); }
     const_reverse_vector_iterator vector_rbegin() const { return Parent::rbegin(); }
  
-    reverse_iterator       rend()       { return {do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
-    const_reverse_iterator rend() const { return {do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    reverse_iterator       rend()       { return reverse_iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    const_reverse_iterator rend() const { return const_reverse_iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
     reverse_vector_iterator       vector_rend()       { return Parent::rend(); }
     const_reverse_vector_iterator vector_rend() const { return Parent::rend(); }
   

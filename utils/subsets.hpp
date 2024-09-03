@@ -25,6 +25,7 @@ namespace mstd {
   //    unless that would set a bit outside the range of the bitset, in which case set bits to contain the first |bits|+1 bits,
   //    unless that's over upper_bound, in which case return false
   bool advance(ordered_bitset& bits, const uint32_t upper_bound) {
+    std::cout << "advancing (bitset mode)\n";
     if(!bits.empty()) {
       const size_t trailing_zeros = bits.num_trailing_zeros();
       // NOTE: flip_upwards will also flip (and count!) the 0 to the left to the 1s-block, unless there is none(!)
@@ -47,6 +48,7 @@ namespace mstd {
   //    unless that's over upper_bound, in which case return false
   template<mstd::IterableType Container, class Iter>
   bool advance(Container&& c, std::vector<Iter>& bits, const uint32_t upper_bound) {
+    std::cout << "advancing (vector mode)\n";
     if(upper_bound > 0) {
       Iter c_it = std::begin(c);
       if(not bits.empty()) {
@@ -104,10 +106,13 @@ namespace mstd {
     SubsetIterator(_Container& _c, uint32_t low, uint32_t high) requires(partial):
       SubsetIterator(_c) 
     {
+      DEBUG4(std::cout << "constructing SubsetIterator for partial subsets of sizes "<<low<<" -- "<<high<<'\n');
       DEBUG5(std::cout << "input container: "<<type_name<_Container>() <<'\n');
       DEBUG5(std::cout << "output container: "<<type_name<_OutputContainer>() <<'\n');
       DEBUG5(std::cout << "SubsetState: "<<type_name<SubsetState>() << " (storing iters: "<<store_iters<<")\n");
       if(low > high) std::swap(low, high);
+      if(low > _c.size()) low = high = _c.size();
+      if(high > _c.size()) high = _c.size();
       this->template get<0>() = high;
       if constexpr (store_iters) {
         auto it = std::begin(_c);

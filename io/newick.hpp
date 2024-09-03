@@ -158,6 +158,7 @@ namespace PT{
     NewickParser(std::istream& _newick_stream, Args&&... args):
       emplacer(std::forward<Args>(args)...)
     {
+      std::cout << "emplacer: "<<mstd::type_name<Emplacer>() << '\n';
       std::getline(_newick_stream, newick_string);
       back = newick_string.length() - 1;
     }
@@ -198,11 +199,14 @@ namespace PT{
       } else return UINT_MAX;
     }
 
+    using DataArrays = std::array<std::optional<std::string_view>, 4>; //  label, hybrid_num, edge_data, node_data
+    enum { DA_Label = 0, DA_hyb_num = 1, DA_edge_data = 2, DA_node_data = 2 };
+
     // a subtree is a leaf or an internal vertex
-    // return the created node as well as a string_view to its incoming edge-data
-    std::pair<NodeDesc, std::optional<std::string_view>> read_subtree() {
-      NodeDesc root;
-      std::array<std::optional<std::string_view>, 4> data; //  label, hybrid_num, edge_data, node_data
+    // return the created node as well as the data-strings for it
+    auto  read_subtree() {
+      std::pair<NodeDesc, DataArrays> result;
+      auto& [root, data] = result;
       std::string_view root_data = read_annotation();
 
       DEBUG5(std::cout << "splitting root_data '"<<root_data<<"'\n");
@@ -212,7 +216,7 @@ namespace PT{
       if(mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_edge_data)) i = 2;
       if(mstd::split_prefix_at_next(root_data, data[i], config::NW_delimeters.start_of_node_data)) {
         data[3] = root_data;
-      } else data[2] = root_data;
+      } else data[i] = root_data;
 
       DEBUG4(std::cout << "split data into label:'"<<data[0].value_or("")<<"' hybrid_num:'"<<data[1].value_or("")<<"' edge_data:'"<<data[2].value_or("")<<"' node_data:'"<<data[3].value_or("")<<"'\n");
       if(data[1].has_value()) {
@@ -247,7 +251,7 @@ namespace PT{
         if(data[0].has_value()) emplacer.set_label(root, data[0].value());
         if((back > 0) && newick_string.at(back) == ')') read_internal<false>(root);
       }
-      return {root, data[2]};
+      return result;
     }
 
     // an internal vertex is ( + branchlist + )
@@ -268,7 +272,7 @@ namespace PT{
     template<bool root_is_hybrid = false>
     void read_branchset(const NodeDesc root) {
       NodeSet children_seen;
-      children_seen.insert(read_branch(root));
+      children_seen.insert(read_branch(root).first);
       while(newick_string.at(back) == ',') {
         if constexpr (root_is_hybrid){
           if constexpr (not allow_non_binary)
@@ -277,9 +281,10 @@ namespace PT{
             throw mstd::MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
         }
         --back;
-        const NodeDesc new_child = read_branch(root);
+        const auto [new_child, nc_data]  = read_branch(root);
         if(not children_seen.emplace(new_child).second)
-          throw mstd::MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> "+std::to_string(new_child));
+          throw mstd::MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> " + std::to_string(new_child) +
+                  " (hybrid number: " + std::string(nc_data[DA_hyb_num].value()) + ")");
         if(back < 0) throw mstd::MalformedInput(newick_string, back, "unmatched ')'");
       }
       if constexpr (not allow_non_binary)
@@ -289,12 +294,15 @@ namespace PT{
 
     // a branch is a subtree + a length
     // return the head of the read branch
-    NodeDesc read_branch(const NodeDesc root) {
-      const auto [child, edge_data] = read_subtree();
-      if(edge_data.has_value()) {
-        emplacer.emplace_edge_raw(root, child, edge_data.value());
+    auto read_branch(const NodeDesc root) {
+      const auto result = read_subtree();
+      const auto& [child, data_arrs] = result;
+
+      if(data_arrs[2].has_value()) {
+        emplacer.emplace_edge_raw(root, child, data_arrs[2].value());
       } else emplacer.emplace_edge_raw(root, child);
-      return child;
+      
+      return result;
     }
 
     // read all annotations (label, hybrid, edge-data, node-data) as string_view

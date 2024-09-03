@@ -20,15 +20,29 @@ namespace PT{
     // ... its DFS-parent...
     NodeDesc DFS_parent = NoNode;
     // ... its DFS-number...
-    size_t DFS_number = 0;
+    size_t DFS_number : 59 = 0;
     // ... whether it is visited...
-    bool visited = false;
+    bool visited : 1 = false;
     // ... if it's the start of said chain...
-    bool start_of_cyclic_chain = false;
+    bool start_of_cyclic_chain : 1 = false;
     // ... is incident with a bridge ...
-    bool incident_with_bridge = false;
+    bool incident_with_bridge : 1 = false;
     // ... if the node has an incoming bridge (if the network has a unique root, such a bridge is unique)
-    bool has_incoming_bridge = false;
+    bool has_incoming_bridge : 1 = false;
+
+    // in order to tell biconnected components apart, we'll also store the root r of each chain (except in r itself)
+    // (for any cut node u, we will enumerate the BCCs with root u before the at most one BCC containing u in which u is not the root)
+    bool DFS_parent_is_chain_root : 1 = false;
+
+    bool is_leaf_or_cut_node() const { return start_of_cyclic_chain || incident_with_bridge; }
+    bool is_leaf_or_cut_node_or_root() const { return is_leaf_or_cut_node() || (DFS_parent == NoNode); }
+
+    bool is_first_edge_in_nontrivial_bcc_from(const NodeDesc u) const {
+      return DFS_parent_is_chain_root && (DFS_parent == u);
+    }
+    bool is_first_edge_in_bcc_from(const NodeDesc u) const {
+      return (DFS_parent == u) && (DFS_parent_is_chain_root || has_incoming_bridge);
+    }
 
     friend std::ostream& operator<<(std::ostream& os, const ChainInfo& info) {
       return os << "(DFS#: "<<info.DFS_number
@@ -38,32 +52,16 @@ namespace PT{
                 << "\tDFS-parent: "<< info.DFS_parent
                 << ")\n";
     }
-
-    bool is_leaf_or_cut_node() const { return start_of_cyclic_chain || incident_with_bridge; }
-    bool is_leaf_or_cut_node_or_root() const { return is_leaf_or_cut_node() || (DFS_parent == NoNode); }
   };
 
-  // in order to tell biconnected components apart, we'll also store the root r of each chain (except in r itself)
-  // (for any cut node u, we will enumerate the BCCs with root u before the at most one BCC containing u in which u is not the root)
-  struct ChainInfoBCC: public ChainInfo {
-    bool DFS_parent_is_chain_root = false;
-    
-    bool is_first_edge_in_nontrivial_bcc_from(const NodeDesc u) const {
-      return DFS_parent_is_chain_root && (ChainInfo::DFS_parent == u);
-    }
-    bool is_first_edge_in_bcc_from(const NodeDesc u) const {
-      return (ChainInfo::DFS_parent == u) && (DFS_parent_is_chain_root || ChainInfo::has_incoming_bridge);
-    }
-
-  };
+  static_assert(sizeof(ChainInfo) <= 16);
 
   // the main data structure is the chain decomposition
   // it can answer whether a node is a cut node and whether an arc is a bridge
   // if output_root == true, then it will pretend that the root is a cut node
   template<StrictPhylogenyType Network, CutObject cut_object, bool output_root = (cut_object == CutObject::bcc)>
   struct ChainDecomposition {
-    using InfoStruct = std::conditional_t<cut_object == CutObject::bcc, ChainInfoBCC, ChainInfo>;
-    NodeMap<InfoStruct> chain_info;
+    NodeMap<ChainInfo> chain_info;
 
     // register the fact that the edge to the DFS-parent is a bridge
     void mark_edge_to_DFS_parent_as_bridge(ChainInfo& u_info) {
@@ -75,7 +73,7 @@ namespace PT{
     }
 
     NodeDesc treat_forwardedge(const NodeDesc u, NodeDesc v) {
-      InfoStruct* v_info;
+      ChainInfo* v_info;
       assert(u != v);
       while(v != NoNode) {
         v_info = &(chain_info.at(v));

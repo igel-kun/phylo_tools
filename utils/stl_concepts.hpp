@@ -62,7 +62,8 @@ namespace mstd {
   template<class T>
   using _iterator_of_t = typename _iterator_of<std::remove_reference_t<T>>::type;
 
-  template<class T> concept ArithmeticType =  is_really_arithmetic_v<T>;
+  template<class T> concept StrictArithmeticType =  is_really_arithmetic_v<T>;
+  template<class T> concept ArithmeticType =  StrictArithmeticType<std::remove_cvref_t<T>>;
   template<class T> concept PointerType = std::is_pointer_v<std::remove_cvref_t<T>>;
 
   template<class T>

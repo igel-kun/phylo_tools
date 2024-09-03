@@ -35,11 +35,8 @@ namespace PT{
   };
 
 
-  template<SWconfig config,
-           StrictPhylogenyType Network,
-           class RegisterNode,
-           class... ExtracterArgs>
-  void _compute_min_sw_extension(const Network& N, RegisterNode&& _register_node, ExtracterArgs&&... args) {
+  template<SWconfig config, StrictPhylogenyType Network, class RegisterNode>
+  void _compute_min_sw_extension(const Network& N, RegisterNode&& _register_node) {
     static constexpr bool preprocess = (config & sw_no_preprocess) == 0;
     static constexpr bool low_mem    = (config & sw_low_mem_footprint) != 0;
     static constexpr bool bottom_up  = (config & sw_bottom_up) != 0;
@@ -57,7 +54,8 @@ namespace PT{
           ScanwidthDP2<low_mem, const Component, EdgeWeightExtract>>;
     
     DEBUG4(std::cout << "getting biconnected component factory\n");
-    const auto bc_components = get_biconnected_components<Component>(N, std::forward<ExtracterArgs>(args)...);
+    // NOTE: we're extracting u's NodeDesc in order to store it in the corresponding node in the BCC as data
+    const auto bc_components = get_biconnected_components<Component>(N, mstd::IdentityFunction<NodeDesc>());
     for(auto& bcc: bc_components){
       DEBUG4(std::cout << "found biconnected comp ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n");
 
@@ -72,27 +70,28 @@ namespace PT{
                 const auto uv = mstd::front(bcc.edges());
                 //const auto& uv = std::front(bcc.edges());
                 DEBUG5(std::cout << "edge is "<<uv<<"\n");
-                mstd::append(_register_node, node_of<Component>(uv.head()).data());
+                mstd::append(_register_node, Component::node_of(uv.head()).data());
                 break;
               }
       default:{
                 DPType dp(bcc);
-                dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ mstd::append(_register_node, node_of<Component>(u).data()); });
+                dp.compute_min_sw_extension_no_bridges([&](const NodeDesc u){ mstd::append(_register_node, Component::node_of(u).data()); });
               }
       }
       DEBUG5(std::cout << "done working with\n"; std::cout <<bcc<<"\n");
     }
-    mstd::append(_register_node, bc_components.get_begin_end_transformation().extracter(Ex_node_data{}, N.root()));
+    // finally register the root manually
+    mstd::append(_register_node, N.root());
   }
 
 #warning "TODO: move the initial preprocessing into the construction of the DP?"
+
   template<SWconfig sw_config, StrictPhylogenyType Network, class RegisterNode>
   void compute_min_sw_extension(const Network& N, RegisterNode&& _register_node) {
-    using NodeDataExtract = mstd::IdentityFunction<NodeDesc>;
     if constexpr ((sw_config & sw_no_preprocess) == 0) {
       using RWNetwork = CompatibleNetwork<Network, NodeDesc, uint32_t, void>;
       // make a copy of N in which all nodes are annotated with their corresponding node in N and all edges have weight 1
-      RWNetwork N_copy(N, NodeDataExtract(), [](const NodeDesc, const NodeDesc){return 1;});
+      RWNetwork N_copy(N, mstd::IdentityFunction<NodeDesc>(), [](const NodeDesc, const NodeDesc){return 1;});
       DEBUG3(std::cout << "after copy:\n"<<ExtendedDisplay(N_copy)<<"\n");
       apply_sw_preprocessing(N_copy);
       _compute_min_sw_extension<sw_config>(N_copy, std::forward<RegisterNode>(_register_node));
@@ -100,7 +99,7 @@ namespace PT{
         _register_node = apply_to_network(_register_node, N);
       }
     } else
-      _compute_min_sw_extension<sw_config>(N, std::forward<RegisterNode>(_register_node), NodeDataExtract());
+      _compute_min_sw_extension<sw_config>(N, std::forward<RegisterNode>(_register_node));
   }
 
 

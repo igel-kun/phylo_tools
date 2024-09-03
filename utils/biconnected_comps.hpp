@@ -168,7 +168,7 @@ namespace PT{
       auto c = CutNodeChildrenIterator<Network>(std::move(b));
       auto d = BCCStartingCutNodeChildIterator<Network, allow_trivial>(std::piecewise_construct, std::tuple{std::move(c)}, std::tuple{});  
       auto bcc_maker = BCCmaker<Network, Component, Emplacer>(std::forward<Args>(args)...);
-      auto e = OutIterator(std::piecewise_construct, std::tuple{std::move(d)}, std::forward_as_tuple(std::move(bcc_maker)));
+      auto e = OutIterator(std::piecewise_construct, std::forward_as_tuple(std::move(d)), std::forward_as_tuple(std::move(bcc_maker)));
       return e;
     }
 

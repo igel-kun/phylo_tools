@@ -23,6 +23,10 @@ namespace PT {
     template<class T> static constexpr bool occurs = mstd::is_in<T, Feats...>;
     template<class T> auto& get_by_type() { return this->template get<index<T>>(); };
     template<class T> const auto& get_by_type() const { return this->template get<index<T>>(); };
+
+    friend std::ostream& operator<<(std::ostream& os, const _Features<FeatClass, Feats...>& x) {
+      return os << static_cast<const Tuple&>(x);
+    }
   };
 
   // 'FeatureCollection' contains a FeatureList for each type in Feats...

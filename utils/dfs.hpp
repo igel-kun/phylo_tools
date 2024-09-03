@@ -537,6 +537,7 @@ namespace PT{
            class _Roots = void,
            OptionalNodeSetType SeenSet = typename Network::DefaultSeen,
            class Forbidden = void>
+    requires (not std::is_reference_v<SeenSet>)
   struct Traversal:
     public TraversalHelper<o, Network, RootsOr<_Roots, Network>, SeenSet, Forbidden>,
     public mstd::iterator_traits<typename TraversalHelper<o, Network, RootsOr<_Roots, Network>, SeenSet, Forbidden>::Iter>

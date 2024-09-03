@@ -187,6 +187,12 @@ namespace mstd {
   template<class TupleContainer>
   constexpr auto seconds(TupleContainer&& c) { return SecondsFactory<TupleContainer>(std::forward<TupleContainer>(c)); }
 
+  
+  // ----------- special case: converting element ---------------
+  template<class T> struct converter { T operator()(auto&& x) const { return static_cast<T>(x); } };
+  template<class T, class Target>
+  using converting_iterator = transforming_iterator<T, converter<Target>>;
+
 }
 
 
