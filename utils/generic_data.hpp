@@ -31,9 +31,9 @@
 
 namespace mstd {
 
-  template<class T, class... Args>
+  template<class T, class Out>
     requires std::is_arithmetic_v<T>
-  bool try_reading_variant_item(const std::string_view s, std::variant<Args...>& target) {
+  bool try_reading_number(const std::string_view s, Out& target) {
     if(!s.empty()) {
       size_t first_unconverted;
       target = stoX<T>(s, first_unconverted);
@@ -45,17 +45,17 @@ namespace mstd {
   Var parse_variant(const std::string_view s) {
     Var result;
     if constexpr (std::is_constructible_v<Var, uint64_t>) {
-      if(try_reading_variant_item<uint64_t>(s, result))
+      if(try_reading_number<uint64_t>(s, result))
         return result;
     } else if constexpr (std::is_constructible_v<Var, uint32_t>)
-      if(try_reading_variant_item<uint32_t>(s, result))
+      if(try_reading_number<uint32_t>(s, result))
         return result;
     
     if constexpr (std::is_constructible_v<Var, double>) {
-      if(try_reading_variant_item<double>(s, result))
+      if(try_reading_number<double>(s, result))
         return result;
     } else if constexpr (std::is_constructible_v<Var, float>) {
-      if(try_reading_variant_item<float>(s, result))
+      if(try_reading_number<float>(s, result))
         return result;
     }
     

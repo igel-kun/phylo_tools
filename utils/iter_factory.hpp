@@ -6,27 +6,29 @@
 namespace mstd {
 
   template<class Iterator, class _EndIter = CorrespondingEndIter<Iterator>>
-  class ProtoIterFactory: public auto_iter<Iterator, _EndIter> {
+  struct ProtoIterFactory: public auto_iter<Iterator, _EndIter>
+  {
     using Parent = auto_iter<Iterator, _EndIter>;
-    using EndIter = typename Parent::EndIterator;
-  public:
-    using Parent::Parent;
     using Parent::get_iter;
     using Parent::get_end;
+
+    ProtoIterFactory() = default;
+    INHERIT_ALL_CONSTRUCTORS(ProtoIterFactory, Parent);
 
     bool empty() const { return begin() == end(); }
     size_t size() const { return end() - begin(); }
 
-    Iterator begin() const & { return get_iter(); }
-    Iterator begin() & { return get_iter(); }
-    Iterator begin() && { return get_iter(); }
-    EndIter end() const & { return get_end(); }
-    EndIter end() & { return get_end(); }
-    EndIter end() && { return get_end(); }
+    auto begin() const & { return get_iter(); }
+    auto begin() & { return get_iter(); }
+    auto begin() && { return get_iter(); }
+    auto end() const & { return get_end(); }
+    auto end() & { return get_end(); }
+    auto end() && { return get_end(); }
   };
 
   template<class Iterator, class BeginEndTransformation, class EndIter = CorrespondingEndIter<Iterator>> requires (!std::is_void_v<BeginEndTransformation>)
-  class IterFactoryWithBeginEnd: public ProtoIterFactory<Iterator, EndIter> {
+  class IterFactoryWithBeginEnd: public ProtoIterFactory<Iterator, EndIter>
+  {
     using Parent = ProtoIterFactory<Iterator, EndIter>;
     BeginEndTransformation trans;    
   public:
@@ -69,5 +71,6 @@ namespace mstd {
 
   template<class IterOrContainer, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<iterator_of_t<IterOrContainer>>>
   using IterFactory = typename _IterFactory<iterator_of_t<IterOrContainer>, BeginEndTransformation, EndIter>::type;
+
 }
 

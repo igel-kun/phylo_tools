@@ -592,12 +592,17 @@ namespace mstd {
     }
 
     void set_capacity(const size_t new_capacity) {
-      if(new_capacity < _capacity) {
-        _count -= count_larger_or_equal(new_capacity);
-        auto [c_bucket, c_pos] = bucket_and_pos_of(new_capacity);
-        storage.resize(c_bucket + (c_pos != 0));
-        if(c_pos != 0)
-          storage[c_bucket] &= ~(full_bucket << c_pos);
+      if(new_capacity > 0) {
+        if(new_capacity < _capacity) {
+          _count -= count_larger_or_equal(new_capacity);
+          auto [c_bucket, c_pos] = bucket_and_pos_of(new_capacity);
+          storage.resize(c_bucket + (c_pos != 0));
+          if(c_pos != 0)
+            storage[c_bucket] &= ~(full_bucket << c_pos);
+        } else storage.resize(bucket_of(new_capacity - 1) + 1);
+      } else {
+        storage.clear();
+        _count = 0;
       }
       _capacity = new_capacity;
     }
@@ -685,7 +690,7 @@ namespace mstd {
         auto x = *it;
         ostr << std::bitset<num_bits_in_bucket>(x) << ' ';
       }
-      ostr << "(size "<<size()<<" capacity "<<capacity()<<")\n";
+      ostr << "(size "<<size()<<" capacity "<<capacity()<<')';
     }
 
     friend class unordered_bitset; 

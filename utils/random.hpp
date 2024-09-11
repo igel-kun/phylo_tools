@@ -127,26 +127,17 @@ namespace PT{
   auto get_random_iterator(Container&& c) { return get_random_iterator(std::forward<Container>(c), c.size()); }
 
   //! get an iterator to a random item in the container, except a given iterator
-  //NOTE: the item following/preceeding the forbidden item is twice as likely to be picked...
+  // NOTE: to this end, start at the second item and replace the iterator by begin() if it is hit
   template<mstd::IterableType Container>
   auto get_random_iterator_except(Container&& c, const auto& _except, const size_t container_size) {
     if((container_size >= 2) || (_except != std::begin(c))) {
-      auto result = std::begin(std::forward<Container>(c));
-      const size_t dist = throw_die(container_size - 1);
-      if(dist > 0) {
-        std::advance(result, dist - 1);
-        const auto old_result = result++;
-        // if we hit _except, then take the next item
-        if(result == _except) ++result;
-        // if _except was the last item and we hit it, then take the item before _except
-        if(result == std::end(c)) {
-          return old_result;
-        } else return result;
-      } else {
-        if(result == _except) ++result;
-        assert(result != std::end(c));
-        return result;
-      }
+      if(_except != std::end(c)) {
+        const auto result = std::next(std::begin(c), 1 + throw_die(container_size - 1));
+        // result can never equal begin(), but can hit except
+        if(result == _except) 
+          return std::begin(std::forward<Container>(c));
+        else return result;
+      } else return get_random_iterator(std::forward<Container>(c));
     } else throw std::logic_error{"no choosable item in container"};
   }
 

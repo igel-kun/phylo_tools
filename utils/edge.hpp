@@ -18,6 +18,9 @@ namespace PT{
     ProtoEdge(const reverse_edge_tag, const NodeDesc u, const Adjacency& v):
       Parent(v.get_desc(), Adjacency{u, v})
     {}
+    ProtoEdge(const Adjacency& u, const NodeDesc v):
+      Parent(static_cast<NodeDesc>(u), Adjacency{v, u})
+    {}
 
     const Adjacency& head() const & { return this->second; }
     Adjacency& head() & { return this->second; }

@@ -11,6 +11,7 @@
 #include <list>
 
 #include "utils.hpp"
+#include "runes.hpp"
 #include "iter_bitset.hpp"
 
 #include "sorted_vector.hpp"
@@ -115,8 +116,14 @@ namespace PT {
 
   static constexpr NodeDesc NoNode = NodeDesc{};
   static constexpr std::string NoName = "";
+}
+namespace mstd {
+  template<>
+  struct default_invalid<PT::NodeDesc> { static constexpr PT::NodeDesc value() { return PT::NoNode; } };
+}
+namespace PT {
 
-  using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc, NoNode>;
+  using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc>;
 
   template<> struct _StorageClass<singleS, NodeDesc>  {
     using type = mstd::singleton_set<OptionalNodeDesc>;
@@ -124,41 +131,51 @@ namespace PT {
 
   template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
-  template<class T>
-  concept NodeDescType = std::is_convertible_v<std::remove_cvref_t<T>, NodeDesc>;
-  template<class C>
-  concept HasNodeValue = std::is_convertible_v<typename std::iterator_traits<mstd::iterator_of_t<C>>::value_type, NodeDesc>;
-  template<class C>
-  concept HasNodeKey = std::is_convertible_v<typename std::remove_cvref_t<C>::key_type, NodeDesc>;
-  template<class C>
-  concept MapsToNode = std::is_convertible_v<typename std::remove_cvref_t<C>::mapped_type, NodeDesc>;
-  template<class C>
-  concept NodeIterableType = (mstd::IterableType<C> && HasNodeValue<C>);
-  template<class C>
-  concept NodeContainerType = (mstd::ContainerType<C> && HasNodeValue<C>);
-  template<class C>
-  concept NodeSetType = (mstd::SetType<C> && HasNodeValue<C>);
-  template<class C>
-  concept NodeMapType = (mstd::MapType<C> && HasNodeKey<C>);
-  template<class C>
-  concept OptionalNodeContainerType = (std::is_void_v<C> || NodeContainerType<C>);
-  template<class C>
-  concept OptionalNodeSetType = (std::is_void_v<C> || NodeSetType<C>);
-  template<class C>
-  concept OptionalNodeMapType = (std::is_void_v<C> || NodeMapType<C>);
-  template<class C>
-  concept OptionalMapsToNode = (std::is_void_v<C> || MapsToNode<C>);
+  template<class C> concept has_node_value = std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>;
+  template<class C> concept has_node_key = std::is_convertible_v<mstd::key_type_of_t<C>, NodeDesc>;
+  template<class C> concept maps_to_node = std::is_convertible_v<mstd::mapped_type_of_t<C>, NodeDesc>;
 
-  template<class C>
-  concept NodeTranslationType = (NodeMapType<C> && std::is_same_v<mstd::mapped_type_of_t<C>, NodeDesc>);
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeDescType = mstd::is_convertible_v<T, NodeDesc, rune>;
+  
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept HasNodeValue = mstd::apply_rune_v<C, rune> || has_node_value<mstd::apply_rune_t<C, rune>>;
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept HasNodeKey = mstd::apply_rune_v<C, rune> || has_node_key<mstd::apply_rune_t<C, rune>>;
+  
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept MapsToNode = mstd::apply_rune_v<C, rune> || maps_to_node<mstd::apply_rune_t<C, rune>>;
+  template<class C> concept StrictMapsToNode = MapsToNode<C, mstd::TR_Strict>;
+  template<class C> concept OptionalMapsToNode = MapsToNode<C, mstd::TR_ConstRefVoidOK>;
 
-  template<class F> concept StrictNodeFunctionType = std::invocable<F, NodeDesc>;
-  template<class F> concept NodeFunctionType = StrictNodeFunctionType<std::remove_reference_t<F>>;
-  template<class F> concept OptionalNodeFunctionType = NodeFunctionType<F> || std::is_void_v<F>;
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeIterableType = (mstd::IterableType<C, rune> && HasNodeValue<C, rune>);
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeContainerType = (mstd::ContainerType<C, rune> && HasNodeValue<C, rune>);
+  
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeSetType = (mstd::SetType<C, rune> && HasNodeValue<C, rune>);
+  template<class C> concept StrictNodeSetType = NodeSetType<C, mstd::TR_Strict>;
+  template<class C> concept OptionalNodeSetType = NodeSetType<C, mstd::TR_ConstRefVoidOK>;
 
-  template<class F> concept StrictNodePredicateType = std::predicate<F, NodeDesc>;
-  template<class F> concept NodePredicateType = StrictNodePredicateType<std::remove_reference_t<F>>;
-  template<class F> concept OptionalNodePredicateType = NodePredicateType<F> || std::is_void_v<F>;
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeVecType = (mstd::VectorType<C, rune> && HasNodeValue<C, rune>);
+  template<class C> concept StrictNodeVecType = NodeVecType<C, mstd::TR_Strict>;
+  template<class C> concept OptionalNodeVecType = NodeVecType<C, mstd::TR_ConstRefVoidOK>;
+
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeMapType = (mstd::MapType<C, rune> && HasNodeKey<C, rune>);
+
+  template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeTranslationType = (NodeMapType<C, rune> && std::is_same_v<mstd::mapped_type_of_t<C>, NodeDesc>);
+
+  template<class F, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeFunctionType = mstd::invocable<F, rune, NodeDesc>;
+  template<class F> concept StrictNodeFunctionType = NodeFunctionType<F, mstd::TR_Strict>;
+  template<class F> concept OptionalNodeFunctionType = NodeFunctionType<F, mstd::TR_ConstRefVoidOK>;
+
+  template<class F, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodePredicateType = mstd::predicate<F, rune, NodeDesc>;
 
 
   // degrees
@@ -186,12 +203,14 @@ namespace PT {
   using NodePairSet = HashSet<NodePair>;
 
   // an adjacency is something that can be converted to a NodeDesc
-  template<class A>
-  concept AdjacencyType = std::is_same_v<std::remove_cvref_t<A>, NodeDesc> ||
-    (!mstd::ArithmeticType<A> && std::is_convertible_v<const A, const NodeDesc&>);
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyType = mstd::is_convertible_v<A, NodeDesc, rune> && not mstd::is_arithmetic_v<A>;
 
-  template<class A>
-  concept AdjacencyContainerType = (mstd::ContainerType<A> && AdjacencyType<typename mstd::value_type_of_t<A>>);
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept HasAdjacencyValue = AdjacencyType<typename mstd::value_type_of_t<A>, rune>;
+
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyContainerType = mstd::ContainerType<A, rune> && HasAdjacencyValue<A, rune>;
 
   // a node is something providing a bunch of types and whose predecessors and successors can be queried
   template<typename N>

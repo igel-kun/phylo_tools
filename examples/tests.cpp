@@ -14,6 +14,12 @@
 
 #include "utils/command_line.hpp"
 
+
+constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
+constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));"
+
+
+
 // some static tests
 
 static_assert(std::is_default_constructible_v<mstd::optional_by_invalid<int>>);
@@ -176,7 +182,7 @@ static_assert(std::forward_iterator<typename T::const_iterator>);
 static_assert(mstd::IterableType<T>);
 static_assert(mstd::ContainerType<T>);
 static_assert(mstd::MapType<T>);
-static_assert(mstd::HasIterTraits<UintVecMap>);
+static_assert(mstd::HasIterTraits<mstd::iterator_of_t<UintVecMap>>);
 
 
 void test_vector_map() {
@@ -272,7 +278,25 @@ void test_brute_force() {
   assert(test(result2, "George"));
 }
 
-constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
+
+void test_concat_iter() {
+  std::vector<std::vector<int>> ints{{1,2,3}, {4,5,6}, {7,8,9}};
+  std::array<int, 3> indices{0,1,2};
+  auto trans = [&](int i)->std::vector<int>& {return ints[i];};
+  std::vector<int> result;
+  std::append(result, mstd::get_concatenating(indices, trans));
+  assert(result.size() == 9);
+  assert(result[5] = 6);
+
+
+  using MyNetwork = DefaultLabeledNetwork<mstd::DefaultDataVec, mstd::DefaultDataVec>;
+  const MyNetwork N = parse_newick<MyNetwork>(mark_network2);
+  const NodeVec retis = static_cast<NodeVec>(N.retis());
+  std::cout << "got retis: "<<retis<<'\n';
+  for(const auto uv: N.edges_above(retis))
+    std::cout << uv << '\n';
+}
+
 
 int main(const int argc, const char** argv) {
   parse_given_options(argc, argv);
@@ -282,6 +306,7 @@ int main(const int argc, const char** argv) {
   if(test(options, "-m")) test_vector_map();
   if(test(options, "-b")) test_subsets();
   if(test(options, "-f")) test_brute_force();
+  if(test(options, "-c")) test_concat_iter();
 
 }
 

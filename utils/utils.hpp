@@ -109,6 +109,18 @@ namespace std::ranges {
 // a pointer-lookup that returns nullptr on unsuccessful lookups
 #define return_pointer_lookup(x,y) {const auto __iter = mstd::find((x), (y)); return (__iter == std::end((x))) ? nullptr : &(*__iter); }
 
+// C++ forbids inheriting copy constructors, which makes sense if the class has data members (they would be left uninitialized),
+// but it doesn't make sense if the class has NO data members... in those cases, we can inherit _all_ constructors as follows:
+#define INHERIT_ALL_CONSTRUCTORS(myclass,base) \
+  template<class First, class... Args> requires (not std::is_same_v<std::remove_cvref_t<First>, myclass>)\
+  myclass(First&& first, Args&&... args): base(std::forward<First>(first), std::forward<Args>(args)...) {}
+
+// iterators are supposed to have an assignment that returns a ref to the iterator itself (this is required for std::iterator_traits)
+// now, it we inherit from an iterator and don't write our own operator=() then the inherited assignment will have the wrong return type :(
+#define INHERIT_ASSIGNMENT(myclass,base)\
+  template<class Other> requires (not std::is_same_v<std::remove_cvref_t<Other>, myclass>)\
+  myclass& operator=(Other&& other) { base::operator=(std::forward<Other>(other)); }
+
 // zero-fill
   void clear_memory(void* const start, const size_t num_bytes) {
 #if __linux__

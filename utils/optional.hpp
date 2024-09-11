@@ -6,6 +6,29 @@
 
 namespace mstd {
   // a class implementing std::optional but, instead of using an additional byte, we use a tombstone
+
+  // ------- optional_by_invalid: helpers ------------
+  // by default, a default constructed thing is invalid
+  // specialize to your hearts desire
+  template<class T> struct default_invalid {};
+  template<class T> requires (std::is_pointer_v<T>)
+  struct default_invalid<T> { static constexpr T value() { return nullptr; } };
+  template<class T> requires (std::is_arithmetic_v<T>)
+  struct default_invalid<T> {
+    static constexpr auto value() {
+      if constexpr (std::numeric_limits<T>::has_quiet_NaN) {
+        return std::numeric_limits<T>::quiet_NaN();
+      } else if constexpr (std::numeric_limits<T>::has_infinity) {
+        return std::numeric_limits<T>::infinity();
+      } else return std::numeric_limits<T>::max();
+    }
+  };
+
+  template<class T> constexpr auto default_invalid_v = default_invalid<T>::value();
+ 
+
+
+  // ------- optional_by_invalid: main class ---------
   // NOTE: tombstone can be either
   //  1. a value that is equal-comparable to T or
   //  2. a constexpr lambda returning the tombstone on operator()
@@ -96,19 +119,27 @@ namespace mstd {
     }
   };
 
-  template<class T>
-  static constexpr bool std_optional_v = false;
-  template<class T>
-  static constexpr bool std_optional_v<std::optional<T>> = true;
-
-  template<class T>
-  concept Optional = std_optional_v<std::remove_reference_t<T>> || requires(T t){ T::detect_optional; };
+  // ------- optional_by_invalid: deduction guides ---
+  
+  // ------- optional_by_invalid: concepts -----------
+  template<class T> constexpr bool std_optional_v = false;
+  template<class T> constexpr bool std_optional_v<std::optional<T>> = true;
+  template<class T> concept Optional = std_optional_v<std::remove_reference_t<T>> || requires(T t){ T::detect_optional; };
 
   template<bool invert = false>
   struct optional_value_predicate {
     template<Optional T>
     constexpr bool operator()(const T& x) const { return x.has_value() != invert; }
   };
+
+  
+  // ------- optional_by_invalid: defaults -----------
+  // this is only used to provide default values to the non-type template parameter for OptFor
+  template<class T, class Test, class In> constexpr auto _get_default_invalid(In x) {
+    if constexpr (std::is_same_v<std::remove_cvref_t<In>, Test>)
+      return default_invalid_v<T>;
+    else return x;
+  }
 
   template<class T, auto ts> struct _OptFor { };
   template<Optional T, auto ts> struct _OptFor<T, ts> { using type = T; };

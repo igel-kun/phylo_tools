@@ -17,10 +17,12 @@ namespace mstd {
   template<class T>
   using emplace_result = std::pair<typename std::remove_reference_t<T>::iterator, bool>;
 
+  // ----------- append for: arithmetics -----------------
   // on arithmetic types just adds the second to the first
   template<ArithmeticType P, ArithmeticType Q>
   auto append(P& p, Q&& q) { p += std::forward<Q>(q); return std::pair{&p, true}; }
 
+  // ----------- append for: adding items to containers -----------------
   // on vectors, append = emplace_back 
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
@@ -62,8 +64,7 @@ namespace mstd {
 
 
 
-
-
+  // ----------- append for: callables -----------------
   // on callables, append will call the function and return the result
   template<class F, class... Args> requires std::is_invocable_v<F, Args&&...>
   auto append(F&& f, Args&&... args) {
@@ -73,6 +74,8 @@ namespace mstd {
     else return std::pair<F_Result,bool>{std::forward<F>(f)(std::forward<Args>(args)...), true};
   }
 
+
+  // ----------- append for: concatenating containers -----------------
   // append with 2 containers means to add the second to the end of the first
   template<ContainerType C1, IterableTypeWithSameIterators C2> requires (ConvertibleValueTypes<C1,C2> && !VectorOrStringType<C1>)
   auto append(C1& x, C2&& y) {
@@ -94,13 +97,23 @@ namespace mstd {
     return emplace_result<C1>{x.begin(), true};
   }
 
-
+  template<ContainerType C, VerifyableIter Iter> // if C is not a container of iterators and we get a verifyable iterator, then we can iterate it into C
+    requires (ConvertibleValueTypes<C,Iter> && not IterableType<Iter> && not mstd::is_convertible_v<Iter, value_type_of_t<C>>)
+  auto append(C& x, Iter it) {
+    while(it.is_valid()) {
+      append(x, *it);
+      ++it;
+    }
+    return emplace_result<C>{x.begin(), true};
+  }
 
 
 
   template<class T, class... Args>
-  concept Appendable = requires(T t, Args&&... args) {
-    append(t, args...);
-  };
+  concept is_appendable_v = requires(T t, Args&&... args) { append(t, args...); };
+  template<class T, TypeRune rune, class... Args>
+  concept AppendableR = apply_rune_v<T, rune> || is_appendable_v<T, Args...>;
+  template<class T, class... Args>
+  concept Appendable = AppendableR<T, TR_ConstRefOK, Args...>;
 
 }

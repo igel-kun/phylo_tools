@@ -87,11 +87,11 @@ namespace PT{
   //      0 5 0.4192,bar
   //      0 9
   //      0 1
-  template<StrictEdgeEmplacerType Emplacer, bool allow_non_binary = true, bool allow_junctions = true>
-  class EdgeListParser
+  template<StrictEdgeEmplacerType Emplacer>
+  class EdgeListParser 
   {
-    std::istream* edgestream;
     Emplacer emplacer;
+    std::istream* edgestream;
   public:
 
     template<class... Args>

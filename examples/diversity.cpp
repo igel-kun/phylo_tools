@@ -1,5 +1,6 @@
 
 #include <ranges>
+#include <utility>
 
 #include "utils/benchmark.hpp"
 #include "utils/command_line.hpp"
@@ -31,7 +32,9 @@ struct EdgeData {
     while(iter && (*iter == "")) ++iter;
     if(iter) weight = std::stof(*iter);
     while(++iter && (*iter == ""));
-    if(iter) inheritance_prob = std::stof(*iter);
+    if(iter)
+      if(not mstd::try_reading_number<float>(*iter, inheritance_prob))
+        inheritance_prob = 1;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const EdgeData& ed) {
@@ -170,6 +173,9 @@ int main(const int argc, const char** argv) {
       std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
       N.print_summary(std::cout);
     }
+
+
+
 
     if(test(options, "-l")) {
       const NameVec leaf_names = parse_leaves(options["-l"][0]);

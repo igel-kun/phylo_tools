@@ -13,7 +13,8 @@ namespace mstd {
   //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
   template<class _Iter, class _Transformation, bool pass_iterator = false>
     requires (std::is_invocable_v<_Transformation, std::conditional_t<pass_iterator, _Iter, reference_of_t<_Iter>>>)
-  class transforming_iterator: public InheritableIter<_Iter> {
+  class transforming_iterator: public InheritableIter<_Iter>
+  {
     using Parent = InheritableIter<_Iter>; 
     [[no_unique_address]] _Transformation trans;
     
@@ -90,11 +91,14 @@ namespace mstd {
     // construct from an iterator alone, default-construct the transformation
     template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, transforming_iterator>) &&
         std::is_default_constructible_v<Transformation> && std::is_constructible_v<Parent, T&&>)
-    transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{} {}
+    transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{}
+    {}
 
     // construct from iter and transformaiton
-    template<class T, class F> requires (std::is_constructible_v<Parent, T&&> && std::is_constructible_v<Transformation, F&&>)
-    transforming_iterator(T&& iter, F&& f): Parent{std::forward<T>(iter)}, trans{std::forward<F>(f)} {}
+    template<class T, class... Args> requires (std::is_constructible_v<Parent, T&&> && std::is_constructible_v<Transformation, Args&&...>)
+    transforming_iterator(T&& iter, Args&&... args):
+      Parent{std::forward<T>(iter)}, trans{std::forward<Args>(args)...}
+    {}
 
 
     // std::piecewise construction of the iter and the transformation
@@ -123,7 +127,7 @@ namespace mstd {
 
     difference_type operator-(const Parent& it) const { return std::distance(static_cast<const Parent&>(*this), it); }
     difference_type operator-(const transforming_iterator& it) const { return *this - static_cast<const Parent&>(it); }
-    friend difference_type operator-(const Parent& it1, const transforming_iterator& it2) { return it2 - it1; }
+    friend difference_type operator-(const Parent& it1, const transforming_iterator& it2) { return -(it2 - it1); }
 
     decltype(auto) operator*() & { return apply_trans(deref()); }
     decltype(auto) operator*() const & { return apply_trans(deref()); }
@@ -154,12 +158,12 @@ namespace mstd {
   static_assert(std::random_access_iterator<transforming_iterator<typename std::vector<int>::iterator, std::identity>>);
 
   // factories
-  template<class Iter, class T, bool pass_iterator = false, class BeginEndTransformation = void, class EndIterator = iterator_of_t<Iter>>
-  using TransformingIterFactory = IterFactory<transforming_iterator<Iter, T, pass_iterator>, BeginEndTransformation, EndIterator>;
+  template<class Iter, class Trans, bool pass_iterator = false, class BeginEndTransformation = void, class EndIterator = iterator_of_t<Iter>>
+  using TransformingIterFactory = IterFactory<transforming_iterator<iterator_of_t<Iter>, Trans, pass_iterator>, BeginEndTransformation, EndIterator>;
 
   template<IterableType Container, class Trans, bool pass_iterator = false>
   auto get_transforming(Container&& c, Trans&& trans) {
-    return TransformingIterFactory<iterator_of_t<Container>, Trans, pass_iterator, void>(std::forward<Container>(c), std::forward<Trans>(trans));
+    return TransformingIterFactory<Container, Trans, pass_iterator, void>(std::forward<Container>(c), std::forward<Trans>(trans));
   }
 
 

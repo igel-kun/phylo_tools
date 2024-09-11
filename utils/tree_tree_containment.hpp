@@ -141,7 +141,7 @@ namespace PT {
       decltype(auto) operator()(const NodeDesc a, const NodeDesc b) const
       { return (node_infos.at(a).order_number < node_infos.at(b).order_number) != reverse; }
 
-      template<mstd::dereferencable_to<NodeDesc> Iter>
+      template<mstd::is_dereferencable_to<NodeDesc> Iter>
       decltype(auto) operator()(const Iter it1, const Iter it2) const
       { return operator()(*it1, *it2); }
     };

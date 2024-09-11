@@ -65,26 +65,35 @@ namespace PT {
       NodeSet saved_nodes{std::begin(_saved_nodes), std::end(_saved_nodes)};
       double switching_weight = 0;
       double switching_prob = 1;
+      
+      DEBUG5(NodeSet seen; std::cout << "\nnew switching\n");
       // NOTE: the switching-iter guarantees us to present the edges in pre-order, so if we reverse the order, it'll be a post-order
       for(const auto& uv: std::ranges::reverse_view{active_edges}) {
         const auto [u, v] = uv.as_pair();
+        DEBUG5(std::cout << uv <<'\n');
+        DEBUG5(assert(seen.emplace(v).second));
         if(test(saved_nodes, v)) {
           append(saved_nodes, u);
           // update weight and prob
           switching_weight += static_cast<double>(f.weight(uv));
-          if(Net::is_reti(v))
-            switching_prob *= static_cast<double>(f.iprob(uv));
         }
+        if(Net::is_reti(v))
+          switching_prob *= static_cast<double>(f.iprob(uv));
       }
+      DEBUG5(std::cout << "switching has weight "<<switching_weight<<" & prob "<<switching_prob<<'\n');
       return switching_weight * switching_prob;
     }
 
     template<StrictPhylogenyType Net, NodeIterableType Nodes, class UtilityFunctors>
     double operator()(const Net& N, const Nodes& leaves_to_save, UtilityFunctors&& f) const {
       double result = 0;
-      for(const auto s: SwitchingFactory<Net>{N}) {
+      DEBUG4(size_t count = 0);
+      auto switchings = SwitchingFactory<Net, const Nodes*>{N, leaves_to_save};
+      for(const auto s: std::move(switchings)) {
         result += pd_score_for_switching(N, leaves_to_save, s, f);
+        DEBUG4(++count);
       }
+      DEBUG4(std::cout << count << " switchings; total score: "<<result<<'\n');
       return result;
     }
   };
@@ -127,7 +136,7 @@ namespace PT {
     //std::pair<NodeSet, double> max;
     const auto L = N.leaves();
     //const NodeSet leaves = L.template to_container<NodeSet>();
-    const NodeSet leaves = L;
+    const NodeVec leaves(L.template to_container<NodeVec>());
     std::cout << leaves.size() << " leaves: "<<leaves<<'\n';
     //std::cout << "N = "<<N<<'\n';
     /*

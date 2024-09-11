@@ -283,16 +283,17 @@ namespace PT {
 	  // NOTE: Edge data can be passed either in the Adjacency v or with additional args (the latter takes preference)
     // NOTE: don't add edges incoming to any root! Use add_parent or transfer_above_root for this
     template<AdjacencyType Adj, class... Args>
-    std::pair<const Adjacency&, bool> add_edge(const NodeDesc u, Adj&& v, Args&&... args) {
+    auto add_edge(const NodeDesc u, Adj&& v, Args&&... args) {
       assert(!test(_roots, v));
-      const auto [iter, success] = Parent::add_child(u, std::forward<Adj>(v), std::forward<Args>(args)...);
-      if(success) {
-        const bool res = Parent::add_parent(v, u, *iter).second;
+      const auto result = Parent::add_child(u, std::forward<Adj>(v), std::forward<Args>(args)...);
+      if(result.second) {
+        const bool res = Parent::add_parent(v, u, *(result.first)).second;
         assert(res && "u is a predecessor of v, but v is not a successor of u. This should never happen!");
 				count_edge();
       }
-      return {*iter, success};
+      return result;
     }
+
     /*
     template<AdjacencyType Adj, DataExtracterType DataMaker>
     std::pair<Adjacency, bool> add_edge(const NodeDesc u, Adj&& v, DataMaker&& data_maker) {
@@ -375,7 +376,7 @@ namespace PT {
     // new nodes can only be added as 1. new roots, 2. children or 3. parents of existing nodes
     // NOTE: the edge data can either be passed using the Adjacency v or constructed from the parameter args
     template<AdjacencyType Adj, class... Args>
-    std::pair<Adjacency, bool> add_child(const NodeDesc u, Adj&& v, Args&&... args) {
+    auto add_child(const NodeDesc u, Adj&& v, Args&&... args) {
       assert(u != static_cast<NodeDesc>(v));
       DEBUG5(std::cout << "adding edge from " << u << " to " << v <<"\n");
       const auto result = add_edge(u, std::forward<Adj>(v), std::forward<Args>(args)...);
@@ -384,7 +385,7 @@ namespace PT {
     }
 
     template<AdjacencyType Adj, class... Args>
-    bool add_parent(Adj&& v, const NodeDesc u, Args&&... args) {
+    auto add_parent(Adj&& v, const NodeDesc u, Args&&... args) {
       assert(degree(u) == 0);
       const auto result = add_edge(u, std::forward<Adj>(v), std::forward<Args>(args)...);
       if(result.second) {
@@ -945,16 +946,19 @@ namespace PT {
 
     // =============== traversals ======================
     
+    // DFSNodeIterator should have std::iterator_traits
+    static_assert(mstd::__LegacyInputIterator<mstd::auto_iter<mstd::_filtered_iterator<DFSNodeIterator<postorder, Phylogeny, NodeSet, void>, decltype([](NodeDesc){return true;})>>>);
+
     // --------------- relative node traversals (below) ------------------
 
     // list all nodes below u in order _o (default: postorder)
-    template<TraversalType o = postorder, class Roots> requires (NodeIterableType<Roots> || NodeDescType<Roots>)
+    template<TraversalType o = postorder, class Roots>
     static auto nodes_below(Roots&& R) { return NodeTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R)); }
     // we can represent nodes that are forbidden to visit by passing either a container of forbidden nodes or a node-predicate
     template<TraversalType o = postorder, class Forbidden, class Roots>
-      requires (!DFSOrderTag<Forbidden> && (NodeIterableType<Roots> || NodeDescType<Roots>))
+      requires (not DFSOrderTag<Forbidden> && (NodeIterableType<Roots> or NodeDescType<Roots>))
     static auto nodes_below(Roots&& R, Forbidden&& forbidden) {
-      return NodeTraversal<o, Phylogeny, Roots, DefaultSeen, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      return NodeTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
 
     template<class... Args> static auto nodes_below_preorder(Args&&... args)  { return nodes_below<preorder>(std::forward<Args>(args)...); }
@@ -970,9 +974,7 @@ namespace PT {
 
     // --------------- relative reverse node traversals (above) ------------------
     template<TraversalType o = preorder, class... Args>
-    static auto nodes_above(Args&&... args) {
-      return nodes_below<TraversalType(o | reverse_traversal)>(std::forward<Args>(args)...);
-    }
+    static auto nodes_above(Args&&... args) { return nodes_below<TraversalType(o | reverse_traversal)>(std::forward<Args>(args)...); }
 
     template<class... Args> static auto nodes_above_preorder(Args&&... args)  { return nodes_above<preorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto nodes_above_inorder(Args&&... args)   { return nodes_above<inorder>(std::forward<Args>(args)...); }
@@ -985,9 +987,18 @@ namespace PT {
     template<TraversalType o = preorder, class... Args>
     static auto retis_above(Args&&... args) { return nodes_with_above<o>(is_reti, std::forward<Args>(args)...); }
 
-    // --------------- absolute node traversals (below roots) ------------------
-    template<TraversalType o = postorder, class... Args>
-    auto nodes(Args&&... args) const { return nodes_below<o, const RootContainer&>(_roots, std::forward<Args>(args)...); }
+    // --------------- absolute node traversals (below (default) or above roots) ------------------
+    template<TraversalType o = postorder, class DIR_tag, class... Args> requires (std::is_convertible_v<DIR_tag, direction_tag>)
+    auto nodes(const DIR_tag, Args&&... args) const {
+      if constexpr (std::is_convertible_v<DIR_tag, below_tag>)
+        return nodes_below<o, const RootContainer&>(_roots, std::forward<Args>(args)...);
+      else return nodes_above<o, const RootContainer&>(_roots, std::forward<Args>(args)...);
+    }
+    template<TraversalType o = postorder, class First, class... Args> requires (not std::is_convertible_v<First, direction_tag>)
+    auto nodes(First&& first, Args&&... args) const { return nodes(below_tag{}, std::forward<Args>(args)...); }
+    template<TraversalType o = postorder> auto nodes() const { return nodes(below_tag{}); }
+
+
     template<class... Args> auto nodes_preorder(Args&&... args) const  { return nodes<preorder>(std::forward<Args>(args)...); }
     template<class... Args> auto nodes_inorder(Args&&... args) const   { return nodes<inorder>(std::forward<Args>(args)...); }
     template<class... Args> auto nodes_postorder(Args&&... args) const { return nodes<postorder>(std::forward<Args>(args)...); }
@@ -1005,7 +1016,7 @@ namespace PT {
     }
     template<TraversalType o = postorder, class Roots, class Forbidden> requires (NodeIterableType<Roots> || NodeDescType<Roots>)
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
-      return AllEdgesTraversal<o, Phylogeny, Roots, DefaultSeen, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      return AllEdgesTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
     template<class... Args> static auto edges_below_preorder(Args&&... args)  { return edges_below<preorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_below_inorder(Args&&... args)   { return edges_below<inorder>(std::forward<Args>(args)...); }
@@ -1013,14 +1024,24 @@ namespace PT {
 
     // --------------- relative reverse edge traversals (above) ------------------
     template<TraversalType o = preorder, class... Args>
-    static auto edges_above(Args&&... args) { return edges_below<TraversalType(o | reverse_traversal)>(std::forward<Args>(args)...); }
+    static auto edges_above(Args&&... args) {
+      return edges_below<TraversalType(o | reverse_traversal)>(std::forward<Args>(args)...);
+    }
     template<class... Args> static auto edges_above_preorder(Args&&... args)  { return edges_above<preorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_above_inorder(Args&&... args)   { return edges_above<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_above_postorder(Args&&... args) { return edges_above<postorder>(std::forward<Args>(args)...); }
 
-    // --------------- absolute edge traversals (below roots) ------------------
-    template<TraversalType o = postorder, class... Args>
-    auto edges(Args&&... args) const { return edges_below<o, const RootContainer&>(_roots, std::forward<Args>(args)...); }
+    // --------------- absolute edge traversals (below (default) or above roots) ------------------
+    template<TraversalType o = postorder, class DIR_tag, class... Args> requires (std::is_convertible_v<DIR_tag, direction_tag>)
+    auto edges(const DIR_tag, Args&&... args) const {
+      if constexpr (std::is_convertible_v<DIR_tag, below_tag>)
+        return edges_below<o, const RootContainer&>(_roots, std::forward<Args>(args)...);
+      else return edges_above<o, const RootContainer&>(_roots, std::forward<Args>(args)...);
+    }
+    template<TraversalType o = postorder, class First, class... Args> requires (not std::is_convertible_v<First, direction_tag>)
+    auto edges(First&& first, Args&&... args) const { return edges(below_tag{}, std::forward<Args>(args)...); }
+    template<TraversalType o = postorder> auto edges() const { return edges(below_tag{}); }
+
     template<class... Args> auto edges_preorder(Args&&... args) const  { return edges<preorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_inorder(Args&&... args) const   { return edges<inorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_postorder(Args&&... args) const { return edges<postorder>(std::forward<Args>(args)...); }
@@ -1119,23 +1140,6 @@ namespace PT {
     template<bool, StrictPhylogenyType, OptionalPhylogenyType, OptionalMapsToNode> friend struct EdgeEmplacementHelper;
 
 
-    // emplace a set of new edges into *this
-    // NOTE: to extract node/edge data, pass data-extraction functions when constructing the emplacer (see <edge_emplacement.hpp> and <extract_data.hpp>)
-    // NOTE: node-/edge- data is passed into the extractor functions by move if the edge-container is not passed by const reference!
-    // NOTE: the emplacer_args allow you to pass your own (partial) node translation old_to_new in order to pre-define node-correspondances (powerfull!)
-    //       if you do this, make sure that all values in the translation are valid node descriptors (point to constructed nodes of the correct type)
-    //       see <edge_emplacement.hpp> and <extract_data.hpp> for more info on passing node-translation functions
-    template<mstd::IterableType Edges, EdgeEmplacerType Emplacer>
-    void build_from_edges(Edges&& edges, Emplacer&& emplacer) {
-      DEBUG3(std::cout << "init Network with edges "<<edges<<"\n");
-      // step 1: copy other_x
-      // step 2: copy everything below other_x
-      for(auto&& e: std::forward<Edges>(edges))
-        emplacer.emplace_edge(static_cast<mstd::copy_cvref_t<Edges&&, decltype(e)>>(e));
-    }
-
-
-  protected:
     // increase our node-/edge- counts by the number of nodes/edges below other_x and decrease other's by the same amount
     // in short: update node- and edge counts in reaction of moving other_x into us
     template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
@@ -1212,13 +1216,32 @@ namespace PT {
     }
 
 
+    // emplace a set of new edges into *this
+    // NOTE: to extract node/edge data, pass data-extraction functions when constructing the emplacer (see <edge_emplacement.hpp> and <extract_data.hpp>)
+    // NOTE: node-/edge- data is passed into the extractor functions by move if the edge-container is not passed by const reference!
+    // NOTE: the emplacer_args allow you to pass your own (partial) node translation old_to_new in order to pre-define node-correspondances (powerfull!)
+    //       if you do this, make sure that all values in the translation are valid node descriptors (point to constructed nodes of the correct type)
+    //       see <edge_emplacement.hpp> and <extract_data.hpp> for more info on passing node-translation functions
+    template<mstd::IterableType Edges, EdgeEmplacerType Emplacer>
+    void build_from_edges(Edges&& edges, Emplacer&& emplacer) {
+      DEBUG3(std::cout << "init Network with edges "<<edges<<"\n");
+      for(auto&& e: std::forward<Edges>(edges))
+        emplacer.emplace_edge(static_cast<mstd::copy_cvref_t<Edges&&, decltype(e)>>(e));
+    }
+
   public:
-    // =============================== construction ======================================
-    Phylogeny() = default;
+    // =============== destruction ==================
     ~Phylogeny() { clear(); }
 
-    // initialize tree from any std::IterableType, for example, std::vector<PT::Edge<>>
-    template<mstd::IterableType Edges, class... EmplacerArgs> requires (!PhylogenyType<Edges>)
+    // =============================== construction ======================================
+    Phylogeny() = default;
+    // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
+    // NOTE: we have to make sure to remove the other phylogeny's roots, otherwise its destructor will destruct the roots as well
+    Phylogeny(Phylogeny&& N) = default;
+
+
+    // initialize tree from any std::IterableType containing edges, for example, std::vector<PT::Edge<>>
+    template<mstd::IterableType Edges, class... EmplacerArgs> requires (not PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges, EmplacerArgs&&... args) {
       build_from_edges(std::forward<Edges>(edges), EdgeEmplacers<true>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...));
       DEBUG2(print_summary(std::cout));
@@ -1226,62 +1249,68 @@ namespace PT {
 
     // NOTE: construction from another (sub-)phylogeny largely depends on the data policy:
     // 1. "copy" (default)      - creates new nodes, copying/moving the data from the other nodes
-    //                            (move data if the other phylogeny is presented as rvalue_reference)
+    //                            (move data if the other phylogeny is presented as rvalue reference)
     // 2. "move"                - simply moves the root from the given (sub-)phylogeny into *this as new root
     // NOTE: 2. requires that the given Phylogeny has the same NodeType as us (but may allow more/less roots)
 
 
+    // -------------------------- construction with explicit tag --------------------------------
     // "copy" construction with root(s)
-    template<PhylogenyType Phylo, NodeIterableType RContainer, class... EmplacerArgs>
-    Phylogeny(const policy_copy_tag, Phylo&& N, const RContainer& in_roots, EmplacerArgs&&... args) {
-      std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using roots "<<in_roots<<"\n";
-      if(!in_roots.empty()) {
-        auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
-        if(in_roots.size() == 1) {
-          build_from_edges(N.edges_below_preorder(mstd::front(in_roots)), emplacer);
+    template<PhylogenyType Phylo, NodeIterableType Nodes, class DIR_tag, class... EmplacerArgs>
+      requires (std::is_convertible_v<DIR_tag, direction_tag>) // direction must be above or below (the given nodes)
+    Phylogeny(const policy_copy_tag, Phylo&& N, const Nodes& some_nodes, const DIR_tag, EmplacerArgs&&... args) {
+      static constexpr bool below = std::is_convertible_v<DIR_tag, below_tag>;
+      DEBUG3(std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using roots "<<some_nodes<<"\n");
+      if(!some_nodes.empty()) {
+        // NOTE: if we're listing edges below, there is no need to track roots (we know them)
+        auto emplacer = EdgeEmplacers<not below, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
+        if(some_nodes.size() == 1) {
+          build_from_edges(N.edges_preorder(DIR_tag{}, mstd::front(some_nodes)), emplacer);
         } else {
-          build_from_edges(N.edges_below_preorder(in_roots), emplacer);
+          build_from_edges(N.edges_preorder(DIR_tag{}, some_nodes), emplacer);
         }
-        DEBUG4(std::cout << "marking roots: "<<in_roots<<"\n");
-        // mark the roots
-        emplacer.mark_roots(in_roots);
+        // mark the roots if we didn't track them
+        if constexpr (below) {
+          DEBUG4(std::cout << "marking roots: "<<some_nodes<<"\n");
+          emplacer.mark_roots(some_nodes);
+        }
         DEBUG2(print_summary(std::cout));
       }
     }
-    
+
+    // if there is no direction-tag, then default to "below", that is, the given nodes are roots
+    template<PhylogenyType Phylo, NodeIterableType Nodes, class... EmplacerArgs>
+    Phylogeny(const policy_copy_tag, Phylo&& N, const Nodes& some_nodes, EmplacerArgs&&... args):
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), some_nodes, below_tag{}, std::forward<EmplacerArgs>(args)...)
+    {}
+   
     // "copy" construction with single root
     template<PhylogenyType Phylo, class... EmplacerArgs>
-    Phylogeny(const policy_copy_tag, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args) {
-      DEBUG3(std::cout << "copy constructing phylogeny with "<<N.num_nodes()<< " nodes, "<<N.num_edges()<<" edges using root "<<in_root<<"\n");
-      //auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
-      auto emplacer = EdgeEmplacers<false, Phylo&&>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...);
-      DEBUG5(std::cout << "extracter is "<<mstd::type_name<decltype(emplacer.data_extracter)>()<<"\n");
-      build_from_edges(N.edges_below_preorder(in_root), emplacer);
-      // mark the root
-      assert(emplacer.contains(in_root));
-      DEBUG4(std::cout << "marking root: "<<emplacer.at(in_root)<<"\n");
-      emplacer.mark_root(in_root);
-      DEBUG2(print_summary(std::cout));
-    }
+    Phylogeny(const policy_copy_tag, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args):
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), mstd::singleton_set(in_root), std::forward<EmplacerArgs>(args)...)
+    {}
 
-    // "copy" construction without root (using all roots of in_tree)
+    // "copy" construction without root (using all roots of N)
     template<PhylogenyType Phylo, class First, class... Args>
-      requires (!NodeIterableType<First> && !std::remove_reference_t<Phylo>::has_unique_root)
+      requires (not NodeIterableType<First> && not std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_tag, Phylo&& N, First&& first, Args&&... args):
       Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), N.roots(), std::forward<First>(first), std::forward<Args>(args)...)
     {}
+
     template<PhylogenyType Phylo, class First, class... Args>
       requires (!NodeIterableType<First> && std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_tag, Phylo&& N, First&& first, Args&&... args):
       Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), mstd::front(N.roots()), std::forward<First>(first), std::forward<Args>(args)...)
     {}
+
     template<PhylogenyType Phylo> requires (!std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_tag, Phylo&& N):
       Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), N.roots())
     {}
+
     template<PhylogenyType Phylo> requires (std::remove_reference_t<Phylo>::has_unique_root)
     Phylogeny(const policy_copy_tag, Phylo&& N):
-      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), mstd::front(N.roots()))
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), N.root())
     {}
 
 
@@ -1311,25 +1340,30 @@ namespace PT {
       throw mstd::Unimplemented("move-construction of phylogenies with different root containers");
     }
 
-    template<StrictPhylogenyType Phylo, class... Args>
-    explicit Phylogeny(const Phylo& in_tree, Args&&... args):
-      Phylogeny(policy_copy_tag(), in_tree, std::forward<Args>(args)...)
+
+
+    // -------------------------- construction without tag delegates to tagged-construction --------------------------------
+    template<StrictPhylogenyType Phylo, class... Args> requires (not std::is_same_v<Phylo, Phylogeny>)
+    explicit Phylogeny(const Phylo& N, Args&&... args):
+      Phylogeny(policy_copy_tag(), N, std::forward<Args>(args)...)
     {}
     // copy-constructing for the same type is not explicit
-    Phylogeny(const Phylogeny& in_tree):
-      Phylogeny(policy_copy_tag(), in_tree)
+    Phylogeny(const Phylogeny& N):
+      Phylogeny(policy_copy_tag(), N)
     {}
 
     template<StrictPhylogenyType Phylo, class... Args>
-      requires (std::is_same_v<Node, typename Phylo::Node> && !((sizeof...(Args) == 0) && std::is_same_v<Phylo, Phylogeny>))
-    explicit Phylogeny(Phylo&& in_tree, Args&&... args):
-      Phylogeny(policy_move_tag(), std::move(in_tree), std::forward<Args>(args)...)
+      requires (std::is_same_v<Node, typename Phylo::Node> && ((sizeof...(Args) != 0) || not std::is_same_v<Phylo, Phylogeny>))
+    explicit Phylogeny(Phylo&& N, Args&&... args):
+      Phylogeny(policy_move_tag(), std::move(N), std::forward<Args>(args)...)
     {}
-    // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
-    // NOTE: we have to make sure to remove the other phylogeny's roots, otherwise its destructor will destruct the roots as well
-    Phylogeny(Phylogeny&& in_tree) = default;
 
+    // -------------------------- construction of subnetwork above a set of nodes --------------------------------
+    template<StrictPhylogenyType Phylo, NodeIterableType Leaves>
+    Phylogeny(Phylo&& N, Leaves&& leaves) {
+    }
 
+    // =================== assignment ======================
 
     // assigning from a Phylogeny-rval-ref is just stealing their stuff - the ProtoPhylogeny knows how to do this
     void assign_from(Phylogeny&& other) {
@@ -1368,8 +1402,6 @@ namespace PT {
     }
 
 
-    // =============== destruction ==================
-  public:
 
     // =================== i/o ======================
 

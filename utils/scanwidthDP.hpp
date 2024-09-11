@@ -271,8 +271,8 @@ namespace PT {
 
 namespace mstd {
   // in order to use DPEntries with optional_by_invalid's, we'll use the default-constructed DPEntry with hash = 1 as invalid
-  template<class P, class Q> struct default_invalid<PT::_DPEntryLowMem<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntryLowMem<P, Q>{1}; }; };
-  template<class P, class Q> struct default_invalid<PT::_DPEntry<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntry<P, Q>{1}; }; };
+  template<class P, class Q> struct default_invalid_v<PT::_DPEntryLowMem<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntryLowMem<P, Q>{1}; }; };
+  template<class P, class Q> struct default_invalid_v<PT::_DPEntry<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntry<P, Q>{1}; }; };
 }
 namespace std {
   template<class P, class Q> struct hash<PT::_DPEntryLowMem<P,Q>> { auto operator()(const PT::_DPEntryLowMem<P,Q>& x) const { return x.hash(); } };

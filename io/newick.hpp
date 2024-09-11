@@ -112,31 +112,12 @@ namespace PT{
 
 
   // ------ READ INPUT --------
-  template<bool store_degree = true>
-  struct NodeDescAndDegree: public std::pair<NodeDesc, Degree> {
-    using Parent = std::pair<NodeDesc, Degree>;
-    using Parent::Parent;
-
-    NodeDesc& get_node() { return this->first; }
-    const NodeDesc& get_node() const { return this->first; }
-    Degree& get_degree() { return this->second; }
-    const Degree& get_degree() const { return this->second; }
-  };
-  template<>
-  struct NodeDescAndDegree<false> {
-    NodeDesc x;
-    NodeDescAndDegree(const NodeDesc& _x, const Degree&): x(_x) {}
-    NodeDesc& get_node() { return x; }
-    const NodeDesc& get_node() const { return x; }
-    friend std::ostream& operator<<(std::ostream& os, const NodeDescAndDegree<false>& ndd) { return os << ndd.x; }
-  };
-
   //! a newick parser
   //NOTE: we parse newick from the back to the front since the node names are _appended_ to the node instead of _prepended_
   //NOTE: node numbers will be consecutive (0 = root) and follow a pre-order numbering of a spanning-tree
   //      this allows you to use RONetworks and anything needing pre-order numbers
   //NOTE: output is done via a functor with 'void operator()(NodeDesc, NodeDesc, std::string&&)' - edge data has to be parsed from the 3rd argument
-  template<StrictEdgeEmplacerType Emplacer, bool allow_non_binary = true, bool allow_junctions = true>
+  template<StrictEdgeEmplacerType Emplacer>
   class NewickParser {
     // a HybridInfo is a name of a hybrid together with it's hybrid-index
     using HybridIndex = uint32_t;
@@ -145,15 +126,16 @@ namespace PT{
     std::string newick_string;
 
     // map a hybrid-index to a node index (and in-degree) so that we can find the corresponding hybrid when reading a hybrid number
-    std::unordered_map<HybridIndex, NodeDescAndDegree<allow_non_binary>> hybrids;
+    std::unordered_map<HybridIndex, NodeDesc> hybrids;
 
-    // pointer to the current read-position in the newick string
-    ssize_t back;
-
-    bool parsed = false;
     Emplacer emplacer;
+
+    static constexpr int32_t parsing_done = -1;
+    // pointer to the current read-position in the newick string
+    intptr_t back = parsing_done;
+
   public:
-  
+
     template<class... Args>
     NewickParser(std::istream& _newick_stream, Args&&... args):
       emplacer(std::forward<Args>(args)...)
@@ -177,7 +159,7 @@ namespace PT{
         DEBUG5(std::cout << "parsing \"" << newick_string << "\""<<std::endl);
         root = read_subtree().first;
       }
-      parsed = true;
+      back = parsing_done;
       DEBUG3(std::cout << "done parsing, root is "<<root<<"\n");
       return root;
     }
@@ -222,19 +204,18 @@ namespace PT{
       if(data[1].has_value()) {
         assert(!data[1]->empty());
         // if root is a hybrid, register it
-        const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1].value()), NoNode, 0);
+        const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1].value()), NoNode); // ,0
         auto& stored = iter->second;
         if(not success) {
-          // if root is a known hybrid, then lookup its index in 'hybrids' and increase registered in-degree
           // we've already seen a hybrid with this index - so replace 'root' by the other node's index
           // increase the registered in-degree of 'root'
-          if constexpr (not allow_non_binary)
-            if(++stored.get_degree() == 3)
-              throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
-          root = stored.get_node();
+//          if (not options.allow_non_binary)
+//            if(++stored.get_degree() == 3)
+//              throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+          root = stored;
         } else if(data[3].has_value()) { // if root was an unknown hybrid, then register it
-          root = stored.get_node() = emplacer.create_node(data[3].value());
-        } else root = stored.get_node() = emplacer.create_node();
+          root = stored = emplacer.create_node(data[3].value());
+        } else root = stored = emplacer.create_node();
         
         // allow giving the hybrid a label at any time it is referenced
         if(data[0].has_value())
@@ -262,39 +243,43 @@ namespace PT{
       if(newick_string.at(back) == ')') --back;
       else throw mstd::MalformedInput(newick_string, back, std::string_view("expected ')' but got '") + newick_string.at(back) + "'");
 
-      read_branchset<root_is_hybrid>(root);
+      read_branchset(root, root_is_hybrid);
       
       if(newick_string.at(back) == '(') --back;
       else throw mstd::MalformedInput(newick_string, back, std::string_view("expected '(' but got '") + newick_string.at(back) + "'");
     }
 
     // a branchset is a comma-separated list of branches
-    template<bool root_is_hybrid = false>
-    void read_branchset(const NodeDesc root) {
-      NodeSet children_seen;
-      children_seen.insert(read_branch(root).first);
+    // NOTE: alot of sanity checks have gone into the emplacer, since they really make more sense in there...
+    void read_branchset(const NodeDesc root, const bool root_is_hybrid = false) {
+//      std::unordered_multiset<NodeDesc> children_seen;
+//      children_seen.insert(read_branch(root).first);
+      read_branch(root);
       while(newick_string.at(back) == ',') {
-        if constexpr (root_is_hybrid){
-          if constexpr (not allow_non_binary)
-            throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
-          if constexpr (not allow_junctions)
-            throw mstd::MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which has been explicitly disallowed");
-        }
+//        if (root_is_hybrid){
+//          if (not options.allow_non_binary)
+//            throw mstd::MalformedInput(newick_string, back, "found non-binary node, which is disallowed (can be allowed via options)");
+//          if (not options.allow_junctions)
+//            throw mstd::MalformedInput(newick_string, back, "found reticulation with multiple children ('junction') which is disallowed (can be allowed via options)");
+//        }
         --back;
-        const auto [new_child, nc_data]  = read_branch(root);
-        if(not children_seen.emplace(new_child).second)
-          throw mstd::MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> " + std::to_string(new_child) +
-                  " (hybrid number: " + std::string(nc_data[DA_hyb_num].value()) + ")");
+//        const auto [new_child, nc_data] = 
+        read_branch(root);
         if(back < 0) throw mstd::MalformedInput(newick_string, back, "unmatched ')'");
+        
+//        children_seen.insert(new_child);
+//        if((not options.allow_parallel_edges) && (children_seen.count(new_child) > 1))
+//          throw mstd::MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> " + std::to_string(new_child) +
+//                  " (hybrid number: " + std::string(nc_data[DA_hyb_num].value()) + ")");
       }
-      if constexpr (not allow_non_binary)
-        if(children_seen.size() == 3)
-          throw mstd::MalformedInput(newick_string, back, "found non-binary node, which has been explicitly disallowed");
+//      if (not options.allow_non_binary)
+//        if(children_seen.size() >= 3)
+//          throw mstd::MalformedInput(newick_string, back, "found non-binary node, which is disallowed (can be allowed via options)");
     }
 
     // a branch is a subtree + a length
     // return the head of the read branch
-    auto read_branch(const NodeDesc root) {
+    void read_branch(const NodeDesc root) {
       const auto result = read_subtree();
       const auto& [child, data_arrs] = result;
 
@@ -302,7 +287,7 @@ namespace PT{
         emplacer.emplace_edge_raw(root, child, data_arrs[2].value());
       } else emplacer.emplace_edge_raw(root, child);
       
-      return result;
+      //return result;
     }
 
     // read all annotations (label, hybrid, edge-data, node-data) as string_view

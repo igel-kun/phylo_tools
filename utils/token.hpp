@@ -26,6 +26,8 @@ namespace mstd {
     using reference  = value_type;
     using const_reference = const value_type;
     using pointer    = mstd::pointer_from_reference<reference>;
+    using difference_type = ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag; // iterator can be copied and re-used in multi-passes (as long as the underlying string exists)
   
     TokenIter(const std::string_view input_string, const Delim& delimeter, const size_t _front = 0, const size_t _next = 0):
       s(input_string), delim(delimeter), front(_front), next(_next == 0 ? input_string.find_first_of(delimeter) : _next)
@@ -43,19 +45,17 @@ namespace mstd {
       } else front = std::string::npos;
       return *this;
     }
+    auto operator++(int) { TokenIter result(*this); ++(*this); return result; }
 
-    //! post-increment
-    TokenIter operator++(int) {
-      const size_t old_front = front;
-      const size_t old_next = next;
-      ++(*this);
-      return TokenIter(s, delim, old_front, old_next);
+    bool operator==(const TokenIter other) const {
+      return (front == other.front) && (s.data() == other.s.data()) && (s.size() == other.s.size());
     }
 
-    std::pair<size_t,size_t> current_indices() const  {
-      return {front, next};
-    }
+    std::pair<size_t,size_t> current_indices() const  { return {front, next}; }
   };
+
+  // TokenIter should have iterator_traits now.... hopefully
+  static_assert(__LegacyInputIterator<TokenIter<>>);
 
   template<class Delim>
   using Tokenizer = mstd::IterFactory<TokenIter<Delim>>;

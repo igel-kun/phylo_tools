@@ -26,6 +26,10 @@ namespace PT {
   struct policy_noop_tag: public data_policy_tag {};
   struct policy_move_children_tag: public data_policy_tag {};
 
+  struct direction_tag {};
+  struct above_tag: public direction_tag {};
+  struct below_tag: public direction_tag {};
+
   template<class T>
   concept DataPolicyTag = std::derived_from<T, data_policy_tag>;
 

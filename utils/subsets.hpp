@@ -25,7 +25,7 @@ namespace mstd {
   //    unless that would set a bit outside the range of the bitset, in which case set bits to contain the first |bits|+1 bits,
   //    unless that's over upper_bound, in which case return false
   bool advance(ordered_bitset& bits, const uint32_t upper_bound) {
-    std::cout << "advancing (bitset mode)\n";
+    DEBUG5(std::cout << "advancing (bitset mode)\n");
     if(!bits.empty()) {
       const size_t trailing_zeros = bits.num_trailing_zeros();
       // NOTE: flip_upwards will also flip (and count!) the 0 to the left to the 1s-block, unless there is none(!)
@@ -48,7 +48,7 @@ namespace mstd {
   //    unless that's over upper_bound, in which case return false
   template<mstd::IterableType Container, class Iter>
   bool advance(Container&& c, std::vector<Iter>& bits, const uint32_t upper_bound) {
-    std::cout << "advancing (vector mode)\n";
+    DEBUG5(std::cout << "advancing (vector mode)\n");
     if(upper_bound > 0) {
       Iter c_it = std::begin(c);
       if(not bits.empty()) {
@@ -157,7 +157,7 @@ namespace mstd {
         _OutputContainer out;
         auto it = std::begin(*c);
         size_t last = 0;
-        DEBUG4(std::cout << "collecting items of "<<*c<<" with mask "; state.print(std::cout); std::cout << "\n");
+        DEBUG4(std::cout << "collecting items of "<<*c<<" with mask "; state.print(std::cout); std::cout << '\n');
         for(auto b_iter = state.begin(); b_iter; ++b_iter){
           const size_t current = *b_iter;
           std::advance(it, current - last);

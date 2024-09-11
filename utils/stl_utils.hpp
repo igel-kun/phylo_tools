@@ -55,9 +55,6 @@ namespace mstd{
   template<size_t dim, class T>
   auto& cast_to_array(T* t) { return *static_cast<T(*)[dim]>(static_cast<void*>(t)); }
 
-  template<class T> constexpr bool is_pair = false;
-  template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
-
 
   // Nth type in a list of types
   template <size_t Index, class First, class... Rest>
@@ -107,11 +104,6 @@ namespace mstd{
   template<class T> struct _const_reference<T&&> { using type = add_const_t<T>&&; };
   template<class T> using const_reference_t = typename _const_reference<T>::type;
 
-  // std::conditional_t for unary templates
-  template<bool condition, template<class> class X, template<class> class Y>
-  struct conditional_template { template<class Z> using type = X<Z>; };
-  template<template<class> class X, template<class> class Y>
-  struct conditional_template<false, X, Y> { template<class Z> using type = Y<Z>; };
 
   // get the first type in a parameter pack, or void if pack size is 0
   template<class... Args>
@@ -139,101 +131,9 @@ namespace mstd{
     else return std::forward<SecondArg>(second);
   }
 
-  // ---------------- copy CV or & qualifiers from a type to the next -------------------
-  // this is useful as what we're getting from a "const std::vector<int>" should be "const int", not "int" (the actualy value_type)
-
-  template<typename T,typename U>
-  struct copy_cv {
-    using R =    std::remove_reference_t<T>;
-    using U1 =   std::conditional_t<std::is_const_v<R>, std::add_const_t<U>, U>;
-    using type = std::conditional_t<std::is_volatile_v<R>, std::add_volatile_t<U1>, U1>;
-  };
-  template<typename T,typename U> using copy_cv_t = typename copy_cv<T,U>::type;
-
-  template<typename T,typename U>
-  struct copy_ref {
-    using URR = std::add_rvalue_reference_t<U>;
-    using ULL = std::conditional_t<std::is_lvalue_reference_v<T>, std::add_lvalue_reference_t<U>, U>;
-    using type = std::conditional_t<std::is_rvalue_reference_v<T>, URR, ULL>;
-  };
-  template<typename T,typename U> using copy_ref_t = typename copy_ref<T,U>::type;
-  // NOTE: it is important to copy the const before copying the ref!
-  template<typename T,typename U> using copy_cvref_t = copy_ref_t<T, copy_cv_t<T, U>>;
-
-
-  // ---------------- reference_of and value_type_of -----------------
-  template<class T> concept HasDeref = requires (T t) { *t; };
-  template<class T> concept HasBegin = requires (T t) { t.begin(); };
-
-  template<class T> struct reference_of {};
-  template<class T> requires has_reference<T>
-  struct reference_of<T> {
-    using BareT = std::remove_reference_t<T>;
-    // some containers do not allow modifying their contents via iterators (such as std::unordered_set)
-    // Thus, we copy constness of the iterator's reference onto the container to copy it onto the reference later on
-    using Traits = std::iterator_traits<iterator_of_t<BareT>>;
-    using TraitsConstness = std::remove_reference_t<typename Traits::reference>;
-    using correctT = copy_cv_t<TraitsConstness, BareT>;
-    // copy constness of the container onto the reference
-    using Ref = typename BareT::reference;
-    static constexpr bool returning_rvalue = !std::is_reference_v<Ref>;
-    using value_type = copy_cv_t<correctT, std::remove_reference_t<Ref>>;
-    using type = std::conditional_t<returning_rvalue, value_type, std::add_lvalue_reference_t<value_type>>;
-  };
-
-  template<class T> requires ((not has_reference<T>) && std::ranges::range<std::remove_const_t<T>>)
-  struct reference_of<T> {
-    using _type = std::ranges::range_reference_t<std::remove_const_t<T>>;
-    using type = copy_cv_t<T, _type>;
-  };
-  template<class T> requires (not (has_reference<T> || std::ranges::range<std::remove_const_t<T>>) && HasBegin<T>)
-  struct reference_of<T> { using type = decltype(std::begin(std::declval<T>())); };
-  template<class T> requires (not (has_reference<T> || std::ranges::range<std::remove_const_t<T>> || HasBegin<T>) && HasDeref<T>)
-  struct reference_of<T> { using type = decltype(*std::declval<T>()); };
-
-  template<class T> using reference_of_t  = typename reference_of<T>::type;
-  template<class T> using value_type_of_t = std::remove_reference_t<reference_of_t<T>>;
-
-  // ----------------- const_pointer and const_reference ---------------------
-  // if a container has a const_pointer type, then return this type, otherwise return a pointer to const value_type
-  template<class N, class T = void> struct get_const_ptr { using type = std::add_pointer_t<std::add_const_t<value_type_of_t<N>>>; };
-  template<class N> struct get_const_ptr<N, std::void_t<typename N::const_pointer>> { using type = typename N::const_pointer; };
-  template<class N> using const_pointer_of_t = typename get_const_ptr<std::remove_reference_t<N>>::type;
-
-  // if a container has a pointer type, then return this type, otherwise return a pointer to value_type
-  template<class N, class T = void> struct get_ptr { using type = std::add_pointer_t<value_type_of_t<N>>; };
-  template<class N> struct get_ptr<N, std::void_t<typename N::pointer>> { using type = typename N::pointer; };
-  template<class N> using pointer_of_t = typename get_ptr<std::remove_reference_t<N>>::type;
-
-  // if a container has a const_reference type, then return this type, otherwise return an lvalue reference to const value_type
-  template<class N, class T = void> struct get_const_ref { using type = std::add_lvalue_reference_t<std::add_const_t<typename std::iterator_traits<N>::value_type>>; };
-  template<class N> struct get_const_ref<N, std::void_t<typename N::const_reference>> { using type = typename N::const_reference; };
-  template<class N> using const_reference_of_t = typename get_const_ref<std::remove_reference_t<N>>::type;
 
 
   // ------------------ ITERATORS -----------------------------------
-
-  // for reasons that escape me, std::iterator_traits depend on satisfaction of the followign concepts, but it's not defined by the STL...
-  // however it is indispensible for debugging to know why std::iterator_traits will not work for a self-defined iterator...
-  template<class T>
-  concept __Referenceable = requires { typename std::type_identity_t<T&>; };
-
-  template<class I>
-  concept __LegacyIterator = requires(I i) {
-      {   *i } -> __Referenceable;
-      {  ++i } -> std::same_as<I&>;
-      { *i++ } -> __Referenceable;
-  } && std::copyable<I>;
-
-  template<class I>
-  concept __LegacyInputIterator = __LegacyIterator<I> && std::equality_comparable<I> && requires(I i) {
-    typename std::incrementable_traits<I>::difference_type;
-    typename std::indirectly_readable_traits<I>::value_type;
-    typename std::common_reference_t<std::iter_reference_t<I>&&, typename std::indirectly_readable_traits<I>::value_type&>;
-    *i++;
-    typename std::common_reference_t<decltype(*i++)&&, typename std::indirectly_readable_traits<I>::value_type&>;
-    requires std::signed_integral<typename std::incrementable_traits<I>::difference_type>;
-  };
 
   // a lightweight end-iterator dummy that can be returned by calls to end() and compared to by other iterators
   template<class> class _GenericEndIterator;
@@ -256,7 +156,7 @@ namespace mstd{
   using GenericEndIteratorS = _GenericEndIterator<T>;
   using GenericEndIterator = _GenericEndIterator<void>;
 
-  template<iter_verifyable Iter, class T>
+  template<VerifyableIter Iter, class T>
   bool operator==(const Iter& other, const GenericEndIteratorS<T>&) { return !other.is_valid(); }
 
   // wrap a pointer in an iterator shell that has all the required types and can be inherited from
@@ -298,18 +198,18 @@ namespace mstd{
     explicit operator TptrRef() { return data; }
     explicit operator TptrConstRef() const { return data; }
   };
+
   template<class T>
   PointerIterWrapper<T> operator+(const long int x, const PointerIterWrapper<T>& it) { return it + x; }
 
-  using _Out = PointerIterWrapper<int*>;
-  static_assert(std::weakly_incrementable<_Out>);
-  static_assert(std::random_access_iterator<_Out>);
+  static_assert(std::weakly_incrementable<PointerIterWrapper<int*>>);
+  static_assert(std::random_access_iterator<PointerIterWrapper<int*>>);
 
   template<class T>
   using InheritableIter = std::conditional_t<std::is_pointer_v<T>, PointerIterWrapper<T>, T>;
 
   template<class Iterator>
-  using CorrespondingEndIter = std::conditional_t<iter_verifyable<Iterator>, void, Iterator>;
+  using CorrespondingEndIter = std::conditional_t<VerifyableIter<Iterator>, void, Iterator>;
 
 
   // convenience class for dereference
@@ -321,59 +221,19 @@ namespace mstd{
     decltype(auto) operator()(T&& t) const { return *t; }
   };
 
-  // a class that returns itself on dereference 
-  // useful for iterators returning rvalues instead of lvalue references
-  template<class T>
-  struct self_deref {
-    T t;
-    template<class... Args>
-    self_deref(Args&&... args): t(std::forward<Args>(args)...) {}
-    T& operator*() { return t; }
-    const T& operator*() const { return t; }
-    T* operator->() { return &t; }
-    const T* operator->() const { return &t; }
-  };
-  template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
-  using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, self_deref<R>>;
-
   // if you want to build a class with some template T in it, but T is a reference, the class will not be assignable; thus it is preferred to use pointers
   template<class R>
   using prefer_pointer = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, R>;
 
-  template<class Ref, class IteratorTag = std::forward_iterator_tag>
-  struct iter_traits_from_reference {
-    static constexpr bool returning_rvalue = not std::is_reference_v<Ref>;
-    using reference = Ref;
-    using value_type = std::remove_reference_t<reference>;
-    using const_reference = std::conditional_t<returning_rvalue, const value_type, const value_type&>;
-    using pointer = pointer_from_reference<reference>;
-    using const_pointer = pointer_from_reference<const_reference>;
-    using difference_type = ptrdiff_t;
-    using size_type = size_t;
-    using iterator_category = IteratorTag; // by default we're a std::forward_iterator, overwrite this if you do bidirectional or random access
-  };
 
-  // not all std::iterator_traits of the STL provide "const_pointer" and "const_reference", so I'll do that for them
-  template<typename T> requires HasIterTraits<T>
-  struct _iterator_traits: public std::iterator_traits<T> {
-    // since the ::reference correctly gives "const T&", we'll just std::remove_reference_t from it
-    using value_type = std::conditional_t<std::is_pointer_v<T>,
-                                          std::remove_reference_t<typename std::iterator_traits<T>::reference>,
-                                          typename std::iterator_traits<T>::value_type>;
-    using const_reference = const_reference_of_t<T>;
-    using const_pointer   = const_pointer_of_t<T>;
-    using iterator = T;
-  };
-  template<typename T>
-  using iterator_traits = _iterator_traits<iterator_of_t<T>>;
-
-  template<MapType M> using key_type_of_t = typename std::remove_reference_t<M>::key_type;
-  template<MapType M> using mapped_type_of_t = typename std::remove_reference_t<M>::mapped_type;
-  
-  template<class T> struct mapped_or_value_type_of { using type = value_type_of_t<T>; };
-  template<MapType M> struct mapped_or_value_type_of<M> { using type = mapped_type_of_t<M>; };
+  // access a pointer or reference, returning it as reference
   template<class T>
-  using mapped_or_value_type_of_t = typename mapped_or_value_type_of<T>::type;
+  decltype(auto) access(T& t) {
+    if constexpr (std::is_pointer_v<std::remove_reference_t<T&>>)
+      return *t;
+    else return t;
+  }
+
 
 
   template<class T, class... Qs> struct _invoke_or_lookup_result { };
@@ -464,6 +324,7 @@ namespace mstd{
   void inplace_merge_fwd(FwdIt first, FwdIt second, const FwdIt last, Compare cmp = Compare{})
   {
 #warning write me
+    exit(EXIT_FAILURE);
   }
 
   template<class FwdIt, class Compare = std::less<>>
@@ -648,57 +509,6 @@ namespace mstd {
 }
 
 namespace std {
-  // ----------------------- OUTPUT ---------------------------------------
-  template<class First, class... Ts>
-  std::ostream& operator<<(std::ostream& os, const std::variant<First, Ts...>& var) {
-    std::visit([&os](const auto& v) { os << v; }, var);
-    return os;
-  }
-
-  template<mstd::IterableType C> requires (!mstd::is_stringlike_v<C>)
-  std::ostream& _print_iterable(std::ostream& os, const C& objs, const char delim = ' ', const char print_empty = true) {
-    if(print_empty || (begin(objs) != end(objs))) {
-      os << '[';
-      bool first = true;
-      for(const auto& obj : objs) {
-        if(first) first = false; else os << delim;
-        using Item = std::remove_cvref_t<decltype(obj)>;
-        if constexpr (mstd::PointerType<Item>) {
-          os << hex << obj;
-        } else if constexpr (mstd::ArithmeticType<Item>) {
-          os << +obj;
-        } else os << obj;
-      }
-      return os << ']';
-    } else return os;
-  }
-
-  template<mstd::IterableType C> requires (!mstd::is_stringlike_v<C>)
-  inline std::ostream& operator<<(std::ostream& os, const C& objs) {
-    return _print_iterable(os, objs, ' ');
-  }
-
-  template<mstd::IterableType C> requires (!mstd::is_stringlike_v<C>)
-  struct Linewise: public C {
-    char delimeter = '\n';
-    bool print_empty = true;
-    Linewise(const C& c, const bool _print_empty = true, const char _delimeter = '\n'):
-      C(c), delimeter{_delimeter}, print_empty{_print_empty} {}
-
-    friend ostream& operator<<(ostream& os, const Linewise& L) {
-      return _print_iterable(os, static_cast<const C&>(L), L.delimeter, L.print_empty);
-    }
-  };
-
-  template<class T> std::string to_string(const T& x) { std::ostringstream out; out << x; return std::move(out).str(); }
-  template<class T> long to_int(const T& x) { return strtol(to_string(x), nullptr, 10); }
-
-  template <typename A, typename B>
-  std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p) { return os << '('<<p.first<<','<<p.second<<')'; }
-  template <typename A>
-  std::ostream& operator<<(std::ostream& os, const std::reference_wrapper<A>& r) { return os << r.get(); }
-
-
   // --------------------- STRINGS & STRING_VIEW ------------------------------
   size_t length(const std::string& s) { return s.size(); }
   size_t length(const std::string_view& s) { return s.size(); }
@@ -771,9 +581,64 @@ namespace std {
   float  stof(const std::string_view s) { return stoX<float>(s); }
   double stod(const std::string_view s) { return stoX<double>(s); }
 
+  template<class T> std::string to_string(const T& x) { std::ostringstream out; out << x; return std::move(out).str(); }
+
+
+  // ----------------------- OUTPUT ---------------------------------------
+  template <typename A, typename B>
+  std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p) { return os << '('<<p.first<<','<<p.second<<')'; }
+  template <typename A>
+  std::ostream& operator<<(std::ostream& os, const std::reference_wrapper<A>& r) { return os << r.get(); }
+
+  template<class First, class... Ts>
+  std::ostream& operator<<(std::ostream& os, const std::variant<First, Ts...>& var) {
+    std::visit([&os](const auto& v) { os << v; }, var);
+    return os;
+  }
+
+  template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
+  std::ostream& _print_iterable(std::ostream& os, C&& objs, const char delim = ' ', const char print_empty = true) {
+    auto _end = std::end(objs);
+    auto _beg = std::forward<C>(objs).begin();
+    if(print_empty || (_beg != _end)) {
+      os << '[';
+      bool first = true;
+      while(_beg != _end) {
+        if(first) first = false; else os << delim;
+        decltype(auto) obj = *_beg;
+        using Item = std::remove_cvref_t<decltype(obj)>;
+        if constexpr (mstd::PointerType<Item>) {
+          os << hex << obj;
+        } else if constexpr (mstd::ArithmeticType<Item>) {
+          os << +obj;
+        } else os << obj;
+        ++_beg;
+      }
+      return os << ']';
+    } else return os;
+  }
+
+  template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
+  inline std::ostream& operator<<(std::ostream& os, C&& objs) {
+    return _print_iterable(os, std::forward<C>(objs), ' ');
+  }
 }
 
 namespace mstd {
+  template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
+  struct Linewise: public C {
+    char delimeter = '\n';
+    bool print_empty = true;
+    Linewise(const C& c, const bool _print_empty = true, const char _delimeter = '\n'):
+      C(c), delimeter{_delimeter}, print_empty{_print_empty} {}
+
+    template<class LW> requires (mstd::is_same_v<LW, Linewise>)
+    friend std::ostream& operator<<(std::ostream& os, LW&& L) {
+      return _print_iterable(os, std::forward<C>(L), L.delimeter, L.print_empty);
+    }
+  };
+
+
   // --------------------- splitting prefixes off string_views ------------------------------
   
   auto split_prefix_from(std::string_view& s, const size_t pos) {
@@ -848,32 +713,7 @@ namespace mstd {
 
 
 
-  // by default, a default constructed thing is invalid
-  // specialize to your hearts desire
-  template<class T> struct default_invalid {};
-  template<class T> requires (std::is_pointer_v<T>)
-  struct default_invalid<T> { static constexpr T value = nullptr; };
-  template<class T> requires (std::is_arithmetic_v<T>)
-  struct default_invalid<T> {
-    static constexpr auto _value() {
-      if constexpr (std::numeric_limits<T>::has_quiet_NaN) {
-        return std::numeric_limits<T>::quiet_NaN();
-      } else if constexpr (std::numeric_limits<T>::has_infinity) {
-        return std::numeric_limits<T>::infinity();
-      } else return std::numeric_limits<T>::max();
-    }
-    static constexpr T value = _value();
-  };
-
-  template<class T> constexpr auto default_invalid_v = default_invalid<T>::value;
  
-  // this is only used to provide default values to the non-type template parameter for OptFor
-  template<class T, class Test, class In> constexpr auto _get_default_invalid(In x) {
-    if constexpr (std::is_same_v<std::remove_cvref_t<In>, Test>)
-      return default_invalid_v<T>;
-    else return x;
-  }
-  
   // -------------------- variants --------------------------------
 
   template<class... Args>
