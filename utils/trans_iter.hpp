@@ -89,21 +89,25 @@ namespace mstd {
     transforming_iterator(const transforming_iterator&) = default;
 
     // construct from an iterator alone, default-construct the transformation
-    template<class T> requires ((!std::is_same_v<std::remove_cvref_t<T>, transforming_iterator>) &&
-        std::is_default_constructible_v<Transformation> && std::is_constructible_v<Parent, T&&>)
+    template<class T>
+      requires ((not mstd::is_same_v<T, transforming_iterator>) and
+        std::is_default_constructible_v<Transformation> and
+        std::is_constructible_v<Parent, T&&>)
     transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{}
     {}
 
     // construct from iter and transformaiton
-    template<class T, class... Args> requires (std::is_constructible_v<Parent, T&&> && std::is_constructible_v<Transformation, Args&&...>)
+    template<class T, class... Args>
+      requires (std::is_constructible_v<Parent, T&&> and
+          std::is_constructible_v<Transformation, Args&&...>)
     transforming_iterator(T&& iter, Args&&... args):
       Parent{std::forward<T>(iter)}, trans{std::forward<Args>(args)...}
     {}
 
 
     // std::piecewise construction of the iter and the transformation
-    template<class IterTuple, class TransTuple>
-    constexpr transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init):
+    template<class IterTuple, class TransTuple = std::tuple<>>
+    constexpr transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init = TransTuple()):
       Parent{make_from_tuple<Parent>(std::forward<IterTuple>(iter_init))},
       trans{make_from_tuple<Transformation>(std::forward<TransTuple>(trans_init))}
     {}

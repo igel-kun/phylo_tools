@@ -111,16 +111,17 @@ namespace mstd {
       DEBUG6(std::cout << "output container: "<<type_name<_OutputContainer>() <<'\n');
       DEBUG6(std::cout << "SubsetState: "<<type_name<SubsetState>() << " (storing iters: "<<store_iters<<")\n");
       if(low > high) std::swap(low, high);
-      if(low > _c.size()) low = high = _c.size();
-      if(high > _c.size()) high = _c.size();
-      this->template get<0>() = high;
-      if constexpr (store_iters) {
-        auto it = std::begin(_c);
-        while(low--) {
-          state.emplace_back(it);
-          ++it;
-        }
-      } else state.flip_lowest_k(low);
+      if(low <= _c.size()) {
+        if(high > _c.size()) high = _c.size();
+        this->template get<0>() = high;
+        if constexpr (store_iters) {
+          auto it = std::begin(_c);
+          while(low--) {
+            state.emplace_back(it);
+            ++it;
+          }
+        } else state.flip_lowest_k(low);
+      } else c = nullptr; // if low > _c.size() then so set falls within the boundaries
     }
 
     template<class T> requires (partial)

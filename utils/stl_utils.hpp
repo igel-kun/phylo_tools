@@ -21,7 +21,7 @@
 #   include<charconv> // for from_chars
 #endif
 
-
+#include "config.hpp"
 #include "hash_utils.hpp"
 #include "stl_concepts.hpp"
 
@@ -597,10 +597,12 @@ namespace std {
   }
 
   template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
-  std::ostream& _print_iterable(std::ostream& os, C&& objs, const char delim = ' ', const char print_empty = true) {
+  std::ostream& _print_iterable(std::ostream& os, C&& objs, const char delim = ' ') {
     auto _end = std::end(objs);
     auto _beg = std::forward<C>(objs).begin();
-    if(print_empty || (_beg != _end)) {
+
+    
+    if(mstd::config::print_empty_containers or (_beg != _end)) {
       os << '[';
       bool first = true;
       while(_beg != _end) {
@@ -626,15 +628,19 @@ namespace std {
 
 namespace mstd {
   template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
-  struct Linewise: public C {
+  struct Linewise {
+    C c;
     char delimeter = '\n';
     bool print_empty = true;
-    Linewise(const C& c, const bool _print_empty = true, const char _delimeter = '\n'):
-      C(c), delimeter{_delimeter}, print_empty{_print_empty} {}
+    Linewise(const C& _c, const bool _print_empty = true, const char _delimeter = '\n'):
+      c{_c}, delimeter{_delimeter}, print_empty{_print_empty} {}
 
     template<class LW> requires (mstd::is_same_v<LW, Linewise>)
     friend std::ostream& operator<<(std::ostream& os, LW&& L) {
-      return _print_iterable(os, std::forward<C>(L), L.delimeter, L.print_empty);
+      std::swap(L.print_empty, config::print_empty_containers);
+      auto& result = _print_iterable(os, std::forward<LW>(L).c, L.delimeter);
+      std::swap(L.print_empty, config::print_empty_containers);
+      return result;
     }
   };
 

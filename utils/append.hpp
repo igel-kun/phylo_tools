@@ -89,11 +89,13 @@ namespace mstd {
     return emplace_result<V>{x.begin(), true};
   }
 
-  template<ContainerType C1, IterableType C2> requires (ConvertibleValueTypes<C1,C2> && !IterableTypeWithSameIterators<C2>)
+  template<ContainerType C1, IterableType C2> requires (ConvertibleValueTypes<C1,C2> and not IterableTypeWithSameIterators<C2>)
   auto append(C1& x, C2&& y) {
-    using ItemRef = copy_cvref_t<C2&&, value_type_of_t<C2>>;
-    for(ItemRef i: std::forward<C2>(y))
-      append(x, static_cast<ItemRef>(i)); // so, right, I know i should already have that type, but not if ItemRef is an rvalue-reference because... reasons
+    for(decltype(auto) i: std::forward<C2>(y)) {
+      if constexpr (std::is_rvalue_reference_v<decltype(i)>)
+        append(x, std::move(i)); // I'm not sure I understand when an rvalue_ref is considered an lvalue ref and when not...
+      else append(x, i);
+    }
     return emplace_result<C1>{x.begin(), true};
   }
 

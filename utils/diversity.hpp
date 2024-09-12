@@ -135,19 +135,8 @@ namespace PT {
 
   template<StrictPhylogenyType Net, class UtilityFunctors, class PDScore>
   auto optimize_diversity_brute_force(const Net& N, const size_t k, UtilityFunctors&& f, PDScore&& pd_score) {
-    //std::pair<NodeSet, double> max;
-    const auto L = N.leaves();
-    //const NodeSet leaves = L.template to_container<NodeSet>();
-    const NodeVec leaves(L.template to_container<NodeVec>());
+    const NodeVec leaves(N.leaves().template to_container<NodeVec>());
     std::cout << leaves.size() << " leaves: " << (leaves | std::ranges::views::transform([&](const NodeDesc x){ return Net::label(x);})) << '\n';
-    //std::cout << "N = "<<N<<'\n';
-    /*
-    for(const auto S: mstd::BoundedSubsetFactory<NodeSet>{leaves, k}) {
-      const auto score = pd_score(N, S, std::forward<UtilityFunctors>(f));
-      if(score > max.second) max = {S, score};
-    }
-    return max;
-    */
     return mstd::brute_force(k, leaves, [&](const auto& S){ return pd_score(N, S, f); });
   }
 

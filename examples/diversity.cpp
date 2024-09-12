@@ -163,7 +163,7 @@ int main(const int argc, const char** argv) {
     } else {
       const size_t k = parse_k(feature_map.size(), options[""][1]);
       const auto [feats, score] = optimize_feature_diversity(k, feature_map);
-      std::cout << "maximum feature-diversity = " << score << ":\n" << feats << '\n';
+      std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
     }
   } else {
     std::cout << "reading network...\n";

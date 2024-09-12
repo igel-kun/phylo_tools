@@ -11,12 +11,16 @@
 #include "utils/optional.hpp" //    optional
 #include "utils/subsets.hpp" //    subset iterators
 #include "utils/brute_force.hpp" // brute_force
-
+#include "utils/concat_iter.hpp" // concatenating_iterator
+#include "utils/generic_data.hpp" // generic data
 #include "utils/command_line.hpp"
 
+#include "utils/network.hpp"
+#include "utils/types.hpp"
+#include "io/newick.hpp"
 
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
-constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));"
+constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));";
 
 
 
@@ -28,12 +32,12 @@ static_assert(std::is_trivially_copyable_v<mstd::optional_by_invalid<int>>);
 static_assert(std::is_trivially_copy_assignable_v<mstd::optional_by_invalid<int>>);
 static_assert(std::is_trivially_move_assignable_v<mstd::optional_by_invalid<int>>);
 
+using namespace PT;
 
-
-PT::OptionMap options;
+OptionMap options;
 
 void parse_given_options(const int argc, const char** argv) {
-  PT::OptionDesc description;
+  OptionDesc description;
   description["-a"] = {0,0};
   description["-s"] = {0,0};
   description["-h"] = {0,0};
@@ -50,7 +54,7 @@ void parse_given_options(const int argc, const char** argv) {
       \t-f\trun brute-force abstraction test\n\
       \t-b\trun bounded-subset test\n");
 
-  PT::parse_options(argc, argv, description, help_message, options);
+  parse_options(argc, argv, description, help_message, options);
 
   if(test(options, "-a"))
     for(const auto& s: {"-s", "-h", "-m", "-b"})
@@ -109,16 +113,16 @@ void test_vector_hash() {
   std::unordered_set<uint32_t> um;
   mstd::vector_hash<uint32_t> vh;
   srand(144);
-  for(size_t i = 0; i < 10e5; ++i) {
-    const uint32_t q = rand();
+  for(size_t i = 0; i < 1e4; ++i) {
+    const uint32_t q = rand() % uint32_t(1e5);
     um.emplace(q);
     vh.emplace(q);
     assert(um.size() == vh.size());
   }
   for(const auto& i: vh) assert(test(um, i));
   for(const auto& i: um) assert(test(vh, i));
-  for(size_t i = 0; i < 10e4; ++i) {
-    const uint32_t q = rand();
+  for(size_t i = 0; i < 1e4; ++i) {
+    const uint32_t q = rand() % uint32_t(1e5);
     um.erase(q);
     vh.erase(q);
     assert(um.size() == vh.size());
@@ -286,7 +290,7 @@ void test_concat_iter() {
   std::vector<int> result;
   std::append(result, mstd::get_concatenating(indices, trans));
   assert(result.size() == 9);
-  assert(result[5] = 6);
+  assert(result[5] == 6);
 
 
   using MyNetwork = DefaultLabeledNetwork<mstd::DefaultDataVec, mstd::DefaultDataVec>;

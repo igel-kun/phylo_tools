@@ -35,7 +35,9 @@ namespace PT {
     template<class Out = OutputVec>
     Out get_active_edges() {
       Out out;
+      //mstd::vector_hash<NodeDesc> seen;
       NodeSet seen;
+      seen.reserve(N->num_nodes());
       NodeVec to_do;
       
       if constexpr (not std::is_void_v<Leaves>) {

@@ -49,8 +49,8 @@ namespace PT {
            template<class> class Parser,
            mstd::Stringlike STR,
            class... Args>
-  Network parse_network(const auto opts, STR&& in, Args&&... args) {
-    return parse_network<Network, Parser>(opts, std::istringstream(std::forward<STR>(in)), std::forward<Args>(args)...);
+  Network parse_network(STR&& in, Args&&... args) {
+    return parse_network<Network, Parser>(std::istringstream(std::forward<STR>(in)), std::forward<Args>(args)...);
   }
 
 }

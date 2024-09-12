@@ -125,17 +125,12 @@ namespace mstd {
 
     friend std::ostream& operator<<(std::ostream& os, const DataVec& dv) {
       bool first_item = true;
-      std::ostringstream accu;
-
       for(auto& x: dv) {
         if(not first_item) {
-          accu << config::data_delimeters[0];
+          os << config::data_delimeters[0];
         } else first_item = false;
-        accu << x;
+        os << x;
       }
-      // if the items are not all empty
-      if(config::print_empty_generic_data || (accu.str().find_first_not_of(config::data_delimeters[0]) != std::string::npos))
-        os << accu.str();
       return os;
     }
   };

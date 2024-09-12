@@ -19,7 +19,7 @@ namespace mstd {
     // generic data delimeters
     char data_delimeters[] = ":,;";
     // if this is set to true, then generic_data will be printed even if all items produce the empty string when printed
-    bool print_empty_generic_data = false;
+    bool print_empty_containers = false;
 
     // characters to use for displaying trees/networks on the console
     // the standard ASCII set is a bit daft but only uses ASCII < 128

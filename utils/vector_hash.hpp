@@ -18,6 +18,7 @@
 #include "utils.hpp"
 #include "stl_utils.hpp"
 #include "filter.hpp"
+#include "trans_iter.hpp"
 #include "optional.hpp"
 #ifdef STATISTICS
 #include <unordered_map>
@@ -25,8 +26,9 @@
 
 namespace mstd{
 
+  template<class Iterator> using vector_hash_filter_iter = filtered_iterator<Iterator, HasValuePredicate>;
   template<class Iterator, class Element>
-  using vector_hash_iterator = converting_iterator<filtered_iterator<Iterator, HasValuePredicate>, Element>;
+  using vector_hash_iterator = converting_iterator<vector_hash_filter_iter<Iterator>, Element>;
 
   template<
     class _Key,
@@ -39,6 +41,11 @@ namespace mstd{
     using KeyOpt = OptFor<_Key>;
 
     using Parent = std::vector<KeyOpt, Allocator>;
+
+    using VectorIter = typename Parent::iterator;
+    using VectorConstIter = typename Parent::const_iterator;
+    using FilterIter = vector_hash_filter_iter<VectorIter>;
+    using FilterConstIter = vector_hash_filter_iter<VectorConstIter>;
   protected:
     using Parent::Parent;
 
@@ -105,14 +112,18 @@ namespace mstd{
     [[ no_unique_address ]] KeyEqual key_eq;
 
     // make an iterator poiting to the index
-    iterator make_iterator(const uintptr_t index) 
-    { return {do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple(make_vector_iterator(index), vector_end())}; }
-    const_iterator make_iterator(const uintptr_t index) const
-    { return {do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple(make_vector_iterator(index), vector_end())}; }
-    vector_iterator make_vector_iterator(const uintptr_t index) 
-    { return next(Parent::begin(), index); }
-    const_vector_iterator make_vector_iterator(const uintptr_t index) const
-    { return next(Parent::begin(), index); }
+    auto make_iterator(const uintptr_t index) {
+      return iterator{
+        FilterIter(do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple(make_vector_iterator(index), vector_end()))
+      };
+    }
+    auto make_iterator(const uintptr_t index) const {
+      return const_iterator{
+        FilterConstIter(do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple(make_vector_iterator(index), vector_end()))
+      };
+    }
+    auto make_vector_iterator(const uintptr_t index) { return vector_iterator(next(Parent::begin(), index)); }
+    auto make_vector_iterator(const uintptr_t index) const { return const_vector_iterator(next(Parent::begin(), index)); }
 
     // compute the hash of an integer in the current vector
     inline uintptr_t do_hash(const Key& x) const noexcept {  return simple_hash(hasher(x)); }
@@ -236,11 +247,10 @@ namespace mstd{
     template<typename KeyRef>
     insert_result _insert(KeyRef&& key) {
       DEBUG5(std::cout << "===> inserting "<<key<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
-      DEBUG5(std::cout << "===> current layout: "<< static_cast<const Parent&>(*this)<<'\n');
+      DEBUG6(std::cout << "===> current layout: "<< static_cast<const Parent&>(*this)<<'\n');
       // find the slot where we would place the key
       const auto [index, status] = find_slot(key);
       DEBUG5(std::cout << "===> got index "<<index<<" from find_slot\n");
-
 
       switch(status){
         case FindStatus::FS_vacant: 
@@ -251,7 +261,7 @@ namespace mstd{
           if(key_at(index) != key){
             key_at(index) = std::forward<KeyRef>(key);
             ++active_values;
-            return {make_vector_iterator(index), true};
+            return {make_iterator(index), true};
           } else {
             rehash();
             return _insert(std::forward<KeyRef>(key));
@@ -259,7 +269,7 @@ namespace mstd{
         case FindStatus::FS_found_key:
           DEBUG5(std::cout << key << " is already in the set (index "<<index<<")\n");
           // 1 is returned if the key was found, so return failure
-          return {make_vector_iterator(index), false};
+          return {make_iterator(index), false};
         case FindStatus::FS_shiftable: {
           // otherwise, the hash at the index has grown too large
           // in this case, we'll shift everyone forward by one and insert at index
@@ -274,12 +284,12 @@ namespace mstd{
             key_at(0) = key_at(vector_size() - 1);
             shift_forward(index, vector_size() - index - 1, 1);
           } else shift_forward(index, next_free - index, 1);
-          DEBUG5(std::cout << "===> layout after shift: "<<static_cast<const Parent&>(*this)<<'\n');
+          DEBUG6(std::cout << "===> layout after shift: "<<static_cast<const Parent&>(*this)<<'\n');
           // the slot at resukt.first should not be free to receive the key
           key_at(index) = std::forward<KeyRef>(key);
           ++active_values;
-          DEBUG5(std::cout << "===> resulting layout: "<<static_cast<const Parent&>(*this)<<'\n');
-          return {make_vector_iterator(index), true};
+          DEBUG6(std::cout << "===> resulting layout: "<<static_cast<const Parent&>(*this)<<'\n');
+          return {make_iterator(index), true};
         }
         default: throw std::logic_error("unexpected find-status out of eval");
       }
