@@ -15,53 +15,67 @@ namespace PT {
   {
     using Traits = mstd::iter_traits_from_reference<OutputVec>;
     using Tuple = mstd::optional_tuple<Leaves>;
-    using ParentIter = mstd::iterator_of_t<typename Net::ParentContainer>;
-    using ParentAutoIter = mstd::auto_iter<ParentIter>;
+    using ParentContainer = typename Net::ParentContainer;
+    using ParentIter = mstd::iterator_of_t<ParentContainer>;
     using EdgeVec = NetEdgeVec<Net>;
     using AdjVec = NetAdjVec<Net>;
 
     auto& get_leaves() requires (not std::is_void_v<Leaves>) { return mstd::access(Tuple::template get<0>()); }
     auto& get_leaves() const requires (not std::is_void_v<Leaves>) { return mstd::access(Tuple::template get<0>()); }
 
-    // we're going to store for each reticulation an iterator to its currently active parent-adjacency
-    NodeMap<ParentAutoIter> active_parent;
     const Net* N = nullptr;
 
-    // fill active_edges with the switched-on edges below root and return whether we found a leaf
+    // reticulations are on a stack of what is visible from the leaves in the current switching
+    // NOTE: once the last adjacency in the stack is advanced over its last parent, the iter becomes invalid
+    std::vector<NodeWith<ParentIter>> active_parent;
+    OutputVec buffer;
+
     // NOTE: the active_edges are guaranteed in post-order of the switching (the tree containing all switched-on edges)
     // NOTE: if we have Leaves stored in the iter, then we'll use those to base the active edges, otherwise, we use what's passed, or N->leaves()
-    template<mstd::VectorType EdgeVec, class... Args>
-    EdgeVec get_active_edges(Args&&... args) const {
-      EdgeVec active_edges;
+    template<class Out = OutputVec>
+    Out get_active_edges() {
+      Out out;
       NodeSet seen;
       NodeVec to_do;
       
       if constexpr (not std::is_void_v<Leaves>) {
-        to_do.reserve(128);
+        to_do.reserve(16);
         to_do.insert(to_do.end(), get_leaves().begin(), get_leaves().end());
-      } else if constexpr (sizeof...(Args) > 0) {
-        mstd::append(to_do, std::forward<Args>(args)...);
-      } else to_do = N->leaves.template to_container<NodeVec>;
+      } else to_do = N->leaves().template to_container<NodeVec>;
       
+      size_t retis_seen = 0;
       while(not to_do.empty()) {
-        DEBUG5(std::cout << "next node: "<<to_do.back() << " ("<< to_do.size() - 1 << " to go)\n");
+        DEBUG6(std::cout << "next node: "<<to_do.back() << " ("<< to_do.size() - 1 << " to go)\n");
         NodeDesc& v = to_do.back();
-        if(seen.emplace(v).second && (Net::in_degree(v) > 0)) {
-          const auto u_adj = (Net::is_reti(v)) ? *active_parent.at(v) : Net::parent(v);
-          append(active_edges, u_adj, v);
-          v = u_adj;
+        if(seen.emplace(v).second and (Net::in_degree(v) > 0)) {          
+          ParentIter vp;
+          if(Net::is_reti(v)) {
+            assert(retis_seen <= active_parent.size());
+            if(retis_seen == active_parent.size()) {
+              // if it's the first time we encounter v on the path, then add a fresh parent-auto-iter to the stack and move along it
+              vp = Net::parents(v).begin();
+              append(active_parent, v, vp);
+              DEBUG6(std::cout << "added "<<v<<" with it's first parent "<<*vp<<" to active_parent["<<retis_seen<<"]\n");
+            } else vp = active_parent[retis_seen].second;
+            ++retis_seen;
+          } else vp = Net::parents(v).begin();
+          // move along the current ParentIter, filling out
+          if constexpr (mstd::AppendableR<Out, mstd::TR_RefOK, NodeDesc, decltype(*vp)>) {
+            append(out, reverse_edge_tag{}, v, *vp);
+          } else append(out, *vp);
+          v = *vp;
         } else to_do.pop_back();
       }
-      return active_edges;
+      return out;
     }
 
   public:
     using typename Traits::value_type;
     using typename Traits::pointer;
 
-    bool is_valid() const { return N == nullptr; }
+    bool is_valid() const { return N != nullptr; }
 
-    const NodeMap<ParentAutoIter>& get_active_parents() const { return active_parent; }
+    const auto& get_active_parents() const { return active_parent; }
 
     SwitchingIter() = default;
 
@@ -69,39 +83,40 @@ namespace PT {
     SwitchingIter(const Net& _N, Args&&... args):
       Tuple{std::forward<Args>(args)...},
       N{&_N}
-    {
-      for(const NodeDesc r: N->retis_above(get_leaves())) {
-        DEBUG5(std::cout << "switching-iter adding parents "<<Net::parents(r) <<" of "<<r<<'\n');
-        append(active_parent, r, Net::parents(r));
-      }
-      DEBUG5(std::cout << "done making switching iter\n");
-    }
+    { buffer = get_active_edges(); }
 
     SwitchingIter(const Net& _N):
       N(&_N)
     {
       if constexpr (not std::is_void_v<Leaves>)
         get_leaves() = N->leaves().template to_container<Leaves>();
+      buffer = get_active_edges();
     }
 
     template<class... Args>
-    auto active_adjacencies(Args&&... args) const { return get_active_edges<AdjVec>(std::forward<Args>(args)...);}
+    auto active_adjacencies() const { return get_active_edges<AdjVec>();}
     template<class... Args>
-    auto active_edges(Args&&... args) const { return get_active_edges<EdgeVec>(std::forward<Args>(args)...);}
+    auto active_edges(Args&&... args) const { return get_active_edges<EdgeVec>();}
 
-    value_type operator*() const { return active_edges(); }
-    pointer operator->() const { return operator*(); }
+    auto& operator*() const { return buffer; }
+    auto operator->() const { return &buffer; }
 
     SwitchingIter& operator++() {
-      for(auto& [r, parent_it]: active_parent) {
-        // if incrementing the parent iter is possible, we're fine
-        if(++parent_it) return *this;
-        // otherwise, continue to the next reticulation and reset this one's parent iter
-        parent_it = Net::parents(r);
+      while(1) {
+        if(active_parent.empty()) {
+          DEBUG5(std::cout << "all switchings considered, iter is now invalid...\n");
+          N = nullptr;
+          assert(not is_valid());
+          buffer.clear();
+          return *this;
+        } else {
+          auto& [r, parent] = active_parent.back();
+          if(++parent != Net::parents(r).end()) {
+            buffer = get_active_edges();
+            return *this;
+          } else active_parent.pop_back();
+        }
       }
-      // if we arrive here, then we've looped through all switchings, so set it to invalid
-      N = nullptr;
-      return *this;
     }
 
     SwitchingIter operator++(int) { SwitchingIter old{*this}; ++(*this); return old; }

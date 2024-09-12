@@ -44,7 +44,7 @@ namespace mstd {
       if(non_empty()) throw std::out_of_range("trying to add second element to singleton set");
       storage.emplace(el);
     }
-    void pop() {
+    void pop_back() {
       if(empty()) throw std::out_of_range("trying to pop from empty singleton set");
       clear();
     }

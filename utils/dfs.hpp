@@ -55,7 +55,7 @@ namespace PT{
     bool next_root() {
       if(has_roots()) {
         if constexpr (NodeContainerType<Roots>) {
-          roots.pop();
+          roots.pop_back();
         } else ++roots;
         return has_roots();
       } else return false;

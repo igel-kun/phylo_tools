@@ -107,9 +107,9 @@ namespace mstd {
       SubsetIterator(_c) 
     {
       DEBUG4(std::cout << "constructing SubsetIterator for partial subsets of sizes "<<low<<" -- "<<high<<'\n');
-      DEBUG5(std::cout << "input container: "<<type_name<_Container>() <<'\n');
-      DEBUG5(std::cout << "output container: "<<type_name<_OutputContainer>() <<'\n');
-      DEBUG5(std::cout << "SubsetState: "<<type_name<SubsetState>() << " (storing iters: "<<store_iters<<")\n");
+      DEBUG6(std::cout << "input container: "<<type_name<_Container>() <<'\n');
+      DEBUG6(std::cout << "output container: "<<type_name<_OutputContainer>() <<'\n');
+      DEBUG6(std::cout << "SubsetState: "<<type_name<SubsetState>() << " (storing iters: "<<store_iters<<")\n");
       if(low > high) std::swap(low, high);
       if(low > _c.size()) low = high = _c.size();
       if(high > _c.size()) high = _c.size();

@@ -22,7 +22,7 @@ using namespace std::literals;
 struct EdgeData {
   float inheritance_prob = 1;
   float weight = 0;
-  float gamma;
+  float gamma = 0;
 
   EdgeData() = default;
 

@@ -611,7 +611,7 @@ namespace mstd {
     //! flip bits starting from x upwards until k'th zero encountered
     //! return number of flipped bits
     size_t flip_upwards_until_kth_zero(const value_type x, size_t k = 1) {
-      DEBUG5(std::cout << "flipping from index "<< static_cast<int>(x)<<" ("<<k<<" more zeros)\n");
+      DEBUG6(std::cout << "flipping from index "<< static_cast<int>(x)<<" ("<<k<<" more zeros)\n");
       if((x < _capacity) && (k > 0)) {
         const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
         auto& bucket = storage.at(first_bucket);

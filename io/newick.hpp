@@ -140,7 +140,6 @@ namespace PT{
     NewickParser(std::istream& _newick_stream, Args&&... args):
       emplacer(std::forward<Args>(args)...)
     {
-      std::cout << "emplacer: "<<mstd::type_name<Emplacer>() << '\n';
       std::getline(_newick_stream, newick_string);
       back = newick_string.length() - 1;
     }

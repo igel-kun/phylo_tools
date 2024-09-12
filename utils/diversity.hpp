@@ -67,8 +67,8 @@ namespace PT {
       double switching_prob = 1;
       
       DEBUG5(NodeSet seen; std::cout << "\nnew switching\n");
-      // NOTE: the switching-iter guarantees us to present the edges in pre-order, so if we reverse the order, it'll be a post-order
-      for(const auto& uv: std::ranges::reverse_view{active_edges}) {
+      // NOTE: the switching-iter guarantees us to present the edges in post-order
+      for(const auto& uv: active_edges) {
         const auto [u, v] = uv.as_pair();
         DEBUG5(std::cout << uv <<'\n');
         DEBUG5(assert(seen.emplace(v).second));
@@ -89,9 +89,11 @@ namespace PT {
       double result = 0;
       DEBUG4(size_t count = 0);
       auto switchings = SwitchingFactory<Net, const Nodes*>{N, leaves_to_save};
-      for(const auto s: std::move(switchings)) {
-        result += pd_score_for_switching(N, leaves_to_save, s, f);
+      auto it = std::move(switchings).begin();
+      while(it.is_valid()) {
+        result += pd_score_for_switching(N, leaves_to_save, *it, f);
         DEBUG4(++count);
+        ++it;
       }
       DEBUG4(std::cout << count << " switchings; total score: "<<result<<'\n');
       return result;
@@ -137,7 +139,7 @@ namespace PT {
     const auto L = N.leaves();
     //const NodeSet leaves = L.template to_container<NodeSet>();
     const NodeVec leaves(L.template to_container<NodeVec>());
-    std::cout << leaves.size() << " leaves: "<<leaves<<'\n';
+    std::cout << leaves.size() << " leaves: " << (leaves | std::ranges::views::transform([&](const NodeDesc x){ return Net::label(x);})) << '\n';
     //std::cout << "N = "<<N<<'\n';
     /*
     for(const auto S: mstd::BoundedSubsetFactory<NodeSet>{leaves, k}) {
