@@ -62,7 +62,7 @@ if(${ASAN})
   set(PROTOTYPE_SANITIZER "-fsanitize=address -fsanitize-address-use-after-scope")
 endif()
 
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-range-loop-construct -ftemplate-depth=100")
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-dangling-reference -Wno-range-loop-construct -ftemplate-depth=100")
 set(PROTOTYPE_FLAGS "-fmax-errors=${MAXERR} -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200 -fno-omit-frame-pointer")
 set(PROTOTYPE_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -Wno-unused-function -Wshadow")
 

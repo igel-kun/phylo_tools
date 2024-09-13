@@ -7,29 +7,11 @@ namespace mstd {
   template<size_t i, class T>
   struct optional_item {
     T value;
-
-    /*
-    optional_item() = default;
-    optional_item(const optional_item&) = default;
-    optional_item(optional_item&&) = default;
-
-    optional_item& operator=(const optional_item&) = default;
-    optional_item& operator=(optional_item&&) = default;
-    
-    template<class First, class... Args> 
-      requires (!std::is_same_v<std::remove_cvref_t<First>, optional_item> && (!std::is_reference_v<T> || (sizeof...(Args) != 0)))
-    optional_item(First&& first, Args&&... args): value(std::forward<Args>(args)...) {}
-*/
-// NOTE: the ability to convert an optional_tuple to any of its members is confusing and NOT a good idea
-//    For example: NodeSet L = N.leaves() returns the SeenSet of the DFS traversal and that's NOT what we want
-//
-//    operator T&() { return value; }
-//    operator const T&() const { return value; }
   };
   template<size_t i> struct optional_item<i, void> {};
 
   // optional pointers can be initialized from references
-  template<size_t i, class T> requires (std::is_pointer_v<T> && !std::is_void_v<std::remove_pointer_t<T>>)
+  template<size_t i, class T> requires (std::is_pointer_v<T> and not std::is_void_v<std::remove_pointer_t<T>>)
   struct optional_item<i, T> {
     using BareT = std::remove_pointer_t<T>;
     T value = nullptr;
@@ -37,8 +19,33 @@ namespace mstd {
     optional_item() = default;
     optional_item(T t): value{t} {}
     optional_item(BareT& ref): value{&ref} {}
+
+    optional_item(const std::unique_ptr<BareT>& pt): value{pt.get()} {}
+    optional_item(std::unique_ptr<BareT>&&) = delete;
   };
   template<size_t i> struct optional_item<i, void*> { void* value = nullptr; };
+
+  template<size_t i, class T>
+  struct optional_item<i, std::unique_ptr<T>> {
+    using BareT = std::remove_pointer_t<T>;
+    std::unique_ptr<T> value = nullptr;
+
+    optional_item() = default;
+    optional_item(optional_item&& other): optional_item(std::move(other).value) {}
+    optional_item(const optional_item& other): optional_item(other.value) {}
+
+    optional_item(std::unique_ptr<T>&& t): value{std::move(t)} {}
+    optional_item(T* t) { if(t != nullptr) value = std::make_unique<T>(*t); }
+    optional_item(const std::unique_ptr<T>& t): optional_item(t.get()) {}
+
+    optional_item(const T& ref): value{std::make_unique<T>(ref)} {}
+    optional_item(T&& ref): value{std::make_unique<T>(std::move(ref))} {}
+
+    auto& operator=(optional_item&& other) { value = std::move(other).value; }
+    auto& operator=(const optional_item& other) { value.reset(); if(other.value) value = std::make_unique<T>(other.value); }
+  };
+
+  static_assert(std::copy_constructible<optional_item<0, std::unique_ptr<int>>>);
 
 
 
@@ -63,8 +70,9 @@ namespace mstd {
     _optional_tuple() = default;
 
     template<class _LastT, class... _Rest>
-      requires (not std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>>
-          && std::is_constructible_v<Item, _LastT&&> && std::is_constructible_v<Parent, _Rest&&...>)
+      requires (not std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>> and
+          std::is_constructible_v<Item, _LastT&&> and
+          std::is_constructible_v<Parent, _Rest&&...>)
     _optional_tuple(_LastT&& last, _Rest&&... rest):
       Item(std::forward<_LastT>(last)),
       Parent(std::forward<_Rest>(rest)...)
@@ -120,9 +128,10 @@ namespace mstd {
 
     _optional_tuple(){};
 
+    // NOTE: void fields DO NOT consume passed arguments unless piecewise_construct is given!!!
     template<class _LastT, class... _Rest> requires (!std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>>)
     _optional_tuple(_LastT&& last, _Rest&&... rest):
-      Parent(std::forward<_Rest>(rest)...)
+      Parent(std::forward<_LastT>(last), std::forward<_Rest>(rest)...)
     {}
 
     template<class _LastT, class... _Rest>
@@ -170,10 +179,10 @@ namespace mstd {
   template<class... Ts> requires (not std::disjunction_v<std::is_reference<Ts>...>) // is_reference istead of is_reference_v is correct here! Why, STL???
   struct optional_tuple: public _optional_tuple<0, Ts...> {
     using Parent = _optional_tuple<0, Ts...>;
-    using Parent::Parent;
 
     optional_tuple() = default;
-    
+    INHERIT_ALL_CONSTRUCTORS(optional_tuple, Parent);
+
     template<size_t i> static constexpr bool has_value = mstd::has_value<i, optional_tuple>::value;
 
     template<size_t i> requires (has_value<i>)

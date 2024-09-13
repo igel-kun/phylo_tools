@@ -41,7 +41,7 @@ namespace PT {
     static constexpr StorageEnum RootStorage = _RootStorage;
     static constexpr bool has_unique_root = (RootStorage == singleS);
     using RootContainer = StorageClass<_RootStorage, NodeDesc>;
-    using DefaultSeen = NodeSet;
+    using DefaultSeen = std::unique_ptr<NodeSet>; // NOTE: by letting this be a pointer, we can modify the SeenSet even on const DFSIterators (dirty hack)
   protected:
 #warning "TODO: make counting nodes and edges optional by template!"
     RootContainer _roots;
@@ -947,18 +947,30 @@ namespace PT {
     // =============== traversals ======================
     
     // DFSNodeIterator should have std::iterator_traits
-    static_assert(mstd::__LegacyInputIterator<mstd::auto_iter<mstd::_filtered_iterator<DFSNodeIterator<postorder, Phylogeny, NodeSet, void>, decltype([](NodeDesc){return true;})>>>);
+    using _NodeTrav = mstd::auto_iter<mstd::_filtered_iterator<DFSNodeIterator<postorder, Phylogeny, NodeSet, void>, decltype([](NodeDesc){return true;})>>;
+    using _NodeTravEz = DFSNodeIterator<postorder, Phylogeny, NodeSet, void>;
+
+    static_assert(std::copy_constructible<_NodeTravEz>);
+    static_assert(std::copy_constructible<_NodeTrav>);
+    static_assert(mstd::__LegacyInputIterator<_NodeTrav>);
 
     // --------------- relative node traversals (below) ------------------
+    static constexpr auto make_seen() { return std::make_unique<mstd::remove_pointer_t<DefaultSeen>>(); }
 
     // list all nodes below u in order _o (default: postorder)
     template<TraversalType o = postorder, class Roots>
-    static auto nodes_below(Roots&& R) { return NodeTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R)); }
+    static auto nodes_below(Roots&& R) {
+      if constexpr (std::is_void_v<DefaultSeen>)
+        return NodeTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R));
+      else return NodeTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R), make_seen());
+    }
     // we can represent nodes that are forbidden to visit by passing either a container of forbidden nodes or a node-predicate
     template<TraversalType o = postorder, class Forbidden, class Roots>
       requires (not DFSOrderTag<Forbidden> && (NodeIterableType<Roots> or NodeDescType<Roots>))
     static auto nodes_below(Roots&& R, Forbidden&& forbidden) {
-      return NodeTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      if constexpr (std::is_void_v<DefaultSeen>)
+        return NodeTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      else return NodeTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden), make_seen());
     }
 
     template<class... Args> static auto nodes_below_preorder(Args&&... args)  { return nodes_below<preorder>(std::forward<Args>(args)...); }
@@ -1012,11 +1024,15 @@ namespace PT {
     // --------------- relative edge traversals (below) ------------------
     template<TraversalType o = postorder, class Roots> requires (NodeIterableType<Roots> || NodeDescType<Roots>)
     static auto edges_below(Roots&& R) {
-      return AllEdgesTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R));
+      if constexpr (std::is_void_v<DefaultSeen>)
+        return AllEdgesTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R));
+      else return AllEdgesTraversal<o, Phylogeny, Roots>(std::forward<Roots>(R), make_seen());
     }
     template<TraversalType o = postorder, class Roots, class Forbidden> requires (NodeIterableType<Roots> || NodeDescType<Roots>)
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
-      return AllEdgesTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      if constexpr (std::is_void_v<DefaultSeen>)
+        return AllEdgesTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      else return AllEdgesTraversal<o, Phylogeny, Roots, Forbidden, DefaultSeen>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden), make_seen());
     }
     template<class... Args> static auto edges_below_preorder(Args&&... args)  { return edges_below<preorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_below_inorder(Args&&... args)   { return edges_below<inorder>(std::forward<Args>(args)...); }
@@ -1287,7 +1303,7 @@ namespace PT {
     // "copy" construction with single root
     template<PhylogenyType Phylo, class... EmplacerArgs>
     Phylogeny(const policy_copy_tag, Phylo&& N, const NodeDesc in_root, EmplacerArgs&&... args):
-      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), mstd::singleton_set(in_root), std::forward<EmplacerArgs>(args)...)
+      Phylogeny(policy_copy_tag{}, std::forward<Phylo>(N), in_root, std::forward<EmplacerArgs>(args)...)
     {}
 
     // "copy" construction without root (using all roots of N)
@@ -1422,7 +1438,7 @@ namespace PT {
                               auto& seen,
                               NodeDataToString&& node_data_to_string = NodeDataToString()) 
     {
-      const Node& u_node = node_of(u);
+      const Node& u_node = PT::node_of<Phylogeny>(u);
       const bool u_reti = u_node.is_reti();
 
       std::string u_name = mstd::config::locale.char_no_branch_hori;

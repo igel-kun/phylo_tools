@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <memory>
+
 namespace mstd {
 
   // ================= Type Runes ====================
@@ -15,14 +17,22 @@ namespace mstd {
     TR_ConstRefOK = 0b0011, TR_VoidPtrOK = 0b1100,
     TR_ConstRefVoidOK = 0b1011, TR_ConstRefPtrOK = 0b0111, TR_ConstRefVoidPtrOK = 0b1111};
 
+  template<class T> struct remove_pointer { using type = T; };
+  template<class T> struct remove_pointer<T*> { using type = T; };
+  template<class T> struct remove_pointer<std::unique_ptr<T>> { using type = T; };
+  template<class T> struct remove_pointer<std::shared_ptr<T>> { using type = T; };
+  
+  template<class T> using remove_pointer_t = typename remove_pointer<T>::type;
+
   template<class T, TypeRune rune>
   struct apply_rune {
     using T1 = std::conditional_t<rune & TR_RefOK, std::remove_reference_t<T>, T>;
     using T2 = std::conditional_t<rune & TR_ConstOK, std::remove_const_t<T1>, T1>;
-    using T3 = std::conditional_t<rune & TR_PtrOK, std::remove_pointer_t<T2>, T2>;
+    using T3 = std::conditional_t<rune & TR_PtrOK, remove_pointer_t<T2>, T2>;
     using type = T3;
     static constexpr bool value = (std::is_void_v<T> && (rune & TR_VoidOK));
   };
+
   constexpr auto operator+(const TypeRune x, const TypeRune y) { return TypeRune{x | y}; }
 
   template<class T, TypeRune rune> using apply_rune_t = typename apply_rune<T, rune>::type;
@@ -53,4 +63,6 @@ namespace mstd {
   template<class P, TypeRune rune = TR_Strict> // NOTE: strict by default
   constexpr bool is_pointer_v = apply_rune_v<P, rune> || std::is_pointer_v<apply_rune_t<P, rune>>;
 
+
+  static_assert(mstd::is_same_v<std::unique_ptr<int>, int, TR_PtrOK>);
 }

@@ -170,7 +170,8 @@ int main(const int argc, const char** argv) {
     MyNetwork N(read_network(options[""][0]));
 
     if(mstd::test(options, "-v")) {
-      std::cout << "N: " << std::endl << ExtendedDisplay(N) << std::endl;
+      std::cout << "N:" << std::endl;
+      std::cout << ExtendedDisplay(N) << std::endl;
       N.print_summary(std::cout);
     }
 

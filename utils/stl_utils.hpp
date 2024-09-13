@@ -228,8 +228,8 @@ namespace mstd{
 
   // access a pointer or reference, returning it as reference
   template<class T>
-  decltype(auto) access(T& t) {
-    if constexpr (std::is_pointer_v<std::remove_reference_t<T&>>)
+  decltype(auto) access(T&& t) {
+    if constexpr (HasDeref<T>)
       return *t;
     else return t;
   }

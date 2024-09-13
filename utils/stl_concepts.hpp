@@ -96,7 +96,7 @@ namespace mstd {
   // ---------------- getting iterators of containers  -------------------
   template<class T> concept has_iter_category = requires { typename std::iterator_traits<T>::iterator_category; };
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept HasIterCategory = apply_rune_v<T, rune> || has_iter_category<apply_rune_t<T, rune>>;
+  concept HasIterCategory = apply_rune_v<T, rune> or has_iter_category<apply_rune_t<T, rune>>;
 
   // ever needed to get an iterator if T was non-const and a const_iterator if T was const? Try this:
   template<class T> struct _iterator_of { using type = T; };
@@ -119,8 +119,11 @@ namespace mstd {
 
 
   // ---------------- reference_of and value_type_of -----------------
-  template<class T> concept HasDeref = requires (T t) { *t; };
-  template<class T> concept HasBegin = requires (T t) { t.begin(); };
+  template<class T> concept has_deref = requires (T t) { *t; };
+  template<class T, TypeRune rune = TR_ConstRefOK> concept HasDeref = apply_rune_v<T, rune> or has_deref<apply_rune_t<T, rune>>;
+
+  template<class T> concept has_begin = requires (T t) { t.begin(); };
+  template<class T, TypeRune rune = TR_ConstRefOK> concept HasBegin = apply_rune_v<T, rune> or has_begin<apply_rune_t<T, rune>>;
 
   template<class T> struct reference_of {};
   template<class T> requires (has_reference<T>)
@@ -214,7 +217,7 @@ namespace mstd {
   template<class T, class A> constexpr bool is_vector_v<std::vector<T, A>> = true;
 
   template<class T, TypeRune rune = TR_ConstRefOK> concept VectorType = apply_rune_v<T, rune> || is_vector_v<apply_rune_t<T, rune>>;
-  template<class T> concept StrictVectorType = is_vector_v<T, TR_Strict>;
+  template<class T> concept StrictVectorType = VectorType<T, TR_Strict>;
 
   template<class T, TypeRune rune = TR_ConstRefOK> concept VectorOrStringType = VectorType<T, rune> || mstd::Stringlike<T, rune>;
   template<class T> concept StrictVectorOrStringType = VectorOrStringType<T, TR_Strict>;

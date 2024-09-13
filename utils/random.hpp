@@ -88,26 +88,6 @@ namespace PT{
   void sample(Container&& c, const size_t k, T* const result) {
     std::ranges::sample(c, mstd::PointerIterWrapper<T*>(result), k, std::mt19937{std::random_device{}()});
   }
-
-/*
-  // reservoir sampling for getting k random iterators from an unknown number of samples
-  template<mstd::IndexibleType Vec, mstd::IterableType Container>
-  void reservoir_sampling(Container&& c, const size_t k, Vec& result) {
-    auto it = std::begin(c);
-    size_t i = 0;
-    while(++i <= k) {
-      if(it != std::end(c)) {
-        append(result, it);
-      } else return;
-      std::advance(it);
-    }
-    while(it != std::end(c)){
-      const size_t rnd = throw_die(i++);
-      if(rnd < k) result[rnd] = it;
-      std::advance(it);
-    }
-  }
-  */
   template<mstd::IndexibleType Vec, mstd::IterableType Container>
   Vec sample(Container&& c, const size_t k) {
     Vec result;
@@ -116,15 +96,43 @@ namespace PT{
   }
 
 
+  // reservoir sampling for getting k random **iterators** from an unknown number of samples
+  template<mstd::IndexibleType Vec, mstd::IterableType Container>
+  Vec reservoir_sampling(Container&& c, const size_t k) {
+    Vec result;
+    const auto _end = std::end(c);
+    auto it = std::forward<Container>(c).begin();
+    size_t i = 0;
+    while((++i <= k) and (it != _end)) {
+      append(result, it);
+      ++it;
+    }
+    while(it != _end){
+      const size_t rnd = throw_die(i++);
+      if(rnd < k) result[rnd] = it;
+      ++it;
+    }
+    return result;
+  }
+  
   //! get an iterator to a (uniformly) random item in the container
   template<mstd::IterableType Container>
   auto get_random_iterator(Container&& c, const size_t container_size) {
     assert(!c.empty());
     return std::next(c.begin(), throw_die(container_size));
   }
-
   template<mstd::IterableTypeWithSize Container>
   auto get_random_iterator(Container&& c) { return get_random_iterator(std::forward<Container>(c), c.size()); }
+
+  template<mstd::IterableType Container> requires (not mstd::IterableTypeWithSize<Container>)
+  auto get_random_iterator(Container&& c) {
+    using Iter = decltype(std::forward<Container>(c).begin());
+    using Opt = std::optional<Iter>;
+    if(!c.empty()) {
+      return reservoir_sampling<mstd::singleton_set<Opt>>(std::forward<Container>(c), 1).front();
+    } else throw std::logic_error("trying to pick random element from empty container");
+  }
+
 
   //! get an iterator to a random item in the container, except a given iterator
   // NOTE: to this end, start at the second item and replace the iterator by begin() if it is hit
