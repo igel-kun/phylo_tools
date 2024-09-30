@@ -195,10 +195,11 @@ namespace PT {
   // ============== Edge Emplacer =================
   // ------- Emplacement Helper: helpers -----------
   // ------- Emplacement Helper: main class --------
-  template<StrictEmplacementHelperType _Helper, StrictDataExtracterType Extracter>
+  template<StrictEmplacementHelperType _Helper, StrictDataExtracterType _Extracter>
   struct EdgeEmplacer {
 #warning "TODO: make this inherit from the Helper"
     using Helper = _Helper;
+    using Extracter = _Extracter;
     using SourcePhylo = typename Helper::SourcePhylo;
     using TargetPhylo = typename Helper::TargetPhylo;
     using OldToNewTranslation = typename Helper::OldToNewTranslation;
@@ -365,8 +366,10 @@ namespace PT {
     bool mark_root_directly(const NodeDesc r) { return helper.mark_root_directly(r); }
 
     // translate the roots of N to use as our roots
-    void mark_roots(const auto& source) {
-      for(const NodeDesc r: source.roots()) mark_root(r);
+    template<NodeIterableType Roots>
+    void mark_roots(const Roots& rts) {
+      for(const NodeDesc r: rts)
+        mark_root(r);
     }
     // commit the root-candidates to N
     void commit_roots() { helper.commit_roots(); }

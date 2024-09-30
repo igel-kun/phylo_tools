@@ -194,7 +194,8 @@ namespace PT {
     using Parent::operator();
     using ExtractEdgeData = void;
  
-    template<class... Args> _DataExtracter_ed_nl(Args&&... args): Parent(std::forward<Args>(args)...) {}
+    _DataExtracter_ed_nl() = default;
+    INHERIT_ALL_CONSTRUCTORS(_DataExtracter_ed_nl, Parent)
 
     template<class... Args> bool operator()(const Ex_edge_data, Args&&...) const = delete;
     template<class... Args> bool operator()(const Ex_edge_data, Args&&...) = delete;
@@ -261,7 +262,8 @@ namespace PT {
     using Parent::operator();
     using ExtractNodeData = void;
     
-    template<class... Args> _DataExtracter(Args&&... args): Parent(std::forward<Args>(args)...) {}
+    _DataExtracter() = default;
+    INHERIT_ALL_CONSTRUCTORS(_DataExtracter, Parent)
 
     bool operator()(const Ex_node_data, const NodeDesc) = delete;
     bool operator()(const Ex_node_data, const NodeDesc) const = delete;

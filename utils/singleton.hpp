@@ -120,8 +120,8 @@ namespace mstd {
       return empty() ? other.empty() : (storage == other.storage);
     }
     // careful with operator[] - it does not bounds-check! (use at() if you need bounds checking!)
-    reference operator[](const size_t i) { assert(i == 0); return *(storage + i); }
-    const_reference operator[](const size_t i) const { assert(i == 0); return *(storage + i); }
+    reference operator[](const size_t i) { assert(i == 0); return *storage; }
+    const_reference operator[](const size_t i) const { assert(i == 0); return *storage; }
 
     reference at(const size_t i) { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
     const_reference at(const size_t i) const { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }

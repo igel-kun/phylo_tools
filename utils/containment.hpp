@@ -59,8 +59,8 @@ namespace PT {
     // this is used for branching - it forces u as parent of v
     template<class Translation = NodeTranslation>
     TreeInNetContainment(const TreeInNetContainment& tc, const NodeDesc u, const NodeDesc v, Translation&& trans = Translation()):
-      host{tc.host, trans},
-      guest{tc.guest, trans},
+      host(tc.host, trans),
+      guest(tc.guest, trans),
       HG_label_match{tc.HG_label_match, [&](const auto& other_pair){
         LabelMatchingPair result;
         for(const NodeDesc& x: other_pair.first) mstd::append(result.first, trans.at(x));

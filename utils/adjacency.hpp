@@ -10,7 +10,8 @@ namespace PT {
 
     NodeDesc get_desc() const { return nd; }
     //operator NodeDesc&() { return nd; }  // one should never change the node of an adjacency
-    operator const NodeDesc&() const { return nd; }
+    operator const NodeDesc() const { return nd; }
+    bool operator==(const ProtoAdjacency& other) const { return nd == other.nd; }
     bool operator==(const NodeDesc other) const { return nd == other; }
   };
 
@@ -46,11 +47,6 @@ namespace PT {
     Adjacency(const NodeDesc _nd, const Adjacency& adj): Parent{_nd}, data_ptr(adj.data_ptr) {}
     Adjacency(const NodeDesc _nd): Parent{_nd}, data_ptr{std::make_shared<EdgeData>()} {}
 
-    //Adjacency(const Adjacency&) = default;
-    //Adjacency(Adjacency&& other) = default;
-    //Adjacency& operator=(const Adjacency&) = default;
-    //Adjacency& operator=(Adjacency&&) = default;
-
     EdgeData& data() const { assert(data_ptr); return *data_ptr; }
 
     template<class T> requires (!std::is_void_v<T>)
@@ -74,10 +70,6 @@ namespace PT {
     static constexpr bool has_data = false;
 
     Adjacency() = default;
-    //Adjacency(const Adjacency&) = default;
-    //Adjacency(Adjacency&&) = default;
-    //Adjacency& operator=(const Adjacency&) = default;
-    //Adjacency& operator=(Adjacency&&) = default;
 
     // make from an iterator to an adjacency
     template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
@@ -85,7 +77,6 @@ namespace PT {
 
     template<class... Args>
     Adjacency(const NodeDesc _nd, Args&&... args): Parent{_nd} {}
-
 
     friend std::ostream& operator<<(std::ostream& os, const Adjacency<void>& a) { return os << static_cast<NodeDesc>(a); }
   };

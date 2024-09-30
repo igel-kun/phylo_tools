@@ -25,13 +25,13 @@ namespace PT {
   struct policy_inplace_tag: public data_policy_tag {};
   struct policy_noop_tag: public data_policy_tag {};
   struct policy_move_children_tag: public data_policy_tag {};
+  template<class T> concept DataPolicyTag = std::derived_from<T, data_policy_tag>;
 
   struct direction_tag {};
   struct above_tag: public direction_tag {};
   struct below_tag: public direction_tag {};
+  template<class T> concept DirectionTag = std::derived_from<T, direction_tag>;
 
-  template<class T>
-  concept DataPolicyTag = std::derived_from<T, data_policy_tag>;
 
   // tags for the data extracter
   struct Ex_node_label {};

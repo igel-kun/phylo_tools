@@ -202,7 +202,6 @@ void test_vector_map() {
     vm.emplace(p, q);
     assert(um.size() == vm.size());
   }
-  std::cout << "\t\ttesting equality...\n";
   for(const auto& i: vm) assert(um.at(i.first) == i.second);
   for(const auto& i: um) assert(vm.at(i.first) == i.second);
   

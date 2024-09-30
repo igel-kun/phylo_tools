@@ -3,8 +3,9 @@
 
 #include <concepts>
 #include <vector>
-#include "utils.hpp"
+
 #include "runes.hpp"
+#include "utils.hpp"
 
 namespace mstd {
 
@@ -80,13 +81,15 @@ namespace mstd {
   // a class that returns itself on dereference 
   // useful for iterators returning rvalues instead of lvalue references
   template<class T>
-  struct self_deref {
+  struct self_deref: public T {
     T t;
-   // template<class... Args> self_deref(Args&&... args): t(std::forward<Args>(args)...) {}
-    T& operator*() { return t; }
-    T* operator->() { return &t; }
-    const T& operator*() const { return t; }
-    const T* operator->() const { return &t; }
+
+    INHERIT_ALL_CONSTRUCTORS(self_deref, T);
+    // template<class... Args> self_deref(Args&&... args): t(std::forward<Args>(args)...) {}
+    T& operator*() { return *this; }
+    T* operator->() { return this; }
+    const T& operator*() const { return *this; }
+    const T* operator->() const { return this; }
   };
   template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
   using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, self_deref<R>>;

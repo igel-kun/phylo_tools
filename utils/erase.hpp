@@ -18,12 +18,14 @@ namespace mstd {
   template<ArithmeticType P, ArithmeticType Q>
   void erase(P& p, Q&& q) { p -= std::forward<Q>(q); }
 
+  // ----------------- substract items from containers ---------------------
   template<ContainerType C, class Key>
     requires (std::is_same_v<Key, const_iterator_of_t<C>> || std::is_same_v<Key, iterator_of_t<C>>)
   auto erase(C& c, const Key& key) { return c.erase(key); }
 
   template<ContainerType C, class Key>
-    requires(std::equality_comparable_with<const Key&, value_type_of_t<C>>)
+    requires requires(const value_type_of_t<C>& cv, const Key& k) { {cv == k} -> std::same_as<bool>; }
+  //(std::equality_comparable_with<const Key&, value_type_of_t<C>>)
   auto erase(C& c, const Key& key) {
     if constexpr (VectorType<C>) { // erasing keys usually returns the number of keys removed, so we need to massage vector::erase a little
       const auto iter = std::remove(c.begin(), c.end(), key);

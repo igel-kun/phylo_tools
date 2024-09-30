@@ -199,7 +199,7 @@ namespace PT{
             const auto xy = *xy_iter;
             const NodeDesc x = xy.tail();
             const auto& y = xy.head();
-            assert((x != u) || (y != v));
+            assert((x != u) or (y != v));
             const bool reverse_st = N.has_path(y,u);
             DEBUG3(std::cout << "rolled nodes: "<<u<<" "<<v<<" and "<<x<<" "<<y<<"\t "<<y<<"-"<<u<<"-path? "<<reverse_st<<'\n');
             NodeDesc s = emplacer.create_node();

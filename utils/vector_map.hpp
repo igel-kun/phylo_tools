@@ -117,11 +117,12 @@ namespace mstd{
 
     iterator begin() { return make_iterator(Vector::begin()); }
     const_iterator begin() const { return make_iterator(Vector::begin()); }
-    iterator end() { return make_iterator(Vector::end(), do_not_fix_index_tag()); }
-    const_iterator end() const { return make_iterator(Vector::end(), do_not_fix_index_tag()); }
+    auto end() { return Parent::end(); } //make_iterator(Vector::end(), do_not_fix_index_tag()); }
+    auto end() const { return Parent::end(); } //make_iterator(Vector::end(), do_not_fix_index_tag()); }
+    auto vm_end() const { make_iterator(Vector::end(), do_not_fix_index_tag()); }                                       
 
-    iterator find(const key_type key) { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return end(); }
-    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return end(); }
+    iterator find(const key_type key) { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
+    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
   };
 
 }

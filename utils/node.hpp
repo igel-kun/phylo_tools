@@ -314,6 +314,9 @@ namespace PT{
   template<StrictPhylogenyType T>
   decltype(auto) any_parent_of(const NodeDesc x) { return node_of<T>(x).any_parent(); }
 
+  template<class Network> struct functor_children_of { decltype(auto) operator()(const NodeDesc u) const { return Network::children(u); } };
+  template<class Network> struct functor_parents_of { decltype(auto) operator()(const NodeDesc u) const { return Network::parents(u); } };
+  template<class Network> struct functor_any_parent_of { decltype(auto) operator()(const NodeDesc u) const { return Network::any_parent(u); } };
 
 
   template<StrictNodeType _Node>

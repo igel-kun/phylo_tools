@@ -152,12 +152,10 @@ namespace mstd{
     template<class Other>
     bool operator==(const Other* x) const { assert(x != nullptr); return *x == s; }
   };
-  template<class T>
-  using GenericEndIteratorS = _GenericEndIterator<T>;
   using GenericEndIterator = _GenericEndIterator<void>;
 
   template<VerifyableIter Iter, class T>
-  bool operator==(const Iter& other, const GenericEndIteratorS<T>&) { return !other.is_valid(); }
+  bool operator!=(const Iter& other, const _GenericEndIterator<T>&) { return other.is_valid(); }
 
   // wrap a pointer in an iterator shell that has all the required types and can be inherited from
   template<class Ptr>

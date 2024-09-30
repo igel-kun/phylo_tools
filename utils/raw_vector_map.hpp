@@ -45,10 +45,8 @@ namespace mstd {
   using raw_vector_map = _raw_vector_map<_Key, std::vector<_Element, Allocator>>;
 
   template<std::unsigned_integral _Key, VectorType _base_container> 
-  class _raw_vector_map: public _base_container
+  struct _raw_vector_map: public _base_container
   {
-  public:
-
     using Vector = _base_container;
     using Traits = iterator_traits<Vector>;
     using VectorIter = iterator_of_t<Vector>;
@@ -70,7 +68,7 @@ namespace mstd {
     static_assert(std::is_constructible_v<iterator, mapped_type*, mapped_type*>);
 
     auto make_iter(mapped_type* x) { return iterator{x, data()}; }
-    auto make_const_iter(const mapped_type* x) const { return const_iterator{x, data()}; }
+    auto make_iter(const mapped_type* x) const { return const_iterator{x, data()}; }
 
     explicit operator Vector() { return static_cast<Vector&>(*this); }
     explicit operator const Vector() const { return static_cast<const Vector&>(*this); }
@@ -132,20 +130,25 @@ namespace mstd {
 	  
     insert_result insert(const value_type& x) { return try_emplace(x.first, x.second); }
 
+    auto vector_begin() { return Vector::begin(); }
+    auto vector_begin() const { return Vector::begin(); }
+    auto vector_end() { return Vector::end(); }
+    auto vector_end() const { return Vector::end(); }
 
-    iterator begin() { return make_iter(data()); }
-    iterator end() { return make_iter(data() + size()); }
-    const_iterator cbegin() const { return make_const_iter(data()); }
-    const_iterator cend() const { return make_const_iter(data() + size()); }
-    const_iterator begin() const { return cbegin(); }
-    const_iterator end() const { return cend(); }
-    reverse_iterator rbegin() { return make_reverse_iterator(end()); }
-    reverse_iterator rend() { return make_reverse_iterator(begin()); }
-    reverse_const_iterator rbegin() const { return make_reverse_iterator(end()); }
-    reverse_const_iterator rend() const { return make_reverse_iterator(begin()); }
+    auto begin() { return make_iter(data()); }
+    auto begin() const { return cbegin(); }
+    auto cbegin() const { return make_iter(data()); }
+    auto rbegin() { return make_reverse_iterator(end()); }
+    auto rbegin() const { return make_reverse_iterator(end()); }
 
-    iterator find(const key_type x) { if(contains(x)) return data() + x; else return end(); }
-    const_iterator find(const key_type x) const { if(contains(x)) return data() + x; else return end(); }
+    auto end() { return vector_end(); } //make_iter(data() + size()); }
+    auto end() const { return cend(); }
+    auto cend() const { return make_iter(data() + size()); }
+    auto rend() { return make_reverse_iterator(begin()); } 
+    auto rend() const { return make_reverse_iterator(begin()); }
+
+    auto find(const key_type x) { if(contains(x)) return iterator{data() + x}; else return make_iter(data() + size()); }
+    auto find(const key_type x) const { if(contains(x)) return const_iterator{data() + x}; else return make_iter(data() + size()); }
     
     bool contains(const key_type x) const { return static_cast<size_t>(x) < size(); }
     bool count(const key_type x) const { return contains(x); }

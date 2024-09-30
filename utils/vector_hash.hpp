@@ -386,19 +386,22 @@ namespace mstd{
     bool count(const Key& key) const { return contains(key); }
 
     iterator find(const Key& key) {
-      if(empty()) return end();
-      STAT(_count = 0);
-      const auto [iter, status] = find_slot(key);
-      STAT(++hist[_count]);
-      return (status == FindStatus::FS_found_key) ? make_iterator(iter) : end();
+      if(not empty()) {
+        STAT(_count = 0);
+        const auto [iter, status] = find_slot(key);
+        STAT(++hist[_count]);
+        if(status == FindStatus::FS_found_key) return make_iterator(iter);
+      } return end();
     }
 
     const_iterator find(const Key& key) const {
-      if(empty()) return end();
-      STAT(_count = 0);
-      const auto [iter, status] = find_slot(key);
-      STAT(++hist[_count]);
-      return (status == FindStatus::FS_found_key) ? make_iterator(iter) : end();
+      if(!empty()) {
+        STAT(_count = 0);
+        const auto [iter, status] = find_slot(key);
+        STAT(++hist[_count]);
+        if(status == FindStatus::FS_found_key) return make_iterator(iter);
+      }
+      return end();
     }
 
     template<class T> requires (std::is_same_v<std::remove_cvref_t<T>, Key>)
@@ -474,8 +477,10 @@ namespace mstd{
     vector_iterator       vector_begin()       { return Parent::begin(); }
     const_vector_iterator vector_begin() const { return Parent::begin(); }
 
-    iterator       end()       { return typename iterator::Iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
-    const_iterator end() const { return typename const_iterator::Iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    //auto end()       { return vector_end(); } // typename iterator::Iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    //auto end() const { return vector_end(); } //typename const_iterator::Iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    auto end()       { return mstd::GenericEndIterator{}; }
+    auto end() const { return mstd::GenericEndIterator{}; }
     vector_iterator       vector_end()       { return Parent::end(); }
     const_vector_iterator vector_end() const { return Parent::end(); }
  
@@ -484,8 +489,8 @@ namespace mstd{
     reverse_vector_iterator       vector_rbegin()       { return Parent::rbegin(); }
     const_reverse_vector_iterator vector_rbegin() const { return Parent::rbegin(); }
  
-    reverse_iterator       rend()       { return reverse_iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
-    const_reverse_iterator rend() const { return const_reverse_iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    auto rend()       { return vector_rend(); } // reverse_iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
+    auto rend() const { return vector_rend(); } //const_reverse_iterator{do_not_fix_index_tag(), std::piecewise_construct, std::forward_as_tuple()}; }
     reverse_vector_iterator       vector_rend()       { return Parent::rend(); }
     const_reverse_vector_iterator vector_rend() const { return Parent::rend(); }
   

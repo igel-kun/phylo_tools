@@ -18,10 +18,10 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <algorithm>
 
 #include "platform.hpp"
 #include "debug_utils.hpp"
-#include "stl_utils.hpp"
 
 #if __linux__
   #include <string.h> // for explicit_bzero
@@ -112,8 +112,8 @@ namespace std::ranges {
 // C++ forbids inheriting copy constructors, which makes sense if the class has data members (they would be left uninitialized),
 // but it doesn't make sense if the class has NO data members... in those cases, we can inherit _all_ constructors as follows:
 #define INHERIT_ALL_CONSTRUCTORS(myclass,base) \
-  template<class First, class... Args> requires (not std::is_same_v<std::remove_cvref_t<First>, myclass>)\
-  myclass(First&& first, Args&&... args): base(std::forward<First>(first), std::forward<Args>(args)...) {}
+  template<class __First, class... __Args> requires (not std::is_same_v<std::remove_cvref_t<__First>, myclass>)\
+  myclass(__First&& __first, __Args&&... __args): base(std::forward<__First>(__first), std::forward<__Args>(__args)...) {}
 
 // iterators are supposed to have an assignment that returns a ref to the iterator itself (this is required for std::iterator_traits)
 // now, it we inherit from an iterator and don't write our own operator=() then the inherited assignment will have the wrong return type :(

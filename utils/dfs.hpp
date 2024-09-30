@@ -16,8 +16,7 @@ namespace PT{
   //       Thus, any iterator based on coroutines could not be copied (only moved) which made it impossible to use range-based 'for' on them
   //       Therefore, I gave up coroutines for DFS iteration and, should anyone retry this, please be aware of the described pitfall!
   template<TraversalType o, DFSRootStorageType _Roots, TraversalTraitsType Traits>
-  class DFSIterator: public Traits {
-  public:
+  struct DFSIterator: public Traits {
     using Roots = std::conditional_t<std::is_same_v<_Roots, NodeDesc>, NodeSingleton, _Roots>;
     using typename Traits::Network;
     using Traits::track_nodes;
@@ -168,7 +167,8 @@ namespace PT{
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class RootInit, class... Args>
     DFSIterator(RootInit&& root_init, Args&&... args):
-      Traits(std::forward<Args>(args)...), roots(std::forward<RootInit>(root_init))
+      Traits(std::forward<Args>(args)...),
+      roots(std::forward<RootInit>(root_init))
     {
       if(has_roots()) {
         DEBUG6(std::cout << "DFS: making new non-end DFS iterator (type "<< static_cast<int>(o) <<") roots "<<mstd::IterFactory<Roots>{roots}<<", starting at "<<current_root()<<" (tracking? "<<track_nodes<<"), root is seen? "<<is_seen(current_root())<<"\n");
@@ -293,7 +293,7 @@ namespace PT{
     using typename Parent::reference;
     using typename Parent::pointer;
     using Parent::child_history;
-    
+
     pointer operator->() { return operator*(); }
     pointer operator->() const { return operator*(); }
 
@@ -308,6 +308,7 @@ namespace PT{
 
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class RootInit, class... Args>
+      requires (not mstd::is_same_v<RootInit, DFSEdgeIterator>)
     DFSEdgeIterator(RootInit&& root_init, Args&&... args):
       Parent(std::forward<RootInit>(root_init), std::forward<Args>(args)...)
     {

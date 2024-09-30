@@ -60,10 +60,12 @@ namespace mstd {
     _auto_iter& operator=(_auto_iter&&) = default;
 
     // --------------------- Comparison & Increment --------------------------
-    template<class T> requires (VerifyableIter<T>)
-    bool operator==(const T& other) const { return is_valid() ? (other == get_iter()) : other.is_invalid(); }   
-    template<class T> requires (not VerifyableIter<T>)
-    bool operator==(const T& other) const { return is_valid() && (other == get_iter()); }
+    template<class T> 
+    bool operator==(const T& other) const {
+      if constexpr (VerifyableIter<T>)
+        return is_valid() ? (other == get_iter()) : other.is_invalid();
+      else return (other == get_iter());
+    }   
 
     _auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     _auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }
@@ -86,10 +88,9 @@ namespace mstd {
     }
 
     // --------------------- Query ---------------------------
-    bool is_valid() const { return end_it != get_iter(); }
+    bool is_valid() const { return get_iter() != end_it; }
     bool is_invalid() const { return !is_valid(); }
     explicit operator bool() const { return is_valid(); }
-    explicit operator bool() { return is_valid(); }
 
     Iterator& get_iter() & { return static_cast<Iterator&>(*this); }
     Iterator&& get_iter() && { return static_cast<Iterator&&>(*this); }

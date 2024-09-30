@@ -31,8 +31,9 @@ namespace mstd{
 
     bool operator==(const _DSet& y) const { return representative == y.representative; }
 
-    template<class, class, class>
-    friend class DisjointSetForest;
+  template<class _Key, class _Payload, class _MergePayloads>
+    requires (not std::is_void_v<_Payload> or std::is_same_v<_MergePayloads, mstd::IgnoreFunction<void>>)
+  friend class DisjointSetForest;
   };
 
   template<class Key, class Payload = void>
@@ -67,7 +68,7 @@ namespace mstd{
   // a union-find datastructure on keys, allowing an additional payload to be stored for each key
   // MergePayloads is a functor that is called with arguments x & y when y is merged onto x, so the payloads may be updated when merging
   template<class Key, class Payload = void, class MergePayloads = mstd::IgnoreFunction<void>>
-    requires (!std::is_same_v<Payload, void> || std::is_same_v<MergePayloads, mstd::IgnoreFunction<void>>)
+    requires (not std::is_void_v<Payload> or std::is_same_v<MergePayloads, mstd::IgnoreFunction<void>>)
   class DisjointSetForest: public std::unordered_map<Key, DSet<Key, Payload>> {
     using Parent = std::unordered_map<Key, DSet<Key, Payload>>;
   public:

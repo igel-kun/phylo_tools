@@ -96,8 +96,8 @@ namespace PT{
 
     template<class... Args>
     EdgeListParser(std::istream& _edgestream, Args&&... args):
-      edgestream(&_edgestream),
-      emplacer(std::forward<Args>(args)...)
+      emplacer(std::forward<Args>(args)...),
+      edgestream(&_edgestream)
     {}
 
     template<class... Args>
