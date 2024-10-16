@@ -37,7 +37,7 @@ namespace mstd {
     }
     template<class Pred>
     bool apply_pred(Pred&& p) {
-      if constexpr (std::is_pointer_v<Pred>) {
+      if constexpr (std::is_pointer_v<std::remove_cvref_t<Pred>>) {
         assert(pred != nullptr);
         return apply_pred(*p);
       } else if constexpr (pass_iterator) {

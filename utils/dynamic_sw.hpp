@@ -26,6 +26,8 @@ namespace PT {
     static constexpr bool sw_accumulatable = std::is_convertible_v<decltype(network_degrees(NoNode).first), sw_t>;
 
   public:
+    using SWReturnType = typename std::invoke_result_t<NetworkDegrees, const NodeDesc>::first_type;
+    static constexpr bool return_simple_int = std::is_arithmetic_v<SWReturnType>;
 
     DynamicScanwidth()
       requires (!std::is_reference_v<Output> && !std::is_reference_v<NetworkDegrees>)
@@ -60,7 +62,7 @@ namespace PT {
             // most_recent_in_component is a highest leaf of u
             // this information might be valuable for some users, so we give the opportunity to save it
             append(save_highest_child_of, u, most_recent_in_component);
-            sw_u += out.at(most_recent_in_component);
+            mstd::append(sw_u, out.at(most_recent_in_component));
             weak_components.merge_sets_keep_order(u, v);
           }
 
@@ -68,8 +70,8 @@ namespace PT {
         }
         STAT(if constexpr (sw_accumulatable) {
             if(child_sw_max != 0) {if(sw_u < child_sw_max) {++sw_shrinking;} else if(sw_u > child_sw_max) {++sw_raising;}}});
-        sw_u -= outdeg; // discount the edges u-->v from the scanwidth of u
-        append(out, u, sw_u);
+        mstd::erase(sw_u, outdeg); // discount the edges u-->v from the scanwidth of u
+        mstd::append(out, u, sw_u);
       } catch(std::out_of_range& e){
         throw(std::logic_error("trying to compute scanwidth of a non-extension"));
       }
@@ -83,8 +85,10 @@ namespace PT {
     sw_t update_all(const Nodes& nodes, CallBack&& save_highest_child_of = CallBack()) {
       sw_t result = 0;
       for(const NodeDesc u: nodes) {
-        sw_t tmp = update_sw(u, std::forward<CallBack>(save_highest_child_of));
-        result = std::max(tmp, result);
+        const auto tmp = update_sw(u, std::forward<CallBack>(save_highest_child_of));
+        if constexpr (std::is_arithmetic_v<decltype(tmp)>) {
+          result = std::max(tmp, result);
+        } else result = std::max(tmp.size(), result);
       }
       STAT(std::cout << "sw-raising nodes: "<<sw_raising<<" sw-shrinking nodes: "<<sw_shrinking<<" sw-neutral: " << nodes.size() - sw_raising - sw_shrinking<<"\t "<< (100 * sw_raising) / (sw_raising + sw_shrinking) <<"\% raising\n");
       return result;

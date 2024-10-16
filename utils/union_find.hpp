@@ -76,11 +76,11 @@ namespace mstd{
     static constexpr bool has_payload_merger = !std::is_same_v<MergePayloads, mstd::IgnoreFunction<void>>;
 
     using Set = DSet<Key, Payload>;
+    using Parent::operator[];
   protected:
     using Parent::try_emplace;
     using Parent::emplace;
     using Parent::erase;
-    using Parent::operator[];
     using Parent::find;
 
     size_t _set_count = 0;

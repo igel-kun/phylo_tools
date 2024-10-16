@@ -5,8 +5,11 @@
 #include "set_interface.hpp"
 #include "dynamic_sw.hpp"
 
-namespace PT{
-
+namespace PT { class Extension; }
+namespace mstd { // extensions are basically vectors...
+  template<> struct is_vector<PT::Extension> { static constexpr bool value = true; };
+}
+namespace PT {
   struct partial_extension_tag {};
 
   class Extension: public NodeVec {
@@ -58,6 +61,7 @@ namespace PT{
     // NOTE: NetworkDegree is used to return the degrees (pair of indegree and outdegree) of a node in the network
     // NOTE: this can be used to construct the actual edge- or node- set corresponding to the scanwidth entry by passing a suitable function network_degrees
     template<StrictPhylogenyType Net, class NetDeg, class Output, class... Args>
+      requires mstd::IsPair<std::invoke_result_t<std::remove_reference_t<NetDeg>, const NodeDesc>>
     void sw_map_meta(NetDeg&& network_degrees, Output& out, Args&&... args) const {
       DEBUG3(std::cout << "computing sw-map of extension "<<*this<<std::endl);
       DEBUG3(std::cout << "degree-extracter is "<<mstd::type_name<NetDeg>()<<"\n");
@@ -136,7 +140,6 @@ namespace PT{
 
   };
 
-
   // given an extension E and a network N, compute an arbitrary extension respecting both N and E
   // NOTE: this can be used to extend partial extensions to the node-set of a network and/or remove nodes from E that do not occur in N
   // NOTE: set extend_only to leave nodes in the extension that do not occur in N
@@ -146,12 +149,11 @@ namespace PT{
     DEBUG3(std::cout << "extending "<<ext<<" to nodes "<<nodes_of_N<<" of network\n"<<ExtendedDisplay(N)<<"\n");
     if(!ext.empty()) {
       // we will continue to use a single NodeTraversal, and keep adding to its seen_set
-      NodeTraversal<postorder, Network, void, NodeSet> traversal(N);
+      NodeTraversal<postorder, Network> traversal(N);
       for(const NodeDesc u: ext) {
         if(test(nodes_of_N, u)) {
-          assert(!test(traversal.seen_nodes(), u)); // if ext is an extension, the postorder traversal shouldn't have seen u before
           // add to the extension all nodes between u and the seen nodes 
-          traversal.root = u;
+          traversal.set_roots(u);
           append(result, traversal);
           DEBUG3(std::cout << "appended traversal from "<<u<<" - result now: "<<result<<"\n");
         } else // if u is not a node of N
@@ -159,7 +161,6 @@ namespace PT{
             append(result, u);
       }
     } else append(result, N.nodes_postorder());
-#warning "TODO: cannot use std::ranges::copy(N.nodes_postorder(), std::back_inserter(result)) here because TraversalTraits may contain a _SeenSet in a form of a reference! In this case, TraversalTraits (and, thus, DFSIterators) are not assignable, but assignable iterators are required by the ranges library"
     return result;
   }
   template<bool extend_only = false, PhylogenyType Network>
@@ -167,6 +168,5 @@ namespace PT{
     return apply_to_network(ext, N, N.nodes().template to_container<NodeSet>());
   }
 
-
-
 }// namespace
+

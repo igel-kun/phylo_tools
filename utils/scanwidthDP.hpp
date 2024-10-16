@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "optional.hpp"
 #include "set_interface.hpp"
 #include "extension.hpp"
 #include "dynamic_sw.hpp"
@@ -9,21 +10,39 @@
 
 namespace PT {
 
-  // this DP table entry recomputes the scanwidth each time, but only stores the essentials (the extension)
-  template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
-  struct _DPEntryLowMem {
+  struct ProtoDPEntry {
     // NOTE: some parts of the code rely on XOR-hashing here, so don't change that willy-nilly!
     static constexpr mstd::XOR_hash<Extension> Hasher{};
+
+    template<NodeIterableType Nodes>
+    static constexpr size_t hash(const Nodes& nodes) { return Hasher(nodes); }
+
+    size_t hash_cache = 0;
+
+    void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
+    void recompute_hash(const auto& ex) { hash_cache = hash(ex); }
+
+    void clear() { hash_cache = 0; }
+
+    size_t hash() const { return hash_cache; }
+
+    bool operator==(const ProtoDPEntry other) const { return hash_cache == other.hash_cache; }
+    ProtoDPEntry& operator=(const ProtoDPEntry& other) = default;
+  };
+
+
+  // this DP table entry recomputes the scanwidth each time, but only stores the essentials (the extension)
+  template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
+  struct _DPEntryLowMem: public ProtoDPEntry {
+    using Parent = ProtoDPEntry;
+
+    using Parent::hash;
 
     static constexpr void recompute_sw() {}
     static constexpr void update_sw(const NodeDesc u) {}
     
-    template<NodeIterableType Nodes>
-    static constexpr size_t hash(const Nodes& nodes) { return Hasher(nodes); }
-
   protected:
     mutable Extension ex;
-    size_t hash_cache = 0;
 
     // copy the other entry's Extension, replacing our own prefix
     // NOTE: it's important that the prefix contains the same nodes!
@@ -34,9 +53,6 @@ namespace PT {
       std::ranges::copy(other.ex, ex.begin());
     }
 
-    void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
-    void recompute_hash() { hash_cache = hash(ex); }
-
   public:
     using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
     using SWInfo = std::pair<sw_t, DynamicSW>;
@@ -44,16 +60,24 @@ namespace PT {
     _DPEntryLowMem() = default;
     _DPEntryLowMem(const _DPEntryLowMem&) = default;
     _DPEntryLowMem(_DPEntryLowMem&&) = default;
-    _DPEntryLowMem& operator=(_DPEntryLowMem&& other) = default;
 
-     // we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
-     // NOTE: please be careful with this!
-    explicit _DPEntryLowMem(const size_t hash_value): hash_cache(hash_value) {}
+    // we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
+    // NOTE: please be careful with this!
+    explicit constexpr _DPEntryLowMem(const Parent p): Parent{p} {}
+    explicit constexpr _DPEntryLowMem(const size_t _hash): Parent{_hash} {}
    
     template<NodeIterableType Nodes>
     explicit _DPEntryLowMem(Nodes&& nodes):
-      ex(std::forward<Nodes>(nodes)), hash_cache(hash(ex))
+      Parent{hash(ex)},
+      ex(std::forward<Nodes>(nodes))
     {}
+
+    _DPEntryLowMem& operator=(const _DPEntryLowMem& other) = default;
+    _DPEntryLowMem& operator=(_DPEntryLowMem&& other) = default;
+    _DPEntryLowMem& operator=(ProtoDPEntry other) { Parent::operator=(other); ex.clear(); return *this; }
+
+
+
     bool operator==(const _DPEntryLowMem&) const = default;
 
     SWInfo get_dynamic_scanwidth() const {
@@ -62,7 +86,6 @@ namespace PT {
       return result;
     }
 
-    size_t hash() const { return hash_cache; }
     
     const Extension& get_ex() const { return ex; }
 
@@ -73,9 +96,9 @@ namespace PT {
     // update entry with the next node u
     void update(const NodeDesc u) {
       mstd::append(ex, u);
-      hash_one(u);
+      Parent::hash_one(u);
     }
-    void clear() { ex.clear(); hash_cache = 0; }
+    void clear() { ex.clear(); Parent::clear(); }
 
     // this is for debugging purposes only
     bool hash_correct() const { return hash() == hash(ex); }
@@ -90,12 +113,18 @@ namespace PT {
     using Parent = _DPEntryLowMem<Network>;
     using Edge = typename Network::Edge;
     using Parent::ex;
-    using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
-    using SWInfo = std::pair<DynamicSW, sw_t>;
+    using typename Parent::DynamicSW;
+    using typename Parent::SWInfo;
 
     using Parent::Parent;
     
     bool operator==(const _DPEntry& other) const { return Parent::operator==(other); }
+    _DPEntry& operator=(ProtoDPEntry other) { Parent::operator=(other); ds.clear(); scanwidth = 0; return *this; }
+
+   
+    explicit constexpr _DPEntry(const ProtoDPEntry p):
+      Parent(p)
+    {}
 
   protected:
     DynamicSW ds;
@@ -271,8 +300,8 @@ namespace PT {
 
 namespace mstd {
   // in order to use DPEntries with optional_by_invalid's, we'll use the default-constructed DPEntry with hash = 1 as invalid
-  template<class P, class Q> struct default_invalid_v<PT::_DPEntryLowMem<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntryLowMem<P, Q>{1}; }; };
-  template<class P, class Q> struct default_invalid_v<PT::_DPEntry<P, Q>> { static constexpr auto value = [](){ return PT::_DPEntry<P, Q>{1}; }; };
+  template<class P, class Q> struct default_invalid<PT::_DPEntryLowMem<P, Q>> { static constexpr auto value() { return PT::ProtoDPEntry{1}; }; };
+  template<class P, class Q> struct default_invalid<PT::_DPEntry<P, Q>> { static constexpr auto value() { return PT::ProtoDPEntry{1}; }; };
 }
 namespace std {
   template<class P, class Q> struct hash<PT::_DPEntryLowMem<P,Q>> { auto operator()(const PT::_DPEntryLowMem<P,Q>& x) const { return x.hash(); } };

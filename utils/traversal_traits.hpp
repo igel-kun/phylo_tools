@@ -58,7 +58,7 @@ namespace PT {
   template<StrictPhylogenyType _Network,
            mstd::IterableType _ItemContainer,
            class _Forbidden,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet>
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
   struct TraversalTraits:
     public mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, mstd::NoRef<_SeenSet>>, 
     public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
@@ -126,7 +126,7 @@ namespace PT {
 
   template<StrictPhylogenyType _Network,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = DefaultSeenSet<_Network>,
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false>
   class NodeTraversalTraits:
     public TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _Forbidden, _SeenSet>
@@ -162,7 +162,7 @@ namespace PT {
 
   template<StrictPhylogenyType _Network,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = DefaultSeenSet<_Network>,
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false>
   struct EdgeTraversalTraits: public TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>,_Forbidden, _SeenSet>
   {
@@ -213,7 +213,7 @@ namespace PT {
   //      occur as head of any emitted edge, while the latter should not occur as tail of any emitted edge! Thus, we'll need a second storage
   template<StrictPhylogenyType _Network,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = DefaultSeenSet<_Network>,
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false>
   struct AllEdgesTraits: public EdgeTraversalTraits<_Network, _Forbidden, _SeenSet, reverse>
   {

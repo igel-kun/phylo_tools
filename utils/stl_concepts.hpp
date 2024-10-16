@@ -18,6 +18,8 @@ namespace mstd {
   template<class T> constexpr bool is_pair = false;
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
 
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  concept IsPair = apply_rune_v<T, rune> or is_pair<apply_rune_t<T, rune>>;
 
 
   template<class T, TypeRune rune, class ... U> concept IsAnyOfR = (mstd::is_same_v<T, U, rune> || ...);
@@ -27,8 +29,15 @@ namespace mstd {
   template<class T, TypeRune rune = TR_Strict> // NOTE: strict by default
   constexpr bool is_really_arithmetic_v = mstd::is_arithmetic_v<T, rune> || mstd::is_pointer_v<T, rune>;
 
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  constexpr bool is_arithmetic_pair_v = IsPair<T, rune> and
+                std::is_arithmetic_v<typename apply_rune_t<T, rune>::first_type> and 
+                std::is_arithmetic_v<typename apply_rune_t<T, rune>::second_type>;
+
+
+
   // anything that can be converted from and to int is considered "basically arithmetic"
-  template<class T> constexpr bool is_basically_arithmetic_v = std::is_convertible_v<int, std::remove_cvref_t<T>> && std::is_convertible_v<std::remove_cvref_t<T>, int>;
+  template<class T> constexpr bool is_basically_arithmetic_v = std::is_convertible_v<int, std::remove_cvref_t<T>> and std::is_convertible_v<std::remove_cvref_t<T>, int>;
   // std::weakly_incrementable has a whole sack full of other iterator-related requirements like default-constructibility and difference_type...
   template<class T> concept really_pre_incrementable = requires(T t){++t;};
   template<class T> concept really_pre_decrementable = requires(T t){--t;};
@@ -216,8 +225,9 @@ namespace mstd {
 
   template<class T> concept HasAllocator = requires (T t) { typename T::allocator_type; };
 
-  template<class T> constexpr bool is_vector_v = false;
-  template<class T, class A> constexpr bool is_vector_v<std::vector<T, A>> = true;
+  template<class T> struct is_vector { static constexpr bool value = false; };
+  template<class T, class A> struct is_vector<std::vector<T, A>> { static constexpr bool value = true; };
+  template<class T> constexpr bool is_vector_v = is_vector<T>::value;
 
   template<class T, TypeRune rune = TR_ConstRefOK> concept VectorType = apply_rune_v<T, rune> || is_vector_v<apply_rune_t<T, rune>>;
   template<class T> concept StrictVectorType = VectorType<T, TR_Strict>;
@@ -405,4 +415,22 @@ namespace mstd {
     typename std::common_reference_t<decltype(*i++)&&, typename std::indirectly_readable_traits<I>::value_type&>;
     requires std::signed_integral<typename std::incrementable_traits<I>::difference_type>;
   };
+
+
+  // --------------------- MISC ---------------------------------------------
+  template<class T, class Q>
+  concept CompatibleValueTypes = std::is_same_v<value_type_of_t<T>, value_type_of_t<Q>>;
+  template<class T, class Q>
+  concept ConvertibleValueTypes = std::convertible_to<value_type_of_t<Q>, value_type_of_t<T>>;
+
+  template<class T> struct _findable_type { using type = value_type_of_t<T>; };
+  template<MapType M> struct _findable_type<M> { using type = key_type_of_t<M>; };
+  template<class T> using findable_type = typename _findable_type<std::remove_cvref_t<T>>::type;
+  template<class T, class C> concept FindableType = requires(T t, findable_type<C> other) {
+    { t == other } -> std::convertible_to<bool>;
+    { t != other } -> std::convertible_to<bool>;
+  };
+
+
+
 }

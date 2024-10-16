@@ -246,7 +246,7 @@ namespace mstd{
     // insert key and return index and whether an insertion took place
     template<typename KeyRef>
     insert_result _insert(KeyRef&& key) {
-      DEBUG5(std::cout << "===> inserting "<<key<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
+      DEBUG5(std::cout << "===> inserting "<<printable{&key}<<" into vector-hash of vec-size "<<vector_size()<<" with size = "<<size()<<" & load_factor = "<<load_factor()<<" <= "<<max_load_factor<<'\n');
       DEBUG6(std::cout << "===> current layout: "<< static_cast<const Parent&>(*this)<<'\n');
       // find the slot where we would place the key
       const auto [index, status] = find_slot(key);
@@ -254,7 +254,7 @@ namespace mstd{
 
       switch(status){
         case FindStatus::FS_vacant: 
-          DEBUG5(std::cout << "found vacant index "<<index<<" for "<<key<<"\n");
+          DEBUG5(std::cout << "found vacant index "<<index<<" for "<<printable{&key}<<"\n");
           // 0 is returned if we reached an empty slot, so insert there
           // unless 'key' is already there, which means that we went all the way around to find this vacant slot
           // In this case, trigger a rehash
@@ -267,7 +267,7 @@ namespace mstd{
             return _insert(std::forward<KeyRef>(key));
           }
         case FindStatus::FS_found_key:
-          DEBUG5(std::cout << key << " is already in the set (index "<<index<<")\n");
+          DEBUG5(std::cout << printable{&key} << " is already in the set (index "<<index<<")\n");
           // 1 is returned if the key was found, so return failure
           return {make_iterator(index), false};
         case FindStatus::FS_shiftable: {
@@ -301,7 +301,7 @@ namespace mstd{
       target_size = std::bit_ceil(target_size);
       DEBUG5(std::cout << "\n   REHASH to "<<target_size<<" \n");
       DEBUG5(std::cout << "before:\n"<<static_cast<std::vector<KeyOpt>>(*this)<<" (size "<<size()<<")\n");
-      DEBUG5(std::cout << "set: "; for(auto it = begin(); it != end(); ++it) std::cout << *it << " "; std::cout << "\n");
+      DEBUG5(std::cout << "set: "; for(auto it = begin(); it != end(); ++it) std::cout << printable{&(*it)} << " "; std::cout << "\n");
       assert(target_size >= size());
      
       if(empty()){

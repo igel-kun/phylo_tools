@@ -14,8 +14,9 @@ namespace mstd {
   //    you can circumvent this by using the TR_Strict rune: template<ContainerType<TR_Strict> T> -- now 'vector<int>&' no longer passes
 
   enum TypeRune: int { TR_Strict = 0, TR_RefOK = 0b0001, TR_ConstOK = 0b0010, TR_PtrOK = 0b0100, TR_VoidOK = 0b1000,
-    TR_ConstRefOK = 0b0011, TR_VoidPtrOK = 0b1100,
-    TR_ConstRefVoidOK = 0b1011, TR_ConstRefPtrOK = 0b0111, TR_ConstRefVoidPtrOK = 0b1111};
+    TR_ConstRefOK = 0b0011, TR_RefPtrOK = 0b0101, TR_PtrVoidOK = 0b1100, 
+    TR_ConstRefVoidOK = 0b1011, TR_ConstRefPtrOK = 0b0111, TR_RefPtrVoidOK = 0b1101,
+    TR_ConstRefPtrVoidOK = 0b1111};
 
   template<class T> struct remove_pointer { using type = T; };
   template<class T> struct remove_pointer<T*> { using type = T; };

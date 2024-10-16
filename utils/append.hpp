@@ -27,8 +27,9 @@ namespace mstd {
   // this is bad: vector_map<> can be "upcast" to vector<> so this will always conflict with the append for maps
   // the suggestion on stackoverflow is "stop spitting against the wind"... :(
   // so for now, I'm using try_emplace() in all places that would be ambiguous
-  template<VectorOrStringType V, class First, class... Args>
-    requires (not ConvertibleValueTypes<V, First>) // make sure we're not trying to append the Container 'First' to the end of 'V'
+  template<class V, class First, class... Args>
+    requires (not ConvertibleValueTypes<V, First> and  // make sure we're not trying to append the Container 'First' to the end of 'V'
+              (VectorOrStringType<V> or is_derived_from_template_v<V, std::vector>))
   auto append(V& _vec, First&& first, Args&&... args) { 
     return emplace_result<V>{_vec.emplace(_vec.end(), std::forward<First>(first), std::forward<Args>(args)...), true};
   }
@@ -58,7 +59,7 @@ namespace mstd {
 
   // on non-map non-vector containers, append = emplace
   template<IterableType C, class First, class ...Args>
-    requires (!MapType<C> && !VectorOrStringType<C> && !CompatibleValueTypes<C, First> &&
+    requires (not MapType<C> and not VectorOrStringType<C> and not CompatibleValueTypes<C, First> and not is_derived_from_template_v<C, std::vector> and
         std::is_constructible_v<mstd::value_type_of_t<C>, First&&, Args&&...>)
   auto append(C& container, First&& first, Args&&... args) { return container.emplace(std::forward<First>(first), std::forward<Args>(args)...); }
 

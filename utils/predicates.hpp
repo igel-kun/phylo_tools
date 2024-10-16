@@ -28,12 +28,18 @@ namespace pred {
   using BinaryUnequalPredicate = NotPredicate<BinaryEqualPredicate>;
 
   // a predicate returning true/or false depending on whether the query is in a given set
-  template<mstd::IterableType Container, bool invert = false>
+  template<mstd::IterableType<mstd::TR_ConstRefPtrOK> Container, bool invert = false>
   struct ContainmentPredicate {
-    const Container* c;
-    constexpr ContainmentPredicate(const Container& _c): c(&_c) {}
-    template<class Item> constexpr bool operator()(const Item& x) const { return test(*c, x) != invert; }
-    template<class Item> constexpr bool operator()(const Item& x) { return test(*c, x) != invert; }
+    Container c;
+    constexpr ContainmentPredicate(const Container& _c): c(_c) {}
+    constexpr ContainmentPredicate(Container&& _c): c(std::move(_c)) {}
+    
+    template<class Item>
+    constexpr bool operator()(const Item& x) const {
+      if constexpr (mstd::HasDeref<Container>)
+        return test(*c, x) != invert;
+      else return test(c, x) != invert;
+    }
   };
 
   // if P is iterable, get its containment predicate

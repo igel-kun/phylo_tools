@@ -110,16 +110,16 @@ int main(const int argc, const char** argv) {
   case 1:
   case 2:
   case 4:
-    throw Unimplemented("methods 0, 1, 2, and 4");
+    throw mstd::Unimplemented("methods 0, 1, 2, and 4");
   case 3:
     std::cout << "\n ==== computing optimal extension ===\n";
     if(mstd::test(options, "-lm")){
       std::cout << "using low-memory version...\n";
-      compute_min_sw_extension<true, true>(N, [&](const NodeDesc u){ ex.push_back(u); });
+      compute_min_sw_extension<sw_low_mem_footprint>(N, [&](const NodeDesc u){ ex.push_back(u); });
       //compute_min_sw_extension<true>(N, ex); // this is equivalent
     } else {
       std::cout << "using faster, more memory hungry version...\n";
-      compute_min_sw_extension<false, true>(N, ex);
+      compute_min_sw_extension<sw_default>(N, ex);
     }
     break;
   case 5:

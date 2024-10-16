@@ -8,7 +8,7 @@ namespace PT {
 
 
   // this is an iterator for switchings of a network
-  template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_VoidPtrOK> Leaves, mstd::VectorType OutputVec = NetEdgeVec<Net>>
+  template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> Leaves, mstd::VectorType OutputVec = NetEdgeVec<Net>>
   class SwitchingIter:
     public mstd::optional_tuple<Leaves>,
     public mstd::iter_traits_from_reference<OutputVec>

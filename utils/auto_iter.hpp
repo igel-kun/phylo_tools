@@ -31,13 +31,13 @@ namespace mstd {
 
     // construct from a container
     template<IterableType Container, class... Args>
-    _auto_iter(Container&& c, Args&&... args):
-      _auto_iter(std::begin(std::forward<Container>(c)), std::end(c), std::forward<Args>(args)...)
+    constexpr _auto_iter(Container&& c, Args&&... args):
+      _auto_iter(mstd::begin(std::forward<Container>(c)), std::end(c), std::forward<Args>(args)...)
     {}
 
     // construct from two iterators (begin and end)
     template<class _Iterator, class _EndIter, class... Args>
-      requires (mstd::is_constructible_v<Iterator, _Iterator, Args&&...> && mstd::is_convertible_v<_EndIter, EndIterator>)
+      requires (mstd::is_constructible_v<Iterator, _Iterator&&, Args&&...> && mstd::is_convertible_v<_EndIter, EndIterator>)
     constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end, Args&&... args):
       Parent{std::forward<_Iterator>(_it), std::forward<Args>(args)...},
       end_it{std::forward<_EndIter>(_end)} 

@@ -82,7 +82,7 @@ namespace mstd {
         requires(std::is_constructible_v<Parent, _Rest&&...>)
     _optional_tuple(const std::piecewise_construct_t, _LastT&& last, _Rest&&... rest):
       Item(std::make_from_tuple(std::forward<_LastT>(last))),
-      Parent(std::forward<_Rest>(rest)...)
+      Parent(std::piecewise_construct, std::forward<_Rest>(rest)...)
     {}
 
     // construct from any other optional tuple

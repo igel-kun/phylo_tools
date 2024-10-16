@@ -142,8 +142,10 @@ namespace mstd{
   struct _GenericEndIterator<void> {
     static bool is_valid() { return false; }
     bool operator==(const _GenericEndIterator&) const { return true; }
-    template<class Other>
-    bool operator==(const Other& x) const { return (x.operator==(*this)); }
+    template<VerifyableIter Other> requires (not mstd::is_same_v<Other, _GenericEndIterator>)
+    bool operator==(const Other& x) const { return not x.is_valid(); }
+    template<class Other> requires (not VerifyableIter<Other> && not mstd::is_same_v<Other, _GenericEndIterator>)
+    bool operator==(const Other& x) const { return x.operator==(*this); }
   };
 
   template<class Sentinel>
@@ -211,12 +213,16 @@ namespace mstd{
 
 
   // convenience class for dereference
-  // NOTE: for some oscure reason, lambda's do not return 'decltype(auto)' by default, but only 'auto'
+  // NOTE: for some oscure reason, lambdas do not return 'decltype(auto)' by default, but only 'auto'
   //      so, if you want your lambda to return by reference (which is basically _ALWAYS_ what you want), then you'd need to explicitly tell it so
   //      this deref-class here exists so that I don't accidentally forget that...
   struct default_deref {
-    template<class T> requires mstd::HasDeref<T>
-    decltype(auto) operator()(T&& t) const { return *t; }
+    template<class T> 
+    decltype(auto) operator()(T&& t) const {
+      if constexpr (mstd::HasDeref<T>)
+        return *(std::forward<T>(t));
+      else return std::forward<T>(t); 
+    }
   };
 
   // if you want to build a class with some template T in it, but T is a reference, the class will not be assignable; thus it is preferred to use pointers
@@ -272,15 +278,6 @@ namespace mstd{
   
 
   // ----------------------- lookup ----------------------------------
-
-  template<class T> struct _findable_type { using type = value_type_of_t<T>; };
-  template<MapType M> struct _findable_type<M> { using type = key_type_of_t<M>; };
-  template<class T> using findable_type = typename _findable_type<std::remove_cvref_t<T>>::type;
-  template<class T, class C> concept FindableType = requires(T t, findable_type<C> other) {
-    { t == other } -> std::convertible_to<bool>;
-    { t != other } -> std::convertible_to<bool>;
-  };
-
   // a map lookup with default
   template<MapType Map, typename Key, typename Ref = mapped_type_of_t<Map>>
   Ref map_lookup(Map&& m, const Key& key, Ref&& default_val = Ref()) {
@@ -583,6 +580,20 @@ namespace std {
 
 
   // ----------------------- OUTPUT ---------------------------------------
+}
+namespace mstd {
+  template<class T>
+  struct printable {
+    const T* x;
+
+    friend std::ostream& operator<<(std::ostream& os, const printable& p) {
+      if constexpr (Printable<T>) {
+        return os << *(p.x);
+      } else return os << "((unprintable @"<<p.x<<"))";
+    }
+  };
+}
+namespace std {
   template <typename A, typename B>
   std::ostream& operator<<(std::ostream& os, const std::pair<A,B>& p) { return os << '('<<p.first<<','<<p.second<<')'; }
   template <typename A>
@@ -599,7 +610,6 @@ namespace std {
     auto _end = std::end(objs);
     auto _beg = std::forward<C>(objs).begin();
 
-    
     if(mstd::config::print_empty_containers or (_beg != _end)) {
       os << '[';
       bool first = true;
@@ -611,7 +621,7 @@ namespace std {
           os << hex << obj;
         } else if constexpr (mstd::ArithmeticType<Item>) {
           os << +obj;
-        } else os << obj;
+        } else os << mstd::printable{&obj};
         ++_beg;
       }
       return os << ']';
@@ -667,11 +677,6 @@ namespace mstd {
 
 
   // --------------------- MISC ---------------------------------------------
-  template<class T, class Q>
-  concept CompatibleValueTypes = std::is_same_v<value_type_of_t<T>, value_type_of_t<Q>>;
-  template<class T, class Q>
-  concept ConvertibleValueTypes = std::convertible_to<value_type_of_t<Q>, value_type_of_t<T>>;
-
   // Often times I want the template parameter to decide whether an object owns something or not.
   // In previous versions, I just passed either a type (like 'NodeTranslation') or a reference ('NodeTranslation&') to distinguish the two.
   // However, this may give problems with costness, so we might actually want to use owning-/non-owning pointers instead!
@@ -715,15 +720,25 @@ namespace mstd {
     template<class... Args> const T& operator()(Args&&... args) const { return data; }
   };
 
-
-
  
+
   // -------------------- variants --------------------------------
 
   template<class... Args>
   std::ostream& operator<<(std::ostream& os, const std::variant<Args...>& var) {
     return os << std::visit([](const auto& x) { std::cout << x; }, var);
   }
+
+  // -------------------- fixing bugs in the standard ----------------
+
+  // std::begin() doesn't provide an overload for rvalue references
+  template<class T>
+  decltype(auto) begin(T&& x) {
+    if constexpr (HasBegin<T>)
+      return std::forward<T>(x).begin();
+    else return std::begin(x);
+  }
+
 }
 
 

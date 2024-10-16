@@ -243,7 +243,7 @@ namespace PT{
            PhylogenyType _Network,
            class _Roots = void,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = typename _Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = typename _Network::DefaultSeen>
       requires (is_node_traversal(o) and DFSRootStorageType<_Roots, mstd::TR_VoidOK>)
   struct DFSNodeIterator: public DFSIterator<o, RootsOr<_Roots, _Network>, NodeTraversalTraits<_Network, _Forbidden, _SeenSet, is_reverse_traversal(o)>>
   {
@@ -279,7 +279,7 @@ namespace PT{
            PhylogenyType _Network,
            class _Roots = void,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = typename _Network::DefaultSeen,
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = typename _Network::DefaultSeen,
            template<class, class, class, bool> class _Traits = EdgeTraversalTraits>
              requires ((is_edge_traversal(o) || is_all_edge_traversal(o)) and
                        DFSRootStorageType<_Roots, mstd::TR_VoidOK> and
@@ -332,7 +332,7 @@ namespace PT{
            PhylogenyType _Network,
            class _Roots = void,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = typename _Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = typename _Network::DefaultSeen>
              requires (is_all_edge_traversal(o) and DFSRootStorageType<_Roots, mstd::TR_VoidOK>)
   using DFSAllEdgesIterator = DFSEdgeIterator<o, _Network, RootsOr<_Roots, _Network>, _Forbidden, _SeenSet, AllEdgesTraits>;
 
@@ -340,7 +340,7 @@ namespace PT{
   template<PhylogenyType _Network,
            class Roots = void,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> _SeenSet = typename _Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = typename _Network::DefaultSeen>
     requires DFSRootStorageType<Roots, mstd::TR_VoidOK>
   class DFSAllEdgesTailPOIterator: public DFSNodeIterator<postorder, _Network, Roots, _Forbidden, _SeenSet> {
     using Parent = DFSNodeIterator<postorder, _Network, Roots, _Forbidden, _SeenSet>;
@@ -404,37 +404,38 @@ namespace PT{
 
   template<TraversalType o>
   struct _choose_iterator {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_VoidPtrOK> _SeenSet>
+    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
     using type = DFSNodeIterator<o, _Network, Roots, _Forbidden, _SeenSet>;
   };
   template<TraversalType o> requires (is_edge_traversal(o))
   struct _choose_iterator<o> {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_VoidPtrOK> _SeenSet>
+    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
     using type = DFSEdgeIterator<o, _Network, Roots, _Forbidden, _SeenSet>;
   };
   template<TraversalType o> requires (is_all_edge_traversal(o))
   struct _choose_iterator<o> {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_VoidPtrOK> _SeenSet>
+    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
     using type = DFSAllEdgesIterator<o, _Network, Roots, _Forbidden, _SeenSet>;
   };
   template<>
   struct _choose_iterator<all_edge_tail_postorder> {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_VoidPtrOK> _SeenSet>
+    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
     using type = DFSAllEdgesTailPOIterator<_Network, Roots, _Forbidden, _SeenSet>;
   };
-  template<TraversalType o, StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_VoidPtrOK> _SeenSet>
+  template<TraversalType o, StrictPhylogenyType _Network, class Roots, class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
   using choose_iterator = typename _choose_iterator<o>::template type<_Network, Roots, _Forbidden, _SeenSet>;
 
 
-  template<class Forbidden, NodeSetType<mstd::TR_VoidPtrOK> SeenSet>
+  template<class Forbidden, NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
   struct TraversalHelper:
     public mstd::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
   {
     using ForbiddenPred = pred::AsContainmentPred<Forbidden>;
     using Tuple = mstd::optional_tuple<ForbiddenPred, SeenSet>;
-    // we'll give references to our seen set and the forbidden predicate to each sub-iterator
     static constexpr bool has_forbidden_pred = not std::is_void_v<Forbidden>;
     static constexpr bool has_seen_set = not std::is_void_v<SeenSet>;
+    
+    // we'll give references to our seen set and the forbidden predicate to each sub-iterator
     using SeenSetRef = std::conditional_t<has_seen_set, std::add_pointer_t<mstd::remove_pointer_t<std::remove_reference_t<SeenSet>>>, void>;
     using ForbiddenPredRef = std::conditional_t<has_forbidden_pred, std::add_pointer_t<mstd::remove_pointer_t<std::remove_reference_t<ForbiddenPred>>>, void>;
   };
@@ -450,21 +451,25 @@ namespace PT{
 #warning "TODO: check if this can be an auto_iter"
   template<TraversalType o,
            PhylogenyType Network,
-           DFSRootStorageType Roots,
+           DFSRootStorageType _Roots,
            class Forbidden,
-           NodeSetType<mstd::TR_VoidPtrOK> SeenSet>
+           NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
   struct Traversal:
     public TraversalHelper<Forbidden, SeenSet>,
-    public mstd::iterator_traits<choose_iterator<o, Network, Roots,
+    public mstd::iterator_traits<choose_iterator<o, Network, _Roots,
       typename TraversalHelper<Forbidden, SeenSet>::ForbiddenPredRef, typename TraversalHelper<Forbidden, SeenSet>::SeenSetRef>>
   {
     using Parent = TraversalHelper<Forbidden, SeenSet>;
     using PTuple = typename Parent::Tuple;
+    using Roots = std::conditional_t<std::is_same_v<_Roots, NodeDesc>, NodeSingleton, _Roots>;
     using typename Parent::ForbiddenPred;
     using typename Parent::SeenSetRef;
     using typename Parent::ForbiddenPredRef;
 
     Roots roots;
+
+    template<class T>
+    void set_roots(T&& x) { roots.clear(); append(roots, std::forward<T>(x)); }
 
     template<class RootInit, class... Args>
     Traversal(RootInit&& root_init, Args&&... args):
@@ -474,6 +479,11 @@ namespace PT{
       if constexpr (Parent::has_seen_set)
         assert(Parent::template get<1>() != 0);
     }
+    template<PhylogenyType Phylo>
+    Traversal(Phylo&& N):
+      Traversal(std::forward<Phylo>(N).roots(), std::remove_cvref_t<Phylo>::make_seen())
+    {}
+
 
     using Iter = choose_iterator<o, Network, Roots, ForbiddenPredRef, SeenSetRef>;
     using OwningIter = choose_iterator<o, Network, Roots, ForbiddenPred, SeenSet>;
@@ -504,8 +514,8 @@ namespace PT{
 
     // allow the user to play with the SeenSet and ForbiddenPrediacte at all times
     //NOTE: this gives you the power to change the SeenSet while the DFS is running, and with great power comes great responsibility ;] so be careful!
-    auto& seen_nodes() { return Parent::template get<1>(); }
-    const auto& seen_nodes() const { return Parent::template get<1>(); }
+    auto& seen_nodes() { return mstd::default_deref{}(Parent::template get<1>()); }
+    const auto& seen_nodes() const { return mstd::default_deref{}(Parent::template get<1>()); }
     auto& forbidden_predicate() { return Parent::template get<0>(); }
     const auto& forbidden_predicate() const { return Parent::template get<0>(); }
 
@@ -519,7 +529,7 @@ namespace PT{
   template<TraversalType o,
            PhylogenyType Network,
            class Forbidden,
-           NodeSetType<mstd::TR_VoidPtrOK> SeenSet>
+           NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
   struct TraversalHelper<o, Network, Forbidden, SeenSet>:
     public ProtoTraversalHelper<Forbidden, SeenSet>
   {
@@ -577,7 +587,7 @@ namespace PT{
            PhylogenyType Network,
            class _Roots,
            class Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> SeenSet = typename Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> SeenSet = typename Network::DefaultSeen>
     requires (not std::is_reference_v<SeenSet>)
   struct Traversal:
     public TraversalHelper<o, Network, _Roots, Forbidden, SeenSet>,
@@ -599,26 +609,26 @@ namespace PT{
            PhylogenyType Network,
            class Roots = void, // void = root container of the network
            class Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> SeenSet = typename Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> SeenSet = typename Network::DefaultSeen>
   using NodeTraversal = Traversal<o, Network, RootsOr<Roots, Network>, Forbidden, SeenSet>;
   template<TraversalType o,
            PhylogenyType Network,
            class Roots = void, // void = root container of the network
            class Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> SeenSet = typename Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> SeenSet = typename Network::DefaultSeen>
   using EdgeTraversal = Traversal<TraversalType(o | edge_traversal), Network, RootsOr<Roots, Network>, Forbidden, SeenSet>;
   template<TraversalType o,
            PhylogenyType Network,
            class Roots = void, // void = root container of the network
            class Forbidden = void,
-           NodeSetType<mstd::TR_VoidPtrOK> SeenSet = Network::DefaultSeen>
+           NodeSetType<mstd::TR_PtrVoidOK> SeenSet = Network::DefaultSeen>
   using AllEdgesTraversal = Traversal<TraversalType(o | all_edge_traversal), Network, RootsOr<Roots, Network>, Forbidden, SeenSet>;
 
 }// namespace
 
 
 // to use C++20 ranges with our traversals, we'll need to tell the range library that they are borrowed ranges
-template<PT::TraversalType o, PT::PhylogenyType Network, class Roots, class Forbidden, PT::NodeSetType<mstd::TR_VoidPtrOK> SeenSet>
+template<PT::TraversalType o, PT::PhylogenyType Network, class Roots, class Forbidden, PT::NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
 constexpr bool std::ranges::enable_borrowed_range<PT::Traversal<o, Network, Roots, Forbidden, SeenSet>> = true;
 
 

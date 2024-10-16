@@ -62,14 +62,12 @@ namespace PT {
 
     // the WeakComps DSF stores as payload the indeg - outdeg of the all nodes/components
     struct WeakComps: public mstd::DisjointSetForest<NodeDesc, int32_t, DegreePayloadMerge>{
-      using Parent = mstd::DisjointSetForest<NodeDesc, int32_t, DegreePayloadMerge>;
-
       // add a few more nodes to the given DisjointSetForest
       // NOTE: this assumes that nodes + *this is downwards closed
-      void add_nodes(const NodeSpan nodes, auto&& degrees, bool with_children = true) {
+      void add_nodes(const NodeSpan nodes, const DegreeExtracter& degrees, bool with_children = true) {
         for(const NodeDesc u: nodes) {
           const auto [indeg, outdeg] = degrees(u);
-          Parent::emplace_set(u, int32_t(indeg) - int32_t(outdeg));
+          this->emplace_set(u, int32_t(indeg) - int32_t(outdeg));
         }
         if(with_children)
           add_out_edges(nodes);
@@ -78,12 +76,12 @@ namespace PT {
       void add_out_edges(const NodeSpan nodes) {
         for(const NodeDesc u: nodes)
           for(const NodeDesc v: Network::children(u)){
-            assert(Parent::contains(v)); // check if we have a downwards-closed set
-            Parent::merge_sets_keep_order(u, v);
+            assert(this->contains(v)); // check if we have a downwards-closed set
+            this->merge_sets_keep_order(u, v);
           }
       }
 
-      size_t num_components() const { return Parent::set_count(); }
+      size_t num_components() const { return this->set_count(); }
     };
 
 
@@ -158,9 +156,9 @@ namespace PT {
       // --------------------------- init -----------------------------------
       void comps_init() {
         assert(comps.empty());
-        comps.add_nodes(get_non_roots());
+        comps.add_nodes(get_non_roots(), degrees);
         // add the roots as singletons to the components (this enables use of "known_parents()"), we'll add their connections later
-        comps.add_nodes(get_roots(), false);
+        comps.add_nodes(get_roots(), degrees, false);
         DEBUG4(std::cout << "computed " << comps.num_components() << " weak components: "<< comps << "\n");
       }
 
@@ -226,13 +224,13 @@ namespace PT {
 
         // step 1: setup child_comps for all children of roots except u
         for(const NodeDesc r: roots) if(r != u) {
-          assert(!contains(comps, r)); // sanity check
+          assert(!test(comps, r)); // sanity check
           // add r's children with their components to the coomps_of_children
           for(const NodeDesc v: Network::children(r)) {
             // recall: the payload of 'comps' gives the in-degree of the weak component
             const auto& C = comps.set_of(v);
             // in the child_comps map, add the component of v with its representative (in comps)
-            auto& C_set = child_comps.emplace_set(C.representative, C.payload).first->second;
+            auto& C_set = child_comps.emplace_set(C.get_representative(), C.payload).first->second;
             // also add v to point to C so other roots can merge components later (note: v is added with payload 0 since its degrees are counted in C already)
             auto& v_set = child_comps.emplace_set(v, 0).first->second;
             if(C_set != v_set)
@@ -244,16 +242,16 @@ namespace PT {
 
         // step 2: gather the in-degrees of child-components of u after having added all other roots (which possibly merged child-components of u)
         const auto [u_indeg, u_outdeg] = degrees(u);
-        size_t max_comp_indeg = 0;
+        int32_t max_comp_indeg = 0;
         int32_t u_sw = int32_t(u_indeg) - int32_t(u_outdeg);
         NodeSet seen;
         for(const NodeDesc v: Network::children(u)){
           // recall: the payload of 'comps' gives the in-degree of the weak component
           const auto& C = comps.set_of(v);
           // if we haven't seen the weak component of v yet...
-          if(seen.emplace(C.representative).second) {
+          if(seen.emplace(C.get_representative()).second) {
             // record its in-degree
-            const size_t C_indeg = C.payload;
+            const int32_t C_indeg = C.payload;
             u_sw += C_indeg;
             max_comp_indeg = std::max(max_comp_indeg, C_indeg);
           }
@@ -282,7 +280,7 @@ namespace PT {
       // return the number of parents of u in X
       size_t num_known_parents(const NodeDesc u) {
         assert(comps.size() >= all_but_fixed_roots);
-        return std::ranges::count_if(Network::parents(u), pred::ContainmentPredicate{comps});
+        return std::ranges::count_if(Network::parents(u), pred::ContainmentPredicate{&comps});
       }
 
       // each of old_root's children may become a root when old_root is removed; if so, add the child to 'new_roots'

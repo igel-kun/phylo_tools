@@ -46,7 +46,7 @@ namespace mstd {
     }
     
     using Tombstone = decltype(get_tombstone());
-    static_assert(std::is_constructible_v<T, Tombstone&&> && std::is_assignable_v<T&, Tombstone&&>);
+    static_assert(std::is_constructible_v<T, Tombstone&&> and std::is_assignable_v<T&, Tombstone&&>);
 
     static constexpr bool detect_optional = true;
     T element{get_tombstone()};
@@ -116,7 +116,7 @@ namespace mstd {
     bool has_value() const { return element != get_tombstone(); }
 
     friend std::ostream& operator<<(std::ostream& os, const optional_by_invalid& opt) {
-      return os << opt.element;
+      return os << printable{&(opt.element)};
     }
   };
 
