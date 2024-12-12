@@ -23,23 +23,139 @@ namespace mstd {
   template<class T> concept IterBitsetType = StrictIterBitsetType<std::remove_reference_t<T>>;
 
 
-  template<MapType bucket_map = iter_bitset_default_bucket_map>
-  class bitset_iterator;
+  template<MapType bucket_map>
+  struct bucket_map_traits {
+    using bucket_type = typename bucket_map::mapped_type;
+    using bucket_iter = typename bucket_map::iterator;
+    using bucket_const_iter = typename bucket_map::const_iterator;
+    using value_type = mapped_type_of_t<bucket_map>;
 
-  class ordered_bitset;
-  class unordered_bitset;
+    static constexpr value_type full_bucket = ~(static_cast<bucket_type>(0ul));
+    static constexpr size_t num_bytes_in_bucket = sizeof(bucket_type);
+    static constexpr size_t num_bits_in_bucket = CHAR_BIT * sizeof(bucket_type);
+    static constexpr size_t log_bits_in_bucket = NUM_TRAILING_ZEROSL(num_bits_in_bucket);
+    static constexpr bool bucket_size_is_pow_of_two = ((1ul << log_bits_in_bucket) == num_bits_in_bucket);
+
+    static constexpr size_t bucket_of(const auto x) {
+      if constexpr (bucket_size_is_pow_of_two) {
+        return x >> log_bits_in_bucket;
+      } else {
+        return x / num_bits_in_bucket;
+      }
+    }
+    static constexpr size_t pos_of(const auto x) {
+      if constexpr (bucket_size_is_pow_of_two) {
+        return x & (num_bits_in_bucket - 1);
+      } else {
+        return x % num_bits_in_bucket;
+      }
+    }
+    // return bucket number and offset in that bucket of the given item
+    static constexpr auto bucket_and_pos_of(const auto x) {
+      return std::pair{bucket_of(x), pos_of(x)};
+    }
+
+  };
+
+
+  // ========================= iterators =====================================
+  
+  // NOTE: we do not correspond to the official standard since we do not abide by the following condition:
+  // "if a and b compare equal then either they are both non-dereferenceable or *a and *b are references bound to the same object"
+  // since our *-operation does not return a reference, but an integer
+  // however, iteration a la "for(auto i: my_set)" works very well...
+  template<MapType bucket_map = iter_bitset_default_bucket_map>
+  class bitset_iterator:
+    public iter_traits_from_reference<mapped_type_of_t<bucket_map>>,
+    public bucket_map_traits<bucket_map>
+  {
+    using traits = iter_traits_from_reference<mapped_type_of_t<bucket_map>>;
+    using bmap_traits = bucket_map_traits<bucket_map>;
+  public:
+    using typename bmap_traits::bucket_type;
+    using bucket_iter = typename bucket_map::const_iterator;
+
+    using typename traits::value_type;
+    using typename traits::reference;
+    using typename traits::const_reference;
+    using typename traits::pointer;
+    using typename traits::const_pointer;
+
+  protected:
+    const bucket_map* storage;
+    bucket_iter index;
+    bucket_type buffer;
+
+    // advance the index while its buffer is empty
+    // NOTE: this overwrites the current buffer, so make sure it's zero before
+    void advance_while_empty() {
+      while(is_valid()) {
+        buffer = (*index).second;
+        if(buffer) return;
+        ++index;
+      }
+    }
+
+  public:
+    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index):
+      storage(&_storage), index(_index)
+    {
+      advance_while_empty();
+    }
+    
+    bitset_iterator(const bucket_map& _storage):
+      bitset_iterator(_storage, _storage.begin())
+    {}
+
+    // create an iterator at a specific bit inside storage[index]
+    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index, const unsigned char sub_index):
+      bitset_iterator(_storage, _index)
+    {
+      // if we didn't advance the buffer, advance the sub-index inside the buffer
+      if(index == _index)
+        buffer &= (bmap_traits::full_bucket << sub_index);
+    }
+
+    bool is_valid() const { return index != storage->end(); }
+    explicit operator bool() const { return is_valid(); }
+    reference operator*() const { return (*index).first * bmap_traits::num_bits_in_bucket + NUM_TRAILING_ZEROSL(buffer); }
+
+    bitset_iterator& operator++() {
+      buffer ^= (1ul << NUM_TRAILING_ZEROSL(buffer));
+      if(!buffer) {
+        ++index;
+        advance_while_empty();
+      }
+      return *this;
+    }
+
+    bitset_iterator operator++(int) { bitset_iterator result(*this); ++(*this); return result; }
+
+    bool operator==(const bitset_iterator& it) const {
+      const bool we_at_end = !is_valid();
+      const bool they_at_end = !it.is_valid();
+      if(we_at_end != they_at_end) return false;
+      if(we_at_end && they_at_end) return true;
+      return (index == it.index) && (buffer == it.buffer);
+    }
+  };
+
+
+  // =================== main classes ================================
 
   // ATTENTION: this does not do error checking if NDEBUG is on (except front())
   template<MapType _bucket_map = iter_bitset_default_bucket_map>
-  class iterable_bitset: public iter_traits_from_reference<mapped_type_of_t<_bucket_map>> {
+  class iterable_bitset: public iter_traits_from_reference<mapped_type_of_t<_bucket_map>>,
+                         public bucket_map_traits<_bucket_map>
+  {
     // NOTE: bitsets cannot provide meaningful references to their members
     using traits = iter_traits_from_reference<mapped_type_of_t<_bucket_map>>;
+    using bmap_traits = bucket_map_traits<_bucket_map>;
   public:
     using bucket_map = _bucket_map;
-    using bucket_type = typename bucket_map::mapped_type;
-
-    using bucket_iter = typename bucket_map::iterator;
-    using bucket_const_iter = typename bucket_map::const_iterator;
+    using typename bmap_traits::bucket_type;
+    using typename bmap_traits::bucket_iter;
+    using typename bmap_traits::bucket_const_iter;
 
     using typename traits::value_type;
     using typename traits::reference;
@@ -56,31 +172,15 @@ namespace mstd {
 
     inline size_t num_buckets() const { return storage.size(); }
 
-    static constexpr value_type full_bucket = ~(static_cast<bucket_type>(0ul));
-    static constexpr size_t num_bytes_in_bucket = sizeof(bucket_type);
-    static constexpr size_t num_bits_in_bucket = CHAR_BIT * sizeof(bucket_type);
-    static constexpr size_t log_bits_in_bucket = NUM_TRAILING_ZEROSL(num_bits_in_bucket);
-    static constexpr bool bucket_size_is_pow_of_two = ((1ul << log_bits_in_bucket) == num_bits_in_bucket);
-
-    static constexpr size_t bucket_of(const value_type x) {
-      if constexpr (bucket_size_is_pow_of_two) {
-        return x >> log_bits_in_bucket;
-      } else {
-        return x / num_bits_in_bucket;
-      }
-    }
-    static constexpr size_t pos_of(const value_type x) {
-      if constexpr (bucket_size_is_pow_of_two) {
-        return x & (num_bits_in_bucket - 1);
-      } else {
-        return x % num_bits_in_bucket;
-      }
-    }
-    // return bucket number and offset in that bucket of the given item
-    static constexpr auto bucket_and_pos_of(const value_type x) {
-      return std::pair{bucket_of(x), pos_of(x)};
-    }
-
+    using bmap_traits::full_bucket;
+    using bmap_traits::num_bytes_in_bucket;
+    using bmap_traits::num_bits_in_bucket;
+    using bmap_traits::log_bits_in_bucket;
+    using bmap_traits::bucket_size_is_pow_of_two;
+    
+    using bmap_traits::bucket_of;
+    using bmap_traits::pos_of;
+    using bmap_traits::bucket_and_pos_of;
 
   public:
 
@@ -109,10 +209,25 @@ namespace mstd {
       for(typename _InitSet::const_iterator i = _begin; i != _end; ++i) set(*i);
     }
 
+    // make from another iterable_bitset (different bucket map)
+    template<class BMap> requires (not mstd::is_same_v<BMap, bucket_map>)
+    iterable_bitset(const iterable_bitset<BMap>& other) {
+      for(const auto& xy: other.data())
+        storage.emplace(xy.first, xy.second);      
+    }
+
+
     iterable_bitset(const iterable_bitset&) = default;
     iterable_bitset(iterable_bitset&&) = default;
     iterable_bitset& operator=(iterable_bitset&& bs) = default;
     iterable_bitset& operator=(const iterable_bitset& bs) = default;
+
+    template<class BMap> requires (not mstd::is_same_v<BMap, bucket_map>)
+    iterable_bitset& operator=(const iterable_bitset<BMap>& other) {
+      iterable_bitset tmp(other);
+      return operator=(std::move(tmp));
+    }
+
 
     const bucket_map& data() const { return storage; }
     void emplace_back(const bool bit) { if(bit) emplace(capacity()); else ++_capacity; }
@@ -364,31 +479,30 @@ namespace mstd {
       return result;
     }
 
-
-
-    friend class bitset_iterator<bucket_map>;
-    template<class T>
-    friend std::ostream& operator<<(std::ostream& os, const iterable_bitset<T>& bs);
-
-    iterator begin() const;
-    iterator end() const;
+    iterator begin() const { return bitset_iterator<bucket_map>(storage); }
+    iterator end() const { return bitset_iterator<bucket_map>(storage, storage.end()); }
     iterator cbegin() const { return begin(); }
     iterator cend() const { return end(); }
 
-    iterator find(const value_type x) const;
-  };
-}
-namespace std {
-  template<typename bucket_map>
-  struct hash<mstd::iterable_bitset<bucket_map>>{
-    size_t operator()(const mstd::iterable_bitset<bucket_map>& bs) const{
-      size_t result = 0;
-      for(const auto& item: bs.data()) result ^= item;
-      return result;
+    iterator find(const value_type x) const {
+      if(test(x)) {
+        const auto [bucket_num, bucket_offset] = bucket_and_pos_of(x);
+        return bitset_iterator<bucket_map>(storage, storage.find(bucket_num), bucket_offset);
+      } else return end();
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const iterable_bitset& bs) {
+      for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
+      return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
+    }
+
   };
-}
-namespace mstd {
+
+
+  //static_assert(IterableType<ordered_bitset>);
+
+
+
 
   // ------------------ unordered_map-based bitset ----------------------------
 
@@ -427,9 +541,6 @@ namespace mstd {
       _capacity = new_capacity;
     }
 
-    unordered_bitset& operator=(const ordered_bitset& bs);
-
-    friend class ordered_bitset;
   };
 
 
@@ -663,13 +774,6 @@ namespace mstd {
       } else return count();
     }
 
-    ordered_bitset& operator=(const unordered_bitset& bs) {
-      clear();
-      for(const auto& xy: bs.data())
-        storage.emplace(xy.first, xy.second);      
-      return *this;
-    }
-
     ordered_bitset& operator++() {
       const size_t lowest_zero = std::min(num_trailing_ones() + 1, _capacity);
       flip_lowest_k(lowest_zero);
@@ -697,116 +801,6 @@ namespace mstd {
   };
   
 
-  unordered_bitset& unordered_bitset::operator=(const ordered_bitset& bs) {
-    clear();
-    for(const auto& xy: bs.data())
-      storage.emplace(xy.first, xy.second);      
-    return *this;
-  }
-
-  // ========================= iterators =====================================
-  
-  // NOTE: we do not correspond to the official standard since we do not abide by the following condition:
-  // "if a and b compare equal then either they are both non-dereferenceable or *a and *b are references bound to the same object"
-  // since our *-operation does not return a reference, but an integer
-  // however, iteration a la "for(auto i: my_set)" works very well...
-  template<MapType bucket_map>
-  class bitset_iterator: public iter_traits_from_reference<typename iterable_bitset<bucket_map>::value_type>
-  {
-    using Parent = iter_traits_from_reference<typename iterable_bitset<bucket_map>::value_type>;
-    using Bitset = iterable_bitset<bucket_map>;
-  public:
-    using bucket_type = typename Bitset::bucket_type;
-    using bucket_iter = typename bucket_map::const_iterator;
-    using typename Parent::value_type;
-    using typename Parent::reference;
-  protected:
-    const bucket_map* storage;
-    bucket_iter index;
-    bucket_type buffer;
-
-    // advance the index while its buffer is empty
-    // NOTE: this overwrites the current buffer, so make sure it's zero before
-    void advance_while_empty() {
-      while(is_valid()) {
-        buffer = (*index).second;
-        if(buffer) return;
-        ++index;
-      }
-    }
-
-  public:
-    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index):
-      storage(&_storage), index(_index)
-    {
-      advance_while_empty();
-    }
-    
-    bitset_iterator(const bucket_map& _storage):
-      bitset_iterator(_storage, _storage.begin())
-    {}
-
-    // create an iterator at a specific bit inside storage[index]
-    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index, const unsigned char sub_index):
-      bitset_iterator(_storage, _index)
-    {
-      // if we didn't advance the buffer, advance the sub-index inside the buffer
-      if(index == _index)
-        buffer &= (Bitset::full_bucket << sub_index);
-    }
-
-    bool is_valid() const { return index != storage->end(); }
-    explicit operator bool() const { return is_valid(); }
-    reference operator*() const { return (*index).first * Bitset::num_bits_in_bucket + NUM_TRAILING_ZEROSL(buffer); }
-
-    bitset_iterator& operator++() {
-      buffer ^= (1ul << NUM_TRAILING_ZEROSL(buffer));
-      if(!buffer) {
-        ++index;
-        advance_while_empty();
-      }
-      return *this;
-    }
-
-    bitset_iterator operator++(int) { bitset_iterator result(*this); ++(*this); return result; }
-
-    bool operator==(const bitset_iterator& it) const {
-      const bool we_at_end = !is_valid();
-      const bool they_at_end = !it.is_valid();
-      if(we_at_end != they_at_end) return false;
-      if(we_at_end && they_at_end) return true;
-      return (index == it.index) && (buffer == it.buffer);
-    }
-  };
-
-
-
-
-  template<MapType bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::begin() const {
-    return bitset_iterator<bucket_map>(storage);
-  }
-
-  template<MapType bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::end() const {
-    return bitset_iterator<bucket_map>(storage, storage.end());
-  }
-
-  template<MapType bucket_map>
-  bitset_iterator<bucket_map> iterable_bitset<bucket_map>::find(const value_type x) const {
-    if(test(x)) {
-      const auto [bucket_num, bucket_offset] = bucket_and_pos_of(x);
-      return bitset_iterator<bucket_map>(storage, storage.find(bucket_num), bucket_offset);
-    } else return end();
-  }
-
-  //static_assert(IterableType<ordered_bitset>);
-
-  template<class bucket_map>
-  std::ostream& operator<<(std::ostream& os, const iterable_bitset<bucket_map>& bs) {
-    for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
-    return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
-  }
 
 //  std::ostream& operator<<(std::ostream& os, const ordered_bitset& bs) {
 //    return os << static_cast<const iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>>(bs);
@@ -818,5 +812,17 @@ namespace mstd {
   template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_cvref_t<C>>::value;
 
 }
+
+namespace std {
+  template<typename bucket_map>
+  struct hash<mstd::iterable_bitset<bucket_map>>{
+    size_t operator()(const mstd::iterable_bitset<bucket_map>& bs) const{
+      size_t result = 0;
+      for(const auto& item: bs.data()) result ^= item;
+      return result;
+    }
+  };
+}
+
 
 
