@@ -86,7 +86,10 @@ namespace mstd {
 
     transforming_iterator() = default;
     transforming_iterator(transforming_iterator&&) = default;
-    transforming_iterator(const transforming_iterator&) = default;
+    transforming_iterator(const transforming_iterator& it):
+      Parent(it),
+      trans{it.trans}
+    {}
 
     // construct from an iterator alone, default-construct the transformation
     template<class T>
@@ -96,9 +99,10 @@ namespace mstd {
     transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{}
     {}
 
-    // construct from iter and transformaiton
+    // construct from iter and transformation
     template<class T, class... Args>
-      requires (std::is_constructible_v<Parent, T&&> and
+      requires ((not mstd::is_same_v<T, transforming_iterator>) and
+          std::is_constructible_v<Parent, T&&> and
           std::is_constructible_v<Transformation, Args&&...>)
     transforming_iterator(T&& iter, Args&&... args):
       Parent{std::forward<T>(iter)}, trans{std::forward<Args>(args)...}

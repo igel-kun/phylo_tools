@@ -608,7 +608,7 @@ namespace std {
   template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
   std::ostream& _print_iterable(std::ostream& os, C&& objs, const char delim = ' ') {
     auto _end = std::end(objs);
-    auto _beg = std::forward<C>(objs).begin();
+    auto _beg = std::begin(objs);
 
     if(mstd::config::print_empty_containers or (_beg != _end)) {
       os << '[';

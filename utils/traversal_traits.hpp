@@ -167,7 +167,8 @@ namespace PT {
   struct EdgeTraversalTraits: public TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>,_Forbidden, _SeenSet>
   {
     using Parent = TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _Forbidden, _SeenSet>;
-    using EdgeIter = mstd::iterator_of_t<NextEdgeContainer<_Network, reverse>>;
+    using EdgeContainer = NextEdgeContainer<_Network, reverse>;
+    using EdgeIter = mstd::iterator_of_t<EdgeContainer>;
     using EdgeIterTraits = mstd::iterator_traits<EdgeIter>;
     // NOTE: the DFS traversal stack will hold auto-iters for iterators into _Network::(Out)EdgeContainer (which is an IterFactory)
     //       such iterators construct edges from the child/parent-adjacencies on the fly when they are de-referenced (rvalues instead of lvalue references).

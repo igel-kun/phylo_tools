@@ -123,7 +123,7 @@ namespace PT {
   };
 
   template<mstd::IterableType Container> requires FeatureCollectionType<mstd::value_type_of_t<Container>>
-  size_t feature_diversity(Container&& container) { return _feature_diversity()(std::forward<Container>(container)); }
+  size_t feature_diversity(Container&& container) { return _feature_diversity{}(std::forward<Container>(container)); }
 
 
   template<mstd::IterableType Container> // container should contain FeatureCollections or indirections to FeatureCollections
