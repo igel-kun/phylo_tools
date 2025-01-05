@@ -8,9 +8,16 @@
 
 #include "common.hpp"
 
+/* Format of feature collections:
+ * each line consists of
+ * <Leaf Label> <...> <features...>
+ */
+
 namespace PT {
 
-  template<std::invocable<const std::string&> Label2Features, mstd::ContainerType ForbiddenCols = std::vector<uint32_t>, class RES = std::invoke_result_t<Label2Features, const std::string&>>
+  template<std::invocable<const std::string&> Label2Features,
+           mstd::ContainerType ForbiddenCols = std::vector<uint32_t>,
+           class RES = std::invoke_result_t<Label2Features, const std::string&>>
     requires (std::is_reference_v<RES>)
   void read_features(std::istream& in, Label2Features&& label_to_features, ForbiddenCols&& forbidden = ForbiddenCols()) {
     for(const auto& line: RowIterFactory(in)) {

@@ -45,8 +45,11 @@ namespace PT {
       // NOTE: (note: we're not using std::accumulate since N.edges().end() has different type than it's begin())
       // TODO: in C++23, use std::ranges::fold_left
       double D = 0.0;
-      for(const auto e: N.edges())
+      for(const auto e: N.edges()) {
         D += static_cast<double>(f.score(e));
+        DEBUG3(std::cout << "collecting score "<<f.score(e)<<" from edge "<<e<<" --- sum is now "<<D<<'\n');
+      }
+      DEBUG3(std::cout << "final score: "<<D<<'\n');
       return D;
     }
   };
