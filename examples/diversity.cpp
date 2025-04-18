@@ -64,8 +64,10 @@ void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
   description["-m"] = {0,0};
+  description["-mb"] = {0,0};
   description["-f"] = {0,0};
   description["-l"] = {1,1};
+  description["-S"] = {1,1};
   description[""] = {1,2};
   const std::string help_message(std::string(argv[0]) + " [FLAGS] <file> <<k> | -l <leaf list>>\n\
       \tLet N be the network described in file, where each leaf is annotated with its taxon name,\n\
@@ -77,7 +79,9 @@ void parse_options(const int argc, const char** argv) {
       See whitepaper [TODO] for definitions.\n\
       FLAGS:\n\
       \t-v\tverbose output, prints network\n\
-      \t-m\tuse alternative diversity definition (via switchings)\n\
+      \t-m\tuse alternative diversity definition (via switchings, dynamic programming)\n\
+      \t-mb\tuse alternative diversity definition (via switchings, brute force)\n\
+      \t-S i\tnumber i of highest-scoring solutions to return (not compatible with -l)\n\
       \t-l\tcompute the diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
       \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n");
 
@@ -86,11 +90,14 @@ void parse_options(const int argc, const char** argv) {
   if(not file_exists(options[""].front()))
     cfail(std::string{"couldn't open file "} + options[""].front());
 
-  if((not test(options, "-l")) && (options[""].size() < 2)) {
-    std::cerr << "If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n";
-    std::cerr << '\n' << help_message;
-    exit(EXIT_FAILURE);
-  }
+  if((not test(options, "-l")) && (options[""].size() < 2))
+    cfail(std::string{"If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n\n"} + help_message);
+  
+  if(test(options, "-m") && test(options, "-mb"))
+    cfail("-m and -mb are mutually exclusive, please chose a method between brute-force (-mb) and dynamic-programming (-m)\n");
+
+  if(test(options, "-l") && test(options, "-S"))
+    cfail("-l and -S are mutually exclusive\n");
 }
 
 size_t parse_k(const float baseline, const std::string_view k_str) {
@@ -138,15 +145,16 @@ auto read_features(const std::string& filename) {
   FeatureMap feature_map;
   PT::read_features(in,
       [&](const std::string& s) -> typename FeatureMap::mapped_type& { return feature_map[s]; },
-//      [&](const std::string& s) { return feature_map[s]; },
-      std::vector{1});
+      std::vector{1}); // skip column 1
   return feature_map;
 }
 
 
 int main(const int argc, const char** argv) {
-  std::cout << "parsing options...\n";
   parse_options(argc, argv);
+
+  // how many solutions to return
+  const size_t num_solutions = test(options, "-S") ? std::stoi(options["-S"][0]) : 1;
 
   if(test(options, "-f")) {
     std::cout << "parsing features from "<<options[""][0]<<"...\n";
@@ -162,8 +170,15 @@ int main(const int argc, const char** argv) {
       std::cout << "score = "<<score<<'\n';
     } else {
       const size_t k = parse_k(feature_map.size(), options[""][1]);
-      const auto [feats, score] = optimize_feature_diversity(k, feature_map);
-      std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
+      const auto before = mstd::get_time();
+      const auto solutions = optimize_feature_diversity(k, feature_map, num_solutions).solutions;
+      const auto elapsed = mstd::ms_between(before, mstd::get_time());
+      std::cout << "("<<elapsed<<"ms)\n";
+
+      for(const auto& [feats, score]: solutions)
+        std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
+
+
     }
   } else {
     std::cout << "reading network...\n";
@@ -175,28 +190,34 @@ int main(const int argc, const char** argv) {
       N.print_summary(std::cout);
     }
 
-
-
-
     if(test(options, "-l")) {
       const NameVec leaf_names = parse_leaves(options["-l"][0]);
       const auto leaves_range = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
       const NodeSet leaves{leaves_range.begin(), leaves_range.end()};
-      std::cout << "computing diversity score of leaves " << leaves << '\n';
-      const auto score = test(options, "-m") ? 
+      std::cout << "computing diversity score of leaves " << leaf_names << '\n';
+      const auto score = test(options, "-mb") ? 
         pd_score_ct(N, leaves, UtilityFunctors()) :
-        pd_score_classic(N, leaves, UtilityFunctors());
+        (test(options, "-m") ?
+        pd_score_ct_dp(N, leaves, UtilityFunctors()) :
+        pd_score_classic(N, leaves, UtilityFunctors()));
       std::cout << "score = "<<score<<'\n';
     } else {
       const size_t k = parse_k(N.num_leaves(), options[""][1]);
       //using T = decltype(pd_score_ct<MyNetwork, NodeSet, UtilityFunctors>);
       std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
       const auto before = mstd::get_time();
-      const auto [sol, score] = test(options, "-m") ? 
-        optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_ct{}) :
-        optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{});
+      const auto solutions = test(options, "-mb") ? 
+        optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_ct{}, num_solutions).solutions :
+//        (test(options, "-m") ?
+//        optimize_displayed_tree_diversity(N, k, UtilityFunctors(), num_solutions).solutions :
+        optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{}, num_solutions).solutions
+//        )
+        ;
       const auto elapsed = mstd::ms_between(before, mstd::get_time());
-      std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\t("<<elapsed<<"ms)\n";
+      std::cout << "("<<elapsed<<"ms)\n";
+      for(const auto& [sol, score]: solutions) {
+        std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
+      }
     }
   }
 }

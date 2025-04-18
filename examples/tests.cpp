@@ -2,6 +2,7 @@
 #include <optional>
 #include <cstdint>
 #include <iostream>
+#include <utility>
 
 // this runs different tests to see if the low-level stuff is working
 // we're testing:
@@ -19,9 +20,11 @@
 #include "utils/types.hpp"
 #include "io/newick.hpp"
 
+#include "utils/dfs_coro.hpp"
+
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
 constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));";
-
+constexpr auto random_net = "((((((((((a)#H3,(b)#H4))#H2,c))#H1)#H0,(((#H3,d),(#H4,e)))#H5),(#H5,(#H1,#H2))),((#H0,(((((f,g))#H7,(((h,i),(j,k)),l)),(m,n)),#H7)))#H6),#H6);";
 
 
 // some static tests
@@ -40,24 +43,28 @@ void parse_given_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-a"] = {0,0};
   description["-s"] = {0,0};
+  description["-v"] = {0,0};
   description["-h"] = {0,0};
   description["-m"] = {0,0};
   description["-b"] = {0,0};
   description["-f"] = {0,0};
+  description["-d"] = {0,0};
   description[""] = {0,0};
   const std::string help_message(std::string(argv[0]) + " [-a|<options>]\n\
       FLAGS:\n\
       \t-a\tperform all tests\n\
       \t-s\trun singleton_set test\n\
+      \t-v\trun sorted_vector test\n\
       \t-h\trun vector_hash test\n\
       \t-m\trun vector_map test\n\
       \t-f\trun brute-force abstraction test\n\
-      \t-b\trun bounded-subset test\n");
+      \t-b\trun bounded-subset test\n\
+      \t-d\trun DFS test\n");
 
   parse_options(argc, argv, description, help_message, options);
 
   if(test(options, "-a"))
-    for(const auto& s: {"-s", "-h", "-m", "-b"})
+    for(const auto& s: {"-s", "-h", "-m", "-b", "-d", "-v"})
       append(options, s);
 }
 
@@ -130,6 +137,18 @@ void test_vector_hash() {
   for(const auto& i: vh) assert(test(um, i));
   for(const auto& i: um) assert(test(vh, i));
 }
+
+
+void test_sorted_vector() {
+  std::cout << "======> testing mstd::sorted_vector...\n";
+  mstd::sorted_vector<int, std::less<>> sv;
+  for(int i: {-1, 4, -2, 10, 0, 100})
+    sv.emplace(i);
+
+  std::vector<int> other{-2, -1, 0, 4, 10, 100};
+  assert(sv == other);
+}
+
 
 
 using UintVecMap = mstd::vector_map<uint32_t, uint32_t>;
@@ -265,15 +284,16 @@ void test_subsets() {
 void test_brute_force() {
   // see if nums has a subset summing up to 5 -- spoiler: it does :)
   std::unordered_set<int> nums{12, -3, 6, 10, -4, 100};
-  const auto [result1, score1] = mstd::brute_force(nums, [](const auto& S){ return (std::ranges::fold_left(S, 0) == 5);} );
-  assert(score1 == 1);
-  assert(not result1.empty());
+  const auto solutions = mstd::brute_force(nums, 2, [](const auto& S){ return (std::ranges::fold_left(S, 0) == 5);} ).solutions;
+  assert(solutions.size() == 1);
+  assert(solutions[0].second == 1);
+  assert(solutions[0].first.size() == 3);
   
   // find the set of at most 3 items whose combined length is maximum
   std::vector<std::string> strings{"hello", "my", "name", "is", "George"};
-  const auto [result2, score2] = mstd::brute_force(3, strings, [](const auto& S){
-      return std::ranges::fold_left(S | std::ranges::views::transform([](const auto& s){ return s.size();}), 0u);
-  });
+  const auto [result2, score2] = mstd::brute_force(3, strings, 1, [](const auto& S){
+      return std::ranges::fold_left(S | std::ranges::views::transform(mstd::SetSize{}), 0u);
+  }).solutions[0];
   assert(score2 == 15);
   assert(result2.size() == 3);
   assert(test(result2, "hello"));
@@ -290,8 +310,6 @@ void test_concat_iter() {
   std::append(result, mstd::get_concatenating(indices, trans));
   assert(result.size() == 9);
   assert(result[5] == 6);
-
-
   using MyNetwork = DefaultLabeledNetwork<mstd::DefaultDataVec, mstd::DefaultDataVec>;
   const MyNetwork N = parse_newick<MyNetwork>(mark_network2);
   const NodeVec retis = static_cast<NodeVec>(N.retis());
@@ -301,15 +319,113 @@ void test_concat_iter() {
 }
 
 
+void test_dfs() {
+  using MyNetwork = DefaultLabeledNetwork<>;
+  const MyNetwork N = parse_newick<MyNetwork>(random_net);
+
+  NodeVec nodes;    
+  nodes.clear();
+  N.nodes_postorder().append_to(nodes);
+  std::cout << "nodes in postorder: " << nodes << '\n';
+
+  {
+  assert(nodes.back() == 0);
+  NodeDesc old = NoNode;
+  for(const auto v: nodes) {
+    if(old != NoNode) {
+      assert(N.is_leaf(v) || N.is_edge(v, old));
+    } else old = v;
+  }
+  }
+
+
+  auto traversal = N.nodes_preorder(NodeVec{nodes[3], nodes[15], nodes[37]}); // 5, 6, 29 are now forbidden
+  auto& fpred = traversal.forbidden_predicate();
+  nodes.clear();
+  std::move(traversal).append_to(nodes);
+  std::cout << "nodes in preorder with forbidden "<<fpred.c<<": " << nodes << '\n';
+  assert(nodes.size()==24);
+
+  {
+  assert(nodes.back() == 0);
+  NodeDesc old = NoNode;
+  for(const auto v: nodes) {
+    if(old != NoNode) {
+      assert(N.is_leaf(v) || N.is_edge(v, old));
+    } else old = v;
+  }
+  }
+
+
+  EdgeVec edges;    
+  N.edges_preorder().append_to(edges);
+  std::cout << "edges in preorder: " << edges << "\n\n";
+
+  {
+  assert(edges.front().tail() == 0);
+  const Edge<>* old = nullptr;
+  for(const auto uv: edges) {
+    if(old != nullptr) {
+      assert(N.is_leaf(old->head()) || (uv.tail() == old->head()));
+    } else old = &uv;
+  }
+  }
+
+  N.print_subtree(std::cout);
+}
+
+
 int main(const int argc, const char** argv) {
   parse_given_options(argc, argv);
 
   if(test(options, "-s")) test_singleton();
+  if(test(options, "-v")) test_sorted_vector();
   if(test(options, "-h")) test_vector_hash();
   if(test(options, "-m")) test_vector_map();
   if(test(options, "-b")) test_subsets();
   if(test(options, "-f")) test_brute_force();
   if(test(options, "-c")) test_concat_iter();
+  if(test(options, "-d")) test_dfs();
+
+
+  {
+    using MyNetwork = DefaultLabeledNetwork<>;
+    const MyNetwork N = parse_newick<MyNetwork>(random_net);
+
+
+    NodeVec nodes;    
+    nodes.clear();
+    N.nodes_postorder().append_to(nodes);
+    std::cout << nodes << '\n';
+
+    N.print_subtree(std::cout);
+
+    const NodeVec roots{nodes[29], nodes[21]};
+    const NodeSet forbidden{nodes[15], nodes[37], nodes[3]}; 
+    //PTx::DFSIterator<PTx::postorder, MyNetwork, NodeVec, NodeSet, void> it{NodeVec{nodes[29], nodes[21]}, NodeSet{nodes[15], nodes[37]}};
+    
+    using Traversal = PTx::Traversal<PTx::postorder + PTx::edge_traversal, MyNetwork, NodeVec, NodeSet, NodeSet>;
+
+    Traversal trav(roots, forbidden);
+    auto edges = trav.to_container();
+    assert(edges.size() == 15);
+
+    std::cout << "roots: "<<roots<<'\n';
+    std::cout << "forbidden: "<< forbidden << '\n';
+    size_t count = 0;
+    for(auto it = std::move(trav).begin(); it.is_valid(); ++it, ++count) {
+      assert(count < edges.size());
+      std::cout << "---emit--- " << *it << '\n';
+      assert(edges[count] == *it);
+    }
+    std::cout << edges << '\n';
+
+    PTx::Traversal<PTx::preorder + PTx::all_edge_traversal, MyNetwork> trav_all{N};
+    auto all_edges = trav_all.to_container();
+
+    std::cout << "network has "<<all_edges.size()<<" ("<< N.num_edges()<<") edges: "<<all_edges<<'\n';
+    assert(all_edges.size() == N.num_edges());
+  }
 
 }
 
