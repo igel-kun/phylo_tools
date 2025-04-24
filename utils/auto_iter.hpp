@@ -23,16 +23,23 @@ namespace mstd {
     using const_iterator = Iterator;
     using typename Parent::difference_type;
 
+
     // --------------------- Construction & Assignment ---------------------------
+    static constexpr bool reverse = mstd::is_derived_from_template_v<Iterator, std::reverse_iterator>;
+
     // when default-constructed, end_it == *this, so is_valid() will be false
     _auto_iter() requires (std::is_default_constructible_v<Iterator>):
       Parent(), end_it{*this}
     {}
 
-    // construct from a container
+    // construct from a container, if Iterator is an std::reverse_iterator, then construct using std::rbegin
     template<IterableType Container, class... Args>
-    constexpr _auto_iter(Container&& c, Args&&... args):
+    constexpr _auto_iter(Container&& c, Args&&... args) requires (not reverse):
       _auto_iter(mstd::begin(std::forward<Container>(c)), std::end(c), std::forward<Args>(args)...)
+    {}
+    template<IterableType Container, class... Args>
+    constexpr _auto_iter(Container&& c, Args&&... args) requires (reverse):
+      _auto_iter(mstd::rbegin(std::forward<Container>(c)), std::rend(c), std::forward<Args>(args)...)
     {}
 
     // construct from two iterators (begin and end)
@@ -119,19 +126,9 @@ namespace mstd {
     using typename Iterator::difference_type;
 
     // --------------------- Construction & Assignment ---------------------------
-    /*
-    _auto_iter(const _auto_iter& other) = default;
-    _auto_iter(_auto_iter&& other) = default;
-    _auto_iter& operator=(const _auto_iter&) = default;
-    _auto_iter& operator=(_auto_iter&&) = default;
-    */
-
     _auto_iter() = default;
     INHERIT_ALL_CONSTRUCTORS(_auto_iter, Iterator)
     INHERIT_ASSIGNMENT(_auto_iter, Iterator)
-    // inherit copy-constructors from Parent
-    //template<class First, class... Args> requires (not mstd::is_same_v<First, _auto_iter>)
-    //_auto_iter(First&& first, Args&&... args): Iterator(std::forward<First>(first), std::forward<Args>(args)...) {}
 
     // --------------------- Increment & Decrement ---------------------------
     _auto_iter& operator++() { ++static_cast<Iterator&>(*this); return *this; }
@@ -142,7 +139,8 @@ namespace mstd {
     _auto_iter& operator-=(const ptrdiff_t x) { static_cast<Iterator&>(*this) -= x; return *this; }
     _auto_iter operator+(const ptrdiff_t x) const { _auto_iter result = *this; result += x; return result; }
     _auto_iter operator-(const difference_type& x) const { _auto_iter result = *this; result -= x; return result; }
-    difference_type operator-(const _auto_iter it) const { static_cast<const Iterator&>(*this) - it; }
+    difference_type operator-(const _auto_iter& it) const { return operator-(static_cast<const Iterator&>(it)); }
+    difference_type operator-(const Iterator& it) const { static_cast<const Iterator&>(*this) - it; }
 
     // --------------------- Query ---------------------------
     Iterator& get_iter() & { return *this; }
@@ -157,23 +155,30 @@ namespace mstd {
     explicit operator _Container() const { return to_container<_Container>(); }
   };
 
-  template<class Iter, class End = CorrespondingEndIter<Iter>> struct proto_auto_iter { using type = _auto_iter<Iter, End>; };
-  // forbid making auto_iters of auto_iters
-  template<class Iter, class End> struct proto_auto_iter<_auto_iter<Iter, End>> { using type = _auto_iter<Iter, End>; };
-  // auto_iter for containers
-  template<class Container> requires IterableType<Container>
-  struct proto_auto_iter<Container, void> { using type = _auto_iter<mstd::iterator_of_t<Container>>; };
 
-  template<class Iter, class End = CorrespondingEndIter<Iter>>
-  using auto_iter = proto_auto_iter<Iter, End>::type;
+  template<class... Args> struct proto_auto_iter {};
+
+  template<HasIterCategory Iter, class... Args> requires (not is_derived_from_template_v<Iter, _auto_iter>)
+  struct proto_auto_iter<Iter, Args...> { using type = _auto_iter<Iter, Args...>; };
+  // forbid making auto_iters of auto_iters
+  //template<class Iter, class End> struct proto_auto_iter<_auto_iter<Iter, End>> { using type = _auto_iter<Iter, End>; };
+  template<HasIterCategory Iter, class... Args> requires (is_derived_from_template_v<Iter, _auto_iter>)
+  struct proto_auto_iter<Iter, Args...> { using type = Iter; };
+
+  // auto_iter for containers
+  template<IterableType<TR_ConstRefOK> Container, class... Args> requires (not HasIterCategory<Container, TR_ConstRefOK>)
+  struct proto_auto_iter<Container, Args...> { using type = _auto_iter<mstd::iterator_of_t<std::remove_reference_t<Container>>>; };
+
+  template<class... Args> 
+  using auto_iter = proto_auto_iter<Args...>::type;
 
   // --------------------- deduction guides ---------------------
   template<IterableType Container>
   _auto_iter(Container&& c) -> _auto_iter<iterator_of_t<Container&&>>;
 
 
-  template<class Iter, class EndIter = CorrespondingEndIter<Iter>>
-  using MakeVerifyable = std::conditional_t<VerifyableIter<Iter>, Iter, auto_iter<Iter, EndIter>>;
+  template<class Iter, class... Args>
+  using MakeVerifyable = std::conditional_t<VerifyableIter<Iter>, Iter, auto_iter<Iter, Args...>>;
 
   template<IterableType Container,
            class KeyType,

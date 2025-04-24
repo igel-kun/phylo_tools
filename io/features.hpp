@@ -8,13 +8,11 @@
 
 #include "common.hpp"
 
-/* Format of feature collections:
- * each line consists of
- * <Leaf Label> <...> <features...>
- */
-
 namespace PT {
 
+  // read features from a feature table line by line with the following arguments:
+  // label_to_features: a functor that extracts features from a line of the table
+  // forbidden: container of integers indicating columns to skip (f.ex. col 0 contains the name of the leaf, so skip that)
   template<std::invocable<const std::string&> Label2Features,
            mstd::ContainerType ForbiddenCols = std::vector<uint32_t>,
            class RES = std::invoke_result_t<Label2Features, const std::string&>>
@@ -24,7 +22,6 @@ namespace PT {
       std::stringstream line_in{line};
       size_t col = 0;
       std::string tmp;
-      // we assume that each line starts with the label of the node whose features follow
       line_in >> tmp;
       auto& features = label_to_features(tmp);
       while(line_in.good()) {

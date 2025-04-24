@@ -16,7 +16,7 @@ namespace mstd {
     INHERIT_ALL_CONSTRUCTORS(ProtoIterFactory, Parent);
 
     bool empty() const { return begin() == end(); }
-    size_t size() const { return end() - begin(); }
+    size_t size() const { return std::distance(begin(), end()); }
 
     auto begin() const & { return get_iter(); }
     auto begin() & { return get_iter(); }
@@ -26,7 +26,8 @@ namespace mstd {
     auto end() && { return get_end(); }
   };
 
-  template<class Iterator, class BeginEndTransformation, class EndIter = CorrespondingEndIter<Iterator>> requires (!std::is_void_v<BeginEndTransformation>)
+  template<class Iterator, class BeginEndTransformation, class EndIter = CorrespondingEndIter<Iterator>>
+    requires (not std::is_void_v<BeginEndTransformation>)
   class IterFactoryWithBeginEnd: public ProtoIterFactory<Iterator, EndIter>
   {
     using Parent = ProtoIterFactory<Iterator, EndIter>;
@@ -37,14 +38,14 @@ namespace mstd {
 
     IterFactoryWithBeginEnd() = default;
     // construct from a BeginEndTransformation and args for the auto_iter
-    template<class T, class... Args> requires std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<BeginEndTransformation>>
+    template<class T, class... Args> requires mstd::is_same_v<T, BeginEndTransformation>
     IterFactoryWithBeginEnd(T&& _trans, Args&&... args): Parent(std::forward<Args>(args)...), trans(forward<T>(_trans)) {}
     // if the first argument is not a BeginEndTransformation, not an IterFactoryWithBeginEnd, and not piecewise_construct,
     // then default-construct the transformation
     template<class First, class... Args>
-      requires (!std::is_same_v<std::remove_cvref_t<First>, std::remove_cvref_t<BeginEndTransformation>> &&
-                !std::is_same_v<std::remove_cvref_t<First>, IterFactoryWithBeginEnd> &&
-                !std::is_same_v<std::remove_cvref_t<First>, std::piecewise_construct_t>)
+      requires (not mstd::is_same_v<First, BeginEndTransformation> &&
+                not mstd::is_same_v<First, IterFactoryWithBeginEnd> &&
+                not mstd::is_same_v<First, std::piecewise_construct_t>)
     IterFactoryWithBeginEnd(First&& first, Args&&... args): Parent(std::forward<First>(first), std::forward<Args>(args)...), trans() {}
 
     // construct our internal auto_iter and our transformation from two tuples
@@ -72,5 +73,6 @@ namespace mstd {
   template<class IterOrContainer, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<iterator_of_t<IterOrContainer>>>
   using IterFactory = typename _IterFactory<iterator_of_t<IterOrContainer>, BeginEndTransformation, EndIter>::type;
 
+  static_assert(mstd::IterableType<IterFactory<int*>>);
 }
 

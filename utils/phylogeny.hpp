@@ -947,17 +947,32 @@ namespace PT {
     size_t num_leaves() const { return leaves().to_container().size(); } // NOTE: this is slow since we have to crawl the phylogeny
 
     // =============== traversals ======================
+    // NOTE: when calling nodes(NodeContainer X), there is an ambiguity:
+    // is X supposed to be a set of roots above/below the traversal goes or a set of forbidden nodes?
+    // We will interpret as follows:
+    // nodes(direction_tag, R) --> R = roots
+    // nodes(X) --> X = forbidden (if you want to pass a root-set to nodes(), then give it a direction_tag as well!)
+    // nodes_above(R) --> R = roots
+    // nodes_below(R) --> R = roots
+    //
+
     // --------------- relative node traversals (below) ------------------
     static constexpr auto make_seen() { return std::make_unique<mstd::remove_pointer_t<DefaultSeen>>(); }
 
     // list all nodes below u in order _o (default: postorder)
-    template<TraversalType o = postorder, class Roots, class... Forbidden>
-      requires ((sizeof...(Forbidden) <= 1) and  (NodeDescType<Roots> or NodeIterableType<Roots>))
-    static auto nodes_below(Roots&& R, Forbidden&&... forbidden) {
+    template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden> 
+    static auto nodes_below(Roots&& R, Forbidden&& forbidden) {
       using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
-        return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden)...);
-      else return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden)..., make_seen());
+        return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      else return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden), make_seen());
+    }
+    template<TraversalType o = postorder, NodeOrIterableType Roots> 
+    static auto nodes_below(Roots&& R) {
+      using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      if constexpr (std::is_void_v<DefaultSeen>)
+        return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
+      else return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R), make_seen());
     }
 
     template<class... Args> static auto nodes_below_preorder(Args&&... args)  { return nodes_below<preorder>(std::forward<Args>(args)...); }
@@ -972,37 +987,8 @@ namespace PT {
     template<class... Args> static auto nodes_above_inorder(Args&&... args)   { return nodes_above<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto nodes_above_postorder(Args&&... args) { return nodes_above<postorder>(std::forward<Args>(args)...); }
 
-    // --------------- relative reverse node traversals (with pred) ------------------
-    template<TraversalType o = preorder, NodePredicateType Predicate, class... Args>
-    static auto nodes_with_below(Predicate&& pred, Args&&... args) {
-      return mstd::make_filtered_factory(nodes_below<o>(std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
-    }
-
-    template<TraversalType o = preorder, NodePredicateType Predicate, class... Args>
-    static auto nodes_with_above(Predicate&& pred, Args&&... args) {
-      return nodes_with<o>(std::forward<Predicate>(pred), above_tag{}, std::forward<Args>(args)...);
-    }
-
-    // NOTE: this cannot be static since we may need to grab the _roots of the current network
-    template<TraversalType o = preorder, NodePredicateType Predicate, class First, class... Args>
-      requires (not mstd::is_convertible_v<First, direction_tag>)
-    auto nodes_with(Predicate&& pred, First&& first, Args&&... args) const {
-      return mstd::make_filtered_factory(nodes<o>(std::forward<First>(first), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
-    }
-    template<TraversalType o = preorder, NodePredicateType Predicate>
-    auto nodes_with(Predicate&& pred) { return mstd::make_filtered_factory(nodes<o>().begin(), std::forward<Predicate>(pred)); }
-
-    // NOTE: however, if we are given a root-set, then we can be static
-    template<TraversalType o = preorder, NodePredicateType Predicate, class First, class Second, class... Args>
-      requires (mstd::is_convertible_v<First, direction_tag> and (NodeIterableType<Second> or NodeDescType<Second>))
-    static auto nodes_with(Predicate&& pred, First&& first, Second&& second, Args&&... args) {
-      return mstd::make_filtered_factory(
-          nodes<o>(std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
-    }
-
     // --------------- absolute node traversals (below (default) or above roots) ------------------
-    template<TraversalType o = postorder, class DIR_tag, class Roots, class... Args>
-      requires (NodeDescType<Roots> or NodeIterableType<Roots>)
+    template<TraversalType o = postorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
     static auto nodes(const DIR_tag dt, Roots&& rt, Args&&...args) {
       if constexpr (mstd::is_convertible_v<DIR_tag, below_tag>)
         return nodes_below<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
@@ -1010,35 +996,69 @@ namespace PT {
     }
     template<TraversalType o = postorder> auto nodes() const { return nodes<o>(below_tag{}, _roots); }
 
+    // --------------- node traversals (with pred) ------------------
+    // NOTE: this cannot be static since we may need to grab the _roots of the current network
+    template<TraversalType o = preorder, NodePredicateType Predicate>
+    auto nodes_with(Predicate&& pred) { return mstd::make_filtered_factory(nodes<o>().begin(), std::forward<Predicate>(pred)); }
+
+    template<TraversalType o = preorder, NodePredicateType Predicate, class First, class... Args> requires (not DirectionTag<First>)
+    auto nodes_with(Predicate&& pred, First&& first, Args&&... args) const {
+      return mstd::make_filtered_factory(nodes<o>(std::forward<First>(first), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
+    }
+    // NOTE: however, if we are given a root-set, then we can be static
+    template<TraversalType o = preorder, NodePredicateType Predicate, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto nodes_with(Predicate&& pred, const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return mstd::make_filtered_factory(
+          nodes<o>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
+    }
+
+    template<TraversalType o = preorder, NodePredicateType Predicate, NodeOrIterableType Roots, class... Args>
+    static auto nodes_with_below(Predicate&& pred, Roots&& rt, Args&&... args) {
+      return nodes_with<o>(std::forward<Predicate>(pred), below_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
+    }
+
+    template<TraversalType o = preorder, NodePredicateType Predicate, NodeOrIterableType Roots, class... Args>
+    static auto nodes_with_above(Predicate&& pred, Roots&& rt, Args&&... args) {
+      return nodes_with<o>(std::forward<Predicate>(pred), above_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
+    }
+
     // -------------- preorder -----------------
-    // NOTE: again, we cannot be static if we don't know whether the arguments contain a root-set
     auto nodes_preorder() const  { return nodes_below<preorder>(_roots); }
-    template<class First, class... Args> requires (not mstd::is_convertible_v<First, direction_tag>)
-    auto nodes_preorder(First&& first, Args&&... args) const  { return nodes<preorder>(std::forward<Args>(args)...); }
-    template<class First, class Second, class... Args>
-      requires (mstd::is_convertible_v<First, direction_tag> and (NodeIterableType<Second> or NodeDescType<Second>))
-    static auto nodes_preorder(First&& first, Second&& second, Args&&... args) {
-      return nodes<preorder>(std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...);
+    
+    template<class First, class... Args> requires (not DirectionTag<First>)
+    auto nodes_preorder(First&& first, Args&&... args) const  {
+      return nodes_below<preorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+    }
+    
+    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto nodes_preorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return nodes<preorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
     // -------------- inorder -----------------
     auto nodes_inorder() const  { return nodes_below<inorder>(_roots); }
-    template<class First, class... Args> requires (not mstd::is_convertible_v<First, direction_tag>)
-    auto nodes_inorder(First&& first, Args&&... args) const  { return nodes<inorder>(std::forward<Args>(args)...); }
-    template<class First, class Second, class... Args>
-      requires (mstd::is_convertible_v<First, direction_tag> and (NodeIterableType<Second> or NodeDescType<Second>))
-    static auto nodes_inorder(First&& first, Second&& second, Args&&... args) {
-      return nodes<inorder>(std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...);
+
+    template<class First, class... Args> requires (not DirectionTag<First>)
+    auto nodes_inorder(First&& first, Args&&... args) const {
+      return nodes_below<inorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+    }
+
+    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto nodes_inorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return nodes<inorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
     // -------------- postorder -----------------
     auto nodes_postorder() const  { return nodes_below<postorder>(_roots); }
-    template<class First, class... Args> requires (not mstd::is_convertible_v<First, direction_tag>)
-    auto nodes_postorder(First&& first, Args&&... args) const  { return nodes<postorder>(std::forward<Args>(args)...); }
-    template<class First, class Second, class... Args>
-      requires (mstd::is_convertible_v<First, direction_tag> and (NodeIterableType<Second> or NodeDescType<Second>))
-    static auto nodes_postorder(First&& first, Second&& second, Args&&... args) {
-      return nodes<postorder>(std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...);
+
+    template<class First, class... Args> requires (not DirectionTag<First>)
+    auto nodes_postorder(First&& first, Args&&... args) const {
+      return nodes_below<postorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+    }
+    
+    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto nodes_postorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return nodes<postorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
     // -------------- leaves -----------------
@@ -1047,12 +1067,13 @@ namespace PT {
     // there are no "leaves_above" ^^
 
     auto leaves() const  { return leaves_below(_roots); }
-    template<class First, class... Args> requires (not mstd::is_convertible_v<First, direction_tag>)
-    auto leaves(First&& first, Args&&... args) const  { return leaves_below(_roots, std::forward<Args>(args)...); }
-    template<class First, class Second, class... Args>
-      requires (mstd::is_convertible_v<First, direction_tag> and (NodeIterableType<Second> or NodeDescType<Second>))
-    static auto leaves(First&& first, Second&& second, Args&&... args) {
-      return nodes_with<postorder>(is_leaf, std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...);
+
+    template<class First, class... Args> requires (not DirectionTag<First>)
+    auto leaves(First&& first, Args&&... args) const  { return leaves_below(_roots, std::forward<First>(first), std::forward<Args>(args)...); }
+    
+    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto leaves(const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return nodes_with<postorder>(is_leaf, dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
 
@@ -1064,25 +1085,32 @@ namespace PT {
     static auto retis_above(Args&&... args) { return nodes_with_above<o>(is_reti, std::forward<Args>(args)...); }
 
     template<TraversalType o = preorder> auto retis() const  { return retis_below<o>(_roots); }
-    template<TraversalType o = preorder, class First, class... Args> requires (not mstd::is_convertible_v<First, direction_tag>)
-    auto retis(First&& first, Args&&... args) const  { return retis_below<o>(_roots, std::forward<Args>(args)...); }
-    template<TraversalType o = preorder, class First, class Second, class... Args>
-      requires (mstd::is_convertible_v<First, direction_tag> and (NodeIterableType<Second> or NodeDescType<Second>))
-    static auto retis(First&& first, Second&& second, Args&&... args) {
-      return nodes_with<o>(is_reti, std::forward<First>(first), std::forward<Second>(second), std::forward<Args>(args)...);
-    }
 
+    template<TraversalType o = preorder, class First, class... Args> requires (not DirectionTag<First>)
+    auto retis(First&& first, Args&&... args) const  { return retis_below<o>(_roots, std::forward<First>(first), std::forward<Args>(args)...); }
+
+    template<TraversalType o = preorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto retis(const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return nodes_with<o>(is_reti, dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
+    }
 
 
     // --------------- relative edge traversals (below) ------------------
-    template<TraversalType o = postorder, class Roots, class... Forbidden>
-      requires ((sizeof...(Forbidden) <= 1) and  (NodeDescType<Roots> or NodeIterableType<Roots>))
-    static auto edges_below(Roots&& R, Forbidden&&... forbidden) {
+    template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden>
+    static auto edges_below(Roots&& R, Forbidden&& forbidden) {
       using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
-        return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden)...);
-      else return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden)..., make_seen());
+        return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      else return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden), make_seen());
     }
+    template<TraversalType o = postorder, NodeOrIterableType Roots>
+    static auto edges_below(Roots&& R) {
+      using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      if constexpr (std::is_void_v<DefaultSeen>)
+        return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
+      else return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R), make_seen());
+    }
+
     template<class... Args> static auto edges_below_preorder(Args&&... args)  { return edges_below<preorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_below_inorder(Args&&... args)   { return edges_below<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_below_postorder(Args&&... args) { return edges_below<postorder>(std::forward<Args>(args)...); }
@@ -1095,22 +1123,51 @@ namespace PT {
     template<class... Args> static auto edges_above_postorder(Args&&... args) { return edges_above<postorder>(std::forward<Args>(args)...); }
 
     // --------------- absolute edge traversals (below (default) or above roots) ------------------
-    template<TraversalType o = postorder, class DIR_tag, class Roots, class... Args>
-      requires (NodeDescType<Roots> or NodeIterableType<Roots>)
+    template<TraversalType o = postorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
     auto edges(const DIR_tag dt, Roots&& rt, Args&&...args) const {
       if constexpr (mstd::is_convertible_v<DIR_tag, below_tag>)
         return edges_below<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
       else return edges_above<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
-    template<TraversalType o = postorder, class DIR_tag> requires (mstd::is_convertible_v<DIR_tag, direction_tag>)
-    auto edges(const DIR_tag dt) const { return edges(dt, _roots); }
-    template<TraversalType o = postorder> auto edges() const { return edges(below_tag{}, _roots); }
+
+    template<TraversalType o = postorder, class First, class... Args> requires (not DirectionTag<First>)
+    auto edges(First&& first, Args&&... args) const { return edges_below<o>(_roots, std::forward<First>(first), std::forward<Args>(args)...); }
+    
+    template<TraversalType o = postorder>
+    auto edges() const { return edges_below<o>(_roots); }
+
 
     template<class... Args> auto edges_preorder(Args&&... args) const  { return edges<preorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_inorder(Args&&... args) const   { return edges<inorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_postorder(Args&&... args) const { return edges<postorder>(std::forward<Args>(args)...); }
-    template<class... Args> auto edges_tail_postorder(Args&&... args) const { return edges<tail_postorder>(std::forward<Args>(args)...); }
-    
+
+    // --------------- edge traversals (with pred) ------------------
+    // NOTE: this cannot be static since we may need to grab the _roots of the current network
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate>
+    auto edges_with(Predicate&& pred) { return mstd::make_filtered_factory(edges<o>().begin(), std::forward<Predicate>(pred)); }
+
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, class First, class... Args> requires (not DirectionTag<First>)
+    auto edges_with(Predicate&& pred, First&& first, Args&&... args) const {
+      return mstd::make_filtered_factory(edges<o>(std::forward<First>(first), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
+    }
+    // NOTE: however, if we are given a root-set, then we can be static
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    static auto edges_with(Predicate&& pred, const DIR_tag dt, Roots&& rt, Args&&... args) {
+      return mstd::make_filtered_factory(
+          edges<o>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
+    }
+
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, NodeOrIterableType Roots, class... Args>
+    static auto edges_with_below(Predicate&& pred, Roots&& rt, Args&&... args) {
+      return edges_with<o>(std::forward<Predicate>(pred), below_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
+    }
+
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, NodeOrIterableType Roots, class... Args>
+    static auto edges_with_above(Predicate&& pred, Roots&& rt, Args&&... args) {
+      return edges_with<o>(std::forward<Predicate>(pred), above_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
+    }
+
+
 
     // ========================= LCA ===========================
     using TreeLCAOracle = NaiveTreeLCAOracle<Phylogeny>;
@@ -1200,8 +1257,7 @@ namespace PT {
     //       (in particular if you use an EdgeEmplacer with 'track_roots = false' and forget to mark the roots afterwards)
     //       however, this power enables certain use cases where we want to "directly" access the edges of a network...
     //       just, promise to be careful with your EdgeEmplacers
-    template<bool, StrictPhylogenyType, OptionalPhylogenyType, OptionalMapsToNode> friend struct ProtoEdgeEmplacementHelper;
-    template<bool, StrictPhylogenyType, OptionalPhylogenyType, OptionalMapsToNode> friend struct EdgeEmplacementHelper;
+    template<StrictPhylogenyType, bool, OptionalMapsToNode> friend struct EdgeEmplacementHelper;
 
 
     // increase our node-/edge- counts by the number of nodes/edges below other_x and decrease other's by the same amount

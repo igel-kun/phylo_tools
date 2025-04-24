@@ -2,7 +2,7 @@
 #include <string>
 #include "utils/edge_iter.hpp"
 #include "utils/network.hpp"
-#include "utils/net_gen.hpp"
+#include "utils/net_sample.hpp"
 
 
 using namespace PT;

@@ -19,12 +19,12 @@ namespace mstd {
   void erase(P& p, Q&& q) { p -= std::forward<Q>(q); }
 
   // ----------------- substract items from containers ---------------------
-  template<ContainerType C, class Key>
-    requires (std::is_same_v<Key, const_iterator_of_t<C>> || std::is_same_v<Key, iterator_of_t<C>>)
+  template<StrictContainerType C, class Key>
+    requires (not std::is_const_v<C> && (std::is_same_v<Key, const_iterator_of_t<C>> || std::is_same_v<Key, iterator_of_t<C>>))
   auto erase(C& c, const Key& key) { return c.erase(key); }
 
-  template<ContainerType C, class Key>
-    requires requires(const value_type_of_t<C>& cv, const Key& k) { {cv == k} -> std::same_as<bool>; }
+  template<StrictContainerType C, class Key>
+    requires (not std::is_const_v<C> && requires(const value_type_of_t<C>& cv, const Key& k) { {cv == k} -> std::same_as<bool>; })
   //(std::equality_comparable_with<const Key&, value_type_of_t<C>>)
   auto erase(C& c, const Key& key) {
     if constexpr (VectorType<C>) { // erasing keys usually returns the number of keys removed, so we need to massage vector::erase a little
@@ -37,12 +37,12 @@ namespace mstd {
     } else return erase(c, [&](const auto x){return key == x; });
   }
 
-  template<MapType M, class Key>
-    requires std::is_convertible_v<const Key&, key_type_of_t<M>>
+  template<StrictMapType M, class Key>
+    requires (not std::is_const_v<M> && std::is_convertible_v<const Key&, key_type_of_t<M>>)
   auto erase(M& m, const Key& key) { return m.erase(key); }
 
-  template<ContainerType C, class Key>
-    requires (std::is_invocable_v<Key, mstd::value_type_of_t<C>>)
+  template<StrictContainerType C, class Key>
+    requires (not std::is_const_v<C> && (std::is_invocable_v<Key, mstd::value_type_of_t<C>>))
   auto erase(C& c, const Key& key) {
     if constexpr (VectorType<C>) {
       return c.erase(std::remove_if(c.begin(), c.end(), key), c.end());
@@ -53,25 +53,27 @@ namespace mstd {
   }
 
   // ----------------- substract containers from each other ---------------------
-  template<ContainerType C, IterableType Keys>
-    requires (std::is_convertible_v<std::remove_cvref_t<value_type_of_t<Keys>>, value_type_of_t<C>>)
+  template<StrictContainerType C, IterableType Keys>
+    requires (not std::is_const_v<C> && std::is_convertible_v<std::remove_cvref_t<value_type_of_t<Keys>>, value_type_of_t<C>>)
   void erase_by_iterating_keys(C& c, const Keys& keys) {
     for(const auto& key: keys) erase(c, key);
   }
-  template<MapType M, IterableType Keys>
-    requires (std::is_convertible_v<std::remove_cvref_t<value_type_of_t<Keys>>, key_type_of_t<M>>)
+  template<StrictMapType M, IterableType Keys>
+    requires (not std::is_const_v<M> && std::is_convertible_v<std::remove_cvref_t<value_type_of_t<Keys>>, key_type_of_t<M>>)
   void erase_by_iterating_keys(M& m, const Keys& keys) {
     for(const auto& key: keys) erase(m, key);
   }
 
-  template<ContainerType C, IterableType Keys>
+  template<StrictContainerType C, IterableType Keys>
+    requires (not std::is_const_v<C>)
   void erase_by_iterating_container(C& c, const Keys& keys) {
     for(auto iter = begin(c); iter != end(c);)
       if(test(keys, *iter))
         iter = erase(c, iter);
       else ++iter;
   }
-  template<ContainerType C, IterableType Keys>
+  template<StrictContainerType C, IterableType Keys>
+    requires (not std::is_const_v<C>)
   void erase_by_moving(C& c, const Keys& keys) {
     C output;
     const size_t c_size = c.size();
@@ -84,7 +86,8 @@ namespace mstd {
     c = std::move(output);
   }
 
-  template<ContainerType C, IterableType Keys>
+  template<StrictContainerType C, IterableType Keys>
+    requires (not std::is_const_v<C>)
   void erase(C& c, const Keys& keys) {
     if constexpr (SetType<Keys>) {
       if constexpr (VectorType<C>) {
@@ -100,13 +103,14 @@ namespace mstd {
   }
 
   // a quick erase for a vector, swapping the item with the last item and pop_back() that last item
-  template<VectorType V>
+  template<StrictVectorType V>
+    requires (not std::is_const_v<V>)
   void quick_erase(V& vec, const iterator_of_t<V>& iter) {
     assert(vec.size() != 0);
     std::swap(*iter, *std::prev(vec.end()));
     vec.pop_back();
   }
-  template<VectorType V>
+  template<StrictVectorType V> requires (not std::is_const_v<V>)
   void quick_erase(V& vec, const size_t i) { quick_erase(std::forward<V>(vec), std::advance(vec.begin(), i)); }
 
 

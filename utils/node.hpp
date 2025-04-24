@@ -97,9 +97,6 @@ namespace PT{
     Adjacency& any_parent() { return any_predecessor(); }
     Adjacency& parent() { return any_predecessor(); }
 
-    Edge any_outedge() const { return Edge{get_desc(), any_successor()}; }
-    Edge any_inedge()  const { return Edge{reverse_edge_tag(), get_desc(), any_predecessor()}; }
-
   protected:
     template<class... Args>
     auto add_predecessor(Args&&... args) { return mstd::append(predecessors(), std::forward<Args>(args)...); }
@@ -107,7 +104,7 @@ namespace PT{
     auto add_parent(Args&&... args) { return add_predecessor(std::forward<Args>(args)...); }
     size_t remove_predecessor(const NodeDesc n) { return predecessors().erase(n); }
     size_t remove_parent(const NodeDesc n) { return remove_predecessor(n); }
-    void remove_any_predecessor() { mstd::pop(predecessors()); }
+    void remove_any_predecessor() { mstd::pop_back(predecessors()); }
     void remove_any_parent() { remove_any_predecessor(); }
 
   public:
@@ -200,11 +197,12 @@ namespace PT{
 
     OutEdgeContainer out_edges() { return make_outedge_factory<SuccContainer>(get_desc(), _successors); }
     ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(get_desc(), _successors); }
-    Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), mstd::front(_successors) }; }
+    Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), any_successor() }; }
+
     InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(get_desc(), _predecessors); }
     ConstInEdgeContainer in_edges() const {return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
-    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_tag(), get_desc(), mstd::front(_predecessors) }; }
-
+    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_tag(), get_desc(), any_predecessor() }; }
+    
     // lookup a parent/child
     const Adjacency* find_predecessor(const NodeDesc v) const { return_pointer_lookup(_predecessors, v); }
     Adjacency* find_predecessor(const NodeDesc v) { return_pointer_lookup(_predecessors, v); }
@@ -352,7 +350,10 @@ namespace PT{
     
     static constexpr auto  name(const NodeDesc u) { return node_of(u).name(); }
     static constexpr auto& label(const NodeDesc u) { return node_of(u).label(); }
-    static constexpr auto& data(const NodeDesc u) { return node_of(u).data(); }
+    static constexpr auto& data(const NodeDesc u) requires (has_node_data) { return node_of(u).data(); }
+    static constexpr auto& data(const Edge& uv) requires (has_edge_data) { return uv.data(); }
+    static constexpr auto& data(const NodeDesc u, Adjacency& v) requires (has_edge_data) { return v.data(); }
+    static constexpr auto& data(const NodeDesc u, const Adjacency& v) requires (has_edge_data) { return v.data(); }
 
     static constexpr SuccContainer& successors(const NodeDesc u) { return node_of(u).successors(); }
     static constexpr SuccContainer& children(const NodeDesc u) { return node_of(u).successors(); }
@@ -481,6 +482,36 @@ namespace PT{
         return Edge(u, *uv_iter);
       } else return Edge(NoNode, Adjacency());
     }
+
+  };
+
+  template<PhylogenyType Net>
+  struct InternalDataAccess {
+    using Adjacency = typename Net::Adjacency;
+    using Edge = typename Net::Edge;
+    auto& operator()(const NodeDesc u) const requires Net::has_node_data { return node_of<Net>(u).data(); }
+    auto& operator()(const NodeDesc u, const Adjacency& v) const requires Net::has_edge_data { return v.data(); }
+    auto& operator()(const NodeDesc u, Adjacency& v) const requires Net::has_edge_data { return v.data(); }
+    auto& operator()(const Edge& uv) const requires Net::has_edge_data { return uv.data(); }
+  };
+
+  template<class _NodeData = void, class _EdgeData = void>
+  struct ExternalDataAccess {
+    static constexpr bool has_node_data = not std::is_void_v<_NodeData>;
+    static constexpr bool has_edge_data = not std::is_void_v<_EdgeData>;
+    using NodeData = mstd::FirstNonVoid<_NodeData, mstd::monostate>;
+    using EdgeData = mstd::FirstNonVoid<_EdgeData, mstd::monostate>;
+
+    [[ no_unique_address ]] std::conditional_t<has_node_data, HashMap<NodeDesc, NodeData>, mstd::monostate> node_data;
+    [[ no_unique_address ]] std::conditional_t<has_edge_data, HashMap<NodePair, EdgeData>, mstd::monostate> edge_data;
+
+    auto& operator()(const NodeDesc u) const requires has_node_data { return node_data[u]; }
+    auto& operator()(const NodeDesc u, const NodeDesc v) const requires has_edge_data { return edge_data[NodePair{u,v}]; }
+    auto& operator()(const NodePair& uv) const requires has_edge_data { return edge_data(uv); }
+
+    auto& operator()(const NodeDesc u) requires has_node_data { return node_data[u]; }
+    auto& operator()(const NodeDesc u, const NodeDesc v) requires has_edge_data { return edge_data[NodePair{u,v}]; }
+    auto& operator()(const NodePair& uv) requires has_edge_data { return edge_data(uv); }
 
   };
 

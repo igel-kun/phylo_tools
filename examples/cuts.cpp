@@ -5,8 +5,6 @@
 #include "io/newick.hpp"
 #include "io/edgelist.hpp"
 
-#include "utils/generator.hpp"
-
 #include "utils/command_line.hpp"
 #include "utils/network.hpp"
 #include "utils/set_interface.hpp"

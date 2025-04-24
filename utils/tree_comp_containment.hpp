@@ -53,7 +53,9 @@ namespace PT {
           // add the edge to the subtree
           // NOTE: we'll make the emplacer forget whether y already has a copy in the MUL-tree, so that a new copy is added
           host_to_subtree.erase(y);
-          const NodeDesc y_copy = emplacer.emplace_edge(x, y);
+          const auto [y_iter, y_success] = emplacer.emplace_edge(x, y);
+          assert(y_success);
+          const NodeDesc y_copy = y_iter->get_desc();
           // register the label if y has one
           const auto& ylabel = host.label(y);
           if((!leaf_labels_only || host.is_leaf(y)) && !ylabel.empty()) {

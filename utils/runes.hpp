@@ -43,6 +43,9 @@ namespace mstd {
   template<class P, class Q, TypeRune rune = TR_ConstRefOK>
   constexpr bool is_same_v = apply_rune_v<P, rune> || std::is_same_v<apply_rune_t<P, rune>, Q>;
 
+  template<class P, TypeRune rune = TR_RefOK>
+  constexpr bool is_const_v = apply_rune_v<P, rune> || std::is_const_v<apply_rune_t<P, rune>>;
+
   template<class P, class Q, TypeRune rune = TR_ConstRefOK>
   constexpr bool is_convertible_v = apply_rune_v<P, rune> || std::is_convertible_v<apply_rune_t<P, rune>, Q>;
 
@@ -53,7 +56,7 @@ namespace mstd {
   constexpr bool is_constructible_v = _is_constructible_v<P, TR_ConstRefOK, Args...>;
 
   template<class P, TypeRune rune, class... Args>
-  constexpr bool invocable = apply_rune_v<P, rune> || std::invocable<apply_rune_t<P, rune>, Args...>;
+  constexpr bool is_invocable_v = apply_rune_v<P, rune> || std::is_invocable_v<apply_rune_t<P, rune>, Args...>;
 
   template<class P, TypeRune rune = TR_ConstRefOK, class... Args>
   constexpr bool predicate = apply_rune_v<P, rune> || std::predicate<apply_rune_t<P, rune>, Args...>;

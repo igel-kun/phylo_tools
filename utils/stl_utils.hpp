@@ -28,6 +28,8 @@
 namespace mstd{
 
   // --------------------- FUNDAMENTALS -------------------------------------
+  struct monostate {};
+
   template<int width> struct _fixed_width_uint {};
   template<> struct _fixed_width_uint<8> { using type = uint8_t; };
   template<> struct _fixed_width_uint<16> { using type = uint16_t; };
@@ -208,7 +210,7 @@ namespace mstd{
   template<class T>
   using InheritableIter = std::conditional_t<std::is_pointer_v<T>, PointerIterWrapper<T>, T>;
 
-  template<class Iterator>
+  template<HasIterCategory Iterator>
   using CorrespondingEndIter = std::conditional_t<VerifyableIter<Iterator>, void, Iterator>;
 
 
@@ -238,6 +240,44 @@ namespace mstd{
     else return t;
   }
 
+  // a function composition, allows using pointers to functions
+  template<class F1, class F2>
+  struct PointwiseCompose {
+    [[no_unique_address]] F1 f1;
+    [[no_unique_address]] F2 f2;
+
+    template<class... Args>
+    static constexpr bool F1invocable = (std::invocable<decltype(access(std::declval<F1&>())), Args> && ...);
+
+    template<class... Args> requires F1invocable<Args...>
+    decltype(auto) operator()(Args&&... args) {
+      return access(f2)( access(f1)(std::forward<Args>(args))... );
+    }
+    template<class... Args> requires F1invocable<Args...>
+    decltype(auto) operator()(Args&&... args) const {
+      return access(f2)( access(f1)(std::forward<Args>(args))... );
+    }
+
+  };
+  template<class F1, class F2>
+  struct Compose {
+    [[no_unique_address]] F1 f1;
+    [[no_unique_address]] F2 f2;
+
+    template<class... Args> requires std::invocable<decltype(access(f1)), Args...>
+    decltype(auto) operator()(Args&&... args) { return access(f2)(access(f1)(std::forward<Args>(args)...)); }
+  };
+
+
+  template<class Compare>
+  struct EqualFromOrdering {
+    Compare cmp;
+
+    template<class T, class U>
+    bool operator()(const T& a, const U& b) const { return !cmp(a, b) && !cmp(b, a); }
+    template<class T, class U>
+    bool operator()(const T& a, const U& b) { return !cmp(a, b) && !cmp(b, a); }
+  };
 
 
   template<class T, class... Qs> struct _invoke_or_lookup_result { };
@@ -733,10 +773,16 @@ namespace mstd {
 
   // std::begin() doesn't provide an overload for rvalue references
   template<class T>
-  decltype(auto) begin(T&& x) {
+  decltype(auto) begin(T&& x) requires requires(T x) {std::begin(x);} {
     if constexpr (HasBegin<T>)
       return std::forward<T>(x).begin();
     else return std::begin(x);
+  }
+  template<class T>
+  decltype(auto) rbegin(T&& x) requires requires(T x) {std::rbegin(x);} {
+    if constexpr (HasRBegin<T>)
+      return std::forward<T>(x).rbegin();
+    else return std::rbegin(x);
   }
 
 }

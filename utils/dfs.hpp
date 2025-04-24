@@ -96,7 +96,7 @@ namespace PT{
 
     // get the node whose child-iterators are on top of the stack
     NodeDesc node_on_top() const {
-      // if there are at least 2 ranges on the stack, then dereference the second to last to get the current node, otherwise, it's root
+      // if there are at least 2 ranges on the stack, then dereference the second to last to get the current node, otherwise, the current node is the root
       return (child_history.size() > 1) ? get_node(*(child_history[child_history.size() - 2])) : current_root();
     }
 
@@ -121,9 +121,11 @@ namespace PT{
         if(!current_child.is_valid()){
           if constexpr (o & postorder) return; // in post-order, output the node instead of backtracking further
           // in in-order, if all but at most one child have been skipped, then output the node instead of backtrack
-          const NodeDesc u = node_on_top();
-          if((o & inorder) && (Traits::num_next_items(u) <= num_skipped + 1)) return;
-          if((o & inorder) && is_seen(u)) return;
+          if constexpr (o & inorder) {
+            const NodeDesc u = node_on_top();
+            if(Traits::num_next_items(u) <= num_skipped + 1) return;
+            if(is_seen(u)) return;
+          }
           backtrack(); // if the children are spent then keep popping end-iterators unless postorder is requested
         } else if constexpr (!(o & inorder)) dive(get_node(*(child_history.back())));
       } else {
@@ -234,9 +236,7 @@ namespace PT{
     using type = std::conditional_t<roots_container, RContainer, RIter>;
   };
   // if Roots set is not given, it's the same as the network's root set;
-  template<StrictPhylogenyType _Net> struct _RootsOr<void, _Net> { using type = typename _RootsOr<typename _Net::RootContainer, _Net>::type; };
-
-  template<class _Roots, StrictPhylogenyType _Net> using RootsOr = typename _RootsOr<std::remove_reference_t<_Roots>, _Net>::type;
+  template<class _Roots, StrictPhylogenyType _Net> using RootsOr = mstd::FirstNonVoid<_Roots, typename _Net::RootContainer>;
 
 
   template<TraversalType o,
@@ -254,20 +254,17 @@ namespace PT{
 
     DFSNodeIterator() = default;
     INHERIT_ALL_CONSTRUCTORS(DFSNodeIterator, Parent)
-    //DFSNodeIterator() = default;
-    //DFSNodeIterator(const DFSNodeIterator&) = default;
-    //DFSNodeIterator(DFSNodeIterator&&) = default;
-    //DFSNodeIterator& operator=(const DFSNodeIterator&) = default;
-    //DFSNodeIterator& operator=(DFSNodeIterator&&) = default;
 
     DFSNodeIterator& operator++() { ++static_cast<Parent&>(*this); return *this; }
     DFSNodeIterator& operator++(int) { static_cast<Parent&>(*this)++; return *this; }
 
-    pointer operator->() const {
+    pointer operator->() const = delete;
+/*    {
       const auto& result = node_on_top();
       DEBUG6(std::cout << "DFS: emitting ptr to node " << result << "\n");
       return &result;
     }
+*/
     NodeDesc operator*() const {
       const NodeDesc result = node_on_top();
       DEBUG6(std::cout << "DFS: emitting node "<< result<<"\n");
@@ -437,7 +434,17 @@ namespace PT{
     
     // we'll give references to our seen set and the forbidden predicate to each sub-iterator
     using SeenSetRef = std::conditional_t<has_seen_set, std::add_pointer_t<mstd::remove_pointer_t<std::remove_reference_t<SeenSet>>>, void>;
-    using ForbiddenPredRef = std::conditional_t<has_forbidden_pred, std::add_pointer_t<mstd::remove_pointer_t<std::remove_reference_t<ForbiddenPred>>>, void>;
+    // NOTE: we're adding a const here, since the forbidden set is not supposed to be changed by any sub-iterator
+    using ForbiddenPredRef = std::conditional_t<has_forbidden_pred,
+          std::add_pointer_t<std::add_const_t<mstd::remove_pointer_t<std::remove_reference_t<ForbiddenPred>>>>,
+          void>;
+
+    // if TraversalHelper is treated as an aggregate, then we get "too many initializers" if we pass both a seenset and a forbiddenset :/
+    // so we're specifying constructors explicitly
+    TraversalHelper() = default;
+    INHERIT_ALL_CONSTRUCTORS(TraversalHelper, Tuple)
+    INHERIT_ASSIGNMENT(TraversalHelper, Tuple)
+
   };
 
 
@@ -457,7 +464,8 @@ namespace PT{
   struct Traversal:
     public TraversalHelper<Forbidden, SeenSet>,
     public mstd::iterator_traits<choose_iterator<o, Network, _Roots,
-      typename TraversalHelper<Forbidden, SeenSet>::ForbiddenPredRef, typename TraversalHelper<Forbidden, SeenSet>::SeenSetRef>>
+      typename TraversalHelper<Forbidden, SeenSet>::ForbiddenPredRef,
+      typename TraversalHelper<Forbidden, SeenSet>::SeenSetRef>>
   {
     using Parent = TraversalHelper<Forbidden, SeenSet>;
     using PTuple = typename Parent::Tuple;
@@ -475,10 +483,7 @@ namespace PT{
     Traversal(RootInit&& root_init, Args&&... args):
       Parent(std::forward<Args>(args)...),
       roots(std::forward<RootInit>(root_init))
-    {
-      if constexpr (Parent::has_seen_set)
-        assert(Parent::template get<1>() != 0);
-    }
+    {}
     template<PhylogenyType Phylo>
     Traversal(Phylo&& N):
       Traversal(std::forward<Phylo>(N).roots(), std::remove_cvref_t<Phylo>::make_seen())
@@ -521,7 +526,7 @@ namespace PT{
 
     template<mstd::ContainerType Container>
     Container& append_to(Container& c) { append(c, *this); return c; }
-    template<mstd::ContainerType Container>
+    template<mstd::ContainerType Container = std::vector<typename Iter::value_type>>
     Container to_container() { Container c; append(c, *this); return c; }
   };
 

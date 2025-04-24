@@ -19,7 +19,10 @@ namespace PT{
       Parent(v.get_desc(), Adjacency{u, v})
     {}
     ProtoEdge(const Adjacency& u, const NodeDesc v):
-      Parent(static_cast<NodeDesc>(u), Adjacency{v, u})
+      Parent(u.get_desc(), Adjacency{v, u})
+    {}
+    ProtoEdge(const NodeDesc u, const NodeDesc v) requires (std::is_default_constructible_v<EdgeData>):
+      Parent(u, v)
     {}
 
     const Adjacency& head() const & { return this->second; }
@@ -28,9 +31,12 @@ namespace PT{
     NodeDesc tail() const { return this->first; }
     NodePair as_pair() const { return { this->first, this->second }; }
     bool is_invalid() const { return tail() == NoNode; }
+
+    ProtoEdge get_reversed() const { return ProtoEdge{reverse_edge_tag{}, Parent::first, Parent::second}; }
+    Adjacency tail_with_data() const { return Adjacency{Parent::first, Parent::second}; }
   };
 
-  template<class EdgeData>
+  template<class EdgeData = void>
   struct Edge: public ProtoEdge<EdgeData> {
     using Parent = ProtoEdge<EdgeData>;
     using Parent::Parent;

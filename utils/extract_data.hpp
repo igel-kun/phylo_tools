@@ -423,11 +423,19 @@ namespace PT {
     return extracter;
   }
 
-  template<OptionalPhylogenyType SourcePhylo>
-  using DefaultDataExtracter = DataExtracter<SourcePhylo,
+  template<class T> struct _DefaultDataExtracter{};
+ 
+  template<DataExtracterType Extracter> requires (not OptionalPhylogenyType<Extracter>)
+  struct _DefaultDataExtracter<Extracter>{ using type = Extracter; };
+ 
+  template<OptionalPhylogenyType SourcePhylo> requires (not DataExtracterType<SourcePhylo>)
+  struct _DefaultDataExtracter<SourcePhylo>
+  { using type = DataExtracter<SourcePhylo,
                          DefaultExtractData<Ex_node_data, SourcePhylo>,
                          DefaultExtractData<Ex_edge_data, SourcePhylo>,
                          DefaultExtractData<Ex_node_label, SourcePhylo>>;
+  };
 
+  template<class T> using DefaultDataExtracter = typename _DefaultDataExtracter<T>::type;
 
 }

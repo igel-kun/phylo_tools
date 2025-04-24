@@ -13,6 +13,7 @@ namespace PT {
   // postorder: emit a node after all nodes below it
   // add node_traversal or edge_traversal to decide on the traversal type
   // NOTE: these can be combined freely!
+  // NOTE: an all-edge-tail-postorder is just a node-postorder with an additional auto_iter<SuccContainer> for the current node
   enum TraversalType: uint8_t {
     preorder = 0x01, inorder = 0x02, postorder = 0x04,
     pre_and_inorder = 0x03, pre_and_post_order = 0x05, in_and_post_order = 0x06,
@@ -69,28 +70,11 @@ namespace PT {
     TraversalTraits() = default;
     INHERIT_ALL_CONSTRUCTORS(TraversalTraits, Parent)
     INHERIT_ASSIGNMENT(TraversalTraits, Parent)
-/*
-    // NOTE: this forwarding constructor is necessary to construct TraversalTraits from optional_tuples
-    template<class First, class... Args> requires (!std::is_same_v<std::remove_cvref_t<First>, TraversalTraits>)
-    TraversalTraits(First&& first, Args&&... args): Parent(std::forward<First>(first), std::forward<Args>(args)...) {}
-    
-    template<class First> requires (!std::is_same_v<std::remove_cvref_t<First>, TraversalTraits>)
-    TraversalTraits& operator=(First&& first) {
-      Parent::operator=(std::forward<First>(first));
-    }
-*/
-    /*
-    TraversalTraits() = default;
-    TraversalTraits(const TraversalTraits&) = default;
-    TraversalTraits(TraversalTraits&&) = default;
-    TraversalTraits& operator=(const TraversalTraits&) = default;
-    TraversalTraits& operator=(TraversalTraits&&) = default;
-    */
 
     static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
     static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
     static constexpr bool track_nodes = has_seen || has_forbidden;
-
+#warning "make it possible to forbid edges instead of vertices"
     using Network = _Network;
     using ItemContainer  = _ItemContainer;
     using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
@@ -101,6 +85,16 @@ namespace PT {
         return mstd::test(mstd::access(this->template get<0>()), u);
       } else return false;
     }
+/*    bool is_forbidden(const NodePair uv) const {
+      if constexpr (has_forbidden) {
+        if constexpr (mstd::is_testable<_Forbidden, NodePair>)
+          return mstd::test(mstd::access(this->template get<0>()), uv);
+        else if constexpr (reverse) {
+          return is_forbidden(uv.first);
+        } else return is_forbidden(uv.second);
+      } else return false;
+    }
+*/
     // we consider a node 'seen' if it's either seen or forbidden
     bool is_seen(const NodeDesc u) const {
       bool result = is_forbidden(u);
@@ -111,11 +105,13 @@ namespace PT {
       }
       return result;
     }
-    void mark_seen(const NodeDesc u) requires has_seen {
-      mstd::append(mstd::access(this->template get<1>()), u);
+    void mark_seen(const NodeDesc u) {
+      if constexpr (has_seen)
+        mstd::append(mstd::access(this->template get<1>()), u);
     }
-    auto seen_size(const NodeDesc u) const requires has_seen {
-      return mstd::access(this->template get<1>()).size();
+    auto seen_size(const NodeDesc u) const {
+      if constexpr (has_seen)
+        return mstd::access(this->template get<1>()).size();
     }
   };
 

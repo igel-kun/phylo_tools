@@ -11,6 +11,7 @@
 #include "utils/diversity.hpp"
 #include "utils/features.hpp"
 
+#include "utils/net_generator.hpp"
 
 namespace ra = std::ranges;
 namespace rv = std::views;
@@ -117,8 +118,8 @@ NameVec parse_leaves(const std::string_view in) {
 }
 
 // overwrite the emplacement-helper set_label function to store the Label-->NodeDesc mapping in name_to_node
-struct MyHelper: public EdgeEmplacementHelper<true, MyNetwork> {
-  using Parent = EdgeEmplacementHelper<true, MyNetwork>;
+struct MyHelper: public EdgeEmplacementHelper<MyNetwork, true> {
+  using Parent = EdgeEmplacementHelper<MyNetwork, true>;
   using Parent::Parent;
 
   template<class Label>
@@ -177,8 +178,6 @@ int main(const int argc, const char** argv) {
 
       for(const auto& [feats, score]: solutions)
         std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
-
-
     }
   } else {
     std::cout << "reading network...\n";
@@ -187,7 +186,7 @@ int main(const int argc, const char** argv) {
     if(mstd::test(options, "-v")) {
       std::cout << "N:" << std::endl;
       std::cout << ExtendedDisplay(N) << std::endl;
-      N.print_summary(std::cout);
+      //N.print_summary(std::cout);
     }
 
     if(test(options, "-l")) {
@@ -208,13 +207,12 @@ int main(const int argc, const char** argv) {
       const auto before = mstd::get_time();
       const auto solutions = test(options, "-mb") ? 
         optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_ct{}, num_solutions).solutions :
-//        (test(options, "-m") ?
-//        optimize_displayed_tree_diversity(N, k, UtilityFunctors(), num_solutions).solutions :
-        optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{}, num_solutions).solutions
-//        )
-        ;
+        (test(options, "-m") ?
+          optimize_displayed_tree_diversity(N, k, UtilityFunctors(), num_solutions).solutions :
+          optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{}, num_solutions).solutions
+        );
       const auto elapsed = mstd::ms_between(before, mstd::get_time());
-      std::cout << "("<<elapsed<<"ms)\n";
+      std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
       for(const auto& [sol, score]: solutions) {
         std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
       }

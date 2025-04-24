@@ -21,6 +21,9 @@ namespace mstd {
 
 
 
+  // ========== Subset Iteration ==========
+  // ------- Subset Iteration: helpers ---------
+
   // change bits into the next bitset that contains the same number of ones,
   //    unless that would set a bit outside the range of the bitset, in which case set bits to contain the first |bits|+1 bits,
   //    unless that's over upper_bound, in which case return false
@@ -46,7 +49,7 @@ namespace mstd {
   // change bits into the next bitset that contains the same number of ones,
   //    unless that would set a bit outside the range of the bitset, in which case set bits to contain the first |bits|+1 bits,
   //    unless that's over upper_bound, in which case return false
-  template<mstd::IterableType Container, class Iter>
+  template<IterableType Container, class Iter>
   bool advance(Container&& c, std::vector<Iter>& bits, const uint32_t upper_bound) {
     DEBUG5(std::cout << "advancing (vector mode)\n");
     if(upper_bound > 0) {
@@ -77,20 +80,21 @@ namespace mstd {
   }
 
 
-
-  template<mstd::StrictIterableType _Container, bool _partial = false, mstd::StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
-  struct SubsetIterator: public mstd::optional_tuple<std::conditional_t<_partial, uint32_t, void>>,
-                         public mstd::iter_traits_from_reference<_OutputContainer>
+  // ------- Subset Iteration: main class ---------
+  template<StrictIterableType _Container, bool _partial = false, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
+  struct SubsetIterator:
+    public optional_tuple<std::conditional_t<_partial, uint32_t, void>>,
+    public iter_traits_from_reference<_OutputContainer>
   {
-    using Traits = mstd::iter_traits_from_reference<_OutputContainer>;
+    using Traits = iter_traits_from_reference<_OutputContainer>;
     using typename Traits::reference;
     using typename Traits::pointer;
 
     static constexpr bool partial = _partial;
     
-    using Iter = mstd::value_type_of_t<_OutputContainer>;
+    using Iter = value_type_of_t<_OutputContainer>;
     
-    static constexpr bool store_iters = mstd::IsAnyOf<Iter, mstd::iterator_of_t<_Container>, mstd::const_iterator_of_t<_Container>>;
+    static constexpr bool store_iters = IsAnyOf<Iter, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
 
     using SubsetState = std::conditional_t<store_iters, std::vector<Iter>, ordered_bitset>;
 
@@ -125,7 +129,7 @@ namespace mstd {
     }
 
     template<class T> requires (partial)
-    SubsetIterator(_Container& _c, const mstd::linear_interval<T> bounds):
+    SubsetIterator(_Container& _c, const linear_interval<T> bounds):
       SubsetIterator(_c, bounds.low(), bounds.high())
     {}
     SubsetIterator(_Container& _c, const uint32_t low) requires (partial):
@@ -196,10 +200,28 @@ namespace mstd {
   static_assert(__LegacyInputIterator<SubsetIterator<std::vector<int>>>);
   static_assert(HasIterTraits<SubsetIterator<std::vector<int>>>);
 
-  template<mstd::StrictIterableType _Container, bool partial = false, mstd::StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
+  // ------- Subset Iteration: factories ---------
+  template<StrictIterableType _Container, bool partial = false, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
   using SubsetFactory = IterFactory<SubsetIterator<_Container, partial, _OutputContainer>>;
 
-  template<mstd::StrictIterableType _Container, mstd::StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
+  template<StrictIterableType _Container, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
   using BoundedSubsetFactory = IterFactory<SubsetIterator<_Container, true, _OutputContainer>>;
+
+  // ------- Subset Iteration: concepts ---------
+  // ------- Subset Iteration: deduction guides ---------
+  template<StrictIterableType _Container> SubsetIterator(_Container&&) -> SubsetIterator<_Container>;
+
+  template<class T = void, IterableType Container> requires (std::is_void_v<T> || CompatibleValueTypes<T, std::remove_cvref_t<Container>>)
+  auto make_subset_factory(Container&& C, uint32_t lo, uint32_t hi) {
+    using OutputContainer = FirstNonVoid<T, std::remove_cvref_t<Container>>;
+    return SubsetFactory<std::remove_reference_t<Container>, true, OutputContainer>(std::forward<Container>(C), lo, hi);
+  }
+  template<class T = void, IterableType Container> requires (std::is_void_v<T> || CompatibleValueTypes<T, std::remove_cvref_t<Container>>)
+  auto make_subset_factory(Container&& C, linear_interval<T> li) {
+    using OutputContainer = FirstNonVoid<T, std::remove_cvref_t<Container>>;
+    return SubsetFactory<std::remove_reference_t<Container>, true, OutputContainer>(std::forward<Container>(C), li);
+  }
+
+  // ------- Subset Iteration: defaults ---------
 
 }// namespace

@@ -47,7 +47,7 @@ namespace PT{
   // ------------------- STEP 5: transform the filtered child-nodes into biconnected components using a BCCmaker ----------------
   template<StrictPhylogenyType _Network,
            StrictPhylogenyType _Component = _Network,
-           StrictEdgeEmplacerType Emplacer = EdgeEmplacerWithHelper<false, _Component, _Network, NodeTranslation*, DataExtracter<_Network>>>
+           StrictEdgeEmplacerType Emplacer = EdgeEmplacerWithHelper<_Component, false, _Network, NodeTranslation*, DataExtracter<_Network>>>
   struct BCCmaker {
     using Network = _Network;
     using Component = _Component;
@@ -119,7 +119,7 @@ namespace PT{
   template<StrictPhylogenyType Network,
            StrictPhylogenyType Component = Network,
            bool allow_trivial = true,
-           EdgeEmplacerType Emplacer = EdgeEmplacerWithHelper<false, Component, Network, NodeTranslation*, DataExtracter<Network>>>
+           EdgeEmplacerType Emplacer = EdgeEmplacerWithHelper<Component, false, Network, NodeTranslation*, DataExtracter<Network>>>
   using BCCIterator = mstd::transforming_iterator<BCCStartingCutNodeChildIterator<Network, allow_trivial>, BCCmaker<Network, Component, Emplacer>, true>;
 
 
@@ -135,7 +135,7 @@ namespace PT{
   struct BCCBeginEnd {
     using StrictOldToNew = std::remove_cvref_t<OldToNew>;
     using OldToNewRef = StrictOldToNew&;
-    using Emplacer = EdgeEmplacerWithHelper<false, Component, Network, OldToNewRef, Extracter>;
+    using Emplacer = EdgeEmplacerWithHelper<Component, false, Network, OldToNewRef, Extracter>;
     using InIterator = typename BasicBCCIter<Network>::Iterator;
     using OutIterator = BCCIterator<Network, Component, allow_trivial, Emplacer>;
     using MyBCCmaker = BCCmaker<Network, Component, Emplacer>;

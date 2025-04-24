@@ -7,7 +7,7 @@
 #include "tags.hpp"
 #include "except.hpp"
 
-namespace PT{
+namespace PT {
 
 
   struct sequential_taxon_name {

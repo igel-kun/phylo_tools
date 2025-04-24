@@ -36,7 +36,14 @@ namespace mstd {
   // dummy function to not insert anything into an appended vector
   template<VectorType V>
   auto append(V&& _vec) { return emplace_result<V>{_vec.begin(), true}; }
- 
+
+  // allow passing pairs to maps in order to emplace them
+  template<MapType M, class Key, class... Args>
+    requires std::is_convertible_v<Key, value_type_of_t<M>>
+  auto append(M& _map, Key&& _key, Args&&... args)
+  { return _map.emplace(std::forward<Key>(_key), std::forward<Args>(args)...); }
+
+
   // on maps to primitives, append = try_emplace
   //NOTE: this can be used also if mapped_type is NOT a primitive, but no initialization arguments have been given
   template<MapType M, class Key, class... Args>

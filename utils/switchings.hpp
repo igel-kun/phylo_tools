@@ -8,7 +8,7 @@ namespace PT {
 
 
   // this is an iterator for switchings of a network
-  template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> Leaves, mstd::VectorType OutputVec = NetEdgeVec<Net>>
+  template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> Leaves = void, mstd::VectorType OutputVec = NetEdgeVec<Net>>
   class SwitchingIter:
     public mstd::optional_tuple<Leaves>,
     public mstd::iter_traits_from_reference<OutputVec>
@@ -41,20 +41,20 @@ namespace PT {
       NodeVec to_do;
       
       if constexpr (not std::is_void_v<Leaves>) {
-        to_do.reserve(16);
-        to_do.insert(to_do.end(), get_leaves().begin(), get_leaves().end());
-      } else to_do = N->leaves().template to_container<NodeVec>;
+        append(to_do, get_leaves());
+      } else N->leaves().to_container(to_do);
       
       size_t retis_seen = 0;
       while(not to_do.empty()) {
         DEBUG6(std::cout << "next node: "<<to_do.back() << " ("<< to_do.size() - 1 << " to go)\n");
         NodeDesc& v = to_do.back();
-        if(seen.emplace(v).second and (Net::in_degree(v) > 0)) {          
+        if(append(seen, v).second and (Net::in_degree(v) > 0)) {          
           ParentIter vp;
-          if(Net::is_reti(v)) {
+          if(Net::in_degree(v) > 1) {
             assert(retis_seen <= active_parent.size());
             if(retis_seen == active_parent.size()) {
               // if it's the first time we encounter v on the path, then add a fresh parent-auto-iter to the stack and move along it
+              // NOTE: this is important as the same procedure is used for initializing active_parent itself!
               vp = Net::parents(v).begin();
               append(active_parent, v, vp);
               DEBUG6(std::cout << "added "<<v<<" with it's first parent "<<*vp<<" to active_parent["<<retis_seen<<"]\n");
@@ -91,7 +91,7 @@ namespace PT {
       N(&_N)
     {
       if constexpr (not std::is_void_v<Leaves>)
-        get_leaves() = N->leaves().template to_container<Leaves>();
+        N->leaves().to_container(get_leaves());
       buffer = get_active_edges();
     }
 

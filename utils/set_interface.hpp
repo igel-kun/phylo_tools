@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <queue>
 #include <set>
 #include <unordered_set>
 #include <map>
@@ -134,6 +135,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<class T> concept HasFront = requires(T x) { x.front(); };
   template<class T> concept HasBack = requires(T x) { x.back(); };
+  template<class T> concept HasPopBack = requires(T x) { x.pop_back(); };
 
   template<IterableType T>
   constexpr decltype(auto) front(T&& c) {
@@ -189,13 +191,15 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool test(const T& x, const T& y) { return x == y; }
 
   template<class T, std::invocable<T> F>
-    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> || mstd::IterableTypeWithSize<std::invoke_result_t<F,T>>)
-  decltype(auto) test(const F& f, const T& x) {
-    decltype(auto) y = f(x);
-    if constexpr (mstd::IterableTypeWithSize<decltype(y)>)
-      return !y.empty();
-    else return y;
+    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> || mstd::IterableType<std::invoke_result_t<F,T>>)
+  bool test(const F& f, const T& x) {
+    if constexpr (mstd::IterableType<decltype(f(x))>)
+      return not f(x).empty();
+    else return f(x);
   }
+
+  template<class T, class Arg>
+  concept is_testable = requires(T t, Arg arg) { mstd::test(t, arg); };
 
   template<IterableType C1, SetType C2> requires std::is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
   C2& copy(const C1& x, C2& y) {
@@ -256,20 +260,21 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
 
 
-  template<ContainerType C>
-  void pop(C& c) {
+  template<StrictContainerType C>
+  void pop_back(C& c) {
     assert(!c.empty());
-    erase(c, mstd::rbegin(c));
+    if constexpr (HasPopBack<C>) {
+      c.pop_back();
+    } else if constexpr (QueueType<C>) {
+      c.pop();
+    } else erase(c, mstd::rbegin(c));
   }
 
+  template<class T> concept is_poppable = requires(T t) { mstd::pop_back(t); };
+
+
+
   // value-moving pop operations
-  template<QueueType Q>
-  auto value_pop(Q& q) {
-    using value_type = Q::value_type;
-    value_type result = std::move(q.top());
-    q.pop();
-    return result;
-  }
   template<VectorType Q>
   auto value_pop(Q& q) {
     auto result = std::move(q.back());
@@ -314,6 +319,36 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     erase(q, it);
     return v;
   }
+
+  // **** CAUTION: the following is hacky, but technically legal ***
+  // NOTE: please someone convince the committy to fix move-access to priority_queues in the STL, so this hack is no longer necessary
+  // add container access to priority queues, thanks to https://stackoverflow.com/a/12886393/6470423
+  template <class T, class S, class C>
+  S& priority_queue_container(std::priority_queue<T, S, C>& q) {
+    struct HackedQueue: private std::priority_queue<T, S, C> {
+      static S& Container(std::priority_queue<T, S, C>& q) {
+        return q.*&HackedQueue::c;
+      }
+    };
+    return HackedQueue::Container(q);
+  }
+
+  template <class T, class Storage, class Compare>
+  auto value_pop(std::priority_queue<T, Storage, Compare>& q) {
+    struct HackedQueue: private std::priority_queue<T, Storage, Compare> {
+      static auto value_pop(std::priority_queue<T, Storage, Compare>& q) {
+        Storage& c = q.*&HackedQueue::c;
+        Compare& comp = q.*&HackedQueue::comp;
+        std::pop_heap(c.begin(), c.end(), comp);
+        auto value = std::move(c.back());
+        c.pop_back();
+        return value;
+      }
+    };
+    return HackedQueue::value_pop(q);
+  }
+  // **** END OF DIRTY HACK ****
+
 
 
 
@@ -401,6 +436,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     append(result, std::forward<T>(x));
     return result;
   }
+
+  struct SetSize { size_t operator()(const auto& x) const { return x.size(); } };
 }
 
 

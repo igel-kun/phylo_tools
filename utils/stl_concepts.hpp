@@ -100,8 +100,8 @@ namespace mstd {
     const T& operator*() const { return *this; }
     const T* operator->() const { return this; }
   };
-  template<class R> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
-  using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, self_deref<R>>;
+  template<class R, class Else = self_deref<R>> // if the given reference is not a reference but an rvalue, then a pointer to it is modeled via self_deref
+  using pointer_from_reference = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, Else>;
 
 
 
@@ -124,7 +124,7 @@ namespace mstd {
   template<class T> struct _iterator_of<T*> { using type = T*; };
   template<class T, std::size_t N> struct _iterator_of<T (&)[N]> { using type = T*; };
 
-  template<class T> using iterator_of_t = std::conditional_t<HasIterCategory<T>, T, typename _iterator_of<std::remove_reference_t<T>>::type>;
+  template<class T> using iterator_of_t = std::conditional_t<has_iter_category<T>, T, typename _iterator_of<std::remove_reference_t<T>>::type>;
 
   template<class T> using reverse_iterator_of_t = std::reverse_iterator<iterator_of_t<T>>;
   template<class T> using const_iterator_of_t = iterator_of_t<const std::remove_reference_t<T>>;
@@ -136,6 +136,9 @@ namespace mstd {
 
   template<class T> concept has_begin = requires (T t) { t.begin(); };
   template<class T, TypeRune rune = TR_ConstRefOK> concept HasBegin = apply_rune_v<T, rune> or has_begin<apply_rune_t<T, rune>>;
+
+  template<class T> concept has_rbegin = requires (T t) { t.rbegin(); };
+  template<class T, TypeRune rune = TR_ConstRefOK> concept HasRBegin = apply_rune_v<T, rune> or has_rbegin<apply_rune_t<T, rune>>;
 
   template<class T> struct reference_of {};
   template<class T> requires (has_reference<T>)
@@ -235,6 +238,14 @@ namespace mstd {
   template<class T, TypeRune rune = TR_ConstRefOK> concept VectorOrStringType = VectorType<T, rune> || mstd::Stringlike<T, rune>;
   template<class T> concept StrictVectorOrStringType = VectorOrStringType<T, TR_Strict>;
 
+  template<class T> struct is_deque { static constexpr bool value = false; };
+  template<class T, class A> struct is_deque<std::deque<T, A>> { static constexpr bool value = true; };
+  template<class T> constexpr bool is_deque_v = is_deque<T>::value;
+
+  template<class T, TypeRune rune = TR_ConstRefOK> concept DequeType = apply_rune_v<T, rune> || is_deque_v<apply_rune_t<T, rune>>;
+  template<class T> concept StrictDequeType = DequeType<T, TR_Strict>;
+
+
   template<class T, class I = size_t>
   concept is_indexible = requires (T& t, const I& i) { {t[i]}; };
   template<class T, class I = size_t, TypeRune rune = TR_ConstRefOK>
@@ -266,6 +277,9 @@ namespace mstd {
 
   template<IterableType T> using BeginType = decltype(std::begin(std::declval<T>()));
   template<IterableType T> using EndType = decltype(std::end(std::declval<T>()));
+  template<IterableType T> using RBeginType = decltype(std::rbegin(std::declval<T>()));
+  template<IterableType T> using REndType = decltype(std::rend(std::declval<T>()));
+
   // a concept for iterable types in which begin() and end() have the same type (this is apparently needed for some STL stuff like std::vector::insert)
   template<class T, TypeRune rune = TR_ConstRefOK>
   concept IterableTypeWithSameIterators = IterableType<T, rune> && std::is_same_v<BeginType<T>, EndType<T>>;

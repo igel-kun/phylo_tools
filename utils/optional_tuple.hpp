@@ -21,7 +21,7 @@ namespace mstd {
     optional_item(BareT& ref): value{&ref} {}
 
     optional_item(const std::unique_ptr<BareT>& pt): value{pt.get()} {}
-    optional_item(std::unique_ptr<BareT>&&) = delete;
+    optional_item(std::unique_ptr<BareT>&&) = delete; // we cannot take ownership if we only have an observing pointer...
   };
   template<size_t i> struct optional_item<i, void*> { void* value = nullptr; };
 
@@ -31,21 +31,44 @@ namespace mstd {
     std::unique_ptr<T> value = nullptr;
 
     optional_item() = default;
-    optional_item(optional_item&& other): optional_item(std::move(other).value) {}
+    optional_item(optional_item&& other): optional_item(std::move(other.value)) {}
     optional_item(const optional_item& other): optional_item(other.value) {}
 
     optional_item(std::unique_ptr<T>&& t): value{std::move(t)} {}
     optional_item(T* t) { if(t != nullptr) value = std::make_unique<T>(*t); }
     optional_item(const std::unique_ptr<T>& t): optional_item(t.get()) {}
+    optional_item(const std::shared_ptr<T>& t): optional_item(t.get()) {}
 
     optional_item(const T& ref): value{std::make_unique<T>(ref)} {}
     optional_item(T&& ref): value{std::make_unique<T>(std::move(ref))} {}
 
-    auto& operator=(optional_item&& other) { value = std::move(other).value; }
-    auto& operator=(const optional_item& other) { value.reset(); if(other.value) value = std::make_unique<T>(other.value); }
+    optional_item& operator=(optional_item&& other) = default;
+    optional_item& operator=(const optional_item& other) { if(other.value) value = std::make_unique<T>(other.value); else value.reset(); }
   };
 
   static_assert(std::copy_constructible<optional_item<0, std::unique_ptr<int>>>);
+
+  template<size_t i, class T>
+  struct optional_item<i, std::shared_ptr<T>> {
+    using BareT = std::remove_pointer_t<T>;
+    std::shared_ptr<T> value = nullptr;
+
+    optional_item() = default;
+    optional_item(optional_item&& other): optional_item(std::move(other.value)) {}
+    optional_item(const optional_item& other): optional_item(other.value) {}
+
+    optional_item(std::unique_ptr<T>&& t): value{std::move(t)} {}
+    optional_item(std::shared_ptr<T>&& t): value{std::move(t)} {}
+    optional_item(T* t) { if(t != nullptr) value = std::make_shared<T>(*t); }
+    optional_item(const std::unique_ptr<T>& t): optional_item(t.get()) {} // make a copy :/
+    optional_item(const std::shared_ptr<T>& t): value(t) {}
+
+    optional_item(const T& ref): value{std::make_shared<T>(ref)} {}
+    optional_item(T&& ref): value{std::make_unique<T>(std::move(ref))} {}
+
+    optional_item& operator=(optional_item&& other) = default;
+    optional_item& operator=(const optional_item& other) = default;
+  };
 
 
 
@@ -90,32 +113,36 @@ namespace mstd {
     template<class _LastT, class... _Rest>
     _optional_tuple(const _optional_tuple<i, _LastT, _Rest...>& other):
       Item(static_cast<const typename _optional_tuple<i, _LastT, _Rest...>::Item&>(other).value),
-      Parent(static_cast<const Parent&>(other))
+      Parent(static_cast<const typename _optional_tuple<i, _LastT, _Rest...>::Parent&>(other))
     {}
     template<class... _Rest>
     _optional_tuple(const _optional_tuple<i, void, _Rest...>& other):
-      Parent(static_cast<const Parent&>(other))
+      Parent(static_cast<const typename _optional_tuple<i, void, _Rest...>::Parent&>(other))
     {}
 
     template<class _LastT, class... _Rest>
     _optional_tuple(_optional_tuple<i, _LastT, _Rest...>& other):
       Item(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Item&>(other).value),
-      Parent(static_cast<Parent&>(other))
+      Parent(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Parent&>(other))
     {}
     template<class... _Rest>
     _optional_tuple(_optional_tuple<i, void, _Rest...>& other):
-      Parent(static_cast<Parent&>(other))
+      Parent(static_cast<typename _optional_tuple<i, void, _Rest...>::Parent&>(other))
     {}
 
     template<class _LastT, class... _Rest>
     _optional_tuple(_optional_tuple<i, _LastT, _Rest...>&& other):
       Item(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Item&&>(other).value),
-      Parent(static_cast<Parent&&>(other))
+      Parent(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Parent&&>(other))
     {}
-    template<class _LastT, class... _Rest>
+    template<class... _Rest>
     _optional_tuple(_optional_tuple<i, void, _Rest...>&& other):
-      Parent(static_cast<Parent&&>(other))
+      Parent(static_cast<typename _optional_tuple<i, void, _Rest...>::Parent&&>(other))
     {}
+    // base case: default initialize everything that hasn't been initialized by the other tuple
+    template<class _LastT, class... _Rest>
+    _optional_tuple(_optional_tuple<i>&& other) {}
+
   };
 
   // specialization for the case that the next field is 'void'

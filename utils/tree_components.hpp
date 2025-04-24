@@ -31,7 +31,7 @@ namespace PT{
   public:
     // each node in the component DAG will know its corresponding node in the Network
     using ComponentDAG = DefaultNetwork<NodeDesc>;
-//    using Emplacer = EdgeEmplacerWithHelper<false, ComponentDAG, void, NodeTranslation&, mstd::IdentityFunction<NodeDesc>>;
+//    using Emplacer = EdgeEmplacerWithHelper<ComponentDAG, false, void, NodeTranslation&, mstd::IdentityFunction<NodeDesc>>;
 #warning "TODO: make those protected and expose only const refs"
 #warning "TODO: store the emplacer instead of the translation here"
     // N_to_comp_DAG translates nodes of N into nodes of the component DAG

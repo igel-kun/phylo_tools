@@ -9,17 +9,13 @@ namespace pred {
   template<class T, class... Args>
   concept PredicateType = (std::is_invocable_v<T, Args...> && std::is_same_v<std::invoke_result_t<T, Args...>, bool>);
 
-  struct TruePredicate {
-    template<class... Args> constexpr bool operator()(Args&&...) const { return true; }
-  };
+  struct TruePredicate { template<class... Args> constexpr bool operator()(Args&&...) const { return true; } };
 
   template<class Predicate>
   struct NotPredicate: public Predicate {
     using Predicate::Predicate;
-    template<class... Args>
-    constexpr bool operator()(Args&&... args) const { return !Predicate::operator()(args...); }
-    template<class... Args>
-    constexpr bool operator()(Args&&... args) { return !Predicate::operator()(args...); }
+    template<class... Args> constexpr bool operator()(Args&&... args) const { return !Predicate::operator()(args...); }
+    template<class... Args> constexpr bool operator()(Args&&... args) { return !Predicate::operator()(args...); }
   };
 
 
@@ -28,17 +24,21 @@ namespace pred {
   using BinaryUnequalPredicate = NotPredicate<BinaryEqualPredicate>;
 
   // a predicate returning true/or false depending on whether the query is in a given set
-  template<mstd::IterableType<mstd::TR_ConstRefPtrOK> Container, bool invert = false>
+  template<mstd::IterableType<mstd::TR_PtrOK> _Container, bool invert = false>
   struct ContainmentPredicate {
+    // replace references by pointers
+    using Container = _Container;
+    using Storage = std::remove_pointer_t<Container>;
+    static constexpr bool is_indirect = std::is_pointer_v<Container>;
+
     Container c;
     constexpr ContainmentPredicate(const Container& _c): c(_c) {}
     constexpr ContainmentPredicate(Container&& _c): c(std::move(_c)) {}
+    constexpr ContainmentPredicate(const Storage& _c) requires (is_indirect): c(&_c) {}
     
-    template<class Item>
+    template<class Item> requires mstd::is_testable<Storage, const Item&>
     constexpr bool operator()(const Item& x) const {
-      if constexpr (mstd::HasDeref<Container>)
-        return test(*c, x) != invert;
-      else return test(c, x) != invert;
+      return mstd::test(mstd::access(c), x) != invert;
     }
   };
 

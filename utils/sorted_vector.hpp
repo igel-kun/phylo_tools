@@ -6,15 +6,19 @@
 // query: O(log n)
 // insert/erase: O(n)
 
+#pragma once
+
 #include <algorithm>
 #include <cstring>
 
-#pragma once
+#include "stl_utils.hpp"
+#include "predicates.hpp"
+
 
 namespace mstd{
   // do binary search on the vector
   template<class Iter, class Comp, class Key>
-  inline std::pair<Iter, bool> my_binary_search(Iter min, Iter past_end, const Comp& _comp, const Key& key)
+  std::pair<Iter, bool> my_binary_search(Iter min, Iter past_end, const Comp& _comp, const Key& key)
   {
     // the sought value is always in the range [min, past_end - 1] until min == past_end
     while(min != past_end){
@@ -28,122 +32,124 @@ namespace mstd{
     return {past_end, true};
   }
 
-  template<class Key, class Compare = std::less<Key>, class Allocator = std::allocator<Key>>
-  class sorted_vector: private std::vector<Key>
+  // a flat set, if you pass std::less, then the smallest value will be first
+  // NOTE: by default, KeysEqual is FalsePredicate, meaning that storage of duplicates is allowed (so it's a flat multimap)
+  template<class _Key, class _Compare = std::less<_Key>, class _KeysEqual = pred::FalsePredicate, class Allocator = std::allocator<_Key>>
+    requires (std::invocable<_Compare, _Key, _Key> && (std::is_void_v<_KeysEqual> || std::invocable<_KeysEqual, _Key, _Key>))
+  class sorted_vector: public std::vector<_Key>
   {
-    protected:
-      using Parent = std::vector<Key>;
-    public:
-      using typename Parent::iterator;
-      using typename Parent::const_iterator;
-      using insert_result = std::pair<iterator, bool>;
-      using const_insert_result = std::pair<const_iterator, bool>;
+  public:
+    using Parent = std::vector<_Key>;
+    using Key = _Key;
+    using Compare = _Compare;
+    using KeysEqual = _KeysEqual;
 
-      using Parent::erase;
-      using Parent::begin;
-      using Parent::end;
-
-    protected:
-      using Parent::Parent;
-      using Parent::size;
-
-      inline void sortme() { std::sort(this->begin(), this->end(), Compare()); }
-
-      // return an iterator to the smallest element that is at least as large as key (or end() if no such element exists)
-      // return whether the key was NOT found (true = failure)
-      inline iterator _find_this_or_next(const Key& key)
-      {
-        return lower_bound(this->begin(), this->end(), key, Compare());
-      }
-      inline const_iterator _find_this_or_next(const Key& key) const
-      {
-        return lower_bound(this->begin(), this->end(), key, Compare());
-      }
-      inline insert_result find_this_or_next(const Key& key)
-      {
-        auto x = _find_this_or_next(key);
-        return {x, (x != this->end()) ? (*x != key) : true};
-      }
-      inline const_insert_result find_this_or_next(const Key& key) const
-      {
-        auto x = _find_this_or_next(key);
-        return {x, (x != this->end()) ? (*x != key) : true};
-      }
+    using typename Parent::iterator;
+    using typename Parent::const_iterator;
+    using insert_result = std::pair<iterator, bool>;
+    using const_insert_result = std::pair<const_iterator, bool>;
 
 
-    public:
+    using Parent::erase;
+    using Parent::begin;
+    using Parent::end;
+    using Parent::size;
 
-      sorted_vector(): Parent() {}
-      sorted_vector(const std::initializer_list<Key>& li):
-        Parent(li)
-      { sortme(); }
-      template<class InputIt>
-      sorted_vector(const InputIt& _begin, const InputIt& _end):
-        Parent(_begin, _end)
-      { sortme(); }
+  protected:
+    using Parent::Parent;
 
-      // return iterator to element and bool indicating whether insertion took place
-      insert_result emplace(Key&& key)
-      {
-        insert_result i = find_this_or_next(key);
-        if(i.second) Parent::emplace(i.first, key);
-        return i;
-      }
-      insert_result emplace(const Key& key)
-      {
-        insert_result i = find_this_or_next(key);
-        if(i.second) Parent::emplace(i.first, key);
-        return i;
-      }
+    [[no_unique_address]] Compare cmp;
+    [[no_unique_address]] KeysEqual keys_equal;
 
-      iterator find(const Key& key)
-      {
-        auto x = _find_this_or_next(key);
-        if(x != this->end())
-          return (*x == key) ? x : this->end();
-        else return x;
-      }
+    void sortme() { std::sort(this->begin(), this->end(), cmp); }
 
-      const_iterator find(const Key& key) const
-      {
-        auto x = _find_this_or_next(key);
-        if(x != this->end())
-          return (*x == key) ? x : this->end();
-        else return x;
-      }
+    // return an iterator to the smallest element that is at least as large as key (or end() if no such element exists)
+    // return whether the key was NOT found (true = failure)
+    iterator _find_this_or_next(const Key& key) {
+      return lower_bound(this->begin(), this->end(), key, cmp);
+    }
+    const_iterator _find_this_or_next(const Key& key) const {
+      return lower_bound(this->begin(), this->end(), key, cmp);
+    }
+    insert_result find_this_or_next(const Key& key) {
+      auto x = _find_this_or_next(key);
+      return {x, (x != this->end()) ? not keys_equal(x, key) : true};
+    }
+    const_insert_result find_this_or_next(const Key& key) const {
+      auto x = _find_this_or_next(key);
+      return {x, (x != this->end()) ? not keys_equal(x, key) : true};
+    }
 
-      size_t count(const Key& key) const
-      {
-        auto x = _find_this_or_next(key);
-        return (x != this->end());
-      }
+  public:
 
-      // return iterator to element and bool indicating whether insertion took place
-      insert_result insert(const Key& key)
-      {
-        insert_result i = find_this_or_next(key);
-        if(i.second) Parent::emplace(i.first, key);
-        return i;
-      }
+    sorted_vector() = default;
 
-      template<class InputIt>
-      void insert(const InputIt& _begin, const InputIt& _end)
-      {
-        // first, insert the range at the end of the vector
-        iterator x = Parent::insert(this->end(), _begin, _end);
-        // then, sort the new range
-        sort(x, this->end(), Compare());
-        // finally, inplace_merge the ranges
-        inplace_merge(this->begin(), x, this->end());
-      }
+    sorted_vector(const std::initializer_list<Key>& li):
+      Parent(li)
+    { sortme(); }
+    
+    template<mstd::HasIterCategory InputIt, class... Args>
+    sorted_vector(const InputIt& _begin, const InputIt& _end, Args&&... args):
+      Parent(_begin, _end),
+      cmp(std::forward<Args>(args)...)
+    { sortme(); }
 
-      size_t erase(const Key& key)
-      {
-        insert_result i = find_this_or_next(key);
-        if(!i.second){
-          this->erase(i.first);
-          return 1;
-        } else return 0;
-      }
+    sorted_vector(Compare _cmp):
+      Parent(),
+      cmp(std::move(_cmp))
+    {}
+
+    const Compare& key_comp() const { return cmp; }
+    
+
+    iterator find(const Key& key) {
+      auto x = _find_this_or_next(key);
+      if(x != this->end())
+        return (*x == key) ? x : this->end();
+      else return x;
+    }
+
+    const_iterator find(const Key& key) const {
+      auto x = _find_this_or_next(key);
+      if(x != this->end())
+        return (*x == key) ? x : this->end();
+      else return x;
+    }
+
+    size_t count(const Key& key) const {
+      const auto x = _find_this_or_next(key);
+      return (x != this->end());
+    }
+
+    // return iterator to element and bool indicating whether insertion took place
+    template<class K> requires std::is_same_v<K, Key>
+    auto emplace(K&& key) {
+      insert_result i = find_this_or_next(key);
+      if(i.second) Parent::emplace(i.first, std::forward<K>(key));
+      return i;
+    }
+    template<class First, class... Args> requires (not std::is_same_v<std::remove_cvref_t<First>, Key>)
+    auto emplace(First&& first, Args&&... args) { return emplace(Key(std::forward<First>(first), std::forward<Args>(args)...)); }
+
+    template<class K> requires std::is_same_v<K, Key>
+    auto insert(K&& key) { return emplace(std::forward<K>(key)); }
+
+    template<class InputIt>
+    void insert(const InputIt& _begin, const InputIt& _end) {
+      // first, insert the range at the end of the vector
+      const iterator x = Parent::insert(this->end(), _begin, _end);
+      // then, sort the new range
+      sort(x, this->end(), cmp);
+      // finally, inplace_merge the ranges
+      inplace_merge(this->begin(), x, this->end());
+    }
+
+    bool erase(const Key& key) {
+      const insert_result i = find_this_or_next(key);
+      if(!i.second){
+        this->erase(i.first);
+        return 1;
+      } else return 0;
+    }
   };
 }// namespace
