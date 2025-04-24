@@ -121,7 +121,8 @@ namespace PT {
                                                    const EdgeContainer& active_edges,
                                                    auto& util) {
 #warning "TODO: write me"
-    assert(false);
+      assert(false);
+      return 0.0;
     }
 
 
