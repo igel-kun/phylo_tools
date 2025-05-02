@@ -73,7 +73,7 @@ namespace PT {
         result.first += static_cast<double>(util.weight(uv));
         if(Net::is_reti(uv.head())) result.second *= static_cast<double>(util.iprob(uv));
       }
-      DEBUG5(std::cout << "switching has weight "<<switching_weight<<" & prob "<<switching_prob<<'\n');
+      DEBUG5(std::cout << "switching has weight "<<result.first<<" & prob "<<result.second<<'\n');
       return result;
     }
 
@@ -161,7 +161,7 @@ namespace PT {
   template<StrictPhylogenyType Net, class PDScore, class UtilityFunctors>
   auto optimize_diversity_brute_force(const Net& N, const size_t k, UtilityFunctors&& util, PDScore&& pd_score, const size_t num_of_solutions = 1) {
     const NodeVec leaves(N.leaves().template to_container<NodeVec>());
-    std::cout << leaves.size() << " leaves: " << (leaves | std::ranges::views::transform([&](const NodeDesc x){ return Net::label(x);})) << '\n';
+    DEBUG3(std::cout << leaves.size() << " leaves: " << (leaves | std::ranges::views::transform([&](const NodeDesc x){ return Net::label(x);})) << '\n');
     return mstd::brute_force(k, leaves, num_of_solutions, [&](const auto& S){ return pd_score(N, S, util); });
   }
 

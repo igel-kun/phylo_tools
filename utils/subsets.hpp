@@ -92,11 +92,12 @@ namespace mstd {
 
     static constexpr bool partial = _partial;
     
-    using Iter = value_type_of_t<_OutputContainer>;
-    
-    static constexpr bool store_iters = IsAnyOf<Iter, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
+    using OutVal = value_type_of_t<_OutputContainer>;
+    static_assert(not std::is_const_v<OutVal>);
 
-    using SubsetState = std::conditional_t<store_iters, std::vector<Iter>, ordered_bitset>;
+    static constexpr bool store_iters = IsAnyOf<OutVal, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
+
+    using SubsetState = std::conditional_t<store_iters, std::vector<OutVal>, ordered_bitset>;
 
     _Container* c = nullptr;
     SubsetState state;

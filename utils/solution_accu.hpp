@@ -20,11 +20,12 @@ namespace mstd {
   struct SolutionAccumulator {
     using ScoreTypeFromExtracter = typename GetScoreType<ScoreExtracter, Solution>::type;
     using ScoreType = mstd::FirstNonVoid<_ScoreType, ScoreTypeFromExtracter>;
+    static_assert(std::is_invocable_v<ScoreCmp, ScoreType, ScoreType>);
     using SolutionWithScore = std::pair<Solution, ScoreType>;
     using GetSecond = mstd::selector<1>;
     using CmpSeconds = mstd::PointwiseCompose<GetSecond, ScoreCmp>;
+    static_assert(std::is_invocable_v<CmpSeconds, SolutionWithScore, SolutionWithScore>);
     using SolutionVec = mstd::sorted_vector<SolutionWithScore, CmpSeconds>;
-    static_assert(std::invocable<CmpSeconds, SolutionWithScore, SolutionWithScore>);
 
     SolutionVec solutions;
     [[no_unique_address]] std::conditional_t<std::is_void_v<ScoreExtracter>, mstd::IgnoreFunction<>, ScoreExtracter> extracter;

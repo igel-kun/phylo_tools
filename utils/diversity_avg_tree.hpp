@@ -52,7 +52,7 @@ namespace PT {
           result.first += static_cast<double>(util.weight(uv));
           if(Net::is_reti(uv.head())) result.second *= static_cast<double>(util.iprob(uv));
         }
-        DEBUG5(std::cout << "switching has weight "<<switching_weight<<" & prob "<<switching_prob<<'\n');
+        DEBUG5(std::cout << "switching has weight "<<result.first<<" & prob "<<result.second<<'\n');
         return result;
       }
 

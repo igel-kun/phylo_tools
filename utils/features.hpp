@@ -126,13 +126,13 @@ namespace PT {
   size_t feature_diversity(Container&& container) { return _feature_diversity{}(std::forward<Container>(container)); }
 
 
-  template<mstd::IterableType Container> // container should contain FeatureCollections or indirections to FeatureCollections
+  template<mstd::StrictIterableType Container> // container should contain FeatureCollections or indirections to FeatureCollections
     requires (FeatureCollectionType<mstd::value_type_of_t<Container>> or
               FeatureCollectionType<mstd::value_type_of_t<mstd::value_type_of_t<Container>>>)
   auto optimize_feature_diversity(const auto k, const Container& container, size_t num_solutions = 1) {
     return mstd::brute_force(k, container, num_solutions, _feature_diversity{});
   }
-  template<mstd::MapType Map> // Map should map to FeatureCollections or indirections to FeatureCollections
+  template<mstd::StrictMapType Map> // Map should map to FeatureCollections or indirections to FeatureCollections
     requires (FeatureCollectionType<mstd::mapped_type_of_t<Map>> or
               FeatureCollectionType<mstd::value_type_of_t<mstd::mapped_type_of_t<Map>>>)
   auto optimize_feature_diversity(const auto k, const Map& _map, size_t num_solutions = 1) {
