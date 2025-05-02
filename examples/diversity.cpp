@@ -186,7 +186,7 @@ int main(const int argc, const char** argv) {
     if(mstd::test(options, "-v")) {
       std::cout << "N:" << std::endl;
       std::cout << ExtendedDisplay(N) << std::endl;
-      //N.print_summary(std::cout);
+      N.print_summary(std::cout);
     }
 
     if(test(options, "-l")) {
@@ -214,7 +214,7 @@ int main(const int argc, const char** argv) {
       const auto elapsed = mstd::ms_between(before, mstd::get_time());
       std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
       for(const auto& [sol, score]: solutions) {
-        std::cout << "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
+        std::cout << std::fixed << std::setprecision(2)<< "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
       }
     }
   }

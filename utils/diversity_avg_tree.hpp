@@ -7,6 +7,8 @@
 #include "net_generator.hpp"
 #include "switchings.hpp"
 
+#include "dfs_coro.hpp"
+
 namespace PT {
 
   // engine to compute/optimize average-tree diversity of a network N
@@ -31,7 +33,9 @@ namespace PT {
 
     using SideScoreMap = NodeMap<ScoredDirections>;
     
-    using NodesByScore = std::priority_queue<NodeWith<double>, std::vector<NodeWith<double>>, SecondSmaller>;
+    // hilarious: STL priority queue doesn't allow updating priorities
+    //using NodesByScore = std::priority_queue<NodeWith<double>, std::vector<NodeWith<double>>, SecondSmaller>;
+    using NodesByScore = std::multiset<NodeWith<double>, SecondGreater>;
 
 
 
@@ -79,7 +83,7 @@ namespace PT {
 
     SideScoreMap scorable;
     Generator Gen;
-    mstd::SolutionAccumulator<NodeVec> accu;
+    mstd::SolutionAccumulator<NodeVec, double> accu;
     [[ no_unique_address ]] UtilityFunctors util;
 
     AveragePDEngine() = delete;
@@ -135,6 +139,7 @@ namespace PT {
 
     // return the diversity obtained below u if we don't save any leaf reachable by a tree-path from u
     double get_free_score(const NodeDesc gu) const {
+      DEBUG4(std::cout << "computing free score from the sides of "<<gu<<'\n');
       double weight = 0.0;
       for(const auto& gv: Gen.children(gu)) {
         const auto* end_adj = &(gv.data().end_adj);
@@ -142,7 +147,7 @@ namespace PT {
 
         if(guv_prob > 0.0) {
           while(1) {
-            std::cout << "getting free score from "<<gv<<" upwards via "<<*end_adj<<'\n';
+            DEBUG4(std::cout << "getting free score from "<<gv<<" upwards via "<<*end_adj<<" with probability factor "<<guv_prob<<'\n');
             weight += guv_prob * static_cast<double>(util.weight(*end_adj));
             if(*end_adj != get_original_node(gu)) {
               assert(Net::in_degree(*end_adj) == 1);
@@ -157,18 +162,21 @@ namespace PT {
     // save the leaf with maximum diversity gain below u in N (doesn't have to correspond to a generator node)
     // NOTE: this also updates the 'scorable' map
     NodeWith<double> save_best_leaf_below(const NodeDesc u) {
-      std::cout << "saving best leaf below "<<u<<'\n';
+      DEBUG4(std::cout << "saving best leaf below "<<u<<'\n');
       const auto iter = scorable.find(u);
       assert(iter != scorable.end());
       ScoredDirections& directions = iter->second;
       if(not directions.empty()) {
         // recurse to the best node we know
         const auto [v, score] = mstd::value_pop_back(directions);
+        DEBUG4(std::cout << "best score is below "<<v<<": score "<<score<<'\n');
         const NodeDesc saved_leaf = save_best_leaf_below(v).first;
 
         // update the scorable diversity
         // NOTE: we can no longer score uv, since it's been already collected now
-        directions.emplace(v, best_score(v));
+        const double v_new_score = best_score(v);
+        DEBUG4(std::cout << "new score of "<<u<<" via "<<v<<" is "<<v_new_score<<'\n');
+        directions.emplace(v, v_new_score);
 
         // the result is the leaf we got from the recursion and the score we saved initially
         return {saved_leaf, score};
@@ -177,23 +185,26 @@ namespace PT {
 
     // setup the score map below x
     // NOTE: if used on a generator side:
-    //          use 'side_bottom' to indicate the bottom of the side and
+    //          use 'forbidden' to indicate the bottom of the side and
     //          use 'vw_prob' to indicate the probability of the lowest edge of the side (due to saved leaves below)
-    void setup_score_map_below(const NodeDesc x, NodeDesc* const current_bottom = nullptr, const NodeDesc side_bottom = NoNode, const double gvw_prob = 0.0) {
+    void setup_score_map_below(const NodeDesc x, const auto& forbidden = NoNode, NodeDesc* const current_bottom = nullptr, const double gvw_prob = 0.0) {
       ScoredDirections& score_dir = scorable.try_emplace(x).first->second;
       score_dir.reserve(Net::out_degree(x));
       
-      for(const auto& y: Net::children(x)) if(y != side_bottom) {
-        const double weight = util.weight(y);
-        double y_scorable = best_score(y);
-        // if we see the end of the side, then we know the switching probability for the edge xy is vw_prob
-        if(y == current_bottom) {
-          y_scorable += (1 - gvw_prob) * weight;
-          if(current_bottom) *current_bottom = x; // side_bottom is now x
-        } else y_scorable += weight;
-        // register that we can go to y to score y_scorable
-        score_dir.emplace(y, y_scorable);
-      } else if(current_bottom) *current_bottom = x;
+      for(const auto& y: Net::children(x)) {
+        if(not mstd::test(forbidden, y.get_desc())) {
+          const double weight = util.weight(y);
+          double y_scorable = best_score(y);
+          // if we see the end of the side, then we know the switching probability for the edge xy is vw_prob
+          if(current_bottom && (y == *current_bottom)) {
+            y_scorable += (1 - gvw_prob) * weight;
+            *current_bottom = x; // bottom is now x
+          } else y_scorable += weight;
+          // register that we can go to y to score y_scorable
+          score_dir.emplace(y, y_scorable);
+        } else if(current_bottom) *current_bottom = x;
+      }
+      DEBUG4(std::cout << "set up direction vector of "<<x<<": "<<score_dir<<'\n');
     }
 
     // get the best investment table for the generator sides and leaves directly below v, that is,
@@ -203,28 +214,41 @@ namespace PT {
     // NOTE: we assume that we are called in a top-down manner (we need the children in the generator to have no scorable entries)
     void setup_scorable(const NodeDesc gv) {
       const NodeDesc v_in_N = get_original_node(gv);
-      std::cout << "setting up scorable map below "<<v_in_N<<" (generator: "<<gv<<")\n";
+      DEBUG4(std::cout << "setting up scorable map below "<<v_in_N<<" (generator: "<<gv<<")\n");
       ScoredDirections& v_score_dir = scorable.try_emplace(v_in_N).first->second;
       v_score_dir.clear(); // clear out anything that might remain from upper calls
+
       // we produce the table by extending the tables bottom-up
+      NodeSet forbidden; // NOTE: remember the first nodes on the generator sides in N in order to forbid them from the traversal catching the other leaves
+      DEBUG4(std::cout << "direction vector of "<<v_in_N<<" before sides: "<<v_score_dir<<'\n');
       for(const auto& gw: Gen.children(gv)) {
         const auto gvw_prob = gw.data().prob; // probability of drawing a switching where the last edge of the generator side vw reaches a saved leaf
         const auto& start = gw.data().start_adj; // the first node in N on the side gvw
+        append(forbidden, start); // recall the first node on the side to forbid going there later
         const NodeDesc side_bottom = get_original_node(gw); // keep the top node on the spine of the side, since that one might have vw_prob != 0
-        NodeDesc current_bottom = side_bottom;
-        std::cout << "generator side: "<<gv<<"-"<<gw<<" corresponding to path "<<v_in_N<<"-->"<<side_bottom<<" in N\n";
-        for(const NodeDesc x: Net::nodes_below_postorder(start, NodeSingleton{side_bottom})) // mark side_bottom as forbidden
-          setup_score_map_below(x, &current_bottom, side_bottom, gvw_prob);
-        // treat the edge v->start
-        const double weight = util.weight(start);
-        v_score_dir.emplace(start, best_score(start) + weight * (1 - gvw_prob));
+        if(side_bottom != start) { // only register this direction if it has more than 1 edge
+          NodeDesc current_bottom = side_bottom;
+          DEBUG4(std::cout << "generator side: "<<gv<<"-"<<gw<<" corresponding to path "<<v_in_N<<"-->"<<side_bottom<<" in N (free prob: "<<gvw_prob<<")\n");
+          for(const NodeDesc x: Net::nodes_below_postorder(start, NodeSingleton{side_bottom})) // mark side_bottom as forbidden
+            setup_score_map_below(x, side_bottom, &current_bottom, gvw_prob);
+          // treat the edge v->start
+          const double weight = util.weight(start);
+          v_score_dir.emplace(start, best_score(start) + weight * (1 - gvw_prob));
+        }
+        DEBUG4(std::cout << "direction vector of "<<v_in_N<<" after side "<<gv<<'-'<<gw<<": "<<v_score_dir<<'\n');
       } // for all sides vw of v
 
+      DEBUG4(std::cout << "scorable: "<<scorable<<'\n');
+      DEBUG4(std::cout << "forbidden: "<<forbidden<<'\n');
+
       // add the "non-side leaves" below v_in_N (leaves that are below v_in_N but not on any side of v)
-      // NOTE: we're using a custom node traversal that has no seenset and uses the score_below map as a forbidden set
-      NodeTraversal<postorder, Net, NodeDesc, const SideScoreMap*, void> traversal{v_in_N, &scorable};
-      for(const NodeDesc x: traversal)
-        setup_score_map_below(x);
+      // NOTE: we're using a custom node traversal that has no seenset and uses the constructed map as a forbidden set
+      //NodeTraversal<postorder, Net, NodeDesc, const NodeSet, void> traversal{v_in_N, forbidden};
+      PTx::Traversal<PTx::postorder, Net, NodeDesc, const NodeSet, void> traversal{v_in_N, forbidden};
+      for(const NodeDesc x: traversal) {
+        DEBUG4(std::cout << "next node in traversal: "<<x<<'\n');
+        setup_score_map_below(x, forbidden);
+      }
     }
 
     // given that each side of the generator knows its probability and whether it takes a leaf,
@@ -233,15 +257,16 @@ namespace PT {
       double global_score = 0; // score implied by the promised leaves
      
       // Step 1: setup the scorable map, but only for nodes that we want to save leaves below
-      std::cout << "--- setting up scorable map ---\n";
+      DEBUG3(std::cout << "--- setting up scorable map ---\n");
       scorable.clear();
       for(const NodeDesc gu: gleaf_guess_preorder)  
         setup_scorable(gu);
 
       // Step 2: calculate free score for all sides
-      std::cout << "--- getting free score ---\n";
+      DEBUG3(std::cout << "--- getting free score ---\n");
       for(const NodeDesc gu: Gen.nodes_preorder())
         global_score += get_free_score(gu);
+      DEBUG4(std::cout << "free score from promises: " << global_score << '\n');
 
       // now, scorable is filled, we can save the best scoring leaves with the remaining budget
       // NOTE: only generator nodes that we promised to have saved leaves will have contributed to scorable,
@@ -250,41 +275,48 @@ namespace PT {
       solution.reserve(k);
 
       // Step 3: fulfill our promises to the generator nodes
-      std::cout << "--- fulfilling promises to "<<gleaf_guess_preorder<<" ---\n";
+      DEBUG4(std::cout << "--- fulfilling promises to "<<gleaf_guess_preorder<<" ---\n");
       for(const NodeDesc gu: gleaf_guess_preorder) {
         const auto [leaf, score] = save_best_leaf_below(get_original_node(gu));
         append(solution, leaf);
         global_score += score;
-        std::cout << "saving leaf "<<leaf<<" (score "<<score<<", total: "<<global_score<<")\n";
+        DEBUG4(std::cout << "saving leaf "<<leaf<<" (score "<<score<<", total: "<<global_score<<")\n");
       }
       k -= gleaf_guess_preorder.size();
 
       if(k > 0) {
-        std::cout << "attainable scores: "<< (scorable | std::ranges::views::filter([&](const auto& ux){ return not ux.second.empty();}) )<<'\n';
+        DEBUG4(std::cout << "attainable scores: "<< (scorable | std::ranges::views::filter([&](const auto& ux){ return not ux.second.empty();}) )<<'\n');
         // Step 4: take additional leaves while the budget lasts
-        std::cout << "--- preparing to save more leaves ---\n";
+        DEBUG3(std::cout << "--- preparing to save more leaves ---\n");
+        
         // generator nodes, sorted by their attainable score
         NodesByScore best_scores;
-        for(const auto& [u, directions]: scorable) 
-          if(not directions.empty())
-            best_scores.emplace(u, directions.back().second);
-        
-        std::cout << "best scores: "<< mstd::priority_queue_container(best_scores) << '\n';
+        for(const NodeDesc gu: Gen.nodes()) {
+          const NodeDesc u = get_original_node(gu);
+          const auto iter = scorable.find(u);
+          if(iter != scorable.end()) {
+            const auto& directions = iter->second;
+            if(not directions.empty())
+              best_scores.emplace(u, directions.back().second); 
+          }
+        }
+        DEBUG4(std::cout << "best scores: "<< best_scores << '\n');
 
-        std::cout << "--- saving "<< k<< " additional leaves ---\n";
+        DEBUG3(std::cout << "--- saving "<< k<< " additional leaves ---\n");
         while((k-- > 0) && (not best_scores.empty())) {
           const auto [u, score] = mstd::value_pop(best_scores);
-          std::cout << "best priority: "<<u<<" (score "<<score<<")\n";
+          DEBUG4(std::cout << "\nsaving leaf below "<<u<<" (score "<<score<<")\n");
           const auto [leaf, score2] = save_best_leaf_below(u);
+          DEBUG4(std::cout << "scorable map says "<<u<<" has a path to leaf "<<leaf<<" with score "<<score2<<'\n');
           assert(score == score2);
-          best_scores.emplace(u, best_score(u));
+          append(best_scores, u, best_score(u)); // update best_scores[u]
           append(solution, leaf);
           global_score += score;
         }
       }
-      std::cout << "finished solution: "<<solution<<" with diversity "<<global_score<<'\n';
+      DEBUG4(std::cout << "finished solution: "<<solution<<" with diversity "<<global_score<<'\n');
       const double bf_score = brute_force(solution, util);
-      std::cout << "let's check against brute-force: " << bf_score << '\n';
+      DEBUG4(std::cout << "let's check against brute-force: " << bf_score << '\n');
       assert(bf_score == global_score);
       accu.add(solution, global_score);
     }
@@ -301,21 +333,22 @@ namespace PT {
     void optimize_displayed_tree_diversity(const size_t k) {
       // ==== step 1: split into biconnected components
 #warning "TODO: write me"
-      // ==== step 2: produce the generator network: done at init; here, we just clear the previous probabilities
-      for(const auto guv: Gen.edges())
-        guv.data().prob = 0;
+      // ==== step 2: produce the generator network: done at init
 
       // ==== step 3: guess at most k sides of the generator that contain selected leaves
       // step 3.1: get all sides and nodes of the generator
       // accumulate all nodes of the generator that can have tree-paths to leaves
       const NodeVec gen_nodes_preorder = Gen.template nodes_with<preorder>(has_tree_path_to_leaf).template to_container<NodeVec>();
-
-      std::cout << "generator nodes with tree-paths to leaves: "<<gen_nodes_preorder<<'\n';
+      DEBUG3(std::cout << "generator nodes with tree-paths to leaves: "<<gen_nodes_preorder<<'\n');
 
       // guess which at most k generator nodes have tree-paths to saved leaves
       for(const auto gsaved_nodes_preorder: mstd::make_subset_factory(gen_nodes_preorder, 0, k)) {
-        std::cout << "\n=== new guess! ===\n"<<gsaved_nodes_preorder.size() << " nodes with saved leaves below: "<<gsaved_nodes_preorder<<'\n';
+        DEBUG4(std::cout << "\n=== new guess! ===\n"<<gsaved_nodes_preorder.size() << " nodes with saved leaves below: "<<gsaved_nodes_preorder<<'\n');
         
+        // clear the probabilities of the previous guess
+        for(const auto guv: Gen.edges())
+          guv.data().prob = 0;
+       
         // ==== step 4: for each side S in the generator, compute proportion of switchings that the lowest edge of S is in
 #warning "TODO: improve this using a dominator tree: not all switchings need to be iterated in order to compute the proportions!"
         for(const auto gswitching: SwitchingFactory<Generator, const NodeVec*>{Gen, gsaved_nodes_preorder}) {
@@ -323,7 +356,7 @@ namespace PT {
           for(const auto guv: gswitching)
             if(Gen.is_reti(guv.head()))
               switching_prob *= get_side_probability(guv);
-          DEBUG1(std::cout << "switching "<<gswitching<<" has probability "<<switching_prob<<'\n');
+          DEBUG4(std::cout << "switching "<<gswitching<<" has probability "<<switching_prob<<'\n');
           for(const auto guv: gswitching)
             guv.data().prob += switching_prob;
         }

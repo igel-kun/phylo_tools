@@ -6,15 +6,20 @@
 
 namespace mstd {
 
-  template<class T, class Solution> struct _ScoreType {};
-  template<class Solution> struct _ScoreType<void, Solution> { using type = size_t; };
+  // GetScoreType<T, Solution> returns the type of the score given to a Solution by T, or T itself if it's not callable with a Solution
+  // In the special case that T is void, the score type is size_t
+  template<class T, class Solution> struct GetScoreType { using type = T; };
+  template<class Solution> struct GetScoreType<void, Solution> { using type = size_t; };
   template<class T, class Solution> requires std::is_invocable_v<T, Solution>
-  struct _ScoreType<T, Solution> { using type = std::invoke_result_t<T, Solution>; };
+  struct GetScoreType<T, Solution> { using type = std::invoke_result_t<T, Solution>; };
 
   // keep only a certain number of best solutions
-  template<class Solution, class ScoreCmp = std::greater<>, class ScoreExtracter = void>
+  // NOTE: if ScoreExtracter is a type that cannot be called with a Solution, then ScoreExtracter *ITSELF* is used as ScoreType
+  //        (unless overwritten by _ScoreType)
+  template<class Solution, class ScoreExtracter = void, class ScoreCmp = std::greater<>, class _ScoreType = void>
   struct SolutionAccumulator {
-    using ScoreType = typename _ScoreType<ScoreExtracter, Solution>::type;
+    using ScoreTypeFromExtracter = typename GetScoreType<ScoreExtracter, Solution>::type;
+    using ScoreType = mstd::FirstNonVoid<_ScoreType, ScoreTypeFromExtracter>;
     using SolutionWithScore = std::pair<Solution, ScoreType>;
     using GetSecond = mstd::selector<1>;
     using CmpSeconds = mstd::PointwiseCompose<GetSecond, ScoreCmp>;

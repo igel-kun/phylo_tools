@@ -24,7 +24,7 @@ namespace mstd {
     DEBUG5(std::cout << "storing iters? "<< Subsets::store_iters << "\ninternal: "<<type_name<SubsetInternal>()<<'\n');
     static_assert(container_ra || Subsets::store_iters);
 
-    SolutionAccumulator<SubsetInternal, Cmp> accu(keep_best_solutions);
+    SolutionAccumulator<SubsetInternal, double, Cmp> accu(keep_best_solutions);
     for(const auto S: Subsets{container, subset_size_bounds}) {
       int64_t current;
       if constexpr (Subsets::store_iters) {
@@ -37,7 +37,7 @@ namespace mstd {
     }
     // if we used iterators but the user requested something else, we'll have to try and convert...
     if constexpr (not mstd::is_same_v<OutputContainer, SubsetInternal>) {
-      SolutionAccumulator<OutputContainer, Cmp> out{};
+      SolutionAccumulator<OutputContainer, double, Cmp> out{};
       for(const auto& sol: accu.solutions) {
         if constexpr (Subsets::store_iters)
           out.add(sol.first | std::ranges::views::transform(default_deref{}), sol.second);
