@@ -64,10 +64,8 @@ namespace PT {
     static double access_next_diff(Table& tab, const NodeDesc x) {
       const auto iter = tab.find(x);
       if(iter != tab.end()) {
-        std::cout << "found table entry "<<*iter<<'\n';
         auto& [x_table, saved_so_far] = iter->second;
         if(x_table.size() > saved_so_far + 1) {
-          std::cout << "what if we saved "<<saved_so_far<<"+1 leaves below "<<x<<" in " << x_table<<'\n';
           const auto& next_sols = x_table[saved_so_far + 1];
           const auto& current_sols = x_table[saved_so_far];
           if constexpr (use_leaf) 
@@ -101,7 +99,6 @@ namespace PT {
 
     // query best score below a given node
     double best_score_below(const NodeDesc x) const {
-      std::cout << "getting best score of "<<x<<" (index node "<<translate(x)<<"): "<<access_next_diff(std::as_const(result_table), translate(x))<<"\n";
       return access_next_diff(std::as_const(result_table), translate(x));
     }
 
@@ -268,7 +265,7 @@ namespace PT {
         if(not mstd::test(forbidden, y.get_desc())) {
           const double weight = util.weight(y);
           double y_scorable = best_score(y);
-          std::cout << y << " scores "<<y_scorable<<" ("<<y<<" is bottom? "<<(current_bottom and (y == *current_bottom)) << '\n';
+          DEBUG4(std::cout << y << " scores "<<y_scorable<<" ("<<y<<" is bottom? "<<(current_bottom and (y == *current_bottom)) << '\n');
           // if we see the end of the side, then we know the switching probability for the edge xy is vw_prob
           if(current_bottom and (y == *current_bottom)) {
             y_scorable += (1 - gvw_prob) * weight;
@@ -351,7 +348,7 @@ namespace PT {
       for(auto& [sol, score]: result.solutions)
         score += score_delta;
 
-      std::cout << "turned history "<<hist<<" into accu " << result<< '\n';
+      DEBUG4(std::cout << "turned history "<<hist<<" into accu " << result<< '\n');
       return result;
     }
 
@@ -405,7 +402,7 @@ namespace PT {
       } 
       DEBUG4(std::cout << "adding solution: "<<solution<<" with diversity "<<global_score<<'\n');
       auto& accu_table = leaf_table().get_accu_vector(get_root_in_N(), k);
-      std::cout << "got accus : "<<accu_table<<'\n';
+      DEBUG4(std::cout << "got accus : "<<accu_table<<'\n');
       accu_table[sol_size].add(accu_from_histogram(solution, global_score));
      
       if(sol_size < k) {
@@ -505,7 +502,7 @@ namespace PT {
       DEBUG4(bcc.print_summary(std::cout));
       AvgTreeEngine engine(bcc, std::forward<UtilityFunctors>(util), &table);
       engine.optimize_displayed_tree_diversity(k);
-      std::cout << "\nfinal tables: "<<table.result_table << "\n\n";
+      DEBUG4(std::cout << "\nfinal tables: "<<table.result_table << "\n\n");
     } // for all nontrivial biconnected components bcc
 
     // if we don't have a table entry for the root, it means that the root is in a trivial BCC,
@@ -514,17 +511,16 @@ namespace PT {
       // to get the tree component of the root, we run a DFS in which it is forbidden to enter children of reticulations
       auto root_edges = N.edges([&](const NodeDesc x){
           const bool res = (Net::in_degree(x) != 0) and test(table.result_table, Net::parent(x));
-          std::cout << x << "forbidden? "<< res << '\n';
           return res;
         }).to_container();
-      std::cout << "building root component with edges "<<root_edges<<'\n';
+      DEBUG4(std::cout << "building root component with edges "<<root_edges<<'\n');
       BCComponent root_comp(root_edges, Ex_node_data{}, mstd::IdentityFunction<NodeDesc>());
       DEBUG4(std::cout << "\nROOT component ("<<root_comp.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(root_comp) <<"\n");
       DEBUG4(root_comp.print_summary(std::cout));
       AvgTreeEngine engine(root_comp, std::forward<UtilityFunctors>(util), &table);
       engine.optimize_displayed_tree_diversity(k);
     }
-    std::cout << "see how the root table (Node "<<N.root()<<") is doing...\n";
+    DEBUG4(std::cout << "see how the root table (Node "<<N.root()<<") is doing...\n");
     auto& root_table = table.get_root_table(N.root());
     auto& size_k_solutions = root_table.back();
     return std::move(size_k_solutions);
