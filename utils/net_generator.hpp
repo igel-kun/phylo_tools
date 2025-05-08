@@ -114,8 +114,8 @@ namespace PT {
   //    if data is stored within the generator nodes & edges, then get_data(x) = Gen.data(x)
   //    if data is stored externally in 2 maps, then get_data(x) = if constexpr (NodeDesc<x>) node_map[x] else edge_map[x]
   template<StrictPhylogenyType Network, class GetData, EdgeEmplacerType Emplacer>
-    requires (std::invocable<std::remove_reference_t<GetData>, NodeDesc> &&
-              std::invocable<std::remove_reference_t<GetData>, NodeDesc, typename Network::Adjacency>)
+    requires (std::is_invocable_v<std::remove_reference_t<GetData>, NodeDesc> &&
+              std::is_invocable_v<std::remove_reference_t<GetData>, NodeDesc, typename std::remove_cvref_t<Emplacer>::TargetPhylo::Adjacency>)
   void compute_generator(Network& N, GetData&& get_data, Emplacer&& emplacer) {
     // when first we see a generator node below v, store its information
     // when we see a second generator node below v, then make v a generator node as well
@@ -138,7 +138,9 @@ namespace PT {
                                               std::is_convertible_v<typename Generator::EdgeData, EdgeInfo>;
     using MyGetData = std::conditional_t<internal_possible, InternalDataAccess<Generator>, ExternalDataAccess<GeneratorNodeInfo, EdgeInfo>>;
     using GetData = mstd::FirstNonVoid<_GetData, MyGetData>;
-    static_assert((not std::is_void_v<_Generator>) || internal_possible);
+    static_assert(internal_possible || not std::is_void_v<_Generator>);
+    static_assert((not internal_possible) || std::is_invocable_v<GetData, NodeDesc>);
+    static_assert((not internal_possible) || std::is_invocable_v<GetData, NodeDesc, typename Generator::Adjacency>);
 
     Generator G;
     compute_generator(N, GetData{}, DefaultEdgeEmplacer<Generator>{G, EO_forbid_junctions + EO_forbid_non_binary});

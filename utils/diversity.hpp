@@ -85,7 +85,7 @@ namespace PT {
 
 
     template<StrictPhylogenyType Net, NodeIterableType Nodes>
-    double operator()(const Net& N, const Nodes& leaves_to_save, auto& util) const {
+    double operator()(const Net& N, const Nodes& leaves_to_save, auto&& util) const {
       double result = 0;
       DEBUG4(size_t count = 0);
       for(const auto switching: SwitchingFactory<Net, const Nodes*>{N, leaves_to_save}) {
@@ -117,12 +117,10 @@ namespace PT {
 
   template<StrictPhylogenyType Net, class UtilityFunctors>
   auto optimize_displayed_tree_diversity(const Net& N, const size_t k, UtilityFunctors&& util, const size_t num_solutions = 1) {
-    AveragePDEngine<Net, UtilityFunctors> engine(N, std::forward<UtilityFunctors>(util), num_solutions);
+    AveragePDEngine<Net, UtilityFunctors, NoLeafTable> engine(N, std::forward<UtilityFunctors>(util), num_solutions);
     engine.optimize_displayed_tree_diversity(k);
-    return engine.accu;
+    return engine.leaf_query.accus.at(k);
   }
-
-
   
   template<StrictPhylogenyType Net, NodeContainerType Nodes, class UtilityFunctors>
   double pd_score_ct_dp(const Net& N, const Nodes& leaves, UtilityFunctors&& util){

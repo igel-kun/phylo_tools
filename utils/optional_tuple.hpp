@@ -22,6 +22,7 @@ namespace mstd {
 
     optional_item(const std::unique_ptr<BareT>& pt): value{pt.get()} {}
     optional_item(std::unique_ptr<BareT>&&) = delete; // we cannot take ownership if we only have an observing pointer...
+    optional_item(const std::shared_ptr<BareT>& pt): value{pt.get()} {}
   };
   template<size_t i> struct optional_item<i, void*> { void* value = nullptr; };
 

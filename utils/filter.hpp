@@ -23,30 +23,11 @@ namespace mstd {
   // NOTE: the above doesn't seem to make sense, please re-evaluate
   template<HasIterCategory NormalIterator, class _Predicate, bool pass_iterator = false>
   class _filtered_iterator: public MakeVerifyable<NormalIterator> {
-    using Parent = MakeVerifyable<NormalIterator> ;
+    using Parent = MakeVerifyable<NormalIterator>;
     [[no_unique_address]] _Predicate pred;
 
-    template<class Pred>
-    bool apply_pred(Pred&& p) const {
-      if constexpr (std::is_pointer_v<Pred>) {
-        assert(pred != nullptr);
-        return apply_pred(*p);
-      } else if constexpr (pass_iterator) {
-          return p(*this);
-      } else return p(**this);
-    }
-    template<class Pred>
-    bool apply_pred(Pred&& p) {
-      if constexpr (std::is_pointer_v<std::remove_cvref_t<Pred>>) {
-        assert(pred != nullptr);
-        return apply_pred(*p);
-      } else if constexpr (pass_iterator) {
-          return p(*this);
-      } else return p(**this);
-    }
-    bool apply_pred() const { return apply_pred(pred); }
-    bool apply_pred() { return apply_pred(pred); }
-
+    bool apply_pred() const { if constexpr (pass_iterator) return access(pred)(*this); else return access(pred)(**this); }
+    bool apply_pred() { if constexpr (pass_iterator) return access(pred)(*this); else return access(pred)(**this); }
 
     template<bool rev = false>
     void fix_index() {

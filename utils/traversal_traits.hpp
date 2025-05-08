@@ -54,32 +54,55 @@ namespace PT {
 	template<class T> requires (PhylogenyType<T> || NodeType<T>)
 	using DefaultSeenSet = typename _DefaultSeenSet<T>::type;
 
-
 	// NOTE: _SeenSet may be a reference (or even void)
-  template<StrictPhylogenyType _Network,
-           mstd::IterableType _ItemContainer,
-           class _Forbidden,
-           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
-  struct TraversalTraits:
-    public mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, mstd::NoRef<_SeenSet>>, 
-    public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
+  template<class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
+  struct DFSSupportSets:
+    public mstd::optional_tuple<mstd::NoRef<_Forbidden>, mstd::NoRef<_SeenSet>>
   {
-    // NOTE: if _SeenSet is a reference, we replace it with a pointer in order to not lose assignment
-    using Parent = mstd::optional_tuple<pred::AsContainmentPred<_Forbidden>, mstd::NoRef<_SeenSet>>;
-
-    TraversalTraits() = default;
-    INHERIT_ALL_CONSTRUCTORS(TraversalTraits, Parent)
-    INHERIT_ASSIGNMENT(TraversalTraits, Parent)
-
+#warning "make it possible to forbid edges instead of vertices"
     static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
     static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
     static constexpr bool track_nodes = has_seen || has_forbidden;
-#warning "make it possible to forbid edges instead of vertices"
-    using Network = _Network;
-    using ItemContainer  = _ItemContainer;
-    using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
-    using iterator_category = std::forward_iterator_tag;
-   
+
+    // NOTE: if _SeenSet is a reference, we replace it with a pointer in order to not lose assignment
+    using Forbidden = mstd::NoRef<_Forbidden>; //mstd::FirstNonVoid<mstd::NoRef<_Forbidden>, mstd::monostate>;
+    using SeenSet = mstd::NoRef<_SeenSet>; //mstd::FirstNonVoid<mstd::NoRef<_SeenSet>, mstd::monostate>;
+    using Parent = mstd::optional_tuple<Forbidden, SeenSet>;
+    
+    DFSSupportSets() = default;
+    INHERIT_ALL_CONSTRUCTORS(DFSSupportSets, Parent);
+    INHERIT_ASSIGNMENT(DFSSupportSets, Parent);
+
+    // we'll give references to our seen set and the forbidden predicate to each sub-iterator
+    using SeenSetRef = std::conditional_t<has_seen, std::add_pointer_t<mstd::remove_pointer_t<SeenSet>>, void>;
+    // NOTE: we're adding a const here, since the forbidden set is not supposed to be changed by any sub-iterator
+    using ForbiddenRef = std::conditional_t<has_forbidden, std::add_pointer_t<std::add_const_t<mstd::remove_pointer_t<Forbidden>>>, void>;
+
+    /*
+    // NOTE: I tried leaving this as an aggregate, but GCC wouldn't let me:
+    //  "error: initializer for mstd::monostate must be brace-enclosed"... great
+
+    [[ no_unique_address ]] Forbidden forbidden;
+    [[ no_unique_address ]] SeenSet seen;
+
+    template<class First, class... Args> requires (not mstd::is_same_v<First, DFSSupportSets> and not has_forbidden and has_seen)
+    DFSSupportSets(First&& first, Args&&... args):
+      seen(std::forward<First>(first), std::forward<Args>(args)...)
+    {}
+
+    template<class First, class... Args> requires (not mstd::is_same_v<First, DFSSupportSets> and has_forbidden and not has_seen)
+    DFSSupportSets(First&& first, Args&&... args):
+      forbidden(std::forward<First>(first), std::forward<Args>(args)...)
+    {}
+
+    template<class First, class... Args> requires (not mstd::is_same_v<First, DFSSupportSets> and has_forbidden and has_seen)
+    DFSSupportSets(First&& first, Args&&... args):
+      forbidden(std::forward<First>(first)),
+      seen(std::forward<Args>(args)...)
+    {}
+    */
+
+
     bool is_forbidden(const NodeDesc u) const {
       if constexpr (has_forbidden) {
         return mstd::test(mstd::access(this->template get<0>()), u);
@@ -109,10 +132,25 @@ namespace PT {
       if constexpr (has_seen)
         mstd::append(mstd::access(this->template get<1>()), u);
     }
-    auto seen_size(const NodeDesc u) const {
-      if constexpr (has_seen)
-        return mstd::access(this->template get<1>()).size();
-    }
+  };
+
+  template<StrictPhylogenyType _Network,
+           mstd::IterableType _ItemContainer,
+           class _Forbidden,
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
+  struct TraversalTraits:
+    public DFSSupportSets<_Forbidden, _SeenSet>,
+    public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
+  {
+    using Parent = DFSSupportSets<_Forbidden, _SeenSet>;
+    using Network = _Network;
+    using ItemContainer  = _ItemContainer;
+    using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
+    using iterator_category = std::forward_iterator_tag;
+
+    TraversalTraits() = default;
+    INHERIT_ALL_CONSTRUCTORS(TraversalTraits, Parent);
+    INHERIT_ASSIGNMENT(TraversalTraits, Parent);
   };
 
 
@@ -137,7 +175,10 @@ namespace PT {
     using const_reference = reference;
     using pointer         = mstd::pointer_from_reference<reference>;
     using const_pointer   = mstd::pointer_from_reference<const_reference>;
-    using Parent::Parent;
+
+    NodeTraversalTraits() = default;
+    INHERIT_ALL_CONSTRUCTORS(NodeTraversalTraits, Parent);
+    INHERIT_ASSIGNMENT(NodeTraversalTraits, Parent);
 
     // if there is only one node on the stack (f.ex. if we tried putting a leaf on it), consider it empty
     static constexpr unsigned char min_stacksize = 1;
@@ -160,7 +201,8 @@ namespace PT {
            class _Forbidden = void,
            NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false>
-  struct EdgeTraversalTraits: public TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>,_Forbidden, _SeenSet>
+  struct EdgeTraversalTraits:
+    public TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>,_Forbidden, _SeenSet>
   {
     using Parent = TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _Forbidden, _SeenSet>;
     using EdgeContainer = NextEdgeContainer<_Network, reverse>;
@@ -169,7 +211,6 @@ namespace PT {
     // NOTE: the DFS traversal stack will hold auto-iters for iterators into _Network::(Out)EdgeContainer (which is an IterFactory)
     //       such iterators construct edges from the child/parent-adjacencies on the fly when they are de-referenced (rvalues instead of lvalue references).
     //       Note that these edges **DO NOT EXIST IN MEMORY** (only on the return-stack), so we also return rvalues here.
-    using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::child_iterator;
     using value_type      = typename EdgeIterTraits::value_type;
@@ -180,6 +221,11 @@ namespace PT {
     using Adjacency = typename _Network::Adjacency;
     using Parent::mark_seen;
     using Parent::is_seen;
+
+    EdgeTraversalTraits() = default;
+    INHERIT_ALL_CONSTRUCTORS(EdgeTraversalTraits, Parent);
+    INHERIT_ASSIGNMENT(EdgeTraversalTraits, Parent);
+
 
     // an empty stack represents the end-iterator
     static constexpr unsigned char min_stacksize = 2;
@@ -212,15 +258,19 @@ namespace PT {
            class _Forbidden = void,
            NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
            bool reverse = false>
-  struct AllEdgesTraits: public EdgeTraversalTraits<_Network, _Forbidden, _SeenSet, reverse>
+  struct AllEdgesTraits:
+    public EdgeTraversalTraits<_Network, _Forbidden, _SeenSet, reverse>
   {
     using Parent = EdgeTraversalTraits<_Network, _Forbidden, _SeenSet, reverse>;
-    using Parent::Parent;
     using typename Parent::Network;
     using typename Parent::value_type;
     using typename Parent::child_iterator;
     using Parent::mark_seen;
     using Parent::is_seen;
+
+    AllEdgesTraits() = default;
+    INHERIT_ALL_CONSTRUCTORS(AllEdgesTraits, Parent);
+    INHERIT_ASSIGNMENT(AllEdgesTraits, Parent);
 
     // if u has been seen, just return an empty (Out)EdgeContainer (because all of u's out-edges will be skipped anyways)
     child_iterator get_next_items(const NodeDesc u) const {

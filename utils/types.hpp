@@ -53,9 +53,9 @@ namespace PT{
   template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
 
   template<StorageEnum storage>
-  constexpr bool is_inplace_modifyable = ((storage == vecS) || (storage == singleS));
+  constexpr bool is_inplace_modifyable = ((storage == vecS) or (storage == singleS));
   template<StorageEnum storage>
-  constexpr bool unique_elements = !((storage == vecS) || (storage == sortvecS) || (storage == multisetS));
+  constexpr bool unique_elements = not ((storage == vecS) or (storage == sortvecS) or (storage == multisetS));
 
 
   template<class Key,

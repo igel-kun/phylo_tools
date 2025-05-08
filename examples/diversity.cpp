@@ -64,7 +64,9 @@ OptionMap options;
 void parse_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-v"] = {0,0};
-  description["-m"] = {0,0};
+  description["-V"] = {0,0};
+  description["-mr"] = {0,0};
+  description["-ml"] = {0,0};
   description["-mb"] = {0,0};
   description["-f"] = {0,0};
   description["-l"] = {1,1};
@@ -80,8 +82,10 @@ void parse_options(const int argc, const char** argv) {
       See whitepaper [TODO] for definitions.\n\
       FLAGS:\n\
       \t-v\tverbose output, prints network\n\
-      \t-m\tuse alternative diversity definition (via switchings, dynamic programming)\n\
+      \t-mr\tuse alternative diversity definition (via switchings, dynamic programming for reticulations)\n\
+      \t-ml\tuse alternative diversity definition (via switchings, dynamic programming for level)\n\
       \t-mb\tuse alternative diversity definition (via switchings, brute force)\n\
+      \t-V\tcheck solution(s) by brute-forcing switchings\n\
       \t-S i\tnumber i of highest-scoring solutions to return (not compatible with -l)\n\
       \t-l\tcompute the diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
       \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n");
@@ -94,8 +98,8 @@ void parse_options(const int argc, const char** argv) {
   if((not test(options, "-l")) && (options[""].size() < 2))
     cfail(std::string{"If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n\n"} + help_message);
   
-  if(test(options, "-m") && test(options, "-mb"))
-    cfail("-m and -mb are mutually exclusive, please chose a method between brute-force (-mb) and dynamic-programming (-m)\n");
+  if(test(options, "-mr") + test(options, "-ml") + test(options, "-mb") > 1)
+    cfail("-mr, -ml and -mb are mutually exclusive, please chose a method between brute-force (-mb), level-DP (-ml) and reticulation-DP (-mr)\n");
 
   if(test(options, "-l") && test(options, "-S"))
     cfail("-l and -S are mutually exclusive\n");
@@ -196,9 +200,10 @@ int main(const int argc, const char** argv) {
       std::cout << "computing diversity score of leaves " << leaf_names << '\n';
       const auto score = test(options, "-mb") ? 
         pd_score_ct(N, leaves, UtilityFunctors()) :
-        (test(options, "-m") ?
-        pd_score_ct_dp(N, leaves, UtilityFunctors()) :
-        pd_score_classic(N, leaves, UtilityFunctors()));
+        ((test(options, "-ml") || test(options, "-mr")) ?
+          pd_score_ct_dp(N, leaves, UtilityFunctors()) :
+          pd_score_classic(N, leaves, UtilityFunctors())
+        );
       std::cout << "score = "<<score<<'\n';
     } else {
       const size_t k = parse_k(N.num_leaves(), options[""][1]);
@@ -207,12 +212,27 @@ int main(const int argc, const char** argv) {
       const auto before = mstd::get_time();
       const auto solutions = test(options, "-mb") ? 
         optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_ct{}, num_solutions).solutions :
-        (test(options, "-m") ?
-          optimize_displayed_tree_diversity(N, k, UtilityFunctors(), num_solutions).solutions :
-          optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{}, num_solutions).solutions
+        (test(options, "-ml") ?
+          optimize_displayed_tree_diversity_level(N, k, UtilityFunctors(), num_solutions).solutions :
+          (test(options, "-mr") ?
+            optimize_displayed_tree_diversity(N, k, UtilityFunctors(), num_solutions).solutions :
+            optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{}, num_solutions).solutions
+          )
         );
       const auto elapsed = mstd::ms_between(before, mstd::get_time());
       std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
+      // 
+      if(test(options, "-V")) { // verify against brute-force
+        DEBUG4(std::cout << "let's check solutions against brute-force...\n");
+        _pd_score_ct brute_force;
+        for(const auto& sol: solutions) {
+          const double score = sol.second;
+          const double bf_score = brute_force(N, sol.first, UtilityFunctors());
+          if((bf_score < score - 0.01) or (bf_score > score + 0.01))
+            cfail(std::string("Uh oh, solution ") + std::to_string(sol.first) + " scoring " + std::to_string(score) +
+                " vs. " + std::to_string(bf_score) + " by brute-force\n");
+        }
+      }
       for(const auto& [sol, score]: solutions) {
         std::cout << std::fixed << std::setprecision(2)<< "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
       }

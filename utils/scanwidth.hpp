@@ -56,7 +56,7 @@ namespace PT{
     DEBUG4(std::cout << "getting biconnected component factory\n");
     // NOTE: we're extracting u's NodeDesc in order to store it in the corresponding node in the BCC as data
     const auto bc_components = get_biconnected_components<Component>(N, mstd::IdentityFunction<NodeDesc>());
-    for(auto& bcc: bc_components){
+    for(auto& bcc: std::move(bc_components)){
       DEBUG4(std::cout << "found biconnected comp ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n");
 
       if constexpr (preprocess) {

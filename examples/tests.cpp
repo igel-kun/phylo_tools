@@ -43,6 +43,7 @@ void parse_given_options(const int argc, const char** argv) {
   OptionDesc description;
   description["-a"] = {0,0};
   description["-s"] = {0,0};
+  description["-S"] = {0,0};
   description["-v"] = {0,0};
   description["-h"] = {0,0};
   description["-m"] = {0,0};
@@ -58,7 +59,8 @@ void parse_given_options(const int argc, const char** argv) {
       \t-h\trun vector_hash test\n\
       \t-m\trun vector_map test\n\
       \t-f\trun brute-force abstraction test\n\
-      \t-b\trun bounded-subset test\n\
+      \t-S\trun bounded-subset test\n\
+      \t-b\trun Biconnected Components test\n\
       \t-d\trun DFS test\n");
 
   parse_options(argc, argv, description, help_message, options);
@@ -375,6 +377,61 @@ void test_dfs() {
 }
 
 
+test_bcc() {
+  static constexpr std::string diversity_network_006 = "((((((l32:0.02050164852,#H47:0::0.5):1.068140708,((l25:0.2527897357,l26:0.2527897357):0.1716547064,(t63:0.1403079247,t57:0.1403079247):0.2841365174):0.6641979148):1.41922525,((l22:0.5358774596,((l28:0.1688628659,(l29:0.1688628659)#H45:0::0.5):0.1005080127,l24:0.2693708785):0.2665065811):1.299955857,#H28:0.1347631415::0.5):0.6720342898):0.08386657447,((l21:0.6305476259,(l27:0.2235551151,((t17:0.05132528232,l30:0.05132528232):0.1175375835,#H45:0::0.5):0.05469224922):0.4069925108):0.05791050211,(l31:0.02050164852,((l33:0.006991814916,l34:0.006991814916):0.0135098336)#H47:0::0.5):0.6679564794):1.903276053):1.18153951,((((l23:0.3008441365,t137:0.3008441365):0.01128473765,(t58:0.3121288741)#H41:0::0.5):0.3613027167,(t128:0.3121288741,#H41:0::0.5):0.3613027167):1.027638584)#H28:2.072203516::0.5):1.225375063);";
+  using Net = DefaultLabeledNetwork<>;
+  const Net N = parse_newick<MyNetwork>(diversity_network_006);
+
+  {
+    using BCDataExtracter = DataExtracter<Net, mstd::IdentityFunction<NodeDesc>>;
+    using BCEmplacementHelper = EdgeEmplacementHelper<BCComponent, false>; // no need to track roots, the BCCIterator does it automatically
+    using BCEmplacer = EdgeEmplacer<BCEmplacementHelper, BCDataExtracter>;
+    using BCCIter = BCCIterator<Net, BCComponent, false, BCEmplacer>; // NOTE: no trivial components
+    BCCChainDecomposition<Net> chains{N};
+    auto Niter = N.nodes_postorder().begin();
+      auto a = BasicBCCIter<Net>(std::move(Niter), std::move(chains));
+      auto b = CutNodeChildContainerIterator<Net>(std::piecewise_construct, std::tuple{std::move(a)}, std::tuple{});
+      auto c = CutNodeChildrenIterator<Net>(std::move(b));
+      auto d = BCCStartingCutNodeChildIterator<Net, false>(std::piecewise_construct, std::tuple{std::move(c)}, std::tuple{});  
+      auto bcc_maker = BCCmaker<Net, BCComponent, BCEmplacer>(mstd::IdentityFunction<NodeDesc>());
+      assert(bcc_maker.output_emplacer.helper.N == &(bcc_maker.output));
+      auto iter = BCCIter(std::piecewise_construct, std::forward_as_tuple(std::move(d)), std::forward_as_tuple(std::move(bcc_maker)));
+    
+    assert(iter->num_edges() == 9);
+  }
+  /*
+    BCCChainDecomposition<Net> chains{N};
+    std::cout << "done making chain decomposition\n\n";
+
+    using DFSIter = typename NodeTraversal<postorder, Net, NodeDesc>::OwningIter;
+    std::cout << "making "<<mstd::type_name<DFSIter>()<<"\n";
+    DFSIter dfs_it{N};
+    std::cout << "got verifyable iter\n";
+
+    BasicBCCIter<Net> bbi{N, std::move(chains)};
+    std::cout << "got Basic BCC iter\n";
+
+    using AutoIter = mstd::auto_iter<BasicBCCIter<Net>>;
+    AutoIter ai{make_from_tuple<AutoIter>(std::forward_as_tuple(N, N))};
+    std::cout << "got autoiter\n";
+
+    using BeginEnd = BCCBeginEnd<Net, BCComponent, false, NodeTranslation, BCDataExtracter>;
+    BeginEnd be{make_from_tuple<BeginEnd>(std::forward_as_tuple(N, mstd::IdentityFunction<NodeDesc>()))};
+  */
+  {
+    std::cout << "getting Factory\n";
+    using Fac = mstd::IterFactoryWithBeginEnd<typename BasicBCCIter<Net>::Iterator, BCCBeginEnd<Net, BCComponent, false, NodeTranslation, BCDataExtracter>>;
+    Fac factory{std::piecewise_construct, std::forward_as_tuple(N, mstd::IdentityFunction<NodeDesc>()), std::forward_as_tuple(N)};
+    
+    std::cout << "got factory, now starting iteration\n";
+    auto iter = factory.begin();
+
+    assert(iter->num_edges() == 9);
+  }
+}
+
+
+
 int main(const int argc, const char** argv) {
   parse_given_options(argc, argv);
 
@@ -382,10 +439,11 @@ int main(const int argc, const char** argv) {
   if(test(options, "-v")) test_sorted_vector();
   if(test(options, "-h")) test_vector_hash();
   if(test(options, "-m")) test_vector_map();
-  if(test(options, "-b")) test_subsets();
+  if(test(options, "-S")) test_subsets();
   if(test(options, "-f")) test_brute_force();
   if(test(options, "-c")) test_concat_iter();
   if(test(options, "-d")) test_dfs();
+  if(test(options, "-b")) test_bcc();
 
 
   {

@@ -351,6 +351,7 @@ namespace PT{
     static constexpr auto  name(const NodeDesc u) { return node_of(u).name(); }
     static constexpr auto& label(const NodeDesc u) { return node_of(u).label(); }
     static constexpr auto& data(const NodeDesc u) requires (has_node_data) { return node_of(u).data(); }
+    static constexpr auto& data(const Adjacency& uv) requires (has_edge_data) { return uv.data(); }
     static constexpr auto& data(const Edge& uv) requires (has_edge_data) { return uv.data(); }
     static constexpr auto& data(const NodeDesc u, Adjacency& v) requires (has_edge_data) { return v.data(); }
     static constexpr auto& data(const NodeDesc u, const Adjacency& v) requires (has_edge_data) { return v.data(); }

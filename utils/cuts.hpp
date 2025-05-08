@@ -59,6 +59,7 @@ namespace PT{
   // the main data structure is the chain decomposition
   // it can answer whether a node is a cut node and whether an arc is a bridge
   // if output_root == true, then it will pretend that the root is a cut node
+  // NOTE: the decomposition is computed upon construction and will not change! All querys are const
   template<StrictPhylogenyType Network, CutObject cut_object, bool output_root = (cut_object == CutObject::bcc)>
   struct ChainDecomposition {
     NodeMap<ChainInfo> chain_info;

@@ -169,8 +169,8 @@ namespace PT{
     // construct with a given set of seen nodes (which has to correspond to our declared SeenSet), may be movable
     template<class RootInit, class... Args>
     DFSIterator(RootInit&& root_init, Args&&... args):
-      Traits(std::forward<Args>(args)...),
-      roots(std::forward<RootInit>(root_init))
+      Traits{std::forward<Args>(args)...},
+      roots{std::forward<RootInit>(root_init)}
     {
       if(has_roots()) {
         DEBUG6(std::cout << "DFS: making new non-end DFS iterator (type "<< static_cast<int>(o) <<") roots "<<mstd::IterFactory<Roots>{roots}<<", starting at "<<current_root()<<" (tracking? "<<track_nodes<<"), root is seen? "<<is_seen(current_root())<<"\n");
@@ -196,13 +196,6 @@ namespace PT{
     DFSIterator& operator=(const DFSIterator& other) = default;
     DFSIterator& operator=(DFSIterator&& other) = default;
     
-    /*{
-      static_cast<Traits&>(*this) = static_cast<Traits&&>(other);
-      root = other.root;
-      child_history = std::move(other.child_history);
-    }*/
-
-
     DFSIterator& operator++() {
       if(is_valid()) advance();
       return *this;
@@ -245,7 +238,8 @@ namespace PT{
            class _Forbidden = void,
            NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = typename _Network::DefaultSeen>
       requires (is_node_traversal(o) and DFSRootStorageType<_Roots, mstd::TR_VoidOK>)
-  struct DFSNodeIterator: public DFSIterator<o, RootsOr<_Roots, _Network>, NodeTraversalTraits<_Network, _Forbidden, _SeenSet, is_reverse_traversal(o)>>
+  struct DFSNodeIterator:
+    public DFSIterator<o, RootsOr<_Roots, _Network>, NodeTraversalTraits<_Network, _Forbidden, _SeenSet, is_reverse_traversal(o)>>
   {
     using Parent = DFSIterator<o, RootsOr<_Roots, _Network>, NodeTraversalTraits<_Network, _Forbidden, _SeenSet, is_reverse_traversal(o)>>;
     using Parent::node_on_top;
@@ -423,31 +417,6 @@ namespace PT{
   using choose_iterator = typename _choose_iterator<o>::template type<_Network, Roots, _Forbidden, _SeenSet>;
 
 
-  template<class Forbidden, NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
-  struct TraversalHelper:
-    public mstd::optional_tuple<pred::AsContainmentPred<Forbidden>, SeenSet>
-  {
-    using ForbiddenPred = pred::AsContainmentPred<Forbidden>;
-    using Tuple = mstd::optional_tuple<ForbiddenPred, SeenSet>;
-    static constexpr bool has_forbidden_pred = not std::is_void_v<Forbidden>;
-    static constexpr bool has_seen_set = not std::is_void_v<SeenSet>;
-    
-    // we'll give references to our seen set and the forbidden predicate to each sub-iterator
-    using SeenSetRef = std::conditional_t<has_seen_set, std::add_pointer_t<mstd::remove_pointer_t<std::remove_reference_t<SeenSet>>>, void>;
-    // NOTE: we're adding a const here, since the forbidden set is not supposed to be changed by any sub-iterator
-    using ForbiddenPredRef = std::conditional_t<has_forbidden_pred,
-          std::add_pointer_t<std::add_const_t<mstd::remove_pointer_t<std::remove_reference_t<ForbiddenPred>>>>,
-          void>;
-
-    // if TraversalHelper is treated as an aggregate, then we get "too many initializers" if we pass both a seenset and a forbiddenset :/
-    // so we're specifying constructors explicitly
-    TraversalHelper() = default;
-    INHERIT_ALL_CONSTRUCTORS(TraversalHelper, Tuple)
-    INHERIT_ASSIGNMENT(TraversalHelper, Tuple)
-
-  };
-
-
   // this guy is our factory; begin()/end() can be called on it
   //NOTE: Traversal has its own _SeenSet so that multiple calls to begin() can be given the same set of forbidden nodes
   //      Thus, you can either call begin() - which uses the Traversal's _SeenSet, or you call begin(bla, ...) to construct a new _SeenSet from bla, ...
@@ -459,20 +428,20 @@ namespace PT{
   template<TraversalType o,
            PhylogenyType Network,
            DFSRootStorageType _Roots,
-           class Forbidden,
-           NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
+           class _Forbidden,
+           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
   struct Traversal:
-    public TraversalHelper<Forbidden, SeenSet>,
+    public DFSSupportSets<_Forbidden, _SeenSet>,
     public mstd::iterator_traits<choose_iterator<o, Network, _Roots,
-      typename TraversalHelper<Forbidden, SeenSet>::ForbiddenPredRef,
-      typename TraversalHelper<Forbidden, SeenSet>::SeenSetRef>>
+      typename DFSSupportSets<_Forbidden, _SeenSet>::ForbiddenRef,
+      typename DFSSupportSets<_Forbidden, _SeenSet>::SeenSetRef>>
   {
-    using Parent = TraversalHelper<Forbidden, SeenSet>;
-    using PTuple = typename Parent::Tuple;
+    using Helper = DFSSupportSets<_Forbidden, _SeenSet>;
     using Roots = std::conditional_t<std::is_same_v<_Roots, NodeDesc>, NodeSingleton, _Roots>;
-    using typename Parent::ForbiddenPred;
-    using typename Parent::SeenSetRef;
-    using typename Parent::ForbiddenPredRef;
+    using typename Helper::Forbidden;
+    using typename Helper::SeenSet;
+    using typename Helper::SeenSetRef;
+    using typename Helper::ForbiddenRef;
 
     Roots roots;
 
@@ -481,17 +450,17 @@ namespace PT{
 
     template<class RootInit, class... Args>
     Traversal(RootInit&& root_init, Args&&... args):
-      Parent(std::forward<Args>(args)...),
+      Helper(std::forward<Args>(args)...),
       roots(std::forward<RootInit>(root_init))
     {}
     template<PhylogenyType Phylo>
     Traversal(Phylo&& N):
-      Traversal(std::forward<Phylo>(N).roots(), std::remove_cvref_t<Phylo>::make_seen())
+      Traversal(std::forward<Phylo>(N).roots())
     {}
 
 
-    using Iter = choose_iterator<o, Network, Roots, ForbiddenPredRef, SeenSetRef>;
-    using OwningIter = choose_iterator<o, Network, Roots, ForbiddenPred, SeenSet>;
+    using Iter = choose_iterator<o, Network, Roots, ForbiddenRef, SeenSetRef>;
+    using OwningIter = choose_iterator<o, Network, Roots, _Forbidden, _SeenSet>;
     using iterator = Iter;
     using const_iterator = iterator;
    
@@ -502,14 +471,14 @@ namespace PT{
     // if we are traversing edges, then empty() means that there are no edges; to determine this, we have to check if all roots are leaves
     bool empty() const { return begin() == end(); }
 
-    auto begin() & { return Iter(roots, static_cast<PTuple&>(*this)); }
+    auto begin() & { return Iter(roots, static_cast<Helper&>(*this)); }
     // if we have a seenset, we cannot expect the traversal to keep it constant...
-    auto begin() const & //requires (std::is_void_v<SeenSet> or std::is_pointer_v<SeenSet>)
+    auto begin() const & requires (std::is_void_v<SeenSet> or std::is_pointer_v<SeenSet>)
     {
-      return Iter(roots, static_cast<const PTuple&>(*this));
+      return Iter(roots, static_cast<const Helper&>(*this));
     }
     // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
-    auto begin() && { return OwningIter(std::move(roots), static_cast<PTuple&&>(*this)); }
+    auto begin() && { return OwningIter(std::move(roots), static_cast<Helper&&>(*this)); }
 
     // if called with one or more arguments, begin() constructs a new iterator using these arguments
 //    template<class... Args> requires (sizeof...(Args) != 0)
@@ -517,12 +486,12 @@ namespace PT{
 
     static constexpr auto end() { return mstd::GenericEndIterator(); }
 
-    // allow the user to play with the SeenSet and ForbiddenPrediacte at all times
+    // allow the user to play with the SeenSet and Forbiddeniacte at all times
     //NOTE: this gives you the power to change the SeenSet while the DFS is running, and with great power comes great responsibility ;] so be careful!
-    auto& seen_nodes() { return mstd::default_deref{}(Parent::template get<1>()); }
-    const auto& seen_nodes() const { return mstd::default_deref{}(Parent::template get<1>()); }
-    auto& forbidden_predicate() { return Parent::template get<0>(); }
-    const auto& forbidden_predicate() const { return Parent::template get<0>(); }
+    auto& seen_nodes() { return mstd::default_deref{}(Helper::template get<1>()); }
+    const auto& seen_nodes() const { return mstd::default_deref{}(Helper::template get<1>()); }
+    auto& forbidden_predicate() { return Helper::template get<0>(); }
+    const auto& forbidden_predicate() const { return Helper::template get<0>(); }
 
     template<mstd::ContainerType Container>
     Container& append_to(Container& c) { append(c, *this); return c; }
@@ -535,33 +504,33 @@ namespace PT{
            PhylogenyType Network,
            class Forbidden,
            NodeSetType<mstd::TR_PtrVoidOK> SeenSet>
-  struct TraversalHelper<o, Network, Forbidden, SeenSet>:
-    public ProtoTraversalHelper<Forbidden, SeenSet>
+  struct DFSSupportSets<o, Network, Forbidden, SeenSet>:
+    public ProtoDFSSupportSets<Forbidden, SeenSet>
   {
-    using Parent = ProtoTraversalHelper<Forbidden, SeenSet>;
-    using typename Parent::ForbiddenPred;
-    using typename Parent::SeenSetRef;
-    using typename Parent::ForbiddenPredRef;
+    using Helper = ProtoDFSSupportSets<Forbidden, SeenSet>;
+    using typename Helper::Forbidden;
+    using typename Helper::SeenSetRef;
+    using typename Helper::ForbiddenRef;
 
     // we'll give references to our seen set and the forbidden predicate to each sub-iterator
-    using Iter = choose_iterator<o, Network, ForbiddenPredRef, SeenSetRef>;
-    using OwningIter = choose_iterator<o, Network, ForbiddenPred, SeenSet>;
+    using Iter = choose_iterator<o, Network, ForbiddenRef, SeenSetRef>;
+    using OwningIter = choose_iterator<o, Network, Forbidden, SeenSet>;
 
     NodeDesc root;
 
     template<class... Args>
-    TraversalHelper(const NodeDesc _root, Args&&... args):
-      Parent(std::forward<Args>(args)...),
+    DFSSupportSets(const NodeDesc _root, Args&&... args):
+      Helper(std::forward<Args>(args)...),
       root(_root)
     {}
     template<class... Args>
-    TraversalHelper(const NodeSingleton& _root, Args&&... args):
-      Parent(std::forward<Args>(args)...),
+    DFSSupportSets(const NodeSingleton& _root, Args&&... args):
+      Helper(std::forward<Args>(args)...),
       root(_root.empty() ? NoNode : front(_root))
     {}
     template<class... Args>
-    TraversalHelper(const Network& N, Args&&... args):
-      Parent(std::forward<Args>(args)...),
+    DFSSupportSets(const Network& N, Args&&... args):
+      Helper(std::forward<Args>(args)...),
       root(N.root())
     {}
 
@@ -571,7 +540,7 @@ namespace PT{
       else return root == NoNode;
     }
 
-    auto begin() & { return Iter(root, static_cast<Parent&>(*this)); }
+    auto begin() & { return Iter(root, static_cast<Helper&>(*this)); }
     // if we are const, then our seen-set is const and so, the iterator we create cannot reference our seen-set; thus, we'll have to copy it :/
     auto begin() const & { return OwningIter(root, static_cast<const Parent&>(*this)); }
     // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
@@ -595,11 +564,11 @@ namespace PT{
            NodeSetType<mstd::TR_PtrVoidOK> SeenSet = typename Network::DefaultSeen>
     requires (not std::is_reference_v<SeenSet>)
   struct Traversal:
-    public TraversalHelper<o, Network, _Roots, Forbidden, SeenSet>,
-    public mstd::iterator_traits<typename TraversalHelper<o, Network, _Roots, Forbidden, SeenSet>::Iter>
+    public DFSSupportSets<o, Network, _Roots, Forbidden, SeenSet>,
+    public mstd::iterator_traits<typename DFSSupportSets<o, Network, _Roots, Forbidden, SeenSet>::Iter>
   {
     using Roots = _Roots;
-    using Parent = TraversalHelper<o, Network, Roots, Forbidden, SeenSet>;
+    using Parent = DFSSupportSets<o, Network, Roots, Forbidden, SeenSet>;
     using Traits = mstd::iterator_traits<typename Parent::Iter>;
     using iterator = typename Parent::Iter;
     using const_iterator = iterator;

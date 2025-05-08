@@ -43,7 +43,7 @@ namespace PT{
     TreeComponentInfos(Network& _N):
       N(_N)
     {
-      if(!N.empty())
+      if(not N.empty())
         compute_comp_DAG();
     }
 
@@ -53,7 +53,8 @@ namespace PT{
     {}
 
     NodeDesc comp_root_of(const NodeDesc x) const {
-      if(const auto rep = comp_root.lookup(x).first; rep)
+      const auto rep = comp_root.lookup(x).first;
+      if(rep)
         return rep->get_representative();
       else return NoNode;
     }
@@ -160,7 +161,7 @@ namespace PT{
       // create an edge-emplacer for the result DAG; we won't have to track roots since they will be the same as the roots of N
       // NOTE: the lambda tells the emplacer that the node data of the node corresponding to u will be u itself
       //       (thus, each new node has, as its data, the NodeDesc of its corresponding original node)
-      auto emplacer = EdgeEmplacers<false>::make_emplacer(comp_DAG, N_to_comp_DAG, [](const NodeDesc u){ return u;});
+      auto emplacer = EdgeEmplacers<false>::make_emplacer(comp_DAG, N_to_comp_DAG, mstd::IdentityFunction<NodeDesc>());
       
       NodeVec non_trivial_roots;
       NodeVec trivial_roots;

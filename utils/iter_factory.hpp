@@ -39,20 +39,25 @@ namespace mstd {
     IterFactoryWithBeginEnd() = default;
     // construct from a BeginEndTransformation and args for the auto_iter
     template<class T, class... Args> requires mstd::is_same_v<T, BeginEndTransformation>
-    IterFactoryWithBeginEnd(T&& _trans, Args&&... args): Parent(std::forward<Args>(args)...), trans(forward<T>(_trans)) {}
+    IterFactoryWithBeginEnd(T&& _trans, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      trans(std::forward<T>(_trans))
+    {}
+
     // if the first argument is not a BeginEndTransformation, not an IterFactoryWithBeginEnd, and not piecewise_construct,
     // then default-construct the transformation
     template<class First, class... Args>
-      requires (not mstd::is_same_v<First, BeginEndTransformation> &&
-                not mstd::is_same_v<First, IterFactoryWithBeginEnd> &&
-                not mstd::is_same_v<First, std::piecewise_construct_t>)
-    IterFactoryWithBeginEnd(First&& first, Args&&... args): Parent(std::forward<First>(first), std::forward<Args>(args)...), trans() {}
+      requires (not mstd::IsAnyOf<First, BeginEndTransformation, IterFactoryWithBeginEnd, std::piecewise_construct_t>)
+    IterFactoryWithBeginEnd(First&& first, Args&&... args):
+      Parent(std::forward<First>(first), std::forward<Args>(args)...),
+      trans()
+    {}
 
     // construct our internal auto_iter and our transformation from two tuples
     template<class PTuple, class TTuple>
     IterFactoryWithBeginEnd(const std::piecewise_construct_t, TTuple&& trans_init, PTuple&& parent_init):
-      Parent(make_from_tuple<Parent>(forward<PTuple>(parent_init))),
-      trans(make_from_tuple<BeginEndTransformation>(forward<TTuple>(trans_init)))
+      Parent(make_from_tuple<Parent>(std::forward<PTuple>(parent_init))),
+      trans(make_from_tuple<BeginEndTransformation>(std::forward<TTuple>(trans_init)))
     {}
     IterFactoryWithBeginEnd(const IterFactoryWithBeginEnd&) = default;
     IterFactoryWithBeginEnd(IterFactoryWithBeginEnd&&) = default;

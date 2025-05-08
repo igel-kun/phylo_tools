@@ -11,10 +11,12 @@
 
 namespace PT{
 
-  template<PhylogenyType Network>
+  template<StrictPhylogenyType Network>
   using BCCChainDecomposition = ChainDecomposition<Network, CutObject::bcc>;
-  template<PhylogenyType Network>
-  using BasicBCCIter = BCCCutIter<Network, postorder, const BCCChainDecomposition<Network>*>;
+
+  // NOTE: the BasicBCCIter OWNS the chain decomposition
+  template<StrictPhylogenyType Network>
+  using BasicBCCIter = BCCCutIter<Network, postorder, BCCChainDecomposition<Network>>;
 
   //------------- STEP 1: for each cut-node, get its child-container ---------------------
   template<StrictPhylogenyType Network>
@@ -26,18 +28,20 @@ namespace PT{
 
 
   // ------------- STEP 3: filter the children that, with their cut-node, form a BCC-starting edge ------------
-  template<PhylogenyType Network, bool allow_trivial = true>
+  template<StrictPhylogenyType Network, bool allow_trivial = true>
   struct BCCStartEdge {
     using Iterator = CutNodeChildrenIterator<Network>;
+    using BasicIter = BasicBCCIter<Network>;
+
     // we will get the concatenating iterator listing cut-nodes transformed into their child-container
     bool operator()(const Iterator& iter) const {
-      const auto& cut_it = static_cast<const BasicBCCIter<Network>&>(iter);
+      const auto& cut_it = static_cast<const BasicIter&>(iter);
       const auto& chains = cut_it.get_predicate();
-      DEBUG4(std::cout << "checking edge "<<*cut_it<<" -> "<<*iter<<" for BCC - "<< chains->is_first_edge_in_bcc(*cut_it, *iter)  <<"\n");
+      DEBUG4(std::cout << "checking edge "<<*cut_it<<" -> "<<*iter<<" for BCC - "<< mstd::access(chains).is_first_edge_in_bcc(*cut_it, *iter)  <<"\n");
       if constexpr (allow_trivial)
-        return chains->is_first_edge_in_bcc(*cut_it, *iter);
+        return mstd::access(chains).is_first_edge_in_bcc(*cut_it, *iter);
       else 
-        return chains->is_first_edge_in_nontrivial_bcc(*cut_it, *iter);
+        return mstd::access(chains).is_first_edge_in_nontrivial_bcc(*cut_it, *iter);
     }
   };
   template<StrictPhylogenyType Network, bool allow_trivial = true>
@@ -45,9 +49,10 @@ namespace PT{
 
 
   // ------------------- STEP 5: transform the filtered child-nodes into biconnected components using a BCCmaker ----------------
+  // NOTE: the filter owns (1) a seen-set, (2) the cached output components, and (3) the emplacer for the output component
   template<StrictPhylogenyType _Network,
            StrictPhylogenyType _Component = _Network,
-           StrictEdgeEmplacerType Emplacer = EdgeEmplacerWithHelper<_Component, false, _Network, NodeTranslation*, DataExtracter<_Network>>>
+           StrictEdgeEmplacerType Emplacer = EdgeEmplacer<EdgeEmplacementHelper<_Component, false, NodeTranslation>, DataExtracter<_Network>>>
   struct BCCmaker {
     using Network = _Network;
     using Component = _Component;
@@ -61,10 +66,12 @@ namespace PT{
     BCCmaker() = delete; //: output_emplacer(output) {}
 
     template<class First, class... Args> 
-      requires (not mstd::is_same_v<First, BCCmaker> and not mstd::is_same_v<First, std::piecewise_construct_t>)
+      requires (not mstd::IsAnyOf<First, BCCmaker, std::piecewise_construct_t>)
     BCCmaker(First&& first, Args&&... args):
       output_emplacer{output, std::forward<First>(first), std::forward<Args>(args)...}
-    {}
+    { // the output should now be connected to the emplacer
+      assert(output_emplacer.helper.N == &output);
+    }
 
     // NOTE: when piecewise_construct is passed, we need to smuggle-in our output as a network parameter, so we have to extract and repack the first tuple
     template<mstd::TupleType First, mstd::TupleType Second>
@@ -72,19 +79,26 @@ namespace PT{
       output_emplacer(
         std::make_from_tuple<EmplacementHelper>(std::tuple_cat(std::forward_as_tuple(output), std::forward<First>(first))),
         std::make_from_tuple<Extracter>(std::forward<Second>(second)))
-    {}
+    {
+      assert(output_emplacer.helper.N == &output);
+    }
 
-    BCCmaker(const BCCmaker& other):
-      seen{other.seen}, output{}, output_emplacer{other.output_emplacer} {}
-    BCCmaker(BCCmaker&& other) = default;
+    // BCCMakers should not be copied, only moved and if they are moved, we have to remember to reset the pointer to output in the Emplacement Helper
+    BCCmaker(const BCCmaker& other) = delete;
+    BCCmaker(BCCmaker&& other):
+      seen{std::move(other).seen}, output{std::move(other).output}, output_emplacer{std::move(other).output_emplacer}
+    {
+      output_emplacer.helper.N = &output;
+    }
   
     // construct a biconnected component containing the arc uv and store it in 'output'
     //NOTE: remember to set the root of the output component after calling this!
     void make_component_along(const NodeDesc rt, const NodeDesc v) const {
       if(append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v << " (root "<<rt<<")\n");
-        const auto& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
-        for(auto uv: v_node.in_edges()) output_emplacer.emplace_edge(uv);
+        auto& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
+        for(auto uv: v_node.in_edges())
+          output_emplacer.emplace_edge(uv);
         for(const NodeDesc u: v_node.parents()) 
           if(u != rt)
             make_component_along(rt, u);
@@ -98,6 +112,8 @@ namespace PT{
       output_emplacer.clear();
       make_component_along(u, v);
       output_emplacer.mark_root(u);
+      assert(output_emplacer.helper.N == &output);
+      assert(not output.roots().empty());
     }
 
     Component& operator()(const NodeDesc u, const NodeDesc v) const {
@@ -119,7 +135,7 @@ namespace PT{
   template<StrictPhylogenyType Network,
            StrictPhylogenyType Component = Network,
            bool allow_trivial = true,
-           EdgeEmplacerType Emplacer = EdgeEmplacerWithHelper<Component, false, Network, NodeTranslation*, DataExtracter<Network>>>
+           EdgeEmplacerType Emplacer = EdgeEmplacer<EdgeEmplacementHelper<Component, false, NodeTranslation>, DataExtracter<Network>>>
   using BCCIterator = mstd::transforming_iterator<BCCStartingCutNodeChildIterator<Network, allow_trivial>, BCCmaker<Network, Component, Emplacer>, true>;
 
 
@@ -135,7 +151,7 @@ namespace PT{
   struct BCCBeginEnd {
     using StrictOldToNew = std::remove_cvref_t<OldToNew>;
     using OldToNewRef = StrictOldToNew&;
-    using Emplacer = EdgeEmplacerWithHelper<Component, false, Network, OldToNewRef, Extracter>;
+    using Emplacer = EdgeEmplacer<EdgeEmplacementHelper<Component, false, OldToNewRef>, Extracter>;
     using InIterator = typename BasicBCCIter<Network>::Iterator;
     using OutIterator = BCCIterator<Network, Component, allow_trivial, Emplacer>;
     using MyBCCmaker = BCCmaker<Network, Component, Emplacer>;
@@ -149,28 +165,35 @@ namespace PT{
     Extracter extracter;
 
     BCCBeginEnd() = default;
-    BCCBeginEnd(const BCCBeginEnd&) = default;
-    BCCBeginEnd(BCCBeginEnd&&) = default;
+    //BCCBeginEnd(const BCCBeginEnd&) = default;
+    //BCCBeginEnd(BCCBeginEnd&&) = default;
 
     // old_to_new can be initialized in 3 ways: default, copy, and move
     // (1) default:
     template<class First, class... Args>
-      requires (not mstd::is_same_v<First, StrictOldToNew> && not mstd::is_same_v<First, BCCBeginEnd>)
-    BCCBeginEnd(const Network& N, First&& first, Args&&... args):
-      chains{N}, old_to_new{}, extracter{std::forward<First>(first), std::forward<Args>(args)...} {}
-    // (2) copy
-    template<class... Args>
-    BCCBeginEnd(const Network& N, const OldToNew& _old_to_new, Args&&... args):
-      chains{N}, old_to_new{_old_to_new}, extracter{std::forward<Args>(args)...} {}
-    // (3) move
-    template<class... Args>
-    BCCBeginEnd(const Network& N, OldToNew&& _old_to_new, Args&&... args):
-      chains{N}, old_to_new{std::move(_old_to_new)}, extracter{std::forward<Args>(args)...} {}
+      requires (not mstd::is_same_v<First, StrictOldToNew>)
+    BCCBeginEnd(const NodeDesc rt, const size_t num_nodes, First&& first, Args&&... args):
+      chains{rt, num_nodes}, old_to_new{}, extracter{std::forward<First>(first), std::forward<Args>(args)...} {}
+    // (2) copy or move
+    template<class First, class... Args>
+      requires mstd::is_same_v<First, StrictOldToNew>
+    BCCBeginEnd(const NodeDesc rt, const size_t num_nodes, First&& _old_to_new, Args&&... args):
+      chains{rt, num_nodes}, old_to_new{std::forward<First>(_old_to_new)}, extracter{std::forward<Args>(args)...} {}
 
-    template<class Iter, class... Args> requires (mstd::is_same_v<Iter, InIterator>)
-    OutIterator construct_bcc_iter(Iter&& iter, Args&&... args) const {
+    BCCBeginEnd(const NodeDesc rt, const size_t num_nodes):
+      chains{rt, num_nodes}, old_to_new{}, extracter{} {}
+
+    // instead of a root and the number of nodes, we can also get that from a network
+    template<class... Args>
+    BCCBeginEnd(const Network& N, Args&&... args):
+      BCCBeginEnd(N.root(), N.num_nodes(), std::forward<Args>(args)...)
+    {}
+
+
+    template<class Iter, class Decomp, class... Args> requires (mstd::is_same_v<Iter, InIterator>)
+    static OutIterator construct_bcc_iter(Iter&& iter, Decomp&& chain_decomp, Args&&... args) {
       DEBUG4(std::cout << "creating new BCC iterator\n");
-      auto a = BasicBCCIter<Network>(std::forward<Iter>(iter), &chains);
+      auto a = BasicBCCIter<Network>(std::forward<Iter>(iter), std::forward<Decomp>(chain_decomp));
       auto b = CutNodeChildContainerIterator<Network>(std::piecewise_construct, std::tuple{std::move(a)}, std::tuple{});
       auto c = CutNodeChildrenIterator<Network>(std::move(b));
       auto d = BCCStartingCutNodeChildIterator<Network, allow_trivial>(std::piecewise_construct, std::tuple{std::move(c)}, std::tuple{});  
@@ -182,19 +205,21 @@ namespace PT{
     // we're going to use references to our extracter and our old_to_new translation when we're not going out of scope
     template<class Iter> requires (std::is_same_v<std::remove_cvref_t<Iter>, InIterator>)
     OutIterator operator()(Iter&& iter) const & {
-      return construct_bcc_iter(std::forward<Iter>(iter), std::piecewise_construct, std::tuple{&old_to_new}, std::tuple{extracter});
+      return construct_bcc_iter(std::forward<Iter>(iter), chains, std::piecewise_construct, std::tuple{&old_to_new}, std::forward_as_tuple(extracter));
     }
     template<class Iter> requires (std::is_same_v<std::remove_cvref_t<Iter>, InIterator>)
     OutIterator operator()(Iter&& iter) & {
-      return construct_bcc_iter(std::forward<Iter>(iter), std::piecewise_construct, std::tuple{&old_to_new}, std::tuple{extracter});
+      return construct_bcc_iter(std::forward<Iter>(iter), chains, std::piecewise_construct, std::tuple{&old_to_new}, std::forward_as_tuple(extracter));
     }
     template<class Iter> requires (std::is_same_v<std::remove_cvref_t<Iter>, InIterator>)
     OutIterator operator()(Iter&& iter) && {
-      return construct_bcc_iter(std::forward<Iter>(iter),
-          std::piecewise_construct, std::forward_as_tuple(std::move(old_to_new)), std::forward_as_tuple(std::move(extracter)));
+      return construct_bcc_iter(
+          std::forward<Iter>(iter),
+          std::move(chains),
+          std::piecewise_construct,
+          std::forward_as_tuple(std::move(old_to_new)), std::forward_as_tuple(std::move(extracter)));
     }
     auto operator()(const mstd::GenericEndIterator& i) const { return i; }
-
   };
 
   template<StrictPhylogenyType Network,
@@ -212,6 +237,12 @@ namespace PT{
     template<class... Args>
     BiconnectedComponents(const Network& N, Args&&... args):
       Parent(std::piecewise_construct, std::forward_as_tuple(N, std::forward<Args>(args)...), std::forward_as_tuple(N))
+    {}
+    template<class... Args>
+    BiconnectedComponents(const NodeDesc rt, const size_t num_nodes, Args&&... args):
+      Parent(std::piecewise_construct,
+          std::forward_as_tuple(rt, num_nodes, std::forward<Args>(args)...), // make the BCCBeginEnd transformation
+          std::forward_as_tuple(rt)) // make the NodeTraversal part of the BasicBCCIter
     {}
   };
 

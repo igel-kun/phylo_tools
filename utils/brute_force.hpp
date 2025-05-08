@@ -37,7 +37,7 @@ namespace mstd {
     }
     // if we used iterators but the user requested something else, we'll have to try and convert...
     if constexpr (not mstd::is_same_v<OutputContainer, SubsetInternal>) {
-      SolutionAccumulator<OutputContainer, ScoreFunc, Cmp> out{};
+      SolutionAccumulator<OutputContainer, ScoreFunc, Cmp> out{keep_best_solutions};
       for(const auto& sol: accu.solutions) {
         if constexpr (Subsets::store_iters)
           out.add(sol.first | std::ranges::views::transform(default_deref{}), sol.second);
