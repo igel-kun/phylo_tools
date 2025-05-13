@@ -10,6 +10,7 @@
 #include "tags.hpp"
 #include "lca.hpp"
 #include "dfs.hpp"
+//#include "dfs_coro.hpp"
 #include "except.hpp"
 #include "node.hpp"
 #include "edge.hpp"
@@ -980,7 +981,7 @@ namespace PT {
     }
 
     template<class... Args> static auto nodes_below_preorder(Args&&... args)  { return nodes_below<preorder>(std::forward<Args>(args)...); }
-    template<class... Args> static auto nodes_below_inorder(Args&&... args)   { return nodes_below<inorder>(std::forward<Args>(args)...); }
+//    template<class... Args> static auto nodes_below_inorder(Args&&... args)   { return nodes_below<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto nodes_below_postorder(Args&&... args) { return nodes_below<postorder>(std::forward<Args>(args)...); }
 
     // --------------- relative reverse node traversals (above) ------------------
@@ -988,7 +989,7 @@ namespace PT {
     static auto nodes_above(Args&&... args) { return nodes_below<TraversalType(o | reverse_traversal)>(std::forward<Args>(args)...); }
 
     template<class... Args> static auto nodes_above_preorder(Args&&... args)  { return nodes_above<preorder>(std::forward<Args>(args)...); }
-    template<class... Args> static auto nodes_above_inorder(Args&&... args)   { return nodes_above<inorder>(std::forward<Args>(args)...); }
+//    template<class... Args> static auto nodes_above_inorder(Args&&... args)   { return nodes_above<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto nodes_above_postorder(Args&&... args) { return nodes_above<postorder>(std::forward<Args>(args)...); }
 
     // --------------- absolute node traversals (below (default) or above roots) ------------------
@@ -1039,6 +1040,7 @@ namespace PT {
       return nodes<preorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
+    /*
     // -------------- inorder -----------------
     auto nodes_inorder() const  { return nodes_below<inorder>(_roots); }
 
@@ -1051,6 +1053,7 @@ namespace PT {
     static auto nodes_inorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes<inorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
+    */
 
     // -------------- postorder -----------------
     auto nodes_postorder() const  { return nodes_below<postorder>(_roots); }
@@ -1116,14 +1119,14 @@ namespace PT {
     }
 
     template<class... Args> static auto edges_below_preorder(Args&&... args)  { return edges_below<preorder>(std::forward<Args>(args)...); }
-    template<class... Args> static auto edges_below_inorder(Args&&... args)   { return edges_below<inorder>(std::forward<Args>(args)...); }
+    //template<class... Args> static auto edges_below_inorder(Args&&... args)   { return edges_below<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_below_postorder(Args&&... args) { return edges_below<postorder>(std::forward<Args>(args)...); }
 
     // --------------- relative reverse edge traversals (above) ------------------
     template<TraversalType o = preorder, class... Args>
     static auto edges_above(Args&&... args) { return edges_below<TraversalType(o | reverse_traversal)>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_above_preorder(Args&&... args)  { return edges_above<preorder>(std::forward<Args>(args)...); }
-    template<class... Args> static auto edges_above_inorder(Args&&... args)   { return edges_above<inorder>(std::forward<Args>(args)...); }
+    //template<class... Args> static auto edges_above_inorder(Args&&... args)   { return edges_above<inorder>(std::forward<Args>(args)...); }
     template<class... Args> static auto edges_above_postorder(Args&&... args) { return edges_above<postorder>(std::forward<Args>(args)...); }
 
     // --------------- absolute edge traversals (below (default) or above roots) ------------------
@@ -1142,7 +1145,7 @@ namespace PT {
 
 
     template<class... Args> auto edges_preorder(Args&&... args) const  { return edges<preorder>(std::forward<Args>(args)...); }
-    template<class... Args> auto edges_inorder(Args&&... args) const   { return edges<inorder>(std::forward<Args>(args)...); }
+    //template<class... Args> auto edges_inorder(Args&&... args) const   { return edges<inorder>(std::forward<Args>(args)...); }
     template<class... Args> auto edges_postorder(Args&&... args) const { return edges<postorder>(std::forward<Args>(args)...); }
 
     // --------------- edge traversals (with pred) ------------------

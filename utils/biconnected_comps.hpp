@@ -4,6 +4,7 @@
 #pragma once
 
 #include "union_find.hpp"
+#include "concat_iter.hpp"
 
 #include "extract_data.hpp"
 #include "types.hpp"

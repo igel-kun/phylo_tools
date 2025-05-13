@@ -18,13 +18,14 @@
 
 #include "utils/network.hpp"
 #include "utils/types.hpp"
+#include "utils/biconnected_comps.hpp"
 #include "io/newick.hpp"
 
 #include "utils/dfs_coro.hpp"
 
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
 constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));";
-constexpr auto random_net = "((((((((((a)#H3,(b)#H4))#H2,c))#H1)#H0,(((#H3,d),(#H4,e)))#H5),(#H5,(#H1,#H2))),((#H0,(((((f,g))#H7,(((h,i),(j,k)),l)),(m,n)),#H7)))#H6),#H6);";
+constexpr auto random_net = "((((((((((a:0)#H3:1,(b:2)#H4:2):3)#H2:4,c:4):5)#H1:6)#H0:7,(((#H3:2,d:3):8,(#H4:1,e:9):5):1)#H5:6):1,(#H5:1,(#H1:4,#H2:2):4):1):8,((#H0:1,(((((f:4,g:2):1)#H7:4,(((h:1,i:2):5,(j:1,k:2):4):8,l:1):6):3,(m:2,n:4):5):1,#H7:5):2):4)#H6:7),#H6:2);";
 
 
 // some static tests
@@ -37,10 +38,10 @@ static_assert(std::is_trivially_move_assignable_v<mstd::optional_by_invalid<int>
 
 using namespace PT;
 
-OptionMap options;
+mstd::OptionMap options;
 
 void parse_given_options(const int argc, const char** argv) {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-a"] = {0,0};
   description["-s"] = {0,0};
   description["-S"] = {0,0};
@@ -63,7 +64,7 @@ void parse_given_options(const int argc, const char** argv) {
       \t-b\trun Biconnected Components test\n\
       \t-d\trun DFS test\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   if(test(options, "-a"))
     for(const auto& s: {"-s", "-h", "-m", "-b", "-d", "-v"})
@@ -246,7 +247,7 @@ size_t choose(const size_t n, const size_t k) {
   return result;
 }
 
-template<mstd::ContainerType Container>
+template<mstd::StrictContainerType Container>
 void test_subsets_sub(const Container& c, const ssize_t low, const ssize_t high) {
   std::cout << "\nsubsets of "<< c << " with size between "<<low<<" & "<< high <<'\n';
   const mstd::BoundedSubsetFactory<const Container> fac{c, low, high};
@@ -322,8 +323,8 @@ void test_concat_iter() {
 
 
 void test_dfs() {
-  using MyNetwork = DefaultLabeledNetwork<>;
-  const MyNetwork N = parse_newick<MyNetwork>(random_net);
+  using MyNetwork = DefaultLabeledNetwork<void, size_t>;
+  const MyNetwork N = parse_newick<MyNetwork>(random_net, Ex_edge_data{}, mstd::AnythingFromString<>{});
 
   NodeVec nodes;    
   nodes.clear();
@@ -331,62 +332,73 @@ void test_dfs() {
   std::cout << "nodes in postorder: " << nodes << '\n';
 
   {
-  assert(nodes.back() == 0);
-  NodeDesc old = NoNode;
-  for(const auto v: nodes) {
-    if(old != NoNode) {
-      assert(N.is_leaf(v) || N.is_edge(v, old));
-    } else old = v;
-  }
+    assert(nodes.back() == N.root());
+    NodeMap<size_t> po_nums;
+    for(const auto v: nodes) {
+      po_nums[v] = nodes.size() - po_nums.size();
+      assert(std::ranges::all_of(MyNetwork::children(v), [&](const auto x){return po_nums[x] > po_nums[v];}));
+    }
   }
 
 
   auto traversal = N.nodes_preorder(NodeVec{nodes[3], nodes[15], nodes[37]}); // 5, 6, 29 are now forbidden
-  auto& fpred = traversal.forbidden_predicate();
+  auto& fpred = traversal.forbidden();
   nodes.clear();
   std::move(traversal).append_to(nodes);
-  std::cout << "nodes in preorder with forbidden "<<fpred.c<<": " << nodes << '\n';
+  std::cout << "nodes in preorder with forbidden "<<fpred<<": " << nodes << '\n';
   assert(nodes.size()==24);
 
   {
-  assert(nodes.back() == 0);
-  NodeDesc old = NoNode;
-  for(const auto v: nodes) {
-    if(old != NoNode) {
-      assert(N.is_leaf(v) || N.is_edge(v, old));
-    } else old = v;
-  }
+    assert(nodes.front() == N.root());
+    NodeDesc old = NoNode;
+    NodeMap<size_t> po_nums;
+    for(const auto v: nodes) {
+      po_nums[v] = po_nums.size();
+      if(old != NoNode) {
+        // if old->v is not an edge, then all children of old must have been seen before old itself
+        assert((std::ranges::all_of(MyNetwork::children(old), [&](const auto x){ return po_nums[x] < po_nums[old];})) or N.is_edge(old, v));
+      }
+      old = v;
+    }
   }
 
 
-  EdgeVec edges;    
+  NetEdgeVec<MyNetwork> edges;    
   N.edges_preorder().append_to(edges);
   std::cout << "edges in preorder: " << edges << "\n\n";
 
   {
-  assert(edges.front().tail() == 0);
-  const Edge<>* old = nullptr;
-  for(const auto uv: edges) {
-    if(old != nullptr) {
-      assert(N.is_leaf(old->head()) || (uv.tail() == old->head()));
-    } else old = &uv;
-  }
+    assert(edges.front().tail() == N.root());
+    NodeDesc old = NoNode;
+    NodeMap<size_t> po_nums;
+    for(const auto uv: edges) {
+      std::cout << uv << " with data: "<<uv.data()<<'\n';
+      const NodeDesc v = uv.head();
+      po_nums[v] = po_nums.size();
+      if(old != NoNode) {
+        assert((std::ranges::all_of(MyNetwork::children(old), [&](const auto x){ return po_nums[x] < po_nums[old];})) or N.is_edge(old, v));
+      }
+      old = v;
+    }
   }
 
   N.print_subtree(std::cout);
 }
 
 
-test_bcc() {
-  static constexpr std::string diversity_network_006 = "((((((l32:0.02050164852,#H47:0::0.5):1.068140708,((l25:0.2527897357,l26:0.2527897357):0.1716547064,(t63:0.1403079247,t57:0.1403079247):0.2841365174):0.6641979148):1.41922525,((l22:0.5358774596,((l28:0.1688628659,(l29:0.1688628659)#H45:0::0.5):0.1005080127,l24:0.2693708785):0.2665065811):1.299955857,#H28:0.1347631415::0.5):0.6720342898):0.08386657447,((l21:0.6305476259,(l27:0.2235551151,((t17:0.05132528232,l30:0.05132528232):0.1175375835,#H45:0::0.5):0.05469224922):0.4069925108):0.05791050211,(l31:0.02050164852,((l33:0.006991814916,l34:0.006991814916):0.0135098336)#H47:0::0.5):0.6679564794):1.903276053):1.18153951,((((l23:0.3008441365,t137:0.3008441365):0.01128473765,(t58:0.3121288741)#H41:0::0.5):0.3613027167,(t128:0.3121288741,#H41:0::0.5):0.3613027167):1.027638584)#H28:2.072203516::0.5):1.225375063);";
+void test_bcc() {
+  static std::string diversity_network_006 = "((((((l32:0.02050164852,#H47:0::0.5):1.068140708,((l25:0.2527897357,l26:0.2527897357):0.1716547064,(t63:0.1403079247,t57:0.1403079247):0.2841365174):0.6641979148):1.41922525,((l22:0.5358774596,((l28:0.1688628659,(l29:0.1688628659)#H45:0::0.5):0.1005080127,l24:0.2693708785):0.2665065811):1.299955857,#H28:0.1347631415::0.5):0.6720342898):0.08386657447,((l21:0.6305476259,(l27:0.2235551151,((t17:0.05132528232,l30:0.05132528232):0.1175375835,#H45:0::0.5):0.05469224922):0.4069925108):0.05791050211,(l31:0.02050164852,((l33:0.006991814916,l34:0.006991814916):0.0135098336)#H47:0::0.5):0.6679564794):1.903276053):1.18153951,((((l23:0.3008441365,t137:0.3008441365):0.01128473765,(t58:0.3121288741)#H41:0::0.5):0.3613027167,(t128:0.3121288741,#H41:0::0.5):0.3613027167):1.027638584)#H28:2.072203516::0.5):1.225375063);";
   using Net = DefaultLabeledNetwork<>;
-  const Net N = parse_newick<MyNetwork>(diversity_network_006);
+  const Net N = parse_newick<Net>(diversity_network_006);
 
-  {
+    using NodeData = NodeDesc;
+    using EdgeData = typename Net::EdgeData;
+    using BCComponent = CompatibleNetwork<Net, NodeData, EdgeData, void>; // no edge-data or labels necessary
     using BCDataExtracter = DataExtracter<Net, mstd::IdentityFunction<NodeDesc>>;
     using BCEmplacementHelper = EdgeEmplacementHelper<BCComponent, false>; // no need to track roots, the BCCIterator does it automatically
     using BCEmplacer = EdgeEmplacer<BCEmplacementHelper, BCDataExtracter>;
     using BCCIter = BCCIterator<Net, BCComponent, false, BCEmplacer>; // NOTE: no trivial components
+  {
     BCCChainDecomposition<Net> chains{N};
     auto Niter = N.nodes_postorder().begin();
       auto a = BasicBCCIter<Net>(std::move(Niter), std::move(chains));

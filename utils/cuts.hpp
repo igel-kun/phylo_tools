@@ -10,6 +10,7 @@
 #include "types.hpp"
 #include "set_interface.hpp"
 #include "traversal_traits.hpp"
+//#include "dfs_coro.hpp"
 
 namespace PT{
 
@@ -202,6 +203,7 @@ namespace PT{
 
   template<CutObject cut_object>
   static constexpr TraversalType default_tt_for_cut_object = (cut_object == CutObject::bridge) ? all_edge_tail_postorder : postorder;
+  //static constexpr TraversalType default_tt_for_cut_object = postorder + ((cut_object == CutObject::bridge) ? all_edge_traversal : 0);
 
   template<class Iter, class ChainDecomp = std::remove_cvref_t<typename Iter::Predicate>>
   struct WithChains {

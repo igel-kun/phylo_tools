@@ -11,10 +11,10 @@
 
 using namespace PT;
 
-OptionMap options;
+mstd::OptionMap options;
 void parse_options(const int argc, const char** argv)
 {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description["-r"] = {3,3};
   description[""] = {0,2};
@@ -24,7 +24,7 @@ void parse_options(const int argc, const char** argv)
       \n" + std::string(argv[0]) + " -r <x> <y> <z>\n\
       \trandomize a tree with x internal nodes + y leaves and add z additional edges, then check containment of the tree in the network\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   if(mstd::test(options, "-r")){
     const auto r_vec = options.at("-r");

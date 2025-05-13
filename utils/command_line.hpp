@@ -8,10 +8,11 @@
 #include "utils.hpp"
 #include "config.hpp"
 #include "linear_interval.hpp"
+#include "token.hpp"
 #include "stl_concepts.hpp"
 #include "set_interface.hpp"
 
-namespace PT{
+namespace mstd {
 
   // for each option, tell me the min and max number of option parameters
   typedef std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> OptionDesc;
@@ -26,7 +27,7 @@ namespace PT{
     for(int i=1; i < argc; ++i){
       const std::string current_arg(argv[i]);
       if((current_arg == "-h") || (current_arg == "--help")){ // display help and exit
-        std::cout << help_message << std::endl;
+        std::cout << help_message << '\n';
         exit(EXIT_SUCCESS);
       } if((current_arg == "-u") || (current_arg == "--unicode")){ // use unicode character sets (f.ex. for displaying trees on the command line)
         mstd::config::locale = mstd::config::UTF8_locale;
@@ -37,8 +38,8 @@ namespace PT{
             current_option_vec = &(options[current_arg]);
             current_max = mm_iter->second.second;
           } else {
-            std::cerr << "unrecognized option: "<<current_arg<<std::endl;
-            std::cerr << help_message << std::endl;
+            std::cerr << "unrecognized option: "<<current_arg<< '\n';
+            std::cerr << help_message << '\n';
             exit(EXIT_FAILURE);
           }
         } else {
@@ -54,8 +55,9 @@ namespace PT{
       const size_t num_paras = arg_para.second.size();
       const std::pair<uint32_t, uint32_t>& para_bounds = description.at(arg_para.first);
       if((num_paras < para_bounds.first) || (num_paras > para_bounds.second)){
-        std::cerr << "option \""<<arg_para.first<<"\" has "<<num_paras<<" parameters (expected between "<<para_bounds.first<<" & "<<para_bounds.second<<")"<<std::endl;
-        std::cerr << help_message << std::endl;
+        std::cerr << "option \""<<arg_para.first<<"\" has "<<num_paras<<" parameters "
+          << "(expected between "<<para_bounds.first<<" & "<<para_bounds.second<<")"<<'\n';
+        std::cerr << help_message << '\n';
         exit(EXIT_FAILURE);
       }
     }
@@ -89,22 +91,9 @@ namespace PT{
   };
 
 
-  template<mstd::ArithmeticType T = size_t>
-  T arg_from_string(const auto& x) {
-    try {
-      return stoX<T>(x);
-    } catch(const std::exception& err){
-      std::cerr << "problem converting argument to arithmetic type: "<<err.what()<<std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  struct FromString {
-    constexpr auto operator()(const auto& x) const { return stoX<int>(x); }
-  };
 
   template<class T>
-  using ProtoConstraintIntParser = ConstraintArgumentParser<FromString, mstd::linear_interval<int>>;
+  using ProtoConstraintIntParser = ConstraintArgumentParser<AnythingFromString<>, mstd::linear_interval<int>>;
 
   struct ConstraintIntParser: public ProtoConstraintIntParser<mstd::linear_interval<int>> {
     using Parent = ProtoConstraintIntParser<mstd::linear_interval<int>>;

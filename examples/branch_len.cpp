@@ -8,11 +8,11 @@ using namespace PT;
 
 using MyNetwork = DefaultLabeledNetwork<void, float>;
 
-OptionMap options;
+mstd::OptionMap options;
 
 void parse_options(const int argc, const char** argv)
 {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description[""] = {1,2};
   const std::string help_message(std::string(argv[0]) + " <file1>\n\
@@ -20,7 +20,7 @@ void parse_options(const int argc, const char** argv)
       FLAGS:\n\
       \t-v\tverbose output, prints networks\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   for(const std::string& filename: options[""])
     if(!file_exists(filename)) {

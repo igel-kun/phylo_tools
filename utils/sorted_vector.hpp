@@ -122,16 +122,16 @@ namespace mstd{
     }
 
     // return iterator to element and bool indicating whether insertion took place
-    template<class K> requires std::is_same_v<K, Key>
+    template<class K> requires mstd::is_constructible_v<Key, K>
     auto emplace(K&& key) {
       insert_result i = find_this_or_next(key);
       if(i.second) Parent::emplace(i.first, std::forward<K>(key));
       return i;
     }
-    template<class First, class... Args> requires (not std::is_same_v<std::remove_cvref_t<First>, Key>)
+    template<class First, class... Args> requires (not mstd::is_same_v<First, Key>)
     auto emplace(First&& first, Args&&... args) { return emplace(Key(std::forward<First>(first), std::forward<Args>(args)...)); }
 
-    template<class K> requires std::is_same_v<K, Key>
+    template<class K> requires mstd::is_same_v<K, Key>
     auto insert(K&& key) { return emplace(std::forward<K>(key)); }
 
     template<class InputIt>

@@ -20,11 +20,11 @@ using MyNetwork = DefaultLabeledNetwork<>;
 using MyBCC = MyNetwork;
 //CompatibleNetwork<MyNetwork, void, void, void>;
 
-OptionMap options;
+mstd::OptionMap options;
 
 void parse_options(const int argc, const char** argv)
 {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description[""] = {1,1};
   const std::string help_message(std::string(argv[0]) + " <file>\n\
@@ -32,7 +32,7 @@ void parse_options(const int argc, const char** argv)
       FLAGS:\n\
       \t-v\tverbose output, prints network\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   for(const std::string& filename: options[""])
     if(!file_exists(filename)) {

@@ -59,10 +59,10 @@ using NameToNode = std::unordered_map<std::string, NodeDesc>;
 
 NameToNode name_to_node;
 
-OptionMap options;
+mstd::OptionMap options;
 
 void parse_options(const int argc, const char** argv) {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description["-V"] = {0,0};
   description["-mr"] = {0,0};
@@ -90,7 +90,7 @@ void parse_options(const int argc, const char** argv) {
       \t-l\tcompute the diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
       \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   if(not file_exists(options[""].front()))
     cfail(std::string{"couldn't open file "} + options[""].front());
@@ -188,7 +188,7 @@ int main(const int argc, const char** argv) {
     MyNetwork N(read_network(options[""][0]));
 
     if(mstd::test(options, "-v")) {
-      std::cout << "N:" << std::endl;
+      std::cout << "N ("<<N.num_nodes()<<" nodes, "<<N.num_edges()<<" edges -> reti num:" << N.num_edges()-N.num_nodes()+1<<"):" << std::endl;
       std::cout << ExtendedDisplay(N) << std::endl;
       N.print_summary(std::cout);
     }

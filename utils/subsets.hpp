@@ -82,8 +82,8 @@ namespace mstd {
 
   // ------- Subset Iteration: main class ---------
   template<StrictIterableType _Container, bool _partial = false, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
+    requires (not std::is_const_v<_OutputContainer>)
   struct SubsetIterator:
-    public optional_tuple<std::conditional_t<_partial, uint32_t, void>>,
     public iter_traits_from_reference<_OutputContainer>
   {
     using Traits = iter_traits_from_reference<_OutputContainer>;
@@ -92,8 +92,7 @@ namespace mstd {
 
     static constexpr bool partial = _partial;
     
-    using OutVal = value_type_of_t<_OutputContainer>;
-    static_assert(not std::is_const_v<OutVal>);
+    using OutVal = std::remove_const_t<value_type_of_t<_OutputContainer>>;
 
     static constexpr bool store_iters = IsAnyOf<OutVal, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
 
@@ -101,6 +100,7 @@ namespace mstd {
 
     _Container* c = nullptr;
     SubsetState state;
+    [[ no_unique_address ]] std::conditional_t<_partial, uint32_t, mstd::monostate> upper_bound;
 
     SubsetIterator(_Container& _c): c(&_c)
     {
@@ -118,7 +118,7 @@ namespace mstd {
       if(low > high) std::swap(low, high);
       if(low <= _c.size()) {
         if(high > _c.size()) high = _c.size();
-        this->template get<0>() = high;
+        upper_bound = high;
         if constexpr (store_iters) {
           auto it = std::begin(_c);
           while(low--) {
@@ -142,7 +142,7 @@ namespace mstd {
     
     uint32_t get_upper_bound() const {
       if constexpr (partial)
-        return this->template get<0>();
+        return upper_bound;
       else return UINT32_MAX;
     }
     

@@ -6,17 +6,17 @@
 
 using namespace PT;
 
-OptionMap options;
+mstd::OptionMap options;
 void parse_options(const int argc, const char** argv)
 {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description[""] = {0,1};
   const std::string help_message(std::string(argv[0]) + " <file>\n\
       \tThis program converts from extended newick to edgelist format.\
       \tThe edge-direction will be preserved and leaf-labels will be appended to the leaf-names.\n\
       \t'file' contains a tree or network in extended newick\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
 
   if(options[""].empty()) {

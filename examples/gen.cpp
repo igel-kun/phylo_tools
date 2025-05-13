@@ -14,10 +14,10 @@ using namespace PT;
 
 enum class DataTarget { Node, Edge };
 
-OptionMap options;
+mstd::OptionMap options;
 
 void parse_options(const int argc, const char** argv) {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description["-n"] = {1,1};
   description["-el"] = {0,0};
@@ -65,7 +65,7 @@ void parse_options(const int argc, const char** argv) {
       \t-el\toutput in edgelist format instead of eNewick\n\
       \t-L\tput labels on the leaves (small-letter strings in lexicographic order)\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   // sanity check
   if((test(options, "-nd") || test(options, "-ed")) && !test(options, "-ad")) {

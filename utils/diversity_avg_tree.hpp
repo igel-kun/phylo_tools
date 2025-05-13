@@ -454,7 +454,7 @@ namespace PT {
 
       // guess which at most k generator nodes have tree-paths to saved leaves
       for(const auto gsaved_nodes_preorder: mstd::make_subset_factory(gen_nodes_preorder, lower_bnd, k)) {
-        DEBUG4(std::cout << "\n=== new guess! ===\n"<<gsaved_nodes_preorder.size() << " nodes with saved leaves below: "<<gsaved_nodes_preorder<<'\n');
+        DEBUG3(std::cout << "\n=== new guess! ===\n"<<gsaved_nodes_preorder.size() << " nodes with saved leaves below: "<<gsaved_nodes_preorder<<'\n');
         
         // clear the probabilities of the previous guess
         for(const auto guv: Gen.edges())

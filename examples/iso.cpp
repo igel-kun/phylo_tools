@@ -20,11 +20,11 @@ Phylo read_from_stream(std::ifstream& in) {
   }
 }
 
-PT::OptionMap options;
+mstd::OptionMap options;
 
 void parse_given_options(const int argc, const char** argv)
 {
-  PT::OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description["-mr"] = {0,0};
   description["-mt"] = {0,0};
@@ -40,7 +40,7 @@ void parse_given_options(const int argc, const char** argv)
       \t-ma\tlabels of all vertices have to match (shortcut for -mr -mt (-ma overrides -il))\n\
       \t-il\tlabels of leaves do NOT have to match\n");
 
-  PT::parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   for(const std::string& filename: options[""])
     if(!file_exists(filename)) {

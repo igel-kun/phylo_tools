@@ -141,12 +141,12 @@ namespace PT {
   concept NodeDescType = mstd::is_convertible_v<T, NodeDesc, rune>;
   
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept HasNodeValue = mstd::apply_rune_v<C, rune> || has_node_value<mstd::apply_rune_t<C, rune>>;
+  concept HasNodeValue = mstd::apply_rune_v<C, rune> or has_node_value<mstd::apply_rune_t<C, rune>>;
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept HasNodeKey = mstd::apply_rune_v<C, rune> || has_node_key<mstd::apply_rune_t<C, rune>>;
+  concept HasNodeKey = mstd::apply_rune_v<C, rune> or has_node_key<mstd::apply_rune_t<C, rune>>;
   
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept MapsToNode = mstd::apply_rune_v<C, rune> || maps_to_node<mstd::apply_rune_t<C, rune>>;
+  concept MapsToNode = mstd::apply_rune_v<C, rune> or maps_to_node<mstd::apply_rune_t<C, rune>>;
   template<class C> concept StrictMapsToNode = MapsToNode<C, mstd::TR_Strict>;
   template<class C> concept OptionalMapsToNode = MapsToNode<C, mstd::TR_ConstRefVoidOK>;
 

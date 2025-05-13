@@ -17,10 +17,10 @@ using MyNetwork = DefaultLabeledNetwork<mstd::singleton_set_by_invalid<uint16_t>
 using MyEdge = typename MyNetwork::Edge;
 using SWIter = mstd::seconds_iterator<std::unordered_map<PT::NodeDesc, uint32_t>>;
 
-OptionMap options;
+mstd::OptionMap options;
 
 void parse_options(const int argc, const char** argv) {
-  OptionDesc description;
+  mstd::OptionDesc description;
   description["-v"] = {0,0};
   description["-e"] = {0,0};
   description["-et"] = {0,0};
@@ -46,7 +46,7 @@ void parse_options(const int argc, const char** argv) {
       \t\t\tx = 4: heuristic\n\
       \t\t\tx = 5: silly post-order traversal\n");
 
-  parse_options(argc, argv, description, help_message, options);
+  mstd::parse_options(argc, argv, description, help_message, options);
 
   for(const std::string& filename: options[""])
     if(!file_exists(filename)) {

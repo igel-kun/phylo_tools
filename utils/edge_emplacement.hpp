@@ -130,7 +130,7 @@ namespace PT {
     }
 
     template<class... Args>
-      requires ((not TargetPhylo::has_edge_data) || (std::is_constructible_v<typename TargetPhylo::EdgeData, Args&&...>))
+      requires ((not TargetPhylo::has_edge_data) or (std::is_constructible_v<typename TargetPhylo::EdgeData, Args&&...>))
     auto add_an_edge(const NodeDesc u, const NodeDesc v, Args&&... args) {
       assert(N != nullptr);
       if constexpr (track_roots)

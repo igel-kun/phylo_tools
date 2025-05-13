@@ -57,17 +57,32 @@ namespace mstd{
   template<size_t dim, class T>
   auto& cast_to_array(T* t) { return *static_cast<T(*)[dim]>(static_cast<void*>(t)); }
 
+  //NOTE: std::add_rvalue_reference<A&> = A& that's not very intuitive...
+  template<class T>
+  using make_rvalue_reference = std::add_rvalue_reference_t<std::remove_reference_t<T>>;
+
+  // don't add const/volatile to void...
+  template<class T> using add_const_t = std::conditional_t<std::is_void_v<T>, void, std::add_const_t<T>>;
+  template<class T> using add_volatile_t = std::conditional_t<std::is_void_v<T>, void, std::add_volatile_t<T>>;
+  template<class T> constexpr bool is_const_ref = std::is_const_v<std::remove_reference_t<T>>;
+
+  // turn a reference into const reference or rvalue into const rvalue
+  template<class T> struct _const_reference { using type = add_const_t<T>; };
+  template<class T> struct _const_reference<T&> { using type = add_const_t<T>&; };
+  template<class T> struct _const_reference<T&&> { using type = add_const_t<T>&&; };
+  template<class T> using const_reference_t = typename _const_reference<T>::type;
+
+
+
+  // ---------------- Tuples and Variadic Templates -------------------
 
   // Nth type in a list of types
-  template <size_t Index, class First, class... Rest>
-  struct _NthType { using type = First; };
-
-  template <size_t Index, class First, class... Rest> requires (Index > 0)
-  struct _NthType<Index, First, Rest...> { using type = typename _NthType<Index - 1, Rest...>::type; };
-
   template <size_t Index, class... Ts> requires (Index < sizeof...(Ts))
-  using NthType = typename _NthType<Index, Ts...>::type;
+  using NthType = std::tuple_element_t<Index, std::tuple<Ts...>>;
 
+  // get the first type in a parameter pack, or void if pack size is 0
+  template<class... Args>
+  using FirstTypeOf = NthType<0, Args...>;
 
   // first index of a type in a variadic template, or number types if the type does not occur
   template<class T, class First, class... Others>
@@ -91,29 +106,37 @@ namespace mstd{
   const auto& get_by_type(const std::variant<Ts...>& v) { return std::get<var_type_index<T, Ts...>>(v); }
 
 
-  //NOTE: std::add_rvalue_reference<A&> = A& that's not very intuitive...
-  template<class T>
-  using make_rvalue_reference = std::add_rvalue_reference_t<std::remove_reference_t<T>>;
+  // apply a function to all items of a tuple and return the tuple of results
+  template<typename Tuple, typename F, std::size_t... Is>
+  constexpr auto tuple_transform_impl(Tuple&& tup, F&& f, std::index_sequence<Is...>) {
+    return std::make_tuple(f(std::get<Is>(std::forward<Tuple>(tup)), Is)...);
+  }
 
-  // don't add const/volatile to void...
-  template<class T> using add_const_t = std::conditional_t<std::is_void_v<T>, void, std::add_const_t<T>>;
-  template<class T> using add_volatile_t = std::conditional_t<std::is_void_v<T>, void, std::add_volatile_t<T>>;
-  template<class T> constexpr bool is_const_ref = std::is_const_v<std::remove_reference_t<T>>;
+  template<typename Tuple, typename F>
+  constexpr auto tuple_transform(Tuple&& tup, F&& f) {
+    constexpr std::size_t N = std::tuple_size_v<std::remove_reference_t<Tuple>>;
+    return tuple_transform_impl(
+      std::forward<Tuple>(tup),
+      std::forward<F>(f),
+      std::make_index_sequence<N>{}
+    );
+  }
 
-  // turn a reference into const reference or rvalue into const rvalue
-  template<class T> struct _const_reference { using type = add_const_t<T>; };
-  template<class T> struct _const_reference<T&> { using type = add_const_t<T>&; };
-  template<class T> struct _const_reference<T&&> { using type = add_const_t<T>&&; };
-  template<class T> using const_reference_t = typename _const_reference<T>::type;
+  template<typename Tuple, typename F, std::size_t... Is>
+  constexpr auto tuple_generate_impl(F&& f, std::index_sequence<Is...>) {
+    return std::make_tuple(f.template operator()<std::tuple_element_t<Is, Tuple>>(Is)...);
+  }
+
+  template<typename Tuple, typename F>
+  constexpr auto tuple_generate(F&& f) {
+    constexpr size_t N = std::tuple_size_v<std::remove_reference_t<Tuple>>;
+    return tuple_generate_impl<Tuple>(
+      std::forward<F>(f),
+      std::make_index_sequence<N>{}
+    );
+  }
 
 
-  // get the first type in a parameter pack, or void if pack size is 0
-  template<class... Args>
-  struct _FirstTypeOf { using type = void; };
-  template<class First, class... Args>
-  struct _FirstTypeOf<First, Args...> { using type = First; };
-  template<class... Args>
-  using FirstTypeOf = typename _FirstTypeOf<Args...>::type;
 
   // ---------------- conditional invocation ---------------------------
 
