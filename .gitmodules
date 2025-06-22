@@ -1,0 +1,3 @@
+[submodule "rmq"]
+	path = rmq
+	url = https://github.com/leifwalsh/rmq
