@@ -490,8 +490,8 @@ namespace PT{
     //NOTE: this gives you the power to change the SeenSet while the DFS is running, and with great power comes great responsibility ;] so be careful!
     auto& seen_nodes() { return mstd::default_deref{}(Helper::template get<1>()); }
     const auto& seen_nodes() const { return mstd::default_deref{}(Helper::template get<1>()); }
-    auto& forbidden() { return Helper::template get<0>(); }
-    const auto& forbidden() const { return Helper::template get<0>(); }
+    auto& get_forbidden() { return Helper::template get<0>(); }
+    const auto& get_forbidden() const { return Helper::template get<0>(); }
 
     template<mstd::ContainerType Container>
     Container& append_to(Container& c) { append(c, *this); return c; }

@@ -9,6 +9,7 @@
 #include <map>
 #include <unordered_set>
 #include <list>
+#include <limits>
 
 #include "utils.hpp"
 #include "runes.hpp"
@@ -177,6 +178,7 @@ namespace PT {
   using Degree = uint_fast32_t;
   using sw_t = Degree;
   using Degrees = std::pair<Degree, Degree>;
+  constexpr Degree NoDegree = std::numeric_limits<Degree>::max();
 
   // sets and containers of node descriptors
   using NodeSingleton = StorageClass<singleS, NodeDesc>;

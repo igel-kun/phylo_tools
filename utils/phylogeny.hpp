@@ -9,14 +9,19 @@
 #include "types.hpp"
 #include "tags.hpp"
 #include "lca.hpp"
-#include "dfs.hpp"
-//#include "dfs_coro.hpp"
 #include "except.hpp"
 #include "node.hpp"
 #include "edge.hpp"
 #include "induced_tree.hpp"
 #include "edge_emplacement.hpp"
 #include "extract_data.hpp"
+
+#ifdef DFSCORO
+#include "dfs_coro.hpp"
+#else
+#include "dfs.hpp"
+#endif
+
 
 namespace PT {
 

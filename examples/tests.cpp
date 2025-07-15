@@ -21,7 +21,12 @@
 #include "utils/biconnected_comps.hpp"
 #include "io/newick.hpp"
 
+#ifdef DFSCORO
 #include "utils/dfs_coro.hpp"
+#else
+#include "utils/dfs.hpp"
+#endif
+
 
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
 constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));";
@@ -116,6 +121,7 @@ void test_singleton() {
   test_singleton_sub<mstd::singleton_set_by_invalid<int>>(12, -16);
   test_singleton_sub<mstd::singleton_set_by_invalid<std::string, str_invalid>>("bla", "blubb");
   test_singleton_sub<mstd::singleton_set<std::optional<int>>>(0, -1);
+  std::cout << "======> mstd::singleton_set test passed\n";
 }
 
 void test_vector_hash() {
@@ -139,6 +145,7 @@ void test_vector_hash() {
   }
   for(const auto& i: vh) assert(test(um, i));
   for(const auto& i: um) assert(test(vh, i));
+  std::cout << "======> mstd::vector_hash test passed\n";
 }
 
 
@@ -150,6 +157,7 @@ void test_sorted_vector() {
 
   std::vector<int> other{-2, -1, 0, 4, 10, 100};
   assert(sv == other);
+  std::cout << "======> mstd::sorted_vector test passed\n";
 }
 
 
@@ -236,6 +244,7 @@ void test_vector_map() {
   }
   for(const auto& i: vm) assert(um.at(i.first) == i.second);
   for(const auto& i: um) assert(vm.at(i.first) == i.second);
+  std::cout << "======> mstd::vector_map test passed\n";
 }
 
 
@@ -269,7 +278,7 @@ void test_subsets_sub(const Container& c, const ssize_t low, const ssize_t high)
 }
 
 void test_subsets() {
-  std::cout << "======> testing mstd::vector_map...\n";
+  std::cout << "======> testing subset iterators and factories...\n";
 
   const std::unordered_set<int> set1{10, -2, 15, 6, 108, 0, 1};
   test_subsets_sub(set1, 3, 5);
@@ -282,9 +291,11 @@ void test_subsets() {
   std::vector<int> set3;
   for(int i = 0; i < 70; ++i) append(set3, 2*i);
   test_subsets_sub(set3, 3, 3);
+  std::cout << "======> subset iterators and factories test passed\n";
 }
 
 void test_brute_force() {
+  std::cout << "======> testing brute-force infrastructure ...\n";
   // see if nums has a subset summing up to 5 -- spoiler: it does :)
   std::unordered_set<int> nums{12, -3, 6, 10, -4, 100};
   const auto solutions = mstd::brute_force(nums, 2, [](const auto& S){ return (std::ranges::fold_left(S, 0) == 5);} ).solutions;
@@ -302,10 +313,12 @@ void test_brute_force() {
   assert(test(result2, "hello"));
   assert(test(result2, "name"));
   assert(test(result2, "George"));
+  std::cout << "======> brute-force infrastructure test passed\n";
 }
 
 
 void test_concat_iter() {
+  std::cout << "======> testing mstd::concatenating_iterator ...\n";
   std::vector<std::vector<int>> ints{{1,2,3}, {4,5,6}, {7,8,9}};
   std::array<int, 3> indices{0,1,2};
   auto trans = [&](int i)->std::vector<int>& {return ints[i];};
@@ -319,10 +332,11 @@ void test_concat_iter() {
   std::cout << "got retis: "<<retis<<'\n';
   for(const auto uv: N.edges_above(retis))
     std::cout << uv << '\n';
+  std::cout << "======> mstd::concatenating_iterator test passed ...\n";
 }
 
 
-void test_dfs() {
+void test_dfs1() {
   using MyNetwork = DefaultLabeledNetwork<void, size_t>;
   const MyNetwork N = parse_newick<MyNetwork>(random_net, Ex_edge_data{}, mstd::AnythingFromString<>{});
 
@@ -333,16 +347,16 @@ void test_dfs() {
 
   {
     assert(nodes.back() == N.root());
-    NodeMap<size_t> po_nums;
+    NodeSet po_nums;
     for(const auto v: nodes) {
-      po_nums[v] = nodes.size() - po_nums.size();
-      assert(std::ranges::all_of(MyNetwork::children(v), [&](const auto x){return po_nums[x] > po_nums[v];}));
+      assert(std::ranges::all_of(MyNetwork::children(v), [&](const auto x){return mstd::test(po_nums, x);}));
+      mstd::append(po_nums, v);
     }
   }
 
 
   auto traversal = N.nodes_preorder(NodeVec{nodes[3], nodes[15], nodes[37]}); // 5, 6, 29 are now forbidden
-  auto& fpred = traversal.forbidden();
+  auto& fpred = traversal.get_forbidden();
   nodes.clear();
   std::move(traversal).append_to(nodes);
   std::cout << "nodes in preorder with forbidden "<<fpred<<": " << nodes << '\n';
@@ -381,12 +395,59 @@ void test_dfs() {
       old = v;
     }
   }
+  N.print_subtree(std::cout);
+}
+
+void test_dfs2() {
+#ifdef DFSCORO
+  using MyNetwork = DefaultLabeledNetwork<>;
+  const MyNetwork N = parse_newick<MyNetwork>(random_net);
+
+  NodeVec nodes;    
+  nodes.clear();
+  N.nodes_postorder().append_to(nodes);
+  std::cout << nodes << '\n';
 
   N.print_subtree(std::cout);
+
+  const NodeVec roots{nodes[29], nodes[21]};
+  const NodeSet forbidden{nodes[15], nodes[37], nodes[3]}; 
+  //DFSIterator<postorder, MyNetwork, NodeVec, NodeSet, void> it{NodeVec{nodes[29], nodes[21]}, NodeSet{nodes[15], nodes[37]}};
+  
+  using MyTraversal = Traversal<postorder | edge_traversal, MyNetwork, NodeVec, NodeSet, NodeSet>;
+
+  MyTraversal trav(roots, forbidden);
+  auto edges = trav.to_container();
+  assert(edges.size() == 15);
+
+  std::cout << "roots: "<<roots<<'\n';
+  std::cout << "forbidden: "<< forbidden << '\n';
+  size_t count = 0;
+  for(auto it = std::move(trav).begin(); it.is_valid(); ++it, ++count) {
+    assert(count < edges.size());
+    std::cout << "---emit--- " << *it << '\n';
+    assert(edges[count] == *it);
+  }
+  std::cout << edges << '\n';
+
+  Traversal<preorder | all_edge_traversal, MyNetwork> trav_all{N};
+  auto all_edges = trav_all.to_container();
+
+  std::cout << "network has "<<all_edges.size()<<" ("<< N.num_edges()<<") edges: "<<all_edges<<'\n';
+  assert(all_edges.size() == N.num_edges()); 
+#endif
+}
+
+void test_dfs() {
+  std::cout << "======> testing DFS infrastructure ...\n";
+  test_dfs1();
+  test_dfs2();
+  std::cout << "======> DFS infrastructure test passed\n";
 }
 
 
 void test_bcc() {
+  std::cout << "======> testing Biconnected Component infrastructure ...\n";
   static std::string diversity_network_006 = "((((((l32:0.02050164852,#H47:0::0.5):1.068140708,((l25:0.2527897357,l26:0.2527897357):0.1716547064,(t63:0.1403079247,t57:0.1403079247):0.2841365174):0.6641979148):1.41922525,((l22:0.5358774596,((l28:0.1688628659,(l29:0.1688628659)#H45:0::0.5):0.1005080127,l24:0.2693708785):0.2665065811):1.299955857,#H28:0.1347631415::0.5):0.6720342898):0.08386657447,((l21:0.6305476259,(l27:0.2235551151,((t17:0.05132528232,l30:0.05132528232):0.1175375835,#H45:0::0.5):0.05469224922):0.4069925108):0.05791050211,(l31:0.02050164852,((l33:0.006991814916,l34:0.006991814916):0.0135098336)#H47:0::0.5):0.6679564794):1.903276053):1.18153951,((((l23:0.3008441365,t137:0.3008441365):0.01128473765,(t58:0.3121288741)#H41:0::0.5):0.3613027167,(t128:0.3121288741,#H41:0::0.5):0.3613027167):1.027638584)#H28:2.072203516::0.5):1.225375063);";
   using Net = DefaultLabeledNetwork<>;
   const Net N = parse_newick<Net>(diversity_network_006);
@@ -440,6 +501,7 @@ void test_bcc() {
 
     assert(iter->num_edges() == 9);
   }
+  std::cout << "======> Biconnected Component infrastructure test passed\n";
 }
 
 
@@ -456,46 +518,6 @@ int main(const int argc, const char** argv) {
   if(test(options, "-c")) test_concat_iter();
   if(test(options, "-d")) test_dfs();
   if(test(options, "-b")) test_bcc();
-
-
-  {
-    using MyNetwork = DefaultLabeledNetwork<>;
-    const MyNetwork N = parse_newick<MyNetwork>(random_net);
-
-
-    NodeVec nodes;    
-    nodes.clear();
-    N.nodes_postorder().append_to(nodes);
-    std::cout << nodes << '\n';
-
-    N.print_subtree(std::cout);
-
-    const NodeVec roots{nodes[29], nodes[21]};
-    const NodeSet forbidden{nodes[15], nodes[37], nodes[3]}; 
-    //PTx::DFSIterator<PTx::postorder, MyNetwork, NodeVec, NodeSet, void> it{NodeVec{nodes[29], nodes[21]}, NodeSet{nodes[15], nodes[37]}};
-    
-    using Traversal = PTx::Traversal<PTx::postorder + PTx::edge_traversal, MyNetwork, NodeVec, NodeSet, NodeSet>;
-
-    Traversal trav(roots, forbidden);
-    auto edges = trav.to_container();
-    assert(edges.size() == 15);
-
-    std::cout << "roots: "<<roots<<'\n';
-    std::cout << "forbidden: "<< forbidden << '\n';
-    size_t count = 0;
-    for(auto it = std::move(trav).begin(); it.is_valid(); ++it, ++count) {
-      assert(count < edges.size());
-      std::cout << "---emit--- " << *it << '\n';
-      assert(edges[count] == *it);
-    }
-    std::cout << edges << '\n';
-
-    PTx::Traversal<PTx::preorder + PTx::all_edge_traversal, MyNetwork> trav_all{N};
-    auto all_edges = trav_all.to_container();
-
-    std::cout << "network has "<<all_edges.size()<<" ("<< N.num_edges()<<") edges: "<<all_edges<<'\n';
-    assert(all_edges.size() == N.num_edges());
-  }
 
 }
 

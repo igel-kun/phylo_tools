@@ -107,8 +107,11 @@ namespace mstd {
     EndIterator get_end() & { return end_it; }
     EndIterator get_end() && { return move(end_it); }
 
+    template<class _Container>
+    void append_to(_Container& C) const { mstd::append(C, *this); }
+
     template<class _Container = std::vector<typename Parent::value_type>>
-    auto to_container() const { _Container result; mstd::append(result, *this); return result; }
+    auto to_container() const { _Container result; append_to(result); return result; }
 
     template<ContainerType _Container> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<_Container>>
     explicit operator _Container() const { return to_container<_Container>(); }
@@ -148,8 +151,11 @@ namespace mstd {
     Iterator&& get_iter() && { return *this; }
     static EndIterator get_end() { return GenericEndIterator(); }
 
+    template<class _Container>
+    void append_to(_Container& C) const { mstd::append(C, *this); }
+
     template<class _Container = std::vector<std::remove_cvref_t<value_type_of_t<Iterator>>>>
-    auto to_container() const { _Container result; mstd::append(result, *this); return result; }
+    auto to_container() const { _Container result; append_to(result); return result; }
 
     template<ContainerType _Container> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<_Container>>
     explicit operator _Container() const { return to_container<_Container>(); }

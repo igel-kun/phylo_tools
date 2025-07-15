@@ -23,6 +23,7 @@ ENDIF()
 message("Options: (enable with -D<option>=ON & disable with -D<option>=OFF)")
 message("use graphite (GRAPHITE)          " ${GRAPHITE} )
 message("debug mode (0=none) (DEBUG)      " ${DEBUG} )
+message("coroutine-based DFS (DFSCORO)    " ${DFSCORO} )
 message("max errors in debug mode (MAXERR)" ${MAXERR} )
 message("build with address sanitizer     " ${ASAN} )
 message("collect statistics (STATISTICS)  " ${STATISTICS} )
@@ -51,6 +52,12 @@ if(${STATISTICS})
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
 endif()
 
+if(${DFSCORO})
+  MESSAGE("switching to coroutine-based DFS implementation...")
+  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DDFSCORO")
+endif()
+
+
 if(${GRAPHITE})
   message("setting graphite flags...")
   #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
@@ -65,7 +72,6 @@ endif()
 set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-dangling-reference -Wno-range-loop-construct -ftemplate-depth=100 -fdiagnostics-all-candidates")
 set(PROTOTYPE_FLAGS "-fmax-errors=${MAXERR} -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200 -fno-omit-frame-pointer")
 set(PROTOTYPE_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -Wno-unused-function -Wshadow")
-
 
 # static linking
 if(${STATIC})

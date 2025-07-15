@@ -9,8 +9,12 @@
 #include "linear_interval.hpp"
 #include "types.hpp"
 #include "set_interface.hpp"
+
+#ifdef DFSCORO
+#include "dfs_coro.hpp"
+#else
 #include "traversal_traits.hpp"
-//#include "dfs_coro.hpp"
+#endif
 
 namespace PT{
 
@@ -202,8 +206,11 @@ namespace PT{
   };
 
   template<CutObject cut_object>
+#ifdef DFSCORO
+  static constexpr TraversalType default_tt_for_cut_object = postorder + ((cut_object == CutObject::bridge) ? all_edge_traversal : 0);
+#else
   static constexpr TraversalType default_tt_for_cut_object = (cut_object == CutObject::bridge) ? all_edge_tail_postorder : postorder;
-  //static constexpr TraversalType default_tt_for_cut_object = postorder + ((cut_object == CutObject::bridge) ? all_edge_traversal : 0);
+#endif
 
   template<class Iter, class ChainDecomp = std::remove_cvref_t<typename Iter::Predicate>>
   struct WithChains {

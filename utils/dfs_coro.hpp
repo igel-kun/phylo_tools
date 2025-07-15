@@ -6,7 +6,12 @@
 
 #include "iter_factory.hpp"
 
-namespace PTx {
+#ifdef DFSCORO
+namespace PT
+#else
+namespace PTx
+#endif
+{
 
   using TraversalType = uint8_t;
 
@@ -16,14 +21,20 @@ namespace PTx {
   constexpr TraversalType reverse_traversal = 0x10;
   constexpr TraversalType edge_traversal = 0x20; // an edge traversal produces the edges of a DFS-tree
   constexpr TraversalType all_edge_traversal = 0x40; // an all-edge traversal produces all edges of the network
+  constexpr TraversalType depth_last_traversal = 0x80; // a depth-last traversal is only allowed to process a node when all parents have been processed
 
   constexpr bool is_preorder_traversal(const TraversalType tt) { return tt & preorder; }
   constexpr bool is_postorder_traversal(const TraversalType tt) { return tt & postorder; }
 
   constexpr bool is_edge_traversal(const TraversalType tt) { return tt & edge_traversal; }
   constexpr bool is_all_edge_traversal(const TraversalType tt) { return tt & all_edge_traversal; }
+  constexpr bool is_depth_last_traversal(const TraversalType tt) { return tt & depth_last_traversal; }
   constexpr bool is_reverse_traversal(const TraversalType tt) { return tt & reverse_traversal; }
   constexpr bool is_node_traversal(const TraversalType tt) { return !is_edge_traversal(tt) && !is_all_edge_traversal(tt); }
+
+  // the seen set may be a set of nodes or a map indexed by nodes
+  template<class S, mstd::TypeRune rune = mstd::TR_PtrVoidOK>
+  concept DFSSeenType = PT::NodeSetType<S, rune> or PT::NodeMapType<S, rune>;
 
 	// the default set of nodes to track is void for trees
 	template<class T> struct _DefaultSeenSet {};
@@ -39,8 +50,8 @@ namespace PTx {
   template<class Roots>  struct ProtoDFSRootStorage {};
   template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<mstd::RBeginType<Roots>>; };
   template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots> { using type = Roots; };
-  template<class Roots> requires mstd::is_same_v<std::remove_pointer_t<Roots>, PT::NodeDesc> 
-  struct ProtoDFSRootStorage<Roots> { using type = PT::NodeSingleton; };
+  template<> struct ProtoDFSRootStorage<PT::NodeDesc> { using type = PT::NodeSingleton; };
+  template<> struct ProtoDFSRootStorage<PT::NodeDesc*> { using type = PT::NodeSingleton; };
   
   template<PT::NodeOrIterableType<mstd::TR_PtrOK> Roots>
   using DFSRootStorage = typename ProtoDFSRootStorage<Roots>::type;
@@ -48,7 +59,7 @@ namespace PTx {
   // store roots, forbidden and seen
   template<PT::NodeOrIterableType<mstd::TR_PtrOK> _Roots,
            class _Forbidden,
-           PT::NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
+           DFSSeenType _SeenSet>
     requires (std::is_pointer_v<_Roots> || mstd::is_poppable<DFSRootStorage<_Roots>>)
   struct DFSInfo: 
     public mstd::optional_tuple<_Forbidden, _SeenSet>
@@ -87,7 +98,7 @@ namespace PTx {
     // and we'll forbid initializing containers from indirections (for now)
     template<PT::NodeOrIterableType<mstd::TR_PtrOK> Other_Roots,
             class Other_Forbidden,
-            PT::NodeSetType<mstd::TR_PtrVoidOK> Other_SeenSet>
+            DFSSeenType Other_SeenSet>
       requires (not std::is_same_v<DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>, DFSInfo> and
           (roots_indirect >= std::is_pointer_v<Other_Roots>) and // do not allow initializing the root container from a root-indirection!
           ((not has_forbidden) or (forbidden_indirect >= std::is_pointer_v<Other_Forbidden>)) and
@@ -98,7 +109,7 @@ namespace PTx {
     {}
     template<PT::NodeOrIterableType<mstd::TR_PtrOK> Other_Roots,
             class Other_Forbidden,
-            PT::NodeSetType<mstd::TR_PtrVoidOK> Other_SeenSet>
+            DFSSeenType Other_SeenSet>
       requires (not std::is_same_v<DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>, DFSInfo> and
           (roots_indirect >= std::is_pointer_v<Other_Roots>) and // do not allow initializing the root container from a root-indirection!
           ((not has_forbidden) or (forbidden_indirect >= std::is_pointer_v<Other_Forbidden>)) and
@@ -110,7 +121,7 @@ namespace PTx {
 
     template<PT::NodeOrIterableType<mstd::TR_PtrOK> Other_Roots,
             class Other_Forbidden,
-            PT::NodeSetType<mstd::TR_PtrVoidOK> Other_SeenSet>
+            DFSSeenType Other_SeenSet>
       requires (not std::is_same_v<DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>, DFSInfo> and
           (roots_indirect >= std::is_pointer_v<Other_Roots>) and // do not allow initializing the root container from a root-indirection!
           ((not has_forbidden) || (forbidden_indirect >= std::is_pointer_v<Other_Forbidden>)) and
@@ -129,9 +140,10 @@ namespace PTx {
     auto& get_seen() requires (has_seen) { return mstd::access(this->template get<1>()); }
     auto& get_roots() { return roots; }
 
-    void mark_seen(const PT::NodeDesc u) { 
+    template<class... Args>
+    void mark_seen(const PT::NodeDesc u, Args&&... args) { 
       if constexpr (has_seen) {
-        mstd::append(get_seen(), u);
+        mstd::append(get_seen(), u, std::forward<Args>(args)...);
         DEBUG6(std::cout << "seen: "<< get_seen() << '\n');
       }
     }
@@ -173,7 +185,7 @@ namespace PTx {
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer, // _Roots may be a pointer if we use someone else's roots (the network f.ex.)
            class _Forbidden = void,
-           PT::NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>> // _SeenSet may be void (unzip all retis)  or a pointer (shared SeenSet)
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network>> // _SeenSet may be void (unzip all retis)  or a pointer (shared SeenSet)
     requires (std::is_pointer_v<_Roots> || mstd::is_poppable<DFSRootStorage<_Roots>>)
   struct DFSIterator:
     public DFSInfo<_Roots, _Forbidden, _SeenSet>
@@ -184,7 +196,6 @@ namespace PTx {
     using Info::roots_spent;
     using Info::is_forbidden;
     using Info::get_forbidden;
-    using Info::is_seen;
     using Info::mark_seen;
 
     using Roots = _Roots;
@@ -205,8 +216,8 @@ namespace PTx {
 
     static constexpr bool has_seen = Info::has_seen;
     static constexpr bool has_forbidden = Info::has_forbidden;
-    static constexpr bool has_forbidden_edges = mstd::is_testable<std::remove_pointer_t<_Forbidden>, PT::NodePair>;
-    static constexpr bool has_forbidden_nodes = mstd::is_testable<std::remove_pointer_t<_Forbidden>, PT::NodeDesc>;
+    static constexpr bool has_forbidden_edges = mstd::is_testable<std::remove_pointer_t<Forbidden>, PT::NodePair>;
+    static constexpr bool has_forbidden_nodes = mstd::is_testable<std::remove_pointer_t<Forbidden>, PT::NodeDesc>;
 
     // on the state-stack, we store nodes along with their 
     using state_stack = std::vector<AdjIter>;
@@ -234,7 +245,7 @@ namespace PTx {
       return make_edge(tail_on_top(), *(children.back()));
     }
 
-    bool top_is_inv() const { return children.back().is_invalid(); }
+    bool top_is_invalid() const { return children.back().is_invalid(); }
 
     auto& status(auto& os) const {
       PT::NodeDesc u = get_current_root();
@@ -262,7 +273,25 @@ namespace PTx {
       else return Edge(u, std::forward<Adj>(v));
     }
 
-    // return a reason why we cannot visit the next node, 0 = no reason, 1 = node is seen, 2 = node is forbidden, 3 = edge is forbidden
+    // for use with DLS: discount unvisited parents using the seen-map, return the current number of unvisited parents after discounting (as reference!)
+    auto& discount_parents(const PT::NodeDesc u) requires has_seen {
+      const auto [iter, success] = mstd::append(Info::get_seen(), u, PT::NoDegree);
+      if(success) *iter = Network::out_degree(u);
+      --(*iter);
+      DEBUG6(std::cout << "discounting parents of "<<u<<" to " << *iter << '\n');
+      return *iter;
+    }
+
+    // Note: if we're running a DLS, we'll have to make sure to insert u into the seen-map before calling is_seen()
+    bool is_seen(const PT::NodeDesc u) const {
+      if constexpr (is_depth_last_traversal(tt)) {
+        assert(mstd::test(Info::get_seen(), u));
+        return Info::get_seen().at(u) != 0;
+      } else return Info::is_seen(u);
+    }
+
+    // return a reason why we cannot visit the next node:
+    //    0 = no reason, 1 = node is seen (or is not seen often enough if in DLS mode), 2 = node is forbidden, 3 = edge is forbidden
     int may_not_visit_next() const {
       const PT::NodeDesc x = node_on_top();
       if(is_seen(x)) return 1;
@@ -290,72 +319,60 @@ outer_loop: // while(1) {
         assert(children.empty());
         
         // step 1: get the next root and put its adjacency on the stack
-root_loop: // while(1) {
-          if(roots_spent()) return 0;
-          if(may_visit_next()) {
-            // only the pre-order node-traversal must output the root first
-            if constexpr (is_node_traversal(tt) && is_preorder_traversal(tt)) return 1; // resume at &&resume_roots
+root_loop:
+        if(roots_spent()) return 0;
+        // when doing DLS, remember to call discount_parents before asking whether we may visit a node
+        if constexpr (is_depth_last_traversal(tt)) discount_parents(node_on_top());
+        if(may_visit_next()) {
+          // only the pre-order node-traversal must output the root first
+          if constexpr (is_node_traversal(tt) && is_preorder_traversal(tt)) return 1; // resume at &&resume_roots
 resume_roots:
-            visit_next();
-            goto inner_loop;
-          } else pop_root();
-        goto root_loop; //}
-inner_loop: // while(1) {
-          // step 2: go as deep as possible, yielding nodes/edges if in postorder
+          visit_next();
+        } else {
+          pop_root();
+          goto root_loop;
+        }
+        // step 2: go as deep as possible, yielding nodes/edges if in postorder
 descending_loop: // while(1) {
-            DEBUG6(status(std::cout) << '\n');
-            // if we encounter a leaf, then take its (empty) adjacencies off the stack
-            if(top_is_inv()) {
-              children.pop_back();
-              goto ascending_loop;
-            } else {
-              switch(may_not_visit_next()) {
-                case 0:
-                  if constexpr (is_preorder_traversal(tt)) return 3; // resume at &&resume_descending
-                  goto resume_descending;
-                case 1:
-                  if constexpr (is_all_edge_traversal(tt)) return 2; // resume at &&resume_descending_all_edge
-                default: break;
-              }
-resume_descending_all_edge:
-              // if we aren't allowed to go to the next node, then advance the adjacency until we are
-              ++(children.back());
-              goto descending_loop;
-            }
-resume_descending:
-            visit_next(); // if we may visit the next node on the stack, then go ahead
-//          }
-          goto descending_loop;
-
-          // step 3: go up again until we find an adjacency that we can advance in order to go deep again
-ascending_loop: //  while(1) {
-            if(children.empty()) goto inner_loop_end;
-            assert(may_visit_next());
-            if constexpr (is_postorder_traversal(tt)) return 4; // resume at &&resume_ascending
+          DEBUG6(status(std::cout) << '\n');
+          // if we encounter a leaf, then take its (empty) adjacencies off the stack and go up to the parent
+          if(top_is_invalid()) {
+            children.pop_back();
+            // step 3: go up 1 step and descend from the next child-node
+            if(not children.empty()) {
+              assert(may_visit_next());
+              if constexpr (is_postorder_traversal(tt)) return 4; // resume at &&resume_ascending
 resume_ascending:
-            mark_seen(*(children.back()));
-            ++(children.back());
-            if(top_is_inv()) goto ascending_end;
+              // we're done with the current child node, so mark this one and advance to the next
+              if constexpr (not is_depth_last_traversal(tt)) mark_seen(*(children.back()));
+            } else goto descending_loop_end; // if there are no more nodes on the stack, then we're done with this root
+          } else {
+            if constexpr (is_depth_last_traversal(tt)) discount_parents(node_on_top());
             switch(may_not_visit_next()) {
-              case 0: goto ascending_end;
-              case 1:
-                  if constexpr (is_all_edge_traversal(tt)) return 4; // resume at &&resume_ascending
+              case 0: // we actually may visit node_on_top
+                if constexpr (is_preorder_traversal(tt)) return 3; // resume at &&resume_descending
+                goto resume_descending;
+              case 1: // node_on_top is seen
+                if constexpr (is_all_edge_traversal(tt)) return 2; // resume at &&resume_descending_all_edge
               default: break;
             }
-            children.pop_back();
-//          }
-          goto ascending_loop;
-ascending_end:
-          if(children.empty()) goto inner_loop_end;
-        goto inner_loop;
-inner_loop_end:
-//        }
-        if constexpr (is_node_traversal(tt) && is_postorder_traversal(tt)) return 5; // resume at &&resume_outer
+          }
+resume_descending_all_edge:
+          // if we aren't allowed to go to the next node, then advance the adjacency until we are
+          ++(children.back());
+          goto descending_loop;
+resume_descending:
+          visit_next(); // if we may visit the next node on the stack, then go ahead
+          goto descending_loop;
+//      } // end descending loop
+descending_loop_end:
+        // finally, output the root if we're in node-postorder
+        if constexpr (is_node_traversal(tt) and is_postorder_traversal(tt)) return 5; // resume at &&resume_outer
 resume_outer:
         mark_seen(get_current_root());
         pop_root();
+//    } // while(not roots.empty())
       goto outer_loop;
-//      } // while(not roots.empty())
     } // iterate function
 
   public:
@@ -434,7 +451,7 @@ resume_outer:
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           PT::NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
   struct Traversal:
     public mstd::IterFactory<DFSIterator<tt, _Network, _Roots, _Forbidden, _SeenSet>>
   {
@@ -462,28 +479,35 @@ resume_outer:
     auto begin() && { return Iter(static_cast<Iter&&>(*this)); }
   };
 
-#warning "TODO: make a 'robust traversal' whose DFS-iterators survive the destruction of the traversal. Will need shared_ptr for that..."
+#warning "TODO: make a 'robust traversal' with shared ownership of the seen- and forbidden set between the iterators and the traversal. Will need shared_ptr for that..."
 
 
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           PT::NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
   using NodeTraversal = Traversal<tt, _Network, _Roots, _Forbidden, _SeenSet>;
 
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           PT::NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>>
-  using EdgeTraversal = Traversal<tt + edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
+  using EdgeTraversal = Traversal<tt | edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
 
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           PT::NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>>
-  using AllEdgesTraversal = Traversal<tt + all_edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
+  using AllEdgesTraversal = Traversal<tt | all_edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+
+  template<TraversalType tt,
+           PT::StrictPhylogenyType _Network,
+           PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
+           class _Forbidden = void,
+           PT::NodeMapType<mstd::TR_PtrVoidOK> _SeenSet = PT::NodeMap<PT::Degree>>
+  using AllEdgesDLSTraversal = Traversal<tt | depth_last_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
 
 }
