@@ -38,13 +38,20 @@ namespace PTx
 
 	// the default set of nodes to track is void for trees
 	template<class T> struct _DefaultSeenSet {};
+	template<class T> struct _DefaultSeenMap {};
   
 	template<PT::NodeType Node>
 	struct _DefaultSeenSet<Node> { using type = std::conditional_t<PT::TreeNodeType<Node>, void, PT::NodeSet>; };
 	template<PT::StrictPhylogenyType Network>
-	struct _DefaultSeenSet<Network> { using type = std::conditional_t<PT::TreeNodeType<typename Network::Node>, void, PT::NodeSet>; };
-	template<class T> requires (PT::PhylogenyType<T> || PT::NodeType<T>)
-	using DefaultSeenSet = typename _DefaultSeenSet<T>::type;
+	struct _DefaultSeenSet<Network>: public _DefaultSeenSet<typename Network::Node> {};
+
+  template<PT::NodeType Node>
+	struct _DefaultSeenMap<Node> { using type = std::conditional_t<PT::TreeNodeType<Node>, void, PT::NodeMap<PT::Degree>>; };
+	template<PT::StrictPhylogenyType Network>
+	struct _DefaultSeenMap<Network>: public _DefaultSeenMap<typename Network::Node> {};
+
+	template<class T, bool is_map = false> requires (PT::PhylogenyType<T> || PT::NodeType<T>)
+	using DefaultSeenSet = std::conditional_t<is_map, typename _DefaultSeenMap<T>::type, typename _DefaultSeenSet<T>::type>;
 
   // the root storage is either a non-owning reverse auto_iter if we don't own the roots, or a poppable root container
   template<class Roots>  struct ProtoDFSRootStorage {};
@@ -249,6 +256,7 @@ namespace PTx
 
     auto& status(auto& os) const {
       PT::NodeDesc u = get_current_root();
+      os << "status: ";
       for(const auto& succ: children) {
         if(succ.is_valid()) {
           PT::NodeDesc v = *succ;
@@ -258,8 +266,15 @@ namespace PTx
       }
       return os;
     }
-  
+
+    // some getters are necessary in order to construct non-owning iterators from owning iterators
+    uint8_t get_current_resume_pos() const & { return current_resume_pos; }
+    
+    const state_stack& get_children() const & { return children; }
+
   protected:
+    state_stack&& get_children() && { return std::move(children); }
+
     static auto& get_adjacencies(const PT::NodeDesc u) {
       if constexpr (reverse)
         return Network::predecessors(u);
@@ -274,12 +289,18 @@ namespace PTx
     }
 
     // for use with DLS: discount unvisited parents using the seen-map, return the current number of unvisited parents after discounting (as reference!)
-    auto& discount_parents(const PT::NodeDesc u) requires has_seen {
-      const auto [iter, success] = mstd::append(Info::get_seen(), u, PT::NoDegree);
-      if(success) *iter = Network::out_degree(u);
-      --(*iter);
-      DEBUG6(std::cout << "discounting parents of "<<u<<" to " << *iter << '\n');
-      return *iter;
+    void discount_parents(const PT::NodeDesc u) {
+      if constexpr (has_seen) {
+        const auto [iter, success] = mstd::append(Info::get_seen(), u, PT::NoDegree);
+        auto& num_parents = iter->second;
+        if(success) {
+          num_parents = Network::in_degree(u);
+          DEBUG6(std::cout << "newly inserted parent-map entry "<<*iter<<'\n');
+        }
+        --num_parents;
+        DEBUG6(std::cout << "discounting parents of "<<u<<" to " << num_parents << '\n');
+        DEBUG6(std::cout << "parent-map now: " << Info::get_seen() << '\n');
+      }
     }
 
     // Note: if we're running a DLS, we'll have to make sure to insert u into the seen-map before calling is_seen()
@@ -306,7 +327,7 @@ namespace PTx
     void visit_next() {
       const PT::NodeDesc x = node_on_top();
       children.emplace_back(get_adjacencies(x));
-      DEBUG6(std::cout << "adding neighbors of "<<x<<" to the stack: "<<get_adjacencies(x)<<'\n');
+      DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x)<<'\n');
     }
 
     // return the point where to pick back up on the next call
@@ -321,8 +342,8 @@ outer_loop: // while(1) {
         // step 1: get the next root and put its adjacency on the stack
 root_loop:
         if(roots_spent()) return 0;
-        // when doing DLS, remember to call discount_parents before asking whether we may visit a node
-        if constexpr (is_depth_last_traversal(tt)) discount_parents(node_on_top());
+        // when doing DLS, remember to insert the root so 'may_visit_next' can find it (but roots have no indegree)
+        if constexpr (is_depth_last_traversal(tt) and has_seen) mstd::append(Info::get_seen(), node_on_top(), 0);
         if(may_visit_next()) {
           // only the pre-order node-traversal must output the root first
           if constexpr (is_node_traversal(tt) && is_preorder_traversal(tt)) return 1; // resume at &&resume_roots
@@ -387,8 +408,10 @@ resume_outer:
            class OtherSeenSet>
       requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
     DFSIterator(const DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
-      Info(static_cast<const DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other))
-    { advance(); }
+      Info(static_cast<const DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
+      children(other.get_children()),
+      current_resume_pos{other.get_current_resume_pos()}
+    {}
 
     template<TraversalType other_tt,
            class OtherNetwork,
@@ -397,8 +420,10 @@ resume_outer:
            class OtherSeenSet>
       requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
     DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
-      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other))
-    { advance(); }
+      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
+      children(other.get_children()),
+      current_resume_pos{other.get_current_resume_pos()}
+    {}
 
     template<TraversalType other_tt,
            class OtherNetwork,
@@ -407,8 +432,10 @@ resume_outer:
            class OtherSeenSet>
       requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
     DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>&& other): 
-      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&&>(other))
-    { advance(); }
+      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&&>(other)),
+      children(std::move(other.get_children())),
+      current_resume_pos{other.get_current_resume_pos()}
+    {}
 
     template<PT::PhylogenyType Phylo, class... Args>
     DFSIterator(Phylo&& N, Args&&... args):
@@ -451,7 +478,7 @@ resume_outer:
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, is_depth_last_traversal(tt)>>
   struct Traversal:
     public mstd::IterFactory<DFSIterator<tt, _Network, _Roots, _Forbidden, _SeenSet>>
   {
@@ -476,7 +503,7 @@ resume_outer:
     // note: can only draw an iterator from a const traversal if we have no SeenSet
     auto begin() const& requires (std::is_void_v<_SeenSet>) { return NonOwningIter(static_cast<const Iter&>(*this)); }
     auto begin() & { return NonOwningIter(static_cast<Iter&>(*this)); }
-    auto begin() && { return Iter(static_cast<Iter&&>(*this)); }
+    auto begin() && { return OwningIter(static_cast<Iter&&>(*this)); }
   };
 
 #warning "TODO: make a 'robust traversal' with shared ownership of the seen- and forbidden set between the iterators and the traversal. Will need shared_ptr for that..."

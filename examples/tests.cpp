@@ -403,12 +403,11 @@ void test_dfs2() {
   using MyNetwork = DefaultLabeledNetwork<>;
   const MyNetwork N = parse_newick<MyNetwork>(random_net);
 
+  N.print_subtree(std::cout);
+
   NodeVec nodes;    
-  nodes.clear();
   N.nodes_postorder().append_to(nodes);
   std::cout << nodes << '\n';
-
-  N.print_subtree(std::cout);
 
   const NodeVec roots{nodes[29], nodes[21]};
   const NodeSet forbidden{nodes[15], nodes[37], nodes[3]}; 
@@ -431,10 +430,60 @@ void test_dfs2() {
   std::cout << edges << '\n';
 
   Traversal<preorder | all_edge_traversal, MyNetwork> trav_all{N};
-  auto all_edges = trav_all.to_container();
+  const auto all_edges = trav_all.to_container();
 
   std::cout << "network has "<<all_edges.size()<<" ("<< N.num_edges()<<") edges: "<<all_edges<<'\n';
   assert(all_edges.size() == N.num_edges()); 
+#endif
+}
+
+void test_dls() {
+#ifdef DFSCORO
+  using MyNetwork = DefaultLabeledNetwork<>;
+  const MyNetwork N = parse_newick<MyNetwork>(random_net);
+
+
+  {
+    NodeVec nodes;
+    N.print_subtree(std::cout);
+    std::cout << "new DLS traversal\n";
+    Traversal<postorder | depth_last_traversal, MyNetwork> node_trav{N};
+    node_trav.append_to(nodes);
+    std::cout << "DLS postorder: "<<nodes<<'\n';
+    assert(nodes.size() == N.num_nodes());
+    
+    const std::vector<char> descript{'n','m',0,'l','k','j',0,'i','h',0,0,0,'g','f',0,1,0,0,0,0,1,0,0,'e',0,'d',0,0,1,'c'};
+    for(size_t i = 0; i < descript.size(); ++i) {
+      switch(descript[i]) {
+        case 0: assert(not MyNetwork::is_reti(nodes[i]) && not MyNetwork::is_leaf(nodes[i])); break;
+        case 1: assert(MyNetwork::is_reti(nodes[i])); break;
+        default:
+          assert(mstd::front(MyNetwork::label(nodes[i])) == descript[i]);
+      }
+    }
+
+  }
+
+  {
+    N.print_subtree(std::cout);
+    Traversal<preorder | all_edge_traversal | depth_last_traversal, MyNetwork> trav_all{N};
+    std::cout << "DLS all-edge-preorder:\n";
+    const auto all_edges = trav_all.to_container();
+    std::cout << all_edges << '\n';
+    assert(all_edges.size() == N.num_edges());
+
+    const std::vector<char> descript{1,0,1,0,0,1,0,0,'n','m',0,0,'l',0,0,'k','j',0,'i','h',1,0,'g','f',1,0,0,0,1,1,1};
+    for(size_t i = 0; i < descript.size(); ++i) {
+      switch(descript[i]) {
+        case 0: assert(not MyNetwork::is_reti(all_edges[i].head()) && not MyNetwork::is_leaf(all_edges[i].head())); break;
+        case 1: assert(MyNetwork::is_reti(all_edges[i].head())); break;
+        default:
+          assert(mstd::front(MyNetwork::label(all_edges[i].head())) == descript[i]);
+      }
+    }
+
+  }
+
 #endif
 }
 
@@ -442,6 +491,7 @@ void test_dfs() {
   std::cout << "======> testing DFS infrastructure ...\n";
   test_dfs1();
   test_dfs2();
+  test_dls();
   std::cout << "======> DFS infrastructure test passed\n";
 }
 
