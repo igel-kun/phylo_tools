@@ -1,21 +1,37 @@
 
-/*
- * this is an implementation of the code of Lengauer & Tarjan, 1979
- * to compute dominators in a DAG
- */
-
 #pragma once
+
+/* These are 3 implementations of LSA-Tree calculation:
+ * 1. straightforward (idom(v) = LCA[in the domtree] of idom(u) for all parents u of v in N
+ *  (see https://cs.stackexchange.com/questions/43105/dominator-tree-for-dag)
+ *    (a) with LCA via bitvectors
+ *    (b) with LCA via sparse-matrices (see https://www.geeksforgeeks.org/lca-for-general-or-n-ary-trees-sparse-matrix-dp-approach-onlogn-ologn/)
+ * 2. Lengauer Tarjan [LT'79] (this is for general digraphs); running time: O(m \alpha(m))
 
 #include "network.hpp"
 
 namespace PT{
+  /* This computes the dominator-tree of a given network
+   * using a slight adaptation of the algorithm presented here:
+   * https://cs.stackexchange.com/questions/43105/dominator-tree-for-dag
+   * loosely speaking, the immediate dominator of a reticulaion is the
+   * lowest stable ancestor (LSA) of its parents, which can be pre-computed
+   * in a top-down pass
+   *
+   * The sparse-matrix LCA-approach can be used (on the growing(!) LSA-tree)
+   * to answer LCA queries in log(|T|) time
+   * (see https://www.geeksforgeeks.org/lca-for-general-or-n-ary-trees-sparse-matrix-dp-approach-onlogn-ologn/)
+   */
 
+#warning "TODO: continue here by implementing 1(a) and 1(b)"
+
+  
+  // computation of the LSA tree follows [Lengauer & Tarjan, 1979]
+  // it runs in O((n+m)*alpha(n,m)) which is as good as linear time for all intends and purposes
+  // NOTE: LT'79 is actually for general digraphs; in DAGs, we can do better!
   template<class Network>
-  class LSATree{
-    /* computation of the LSA tree follows [Lengauer & Tarjan, 1979]
-     * it runs in O((n+m)*alpha(n,m)) which is as good as linear time for all intends and purposes
-     */
-    const Network& N;
+  class LSATreeLT{
+    const Network* N;
 
     using DFS_num = size_t;
 

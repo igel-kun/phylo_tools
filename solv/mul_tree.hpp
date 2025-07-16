@@ -52,7 +52,7 @@ namespace PT{
         //      items in result (this needs T being monotone and binary though)
         const uint32_t x = displaying1[id1];
         const uint32_t y = displaying2[id2];
-        const uint32_t xy_lca = N.LCA(x, y);
+        const uint32_t xy_lca = NaiveTreeLCAOracle{N}(x, y);
         if(x < y) {
           // if the lca is among x and y, then it is x
           if((xy_lca != x) && (result.empty() || (N.get_minimum(result.back(), xy_lca) == UINT32_MAX)))

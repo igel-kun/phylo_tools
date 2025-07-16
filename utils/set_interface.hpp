@@ -308,7 +308,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     assert(!q.empty());
     const auto it = std::begin(q);
     auto v = std::move(*it);
-    erase(q, it);
+    mstd::erase(q, it);
     return v;
   }
   template<IterableType Q> requires requires(Q q) { { back(q) } -> std::convertible_to<value_type_of_t<Q>>; }
@@ -316,7 +316,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     assert(!q.empty());
     const auto it = std::prev(std::end(q));
     auto v = std::move(*it);
-    erase(q, it);
+    mstd::erase(q, it);
     return v;
   }
 

@@ -15,8 +15,9 @@ namespace PTx
 
   using TraversalType = uint8_t;
 
-  constexpr TraversalType preorder = 0x01;
-  constexpr TraversalType postorder = 0x02;
+  constexpr TraversalType preorder = 0x01; // preorder traversal will output a node before any of its descendants
+  constexpr TraversalType postorder = 0x02; // postorder traversal will output a node after all its descendants
+  constexpr TraversalType inorder = 0x04; // inorder traversal will output a node before *EVERY* child except the first and if there is no child
   constexpr TraversalType pre_and_post_order = preorder + postorder;
   constexpr TraversalType reverse_traversal = 0x10;
   constexpr TraversalType edge_traversal = 0x20; // an edge traversal produces the edges of a DFS-tree
@@ -25,12 +26,13 @@ namespace PTx
 
   constexpr bool is_preorder_traversal(const TraversalType tt) { return tt & preorder; }
   constexpr bool is_postorder_traversal(const TraversalType tt) { return tt & postorder; }
+  constexpr bool is_inorder_traversal(const TraversalType tt) { return tt & inorder; }
 
   constexpr bool is_edge_traversal(const TraversalType tt) { return tt & edge_traversal; }
   constexpr bool is_all_edge_traversal(const TraversalType tt) { return tt & all_edge_traversal; }
   constexpr bool is_depth_last_traversal(const TraversalType tt) { return tt & depth_last_traversal; }
   constexpr bool is_reverse_traversal(const TraversalType tt) { return tt & reverse_traversal; }
-  constexpr bool is_node_traversal(const TraversalType tt) { return !is_edge_traversal(tt) && !is_all_edge_traversal(tt); }
+  constexpr bool is_node_traversal(const TraversalType tt) { return not (is_edge_traversal(tt)) and (not is_all_edge_traversal(tt)); }
 
   // the seen set may be a set of nodes or a map indexed by nodes
   template<class S, mstd::TypeRune rune = mstd::TR_PtrVoidOK>
@@ -187,6 +189,24 @@ namespace PTx
     }
   };
 
+  // helper structure for resuming the iteration; it has to be the same for all template-instanciations, so it needs to be outside the class
+  template<bool doing_inorder_traversal>
+  struct resume_info_t {
+    uint8_t current_pos = 0; // this contains the point at which we want to resume iteration
+    bool operator!=(const resume_info_t& other) const = default; 
+  };
+  template<>
+  struct resume_info_t<true>:
+    public resume_info_t<false> 
+  {
+    // in inorder traversals, we have to keep track of the number of successful descents because:
+    //    if we have 0 successful descents, then we want to output the parent on the ascension, but not before the next descent
+    //    if we have 1 successful descent, then we want to output the parent on the ascension, and before the next descent
+    //    if we have >1 successful descent, then we don't want to output the parent on the ascension, but before the next descent
+    std::vector<uint8_t> num_successful_children;
+  };
+
+
 	// NOTE: _SeenSet may be a reference (or even void)
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
@@ -231,26 +251,47 @@ namespace PTx
 
   protected:
     state_stack children;
-    uint8_t current_resume_pos = 0;
+    resume_info_t<is_inorder_traversal(tt)> resume_info;
 
   public:
+    static auto& get_adjacencies(const PT::NodeDesc u) {
+      if constexpr (reverse)
+        return Network::predecessors(u);
+      else return Network::successors(u);
+    }
+   
+    template<class Adj>
+    static Edge make_edge(const PT::NodeDesc u, Adj&& v) {
+      if constexpr (reverse)
+        return Edge(PT::reverse_edge_tag{}, u, std::forward<Adj>(v));
+      else return Edge(u, std::forward<Adj>(v));
+    }
 
-    PT::NodeDesc node_on_top() const {
+    // return the k'th node on the child stack (k=0 for the current node)
+    PT::NodeDesc get_kth_node_on_top(const uint32_t k) const {
       assert(not roots_spent());
-      if(not children.empty()) {
-        assert(children.back().is_valid());
-        return *(children.back());
+      assert(children.size() >= k);
+      if(children.size() > k) {
+        const auto& iter = children[children.size() - k - 1];
+        assert(iter.is_valid());
+        return iter->get_desc();
       } else return get_current_root();
     }
-
-    PT::NodeDesc tail_on_top() const {
-      assert(not children.empty());
-      return (children.size() == 1) ? get_current_root() : children[children.size() - 2]->get_desc();
+    // return the k'th edge on the child stack (k=0 for the edge to the current node)
+    auto get_kth_edge_on_top(const uint32_t k) const {
+      assert(not roots_spent());
+      assert(children.size() >= k + 1);
+      const NodeDesc x = get_kth_node_on_top(k + 1);
+      const auto y_iter = children[children.size() - k - 1];
+      assert(y_iter.is_valid());
+      return make_edge(x, *y_iter);
     }
 
-    PT::NodePair edge_on_top() const {
-      return make_edge(tail_on_top(), *(children.back()));
-    }
+    auto node_on_top() const { return get_kth_node_on_top(0); }
+    auto tail_on_top() const { return get_kth_node_on_top(1); }
+
+    auto edge_on_top() const { return get_kth_edge_on_top(0); }
+    auto second_edge_on_top() const { return get_kth_edge_on_top(1); }
 
     bool top_is_invalid() const { return children.back().is_invalid(); }
 
@@ -268,25 +309,12 @@ namespace PTx
     }
 
     // some getters are necessary in order to construct non-owning iterators from owning iterators
-    uint8_t get_current_resume_pos() const & { return current_resume_pos; }
+    auto get_resume_info() const & { return resume_info; }
     
     const state_stack& get_children() const & { return children; }
 
   protected:
     state_stack&& get_children() && { return std::move(children); }
-
-    static auto& get_adjacencies(const PT::NodeDesc u) {
-      if constexpr (reverse)
-        return Network::predecessors(u);
-      else return Network::successors(u);
-    }
-   
-    template<class Adj>
-    static Edge make_edge(const PT::NodeDesc u, Adj&& v) {
-      if constexpr (reverse)
-        return Edge(PT::reverse_edge_tag{}, u, std::forward<Adj>(v));
-      else return Edge(u, std::forward<Adj>(v));
-    }
 
     // for use with DLS: discount unvisited parents using the seen-map, return the current number of unvisited parents after discounting (as reference!)
     void discount_parents(const PT::NodeDesc u) {
@@ -330,10 +358,31 @@ namespace PTx
       DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x)<<'\n');
     }
 
+    // return whether we can produce an in-order output
+    // NOTE: in particular, we cannot produce an in-order output if we're doing an edge-traversal and the child-stack is size-1
+    //    this is becuase an in-order edge is formed from the grandparent to the parent of the current node
+    bool can_make_inorder_output() const {
+      // we'll need at least 2 neighborhoods on the stack to form an inorder edge (grandparent->parent)
+      // we'll need at least 1 neighborhoods on the stack to form an inorder node (parent)
+      return (children.size() >= 2 - is_node_traversal(tt));
+    }
+
+    // prepare to descent into a child node and return whether the parent should be output before
+    bool prepare_inorder_descent() {
+      auto& num_sc = resume_info.num_successful_children;
+      assert(not num_sc.empty());
+      uint8_t& current_num_sc = mstd::back(num_sc);
+      const bool result = (current_num_sc != 0); // if we have not dived successfully into a child node, then don't output the parent
+      ++current_num_sc;
+      append(num_sc, 0); // for the child node that we are about to dive into, prepare an entry in the table
+      return result;
+    }
+
     // return the point where to pick back up on the next call
     uint8_t iterate(const uint8_t start_jump) {
-      static constexpr void* jump_table[] = {&&outer_loop, &&resume_roots,
-        &&resume_descending_all_edge, &&resume_descending, &&resume_ascending, &&resume_outer};
+      static constexpr void* jump_table[] = {&&outer_loop, &&resume_roots, // 0, 1
+        &&resume_descending_all_edge, &&resume_descending, &&resume_ascending, // 2, 3, 4
+        &&resume_ascending_inorder, &&resume_descending_inorder, &&resume_outer}; // 5, 6, 7
       DEBUG6(std::cout << "resuming at index "<<static_cast<int>(start_jump)<<'\n');
       goto* jump_table[start_jump];
 outer_loop: // while(1) {
@@ -344,20 +393,27 @@ root_loop:
         if(roots_spent()) return 0;
         // when doing DLS, remember to insert the root so 'may_visit_next' can find it (but roots have no indegree)
         if constexpr (is_depth_last_traversal(tt) and has_seen) mstd::append(Info::get_seen(), node_on_top(), 0);
-        if(may_visit_next()) {
+        if(may_not_visit_next()) {
+          pop_root();
+          goto root_loop;
+        } else {
           // only the pre-order node-traversal must output the root first
           if constexpr (is_node_traversal(tt) && is_preorder_traversal(tt)) return 1; // resume at &&resume_roots
 resume_roots:
+          if constexpr (is_inorder_traversal(tt)) append(resume_info.num_successful_children, 0);
           visit_next();
-        } else {
-          pop_root();
-          goto root_loop;
         }
         // step 2: go as deep as possible, yielding nodes/edges if in postorder
 descending_loop: // while(1) {
           DEBUG6(status(std::cout) << '\n');
-          // if we encounter a leaf, then take its (empty) adjacencies off the stack and go up to the parent
+          // if the node_on_top has no more children, then take its adjacency iterator off the stack and go up to the parent
           if(top_is_invalid()) {
+            // if we're in in-order mode and we are about to ascend, then output the parent iff we've had <2 successful children
+            if constexpr (is_inorder_traversal(tt)) {
+              if(mstd::value_pop_back(resume_info.num_successful_children) < 2)
+                if(can_make_inorder_output()) return 5; // resume at &&resume_ascending_inorder
+            }
+resume_ascending_inorder:
             children.pop_back();
             // step 3: go up 1 step and descend from the next child-node
             if(not children.empty()) {
@@ -379,16 +435,22 @@ resume_ascending:
             }
           }
 resume_descending_all_edge:
-          // if we aren't allowed to go to the next node, then advance the adjacency until we are
+          // if we are done with the current child node (either we treated it or we aren't allowed to visit it), then advance the adjacency
           ++(children.back());
           goto descending_loop;
 resume_descending:
+          // before visiting the next node: if we are in in-order mode, then output the parent, unless this is the first child
+          if constexpr (is_inorder_traversal(tt)) {
+            if(prepare_inorder_descent())
+              if(can_make_inorder_output()) return 6; // resume at &&dresume_descending_inorder
+          }
+resume_descending_inorder:
           visit_next(); // if we may visit the next node on the stack, then go ahead
           goto descending_loop;
 //      } // end descending loop
 descending_loop_end:
         // finally, output the root if we're in node-postorder
-        if constexpr (is_node_traversal(tt) and is_postorder_traversal(tt)) return 5; // resume at &&resume_outer
+        if constexpr (is_node_traversal(tt) and is_postorder_traversal(tt)) return 7; // resume at &&resume_outer
 resume_outer:
         mark_seen(get_current_root());
         pop_root();
@@ -397,7 +459,7 @@ resume_outer:
     } // iterate function
 
   public:
-    void advance() { current_resume_pos = iterate(current_resume_pos); }
+    void advance() { resume_info.current_pos = iterate(resume_info.current_pos); }
 
     DFSIterator() = default;
 
@@ -410,7 +472,7 @@ resume_outer:
     DFSIterator(const DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
       Info(static_cast<const DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
       children(other.get_children()),
-      current_resume_pos{other.get_current_resume_pos()}
+      resume_info(other.get_resume_info())
     {}
 
     template<TraversalType other_tt,
@@ -422,7 +484,7 @@ resume_outer:
     DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
       Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
       children(other.get_children()),
-      current_resume_pos{other.get_current_resume_pos()}
+      resume_info(other.get_resume_info())
     {}
 
     template<TraversalType other_tt,
@@ -434,7 +496,7 @@ resume_outer:
     DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>&& other): 
       Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&&>(other)),
       children(std::move(other.get_children())),
-      current_resume_pos{other.get_current_resume_pos()}
+      resume_info(other.get_resume_info())
     {}
 
     template<PT::PhylogenyType Phylo, class... Args>
@@ -456,8 +518,14 @@ resume_outer:
     
     value_type operator*() const {
       if constexpr (is_node_traversal(tt))
-        return node_on_top();
-      else return edge_on_top();
+        if constexpr (is_inorder_traversal(tt)) {
+          return tail_on_top();
+        } else return node_on_top();
+      else {
+        if constexpr (is_inorder_traversal(tt)) {
+          return second_edge_on_top();
+        } else return edge_on_top();
+      }
     }
 
     DFSIterator& operator++() { advance(); return *this; }
@@ -467,7 +535,7 @@ resume_outer:
     bool operator==(const DFSIterator& other) const {
       if(is_invalid()) return other.invalid();
       if(other.invalid()) return false;
-      if(current_resume_pos != other.current_resume_pos) return false;
+      if(resume_info != other.resume_info) return false;
       if(children.size() != other.children.size()) return false;
       return static_cast<const Info&>(*this) == static_cast<const Info&>(other);
     }

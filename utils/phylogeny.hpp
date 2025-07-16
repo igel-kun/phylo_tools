@@ -1180,24 +1180,6 @@ namespace PT {
     }
 
 
-
-    // ========================= LCA ===========================
-    using TreeLCAOracle = NaiveTreeLCAOracle<Phylogeny>;
-    using NetworkLCAOracle = NaiveNetworkLCAOracle<Phylogeny>;
-    using LCAOracle = std::conditional_t<is_declared_tree, TreeLCAOracle, NetworkLCAOracle>;
-
-    LCAOracle naiveLCA() const { return LCAOracle(*this); }
-#warning "TODO: use more efficient LCA"
-    LCAOracle LCA() const { return naiveLCA(); }
-
-    // return the descendant among x and y unless they are incomparable; return NoNode in this case
-    NodeDesc get_minimum(const NodeDesc x, const NodeDesc y) const {
-      const NodeDesc lca = LCA()(x,y);
-      if(lca == x) return y;
-      if(lca == y) return x;
-      return NoNode;
-    }
-
   protected:
     static bool cyclic_below(const NodeDesc start, NodeSet& current_path, NodeSet& seen) {
       if(append(current_path, start).second) {
@@ -1219,27 +1201,30 @@ namespace PT {
       return false;
     }
 
+    // return whether y and z are have a common parent, or are the same node
     static bool are_siblings(const NodeDesc y, const NodeDesc z) {
       if(y != z) {
         const Node& y_node = node_of(y);
         const Node& z_node = node_of(z);
-        if(!y_node.is_root() && !z_node.is_root()) {
+        if((not y_node.is_root()) and (not z_node.is_root())) {
           return mstd::are_disjoint(y_node.parents(), z_node.parents());
         } else return false;
-       } else return true;
+      } else return true;
     }
 
+    // return a common parent of y and z if they have one, and NoNode, otherwise
     static NodeDesc common_parent(const NodeDesc y, const NodeDesc z) {
       const Node& y_node = node_of(y);
       if(y != z) {
         const Node& z_node = node_of(z);
-      	if(!y_node.is_root() && !z_node.is_root()) {
+      	if((not y_node.is_root()) and (not z_node.is_root())) {
           const auto iter = mstd::common_element(y_node.parents(), z_node.parents());
 					return iter ? *iter : NoNode;
         } else return NoNode;
       } else return y_node.is_root() ? NoNode : y_node.any_parent();
     }
 
+    // return all common parents of y and z in a NodeVec
     static NodeVec common_parents(const NodeDesc y, const NodeDesc z) {
       NodeVec result;
       const Node& y_node = node_of(y);

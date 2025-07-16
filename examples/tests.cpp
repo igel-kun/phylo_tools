@@ -31,7 +31,7 @@
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
 constexpr auto mark_network2 = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,(c:3)#H2:10:.9):2):8,(x:100:bla,#H2:8:.1));";
 constexpr auto random_net = "((((((((((a:0)#H3:1,(b:2)#H4:2):3)#H2:4,c:4):5)#H1:6)#H0:7,(((#H3:2,d:3):8,(#H4:1,e:9):5):1)#H5:6):1,(#H5:1,(#H1:4,#H2:2):4):1):8,((#H0:1,(((((f:4,g:2):1)#H7:4,(((h:1,i:2):5,(j:1,k:2):4):8,l:1):6):3,(m:2,n:4):5):1,#H7:5):2):4)#H6:7),#H6:2);";
-
+constexpr auto random_net_poly = "((((((((((a:0)#H3:1,(b:2)#H4:2):3)#H2:4,c:4):5)#H1:6)#H0:7,(((#H3:2,d:3):8,(#H4:1,e:9):5):1)#H5:6):1,p:3,q:9,(#H5:1,(#H1:4,#H2:2):4):1):8,((#H0:1,(((((f:4,g:2):1)#H7:4,(((h:1,i:2):5,(j:1,k:2):4):8,l:1):6):3,(m:2,n:4):5):1,#H7:5):2):4)#H6:7),#H6:2);";
 
 // some static tests
 
@@ -424,7 +424,7 @@ void test_dfs2() {
   size_t count = 0;
   for(auto it = std::move(trav).begin(); it.is_valid(); ++it, ++count) {
     assert(count < edges.size());
-    std::cout << "---emit--- " << *it << '\n';
+    DEBUG5(std::cout << "--- emit " << *it << '\n');
     assert(edges[count] == *it);
   }
   std::cout << edges << '\n';
@@ -435,6 +435,35 @@ void test_dfs2() {
   std::cout << "network has "<<all_edges.size()<<" ("<< N.num_edges()<<") edges: "<<all_edges<<'\n';
   assert(all_edges.size() == N.num_edges()); 
 #endif
+}
+
+
+void test_dfs3() {
+  using MyNetwork = DefaultLabeledNetwork<>;
+  const MyNetwork N = parse_newick<MyNetwork>(random_net_poly);
+
+  N.print_subtree(std::cout);
+
+  NodeVec nodes;    
+  N.nodes_postorder().append_to(nodes);
+  std::cout << nodes << '\n';
+
+  const NodeVec roots{nodes[43], nodes[21]};
+  const NodeSet forbidden{nodes[15], nodes[37]}; 
+  //DFSIterator<postorder, MyNetwork, NodeVec, NodeSet, void> it{NodeVec{nodes[29], nodes[21]}, NodeSet{nodes[15], nodes[37]}};
+  
+  using MyTraversal = Traversal<inorder, MyNetwork, NodeVec, NodeSet, NodeSet>;
+
+  N.print_subtree(std::cout);
+  std::cout << "roots: "<<roots<<'\n';
+  std::cout << "forbidden: "<< forbidden << '\n';
+  MyTraversal trav(roots, forbidden);
+  NodeVec inorder_nodes;
+  for(const NodeDesc x: trav) {
+    DEBUG5(std::cout << " -- emit: "<<x<<'\n');
+    append(inorder_nodes, x);
+  }
+  std::cout << "inorder nodes: "<<inorder_nodes<<'\n';
 }
 
 void test_dls() {
@@ -492,6 +521,7 @@ void test_dfs() {
   test_dfs1();
   test_dfs2();
   test_dls();
+  test_dfs3();
   std::cout << "======> DFS infrastructure test passed\n";
 }
 

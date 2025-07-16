@@ -220,7 +220,7 @@ namespace PT {
           std::cout << "splitting off label-sub-matching\n";
           LabelMatching sub_match;
           NodeDesc guestLCA = NoNode;
-          auto LCA = guest.LCA();
+          auto LCA = get_default_static_tree_lca_oracle(guest);
           for(const NodeDesc x: subhost.leaves()) {
             auto node_handle = HG_label_match.extract(Host::label(x));
             assert(sub_match.get_allocator() == node_handle.get_allocator());
