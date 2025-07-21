@@ -61,7 +61,9 @@ namespace PT {
     using DegreePayloadMerge = decltype([](int32_t& x, int32_t& y){ x += y; y = 0; });
 
     // the WeakComps DSF stores as payload the indeg - outdeg of the all nodes/components
-    struct WeakComps: public mstd::DisjointSetForest<NodeDesc, int32_t, DegreePayloadMerge>{
+    struct WeakComps:
+      public mstd::DisjointSetForest<NodeDesc, int32_t, DegreePayloadMerge>
+    {
       // add a few more nodes to the given DisjointSetForest
       // NOTE: this assumes that nodes + *this is downwards closed
       void add_nodes(const NodeSpan nodes, const DegreeExtracter& degrees, bool with_children = true) {
@@ -76,7 +78,7 @@ namespace PT {
       void add_out_edges(const NodeSpan nodes) {
         for(const NodeDesc u: nodes)
           for(const NodeDesc v: Network::children(u)){
-            assert(this->contains(v)); // check if we have a downwards-closed set
+            assert(test(*this, v)); // check if we have a downwards-closed set
             this->merge_sets_keep_order(u, v);
           }
       }

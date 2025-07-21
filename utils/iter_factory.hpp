@@ -5,7 +5,7 @@
 
 namespace mstd {
 
-  template<class Iterator, class _EndIter = CorrespondingEndIter<Iterator>>
+  template<HasIterCategory Iterator, class _EndIter = CorrespondingEndIter<Iterator>>
   struct ProtoIterFactory: public auto_iter<Iterator, _EndIter>
   {
     using Parent = auto_iter<Iterator, _EndIter>;
@@ -26,7 +26,7 @@ namespace mstd {
     auto end() && { return get_end(); }
   };
 
-  template<class Iterator, class BeginEndTransformation, class EndIter = CorrespondingEndIter<Iterator>>
+  template<HasIterCategory Iterator, class BeginEndTransformation, class EndIter = CorrespondingEndIter<Iterator>>
     requires (not std::is_void_v<BeginEndTransformation>)
   class IterFactoryWithBeginEnd: public ProtoIterFactory<Iterator, EndIter>
   {
@@ -70,9 +70,9 @@ namespace mstd {
     auto end() && { return std::move(trans)(static_cast<Parent&&>(*this).end()); }
   };
 
-  template<class Iterator, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<Iterator>>
+  template<HasIterCategory Iterator, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<Iterator>>
   struct _IterFactory { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation, EndIter>; };
-  template<class Iterator, class EndIter>
+  template<HasIterCategory Iterator, class EndIter>
   struct _IterFactory<Iterator, void, EndIter> { using type = ProtoIterFactory<Iterator, EndIter>; };
 
   template<class IterOrContainer, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<iterator_of_t<IterOrContainer>>>

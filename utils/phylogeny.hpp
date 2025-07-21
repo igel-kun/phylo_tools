@@ -972,14 +972,14 @@ namespace PT {
     // list all nodes below u in order _o (default: postorder)
     template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden> 
     static auto nodes_below(Roots&& R, Forbidden&& forbidden) {
-      using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
       else return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
     template<TraversalType o = postorder, NodeOrIterableType Roots> 
     static auto nodes_below(Roots&& R) {
-      using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
       else return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
@@ -1110,14 +1110,14 @@ namespace PT {
     // --------------- relative edge traversals (below) ------------------
     template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden>
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
-      using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
       else return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
     template<TraversalType o = postorder, NodeOrIterableType Roots>
     static auto edges_below(Roots&& R) {
-      using RootSet = std::conditional_t<NodeDescType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
       else return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
@@ -1361,11 +1361,10 @@ namespace PT {
     template<mstd::IterableType Edges, class... EmplacerArgs> requires (not PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges, EmplacerArgs&&... args) {
       using GivenEdge = mstd::value_type_of_t<Edges>;
-      using GivenEdgeData = typename GivenEdge::Data;
-      using SourcePhyloFromEdgeData = Phylogeny<_PredStorage, _SuccStorage, void, GivenEdgeData>;
+      using SourcePhyloFromEdgeData = Phylogeny<_PredStorage, _SuccStorage, void, DataOf<GivenEdge>>;
         
       build_from_edges(std::forward<Edges>(edges), EdgeEmplacers<true, SourcePhyloFromEdgeData>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...));
-      DEBUG2(print_summary(std::cout));
+      DEBUG3(print_summary(std::cout));
     }
 
     // NOTE: construction from another (sub-)phylogeny largely depends on the data policy:

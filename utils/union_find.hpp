@@ -29,12 +29,12 @@ namespace mstd{
     DSet() = default;
     
     template<class First, class... Args> requires (not has_payload and not mstd::IsAnyOf<First, DSet>)
-    DSet(First&& first, Arg&&... args):
-      representative(std::forward<First>(first), std::forward<Args>(args)...), _size(1),
+    DSet(First&& first, Args&&... args):
+      representative(std::forward<First>(first), std::forward<Args>(args)...), _size(1)
     {}
  
     template<class KeyInit, class... Args> requires (mstd::is_same_v<KeyInit, Key>)
-    DSet(KeyInit&& _key, Arg&&... args):
+    DSet(KeyInit&& _key, Args&&... args):
       representative(std::forward<KeyInit>(_key)), _size(1), payload(std::forward<Args>(args)...)
     {}
    
@@ -46,14 +46,14 @@ namespace mstd{
 
     // ------- operators --------
   public:
-    bool operator==(const _DSet& y) const { return representative == y.representative; }
+    bool operator==(const DSet& y) const { return representative == y.representative; }
     
     // ------- methods: initialization --------
     // ------- methods: modification --------
   protected:
     void grow(const int x) { _size += x; }
 
-    void merge_onto(_DSet& x) {
+    void merge_onto(DSet& x) {
       representative = x.representative;
       x._size += _size;
     }
@@ -65,8 +65,8 @@ namespace mstd{
 
   
 
-    template<class _Key, class _Payload, class _MergePayloads>
-      requires (not std::is_void_v<_Payload> or std::is_same_v<_MergePayloads, mstd::IgnoreFunction<void>>)
+    template<class _Key, class Payload, class _MergePayloads>
+      requires (not std::is_void_v<Payload> or std::is_same_v<_MergePayloads, mstd::IgnoreFunction<void>>)
     friend class DisjointSetForest;
   };
 

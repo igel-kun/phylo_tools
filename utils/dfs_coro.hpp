@@ -34,6 +34,18 @@ namespace PTx
   constexpr bool is_reverse_traversal(const TraversalType tt) { return tt & reverse_traversal; }
   constexpr bool is_node_traversal(const TraversalType tt) { return not (is_edge_traversal(tt)) and (not is_all_edge_traversal(tt)); }
 
+  constexpr auto& spell_out_traversal(const TraversalType tt, auto& os) {
+    if(tt & reverse_traversal) os << "reverse ";
+    if(tt & edge_traversal) os << "edge ";
+    if(tt & all_edge_traversal) os << "all-edge ";
+    if(is_node_traversal(tt)) os << "node ";
+    if(tt & depth_last_traversal) os << "depth-last ";
+    if(tt & preorder) os << "preorder ";
+    if(tt & postorder) os << "postorder ";
+    if(tt & inorder) os << "inorder ";
+    return os;
+  }
+
   // the seen set may be a set of nodes or a map indexed by nodes
   template<class S, mstd::TypeRune rune = mstd::TR_PtrVoidOK>
   concept DFSSeenType = PT::NodeSetType<S, rune> or PT::NodeMapType<S, rune>;
@@ -459,7 +471,10 @@ resume_outer:
     } // iterate function
 
   public:
-    void advance() { resume_info.current_pos = iterate(resume_info.current_pos); }
+    void advance() {
+      DEBUG6(std::cout << "advancing a "; spell_out_traversal(tt, std::cout)<<'\n');
+      resume_info.current_pos = iterate(resume_info.current_pos);
+    }
 
     DFSIterator() = default;
 

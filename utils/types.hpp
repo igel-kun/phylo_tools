@@ -132,20 +132,37 @@ namespace PT {
 
   template<StorageEnum storage> using NodeStorage = StorageClass<storage, NodeDesc>;
 
-  template<class T> constexpr bool has_data = std::remove_reference_t<T>::has_data;
-  template<class C> constexpr bool has_node_value = std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>;
-  template<mstd::MapType M> constexpr bool has_node_key = std::is_convertible_v<mstd::key_type_of_t<M>, NodeDesc>;
-  template<mstd::MapType M> constexpr bool maps_to_node = std::is_convertible_v<mstd::mapped_type_of_t<M>, NodeDesc>;
+  // an adjacency is something that can be converted to a NodeDesc
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyType = mstd::is_convertible_v<A, NodeDesc, rune> and (not mstd::is_arithmetic_v<A>);
+  template<class A> concept StrictAdjacencyType = AdjacencyType<A, mstd::TR_Strict>;
 
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept HasAdjacencyValue = AdjacencyType<typename mstd::value_type_of_t<A>, rune>;
+
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyContainerType = mstd::ContainerType<A, rune> and HasAdjacencyValue<A, rune>;
 
   template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept NodeDescType = mstd::is_convertible_v<T, NodeDesc, rune>;
-  
+  concept AdjPairType = (mstd::apply_rune_v<T, rune> or
+    (StrictAdjacencyType<typename mstd::apply_rune_t<T, rune>::first_type> and
+     StrictAdjacencyType<typename mstd::apply_rune_t<T, rune>::second_type>));
+
+
+  template<class T> concept has_data = (not std::is_void_v<typename std::remove_reference_t<T>::Data>);
+  template<class T> struct _DataOf { using type = void; };
+  template<class T> requires has_data<T> struct _DataOf<T> { using type = T::Data; };
+  template<class T> using DataOf = typename _DataOf<T>::type;
+
+  template<class C> constexpr bool has_node_value = std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>;
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept HasNodeValue = mstd::apply_rune_v<C, rune> or has_node_value<mstd::apply_rune_t<C, rune>>;
+
+  template<mstd::MapType M> constexpr bool has_node_key = std::is_convertible_v<mstd::key_type_of_t<M>, NodeDesc>;
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept HasNodeKey = mstd::apply_rune_v<C, rune> or has_node_key<mstd::apply_rune_t<C, rune>>;
   
+  template<mstd::MapType M> constexpr bool maps_to_node = std::is_convertible_v<mstd::mapped_type_of_t<M>, NodeDesc>;
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept MapsToNode = mstd::apply_rune_v<C, rune> or maps_to_node<mstd::apply_rune_t<C, rune>>;
   template<class C> concept StrictMapsToNode = MapsToNode<C, mstd::TR_Strict>;
@@ -154,12 +171,12 @@ namespace PT {
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept NodeIterableType = (mstd::IterableType<C, rune> && HasNodeValue<C, rune>);
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept NodeOrIterableType = (NodeIterableType<C, rune> or NodeDescType<C, rune>);
+  concept NodeOrIterableType = (NodeIterableType<C, rune> or AdjacencyType<C, rune>);
 
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept NodeContainerType = (mstd::ContainerType<C, rune> && HasNodeValue<C, rune>);  
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept NodeOrContainerType = (NodeContainerType<C, rune> or NodeDescType<C, rune>);
+  concept NodeOrContainerType = (NodeContainerType<C, rune> or AdjacencyType<C, rune>);
 
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept NodeSetType = (mstd::SetType<C, rune> && HasNodeValue<C, rune>);
@@ -199,16 +216,6 @@ namespace PT {
   using NameVec = std::vector<std::string>;
   using NodePairSet = HashSet<NodePair>;
 
-  // an adjacency is something that can be converted to a NodeDesc
-  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept AdjacencyType = mstd::is_convertible_v<A, NodeDesc, rune> && not mstd::is_arithmetic_v<A>;
-
-  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept HasAdjacencyValue = AdjacencyType<typename mstd::value_type_of_t<A>, rune>;
-
-  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept AdjacencyContainerType = mstd::ContainerType<A, rune> && HasAdjacencyValue<A, rune>;
-
   // a node is something providing a bunch of types and whose predecessors and successors can be queried
   template<typename N>
   concept StrictNodeType = requires(N n) {
@@ -222,9 +229,6 @@ namespace PT {
 
   template<class N> concept NodeType = StrictNodeType<std::remove_cvref_t<N>>;
   template<class N> concept TreeNodeType = (NodeType<N> && (N::is_tree_node));
-
-  template<class T>
-  concept AdjPairType = AdjacencyType<typename std::remove_reference_t<T>::first_type> && AdjacencyType<typename std::remove_reference_t<T>::second_type>;
 
 
   template<class P> 
@@ -284,6 +288,13 @@ namespace PT {
 
   template<class F, class Net, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept EdgePredicateType = mstd::predicate<F, rune, EdgeOf<Net>>;
+
+  // for LCA oracles, or subtree oracles, etc
+  template<class Oracle, class Key, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept OracleType = mstd::is_invocable_v<Oracle, rune, Key> or requires(Oracle o, Key k) { o[k]; };
+
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept NodeOracleType = OracleType<T, NodeDesc, rune>;
 
 
 }

@@ -250,10 +250,6 @@ namespace mstd{
     }
   };
 
-  // if you want to build a class with some template T in it, but T is a reference, the class will not be assignable; thus it is preferred to use pointers
-  template<class R>
-  using prefer_pointer = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, R>;
-
 
   // access a pointer or reference, returning it as reference
   template<class T>
@@ -292,17 +288,6 @@ namespace mstd{
   };
 
 
-  template<class Compare>
-  struct EqualFromOrdering {
-    Compare cmp;
-
-    template<class T, class U>
-    bool operator()(const T& a, const U& b) const { return !cmp(a, b) && !cmp(b, a); }
-    template<class T, class U>
-    bool operator()(const T& a, const U& b) { return !cmp(a, b) && !cmp(b, a); }
-  };
-
-
   template<class T, class... Qs> struct _invoke_or_lookup_result { };
   template<MapType T, class... Qs> struct _invoke_or_lookup_result<T, Qs...> { using type = mstd::mapped_type_of_t<T>; };
   template<class T, class... Qs> requires (std::is_invocable_v<T, Qs...>)
@@ -325,10 +310,11 @@ namespace mstd{
   bool operator==(const std::reverse_iterator<T>& i2, const T& i1) {  return operator==(i1, i2); }
 
   // ----------------------- store references in classes without losing operator= ------------------------------
-  // this replaces references with std::reference_wrappers... maybe better to just store pointers
-  template<class T>
-  using NoRef = std::conditional_t<std::is_reference_v<T>, std::remove_reference_t<T>*, T>;
-  //using NoRef = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
+  // if you want to build a class with some templated member T, but T is instanciated as a reference,
+  // then the class will not be assignable; thus it is preferred to use pointers
+  template<class R>
+  using NoRef = std::conditional_t<std::is_reference_v<R>, std::add_pointer_t<std::remove_reference_t<R>>, R>;
+
 
   // ----------------------- container to array (first 'elements' elements)  ----------------------------------
   template<size_t elements, ContainerType Container>
@@ -444,6 +430,35 @@ namespace std {
   };
 }
 namespace mstd {
+
+  // if you only have a '<'-comparison, but you need '==', then this class does it for you
+  template<class Compare>
+  struct EqualFromOrdering {
+    [[ no_unique_address ]] Compare cmp;
+
+    template<class T, class U>
+    bool operator()(const T& a, const U& b) const { return (not cmp(a, b)) and  (not cmp(b, a)); }
+    template<class T, class U>
+    bool operator()(const T& a, const U& b) { return (not cmp(a, b)) and  (not cmp(b, a)); }
+  };
+
+  // in C++20, unordered_set::find() accepts values that can be compared to the keys, provided the comparator has a field called 'is_transparent'
+  // why this would not just be standard is beyond me...
+  // anyways, this comparator dereferences the arguments when they can be dereferenced, otherwise not, and then it compares the results
+  struct DerefEqual {
+    using is_transparent = void;
+
+    template<class X, class Y>
+    bool operator()(const X& x, const Y& y) const { return access(x) == access(y); }
+  };
+  // a hasher to hash various pointers (C-style pointers, smart pointers, ...)
+  // can be used to index into a hash-table of pointers by different types of pointers
+  struct PtrHash {
+    using is_transparent = void;
+
+    template<HasDeref T>
+    auto operator()(const T& x) const { return std::hash<void*>{}(&(*x)); }
+  };
 
 
   // ------------------------ FUNCTIONS -------------------------------------------
@@ -640,11 +655,11 @@ namespace std {
   double stod(const std::string_view s) { return stoX<double>(s); }
 
   template<class T> std::string to_string(const T& x) { std::ostringstream out; out << x; return std::move(out).str(); }
-
-
-  // ----------------------- OUTPUT ---------------------------------------
 }
+
+// ----------------------- OUTPUT ---------------------------------------
 namespace mstd {
+
   template<class T>
   struct printable {
     const T* x;
@@ -655,6 +670,43 @@ namespace mstd {
       } else return os << "((unprintable @"<<p.x<<"))";
     }
   };
+
+  // a general parser from string_stream to anything
+  template<class Default = size_t>
+  struct AnythingFromString {
+    struct viewbuf: std::streambuf {
+      viewbuf(std::string_view sv) {
+        char* p = const_cast<char*>(sv.data());
+        this->setg(p, p, p + sv.size());
+      }
+    };
+
+    AnythingFromString() = default;
+
+    template<class T>
+    static T from_string(std::string_view sv) {
+      if constexpr (std::is_constructible_v<T, std::string_view>) {
+        return T(sv);  // direct construction from string_view
+      } else if constexpr (std::is_integral_v<T> or std::is_floating_point_v<T>) {
+        return std::stoX<T>(sv);
+      } else if constexpr (std::is_constructible_v<T, std::string>) {
+        return T(std::string(sv));  // conversion with string copy
+      } else if constexpr (std::is_constructible_v<T>) {
+        viewbuf vb(sv);
+        std::istream is(&vb);
+        T value;
+        is >> value;
+        if(!is) throw std::runtime_error("parse error");
+        return value;
+      } else {
+        static_assert([]{ return false; }(), "Don't know how to convert to T from string_view");
+      }
+    }
+
+    template<class T = Default>
+    T operator()(std::string_view sv) const { return from_string<T>(sv); }
+  };
+
 }
 namespace std {
   template <typename A, typename B>

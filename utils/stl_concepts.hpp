@@ -22,7 +22,7 @@ namespace mstd {
   concept IsPair = apply_rune_v<T, rune> or is_pair<apply_rune_t<T, rune>>;
 
 
-  template<class T, TypeRune rune, class ... U> concept IsAnyOfR = (mstd::is_same_v<T, U, rune> || ...);
+  template<class T, TypeRune rune, class ... U> concept IsAnyOfR = (mstd::is_same_v<T, U, rune> or ...);
   template<class T, class ... U> concept IsAnyOf = IsAnyOfR<T, TR_ConstRefOK, U...>;
 
   // std::is_arithmetic is false for pointers.... why?
@@ -354,7 +354,7 @@ namespace mstd {
 		{ a[key] } -> std::same_as<typename T::mapped_type&>;
 	};
   template<class T, TypeRune rune = TR_ConstRefOK>
-	concept MapType = ContainerType<T, rune> && maps_to_key<apply_rune_t<T, rune>>;
+	concept MapType = ContainerType<T, rune> and maps_to_key<apply_rune_t<T, rune>>;
   template<class T> concept StrictMapType = MapType<T, TR_Strict>;
   template<class T> concept OptionalMapType = MapType<T, TR_ConstRefVoidOK>;
 

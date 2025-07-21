@@ -5,12 +5,13 @@
  * This is an implementation of heavy-path decompositions for trees
  */
 #include "types.hpp"
+#include "dfs_coro.hpp"
 
 namespace PT {
 
   // the heavy-path decomposition class
   // accepts a NodeOracleType (also by pointer) or void, indicating that the subtree count should be done and stored by the decomposition itself
-  template<class Tree, NodeOracleType<mstd::TR_PtrVoidOK> SubtreeSizeOracle = void>
+  template<class Tree, NodeOracleType<mstd::TR_PtrVoidOK> _SubtreeSizeOracle = void>
   struct HeavyPathDecomposition {
     // ------- description --------
     // definition: deleting all edges uv s.t. #descendants(u) >= 2*#descendants(v) + 1  yields a decomposition of T into "heavy paths"
@@ -35,25 +36,6 @@ namespace PT {
     NodeDesc root;
     [[ no_unique_address ]] SubtreeSizeOracle size_oracle;
   public:
-
-    // ------- construction & desctruction ---------
-    HeavyPathDecomposition() = default;
-
-    // pass all arguments into the size oracle construction
-    template<class... Args>
-    HeavyPathDecomposition(const NodeDesc _root, Args&&... args):
-      root{_root},
-      subtree_size(std::forward<Args>(args)...);
-    {
-      if constexpr ((not has_size_oracle) and (sizeof...(Args) == 0))
-        build_size_oracle();
-      build_decomposition();
-    };
-
-    template<class... Args>
-    HeavyPathDecomposition(const Tree& T, Args&&... args):
-      HeavyPathDecomposition(T.root(), std::forward<Args>(args)...):
-    {}
 
     // ------- operators --------
 
@@ -93,7 +75,7 @@ namespace PT {
 
     // return if x is an apex
     bool is_apex(const NodeDesc x) const {
-      if(y != root) {
+      if(x != root) {
         return is_apex_with_parent(x, Tree::parent(x));
       } else return true;
     }
@@ -105,11 +87,11 @@ namespace PT {
     size_t subtree_size_of_apex(const NodeDesc x) const { return subtree_size(get_apex(x)); }
 
     // if x and y are on the same heavy path, return the higher one among them, otherwise return NoNode
-    NodeDesc choose_higher_on_same_path(const NodeDesc x, const NodeDesc y) const { return choose_higher_on_same_path(x, y, subtree_size(x), subtree_size(y); }
+    NodeDesc choose_higher_on_same_path(const NodeDesc x, const NodeDesc y) const { return choose_higher_on_same_path(x, y, subtree_size(x), subtree_size(y));}
     NodeDesc choose_higher_on_same_path(const NodeDesc x, const NodeDesc y, const size_t x_size, const size_t y_size) const {
       if(x != y) {
         if(x_size != y_size) {
-          const auto [upper, lower] = (x_size > y_size) ? {x, y} : {y, x};
+          const auto [upper, lower] = (x_size > y_size) ? std::pair{x, y} : std::pair{y, x};
           if(is_apex(upper)) {
             if(is_apex(lower)) {
               return NoNode; // if both are apexes, they cannot be on the same heavy path
@@ -121,7 +103,7 @@ namespace PT {
     // return whether x and y are on the same heavy path
     bool on_same_heavy_path(const NodeDesc x, const NodeDesc y) const { return choose_higher_on_same_path(x, y) != NoNode; }
 
-    const path_info& get_path_info() const { return path_info; }
+    const PathInfo& get_path_info() const { return path_info; }
 
     const auto& subtree_size(const NodeDesc x) const {
       if constexpr (NodeMapType<SubtreeSizeOracle, mstd::TR_PtrOK>) {
@@ -142,6 +124,26 @@ namespace PT {
         return path_info[x].subtree_size;
       }
     }
+
+    // ------- construction & desctruction ---------
+  public:
+    HeavyPathDecomposition() = default;
+
+    // pass all arguments into the size oracle construction
+    template<class... Args>
+    HeavyPathDecomposition(const NodeDesc _root, Args&&... args):
+      root{_root},
+      size_oracle(std::forward<Args>(args)...)
+    {
+      if constexpr ((not has_size_oracle) and (sizeof...(Args) == 0))
+        build_size_oracle();
+      build_decomposition();
+    };
+
+    template<class... Args>
+    HeavyPathDecomposition(const Tree& T, Args&&... args):
+      HeavyPathDecomposition(T.root(), std::forward<Args>(args)...)
+    {}
 
   };
 }

@@ -66,42 +66,6 @@ namespace mstd {
   }
 
 
-  // a general parser from string_stream to anything
-  template<class Default = size_t>
-  struct AnythingFromString {
-    struct viewbuf: std::streambuf {
-      viewbuf(std::string_view sv) {
-        char* p = const_cast<char*>(sv.data());
-        this->setg(p, p, p + sv.size());
-      }
-    };
-
-    AnythingFromString() = default;
-
-    template<class T>
-    static T from_string(std::string_view sv) {
-      if constexpr (std::is_constructible_v<T, std::string_view>) {
-        return T(sv);  // direct construction from string_view
-      } else if constexpr (std::is_integral_v<T> or std::is_floating_point_v<T>) {
-        return std::stoX<T>(sv);
-      } else if constexpr (std::is_constructible_v<T, std::string>) {
-        return T(std::string(sv));  // conversion with string copy
-      } else if constexpr (std::is_constructible_v<T>) {
-        viewbuf vb(sv);
-        std::istream is(&vb);
-        T value;
-        is >> value;
-        if(!is) throw std::runtime_error("parse error");
-        return value;
-      } else {
-        static_assert([]{ return false; }(), "Don't know how to convert to T from string_view");
-      }
-    }
-
-    template<class T = Default>
-    T operator()(std::string_view sv) const { return from_string<T>(sv); }
-  };
-
   // tokenize and parse a string_view into a tuple
   // Converter provides operator()<T>(string_view) that parses a T from a string_view
   // NOTE: if the Converter is not invocable with a string_view,

@@ -57,9 +57,9 @@ namespace PT {
            bool _track_roots = true,
            OptionalMapsToNode _OldToNewTranslation = NodeTranslation>
   struct EdgeEmplacementHelper:
-    public mstd::optional_tuple<mstd::prefer_pointer<_OldToNewTranslation>, std::conditional_t<_track_roots, NodeSet, void>>
+    public mstd::optional_tuple<mstd::NoRef<_OldToNewTranslation>, std::conditional_t<_track_roots, NodeSet, void>>
   {
-    using OldToNewTranslation = mstd::prefer_pointer<_OldToNewTranslation>;
+    using OldToNewTranslation = mstd::NoRef<_OldToNewTranslation>;
     using TargetPhylo = _TargetPhylo;
     using Parent = mstd::optional_tuple<OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>;
 
@@ -192,15 +192,19 @@ namespace PT {
 
   // ------- Emplacement Helper: deduction guides ---------
   // ------- Emplacement Helper: concepts ---------
-  // T is an EmplacementHelper iff T::add_an_edge can be invoked with 2 NodeDesc's
+  // T is an EmplacementHelper iff T::add_an_edge can be invoked with 2 NodeDesc's (this implies that T is not const)
   template<class T> concept StrictEmplacementHelperType = requires(T& t, NodeDesc u) { t.add_an_edge(u,u); };
-  template<class T> concept EmplacementHelperType = StrictEmplacementHelperType<std::remove_cvref_t<T>>;
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept EmplacementHelperType = mstd::apply_rune_v<T, rune> or StrictEmplacementHelperType<mstd::apply_rune_t<T, rune>>;
+
 
   // ------- Emplacement Helper: defaults ---------
   template<StrictPhylogenyType TargetPhylo,
            bool track_roots = true,
            OptionalMapsToNode OldToNew = NodeTranslation>
   using DefaultEdgeEmplacementHelper = EdgeEmplacementHelper<TargetPhylo, track_roots, OldToNew>;
+
+
 
   // ============== Edge Emplacer =================
   // ------- Edge Emplacer: helpers -----------
@@ -304,8 +308,8 @@ namespace PT {
     // --------------- nodes --------------------
     template<class... Args>
     NodeDesc create_copy_of_raw(Args&&... args) {
-      DEBUG5(std::cout << "extracting node data? "<<extract_node_data<<'\n');
-      if constexpr (extract_node_data && (std::is_invocable_v<Extracter, Ex_node_data, Args&&...>)) {
+      DEBUG6(std::cout << "extracting node data? "<<extract_node_data<<'\n');
+      if constexpr (extract_node_data and (std::is_invocable_v<Extracter, Ex_node_data, Args&&...>)) {
         return helper.create_node(data_extracter(Ex_node_data{}, std::forward<Args>(args)...));
       } else return helper.create_node(std::forward<Args>(args)...);
     }
@@ -322,7 +326,7 @@ namespace PT {
     // call to create a copy of the node other_u and either extract its data & label, or pass the data and ignore the label (set it yourself later)
     template<class... Args> requires (Helper::translating)
     NodeDesc create_copy_of(const auto& other_u, Args&&... args) {
-      DEBUG5(std::cout << "\ncreating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new())<<'\n');
+      DEBUG6(std::cout << "creating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new())<<'\n');
       // check if other_u is known to the translation
       const auto [u_iter, u_success] = helper.register_node(other_u);
       NodeDesc& u_copy = u_iter->second;
@@ -344,7 +348,7 @@ namespace PT {
     // --------------- edges --------------------
     template<class... MoreArgs>
     auto emplace_edge_raw(const NodeDesc u, const NodeDesc v, MoreArgs&&... args) {
-      DEBUG5(std::cout << "only adding edge "<< u <<" ----> "<< v <<"\n");
+      DEBUG6(std::cout << "only adding edge "<< u <<" ----> "<< v <<"\n");
       // if the data-extracter can be called with MoreArgs, then use it to make data, otherwise, just pass MoreArgs to the edge creation
       if constexpr (extract_edge_data && (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
         return helper.add_an_edge(u, v, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
@@ -402,7 +406,8 @@ namespace PT {
 
   // -------- Edge Emplacer: concepts --------------
   template<class T> concept StrictEdgeEmplacerType = EmplacementHelperType<typename T::Helper>;
-  template<class T> concept EdgeEmplacerType = StrictEdgeEmplacerType<std::remove_cvref_t<T>>;
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept EdgeEmplacerType = mstd::apply_rune_v<T, rune> or StrictEdgeEmplacerType<mstd::apply_rune_t<T, rune>>;
 
   // -------- Edge Emplacer: defaults  -------------- 
   template<StrictPhylogenyType TargetPhylo,

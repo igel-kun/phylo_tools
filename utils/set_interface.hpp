@@ -21,59 +21,16 @@
 namespace mstd { // since it was the job of STL to provide for it and they failed, I'll pollute their namespace instead :) 
 #warning "TODO: write a back() function (doing front() for std::unordered containers)"
 
-  template<SetType Set, class ValueType = value_type_of_t<Set>>
-  void flip(Set& _set, const ValueType& index) {
-    const auto [iter, success] = _set.emplace(index);
-    if(!success) _set.erase(iter);
-  }
-  template<class T>
-  void flip(iterable_bitset<T>& _set, const uintptr_t index) { return _set.flip(index); }
+  template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> std::convertible_to<bool>; };
+  template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
 
-  // intersect a set with a list/vector/etc
-  template<SetType Set, ContainerType Other>
-  void intersect(Set& target, const Other& source) {
-    for(const auto& x: source) erase(target, x);
-  }
-  // intersect 2 sets
-  template<SetType Set, ContainerType Other> requires SetType<Other>
-  void intersect(Set& target, const Other& source) {
-    if(target.size() > source.size()) {
-      for(const auto& x: source)
-        erase(target, x);
-    } else erase(target, [&source](const auto& x) { return !test(source, x); });
-  }
-  template<SetType S, class T>
-  void intersect(singleton_set<T>& target, const S& source) {
-    if(!target.empty() && !test(source, front(target)))
-      target.clear();
-  }
-  // intersect 2 bitsets
-  template<ContainerType C> requires IterBitsetType<C>
-  void intersect(C& target, const C& source) { target &= source; }
+  // if we're not interested in the return value, we can set values more efficiently
+  template<class S> requires (ContainerType<S> && !SettableType<S>)
+  bool set_val(S& s, const auto& val) { return append(s, val).second; }
+  template<class S> requires (ContainerType<S> && SettableType<S>)
+  bool set_val(S& s, const auto& val) { return s.set(val); }
 
-  template<IterableType I, ContainerType C>
-  bool are_disjoint(const I& x, const C& y) {
-    if constexpr (!SetType<C>) {
-        for(const auto& item: y) if(test(x, item)) return false;
-    } else if constexpr (!SetType<I>) {
-        for(const auto& item: x) if(test(y, item)) return false;
-    } else {
-      if(x.size() < y.size()){
-        for(const auto& item: x) if(test(y, item)) return false;
-      } else {
-        for(const auto& item: y) if(test(x, item)) return false;
-      }
-    }
-    return true;
-  }
-  template<ContainerType C, IterableType I> requires (!ContainerType<I>)
-  bool are_disjoint(const C& x, const I& y) { return are_disjoint(y,x); }
-
-  template<class T, SetType S>
-  bool are_disjoint(const singleton_set<T>& x, const S& y) { return x.empty() ? true : test(y, front(x)); }
-  template<class T, SetType S> requires (!std::is_convertible_v<S, singleton_set<value_type_of_t<S>>>)
-  bool are_disjoint(const S& y, const singleton_set<T>& x) { return are_disjoint(x, y); }
-
+#warning "TODO: add set_val for everything that we can do append on, but discard the iterator; BEFORE: test if this isn't done automatically by the optimizer"
 
   template<ContainerType C, FindableType<C> Key>
   auto find(C&& c, const Key& key) {
@@ -122,6 +79,121 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       return {end(y), end(y)};
   }
 
+
+
+  template<class Index, class C> requires ContainerType<C>
+  decltype(auto) lookup(C&& c, Index&& index) { return c.at(index); }
+  template<class Index, class C> requires (std::invocable<C, Index> && !ContainerType<C>)
+  decltype(auto) lookup(C&& c, Index&& index) { return c(index); }
+
+  // test if something is in the set
+  template<SetType S>
+  bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
+  template<MapType M>
+  bool test(const M& _map, const key_type_of_t<M>& key) { return _map.count(key); }
+  template<VectorType V, class Key> requires (FindableType<Key, V> and not MapType<V>)
+  bool test(const V& vec, const Key& key) { return mstd::find(vec, key) != std::end(vec); }
+  template<class T>
+  bool test(const T& x, const T& y) { return x == y; }
+
+  template<class T, std::invocable<T> F>
+    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> || mstd::IterableType<std::invoke_result_t<F,T>>)
+  bool test(const F& f, const T& x) {
+    if constexpr (mstd::IterableType<decltype(f(x))>)
+      return not f(x).empty();
+    else return f(x);
+  }
+
+  template<class T, class Arg>
+  concept is_testable = requires(T t, Arg arg) { mstd::test(t, arg); };
+
+
+
+  template<SetType Set, class ValueType = value_type_of_t<Set>>
+  void flip(Set& _set, const ValueType& index) {
+    const auto [iter, success] = _set.emplace(index);
+    if(!success) _set.erase(iter);
+  }
+  template<class T>
+  void flip(iterable_bitset<T>& _set, const uintptr_t index) { return _set.flip(index); }
+
+  // intersect two containers
+  template<ContainerType A, ContainerType B> requires ((not SetType<A>) or (not SetType<B>))
+  A get_intersection(const A& a, const B& b) {
+    A result;
+    if constexpr (not SetType<B>) {
+      for(const auto& x: b)
+        if(mstd::test(a, x))
+          append(result, x);
+    } else {
+      for(const auto& x: a)
+        if(mstd::test(b, x))
+          append(result, x);
+    }
+    return result;
+  }
+
+  template<IterBitsetType A>
+  A get_intersection(const A& a, const A& b) { return a & b; }
+
+  template<SetType A, SetType B> requires ((not IterBitsetType<A>) or (not IterBitsetType<B>))
+  A get_intersection(const A& a, const B& b) {
+    A result;
+    if(a.size() > b.size()) {
+      for(const auto& x: b)
+        if(mstd::test(a, x))
+            append(result, x);
+    } else {
+      for(const auto& x: a)
+        if(mstd::test(b, x))
+            append(result, x);
+    }
+    return result;
+  }
+
+
+  // destructive intersection
+  template<ContainerType A, ContainerType B> requires (not SetType<A>)
+  void intersect(A& target, const B& source) {
+    erase(target, [&source](const auto& x) { return not mstd::test(source, x); });
+  }
+  template<SetType A, ContainerType B> requires (not SetType<B>)
+  void intersect(A& target, const B& source) { target = get_intersection(target, source); }
+
+  template<SetType A, SetType B> requires ((not IterBitsetType<A>) or (not IterBitsetType<B>))
+  void intersect(A& target, const B& source) {
+    if(target.size() > source.size()) {
+      target = get_intersection(target, source);
+    } else erase(target, [&source](const auto& x) { return not mstd::test(source, x); });
+  }
+  template<ContainerType C> requires IterBitsetType<C>
+  void intersect(C& target, const C& source) { target &= source; }
+
+
+  template<IterableType I, ContainerType C>
+  bool are_disjoint(const I& x, const C& y) {
+    if constexpr (!SetType<C>) {
+        for(const auto& item: y) if(test(x, item)) return false;
+    } else if constexpr (!SetType<I>) {
+        for(const auto& item: x) if(test(y, item)) return false;
+    } else {
+      if(x.size() < y.size()){
+        for(const auto& item: x) if(test(y, item)) return false;
+      } else {
+        for(const auto& item: y) if(test(x, item)) return false;
+      }
+    }
+    return true;
+  }
+  template<ContainerType C, IterableType I> requires (!ContainerType<I>)
+  bool are_disjoint(const C& x, const I& y) { return are_disjoint(y,x); }
+
+  template<class T, SetType S>
+  bool are_disjoint(const singleton_set<T>& x, const S& y) { return x.empty() ? true : test(y, front(x)); }
+  template<class T, SetType S> requires (!std::is_convertible_v<S, singleton_set<value_type_of_t<S>>>)
+  bool are_disjoint(const S& y, const singleton_set<T>& x) { return are_disjoint(x, y); }
+
+
   // std::unordered_set has no rbegin(), so we just alias it to begin()
   template<class Key, class Hash, class KE, class A>
   auto rbegin(const std::unordered_set<Key, Hash, KE, A>& s) { return s.begin(); }
@@ -160,46 +232,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   constexpr T any_element(Container&& c) {
     return c.empty() ? _invalid : front(std::forward<Container>(c));
   }
-
-  template<class T> concept StrictSettableType = requires(T t, T::value_type x) { { t.set(x) } -> std::convertible_to<bool>; };
-  template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
-
-
-  // if we're not interested in the return value, we can set values more efficiently
-  template<class S> requires (ContainerType<S> && !SettableType<S>)
-  bool set_val(S& s, const auto& val) { return append(s, val).second; }
-  template<class S> requires (ContainerType<S> && SettableType<S>)
-  bool set_val(S& s, const auto& val) { return s.set(val); }
-
-#warning "TODO: add set_val for everything that we can do append on, but discard the iterator; BEFORE: test if this isn't done automatically by the optimizer"
-
-
-  template<class Index, class C> requires ContainerType<C>
-  decltype(auto) lookup(C&& c, Index&& index) { return c.at(index); }
-  template<class Index, class C> requires (std::invocable<C, Index> && !ContainerType<C>)
-  decltype(auto) lookup(C&& c, Index&& index) { return c(index); }
-
-
-  // test if something is in the set
-  template<SetType S>
-  bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
-  template<MapType M>
-  bool test(const M& _map, const key_type_of_t<M>& key) { return _map.count(key); }
-  template<VectorType V, class Key> requires (FindableType<Key, V> and not MapType<V>)
-  bool test(const V& vec, const Key& key) { return mstd::find(vec, key) != std::end(vec); }
-  template<class T>
-  bool test(const T& x, const T& y) { return x == y; }
-
-  template<class T, std::invocable<T> F>
-    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> || mstd::IterableType<std::invoke_result_t<F,T>>)
-  bool test(const F& f, const T& x) {
-    if constexpr (mstd::IterableType<decltype(f(x))>)
-      return not f(x).empty();
-    else return f(x);
-  }
-
-  template<class T, class Arg>
-  concept is_testable = requires(T t, Arg arg) { mstd::test(t, arg); };
 
   template<IterableType C1, SetType C2> requires std::is_convertible_v<value_type_of_t<C1>, value_type_of_t<C2>>
   C2& copy(const C1& x, C2& y) {

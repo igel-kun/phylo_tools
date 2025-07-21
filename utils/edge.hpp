@@ -56,22 +56,14 @@ namespace PT{
   template<class EdgeData = void>
   using EdgeSet = std::unordered_set<Edge<EdgeData>>;
 
-/*
-  // an Edge is something whose head and tail are Nodes
-  template<class T>
-  concept EdgeType = requires(T e) {
-    { e.head() } -> std::convertible_to<NodeDesc>;
-    { e.tail() } -> std::convertible_to<NodeDesc>;
-  };
-*/
   template<class T>
   concept StrictEdgeType = mstd::is_derived_from_template_v<T, ProtoEdge>;
-  template<class T>
-  concept EdgeType = StrictEdgeType<std::remove_cvref_t<T>>;
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept EdgeType = mstd::apply_rune_v<T, rune> or StrictEdgeType<mstd::apply_rune_t<T, rune>>;
 
   // a 'loose' edge type is either an edge or a pair of AdjacencyTypes
-  template<class T>
-  concept LooseEdgeType = EdgeType<T> || AdjPairType<T>;
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept LooseEdgeType = EdgeType<T, rune> or AdjPairType<T, rune>;
 
   template<class F, class Edge>
   concept EdgeFunctionType = LooseEdgeType<Edge> && std::invocable<F, Edge>;

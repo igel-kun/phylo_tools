@@ -17,6 +17,7 @@
 #include "utils/command_line.hpp"
 
 #include "utils/network.hpp"
+#include "utils/tree.hpp"
 #include "utils/types.hpp"
 #include "utils/biconnected_comps.hpp"
 #include "io/newick.hpp"
@@ -26,6 +27,8 @@
 #else
 #include "utils/dfs.hpp"
 #endif
+
+#include "utils/dominators.hpp"
 
 
 constexpr auto mark_network = "(((a:3,(b:2)#H1:2;0.5):2,(#H1:2;0.5,c:3):2):8,x:100);";
@@ -56,6 +59,7 @@ void parse_given_options(const int argc, const char** argv) {
   description["-b"] = {0,0};
   description["-f"] = {0,0};
   description["-d"] = {0,0};
+  description["-o"] = {0,0};
   description[""] = {0,0};
   const std::string help_message(std::string(argv[0]) + " [-a|<options>]\n\
       FLAGS:\n\
@@ -66,6 +70,7 @@ void parse_given_options(const int argc, const char** argv) {
       \t-m\trun vector_map test\n\
       \t-f\trun brute-force abstraction test\n\
       \t-S\trun bounded-subset test\n\
+      \t-o\trun dominators test\n\
       \t-b\trun Biconnected Components test\n\
       \t-d\trun DFS test\n");
 
@@ -161,65 +166,63 @@ void test_sorted_vector() {
 }
 
 
-
-using UintVecMap = mstd::vector_map<uint32_t, uint32_t>;
-static_assert(mstd::ContainerType<UintVecMap>);
-static_assert(mstd::MapType<UintVecMap>);
-
-using T = mstd::raw_vector_map<size_t, int>;
-using I = typename T::iterator;
-using RT = typename I::reference;
-using VT = typename I::value_type;
-
-static_assert(std::is_same_v<typename T::mapped_type, int>);
-static_assert(std::is_same_v<mstd::mapped_type_of_t<T>, int>);
-
-static_assert(std::copy_constructible<T>);
-static_assert(std::is_object_v<T>);
-static_assert(std::move_constructible<T>);
-static_assert(std::is_lvalue_reference_v<T&>);
-static_assert(std::common_reference_with<const std::remove_reference_t<T&>&, const std::remove_reference_t<T>&>);
-static_assert(std::assignable_from<T&, T>);
-static_assert(std::swappable<T>);
-static_assert(std::assignable_from<T&, T&>);
-static_assert(std::assignable_from<T&, const T&>);
-static_assert(std::assignable_from<T&, const T>);
-static_assert(std::regular<T>);
-static_assert(std::swappable<T>);
-static_assert(std::common_reference_with<RT&&, VT&>);
-//[with _Tp = std::raw_vector_map_iterator<long unsigned int, int>; _Tp = std::raw_vector_map_iterator<long unsigned int, int>]
-static_assert(std::common_reference_with<std::iter_rvalue_reference_t<I>&&, const VT&>);
-static_assert(std::common_reference_with<
-  std::iter_rvalue_reference_t<I>&&,
-  const typename std::__detail::__iter_traits_impl<I, std::indirectly_readable_traits<I>>::type::value_type&
->);
-//[with _In = std::raw_vector_map_iterator<long unsigned int, int>; _Tp = std::raw_vector_map_iterator<long unsigned int, int>
-static_assert(std::forward_iterator<I>);
-
-using CI = typename T::const_iterator;
-static_assert(std::input_or_output_iterator<CI>);
-using T1 = typename CI::reference&&;
-using U1 = typename CI::value_type&;
-//static_assert(std::same_as<std::common_reference_t<T1, U1>, std::common_reference_t<U1, T1>>);
-//static_assert(std::convertible_to<T1, std::common_reference_t<T1, U1>>);
-//static_assert(std::convertible_to<U1, std::common_reference_t<T1, U1>>);
-static_assert(std::common_reference_with<T1, U1>);
-static_assert(std::common_reference_with<std::iter_reference_t<CI>&&, std::iter_value_t<CI>&>);
-static_assert(std::common_reference_with<std::iter_reference_t<CI>&&, std::iter_rvalue_reference_t<CI>&&>);
-static_assert(std::common_reference_with<std::iter_rvalue_reference_t<CI>&&, const std::iter_value_t<CI>&>);
-static_assert(std::indirectly_readable<CI>);
-static_assert(std::input_iterator<CI>);
-static_assert(std::derived_from<std::random_access_iterator_tag, std::forward_iterator_tag>);
-static_assert(std::incrementable<CI>);
-static_assert(std::sentinel_for<CI, CI>);
-static_assert(std::forward_iterator<typename T::const_iterator>);
-static_assert(mstd::IterableType<T>);
-static_assert(mstd::ContainerType<T>);
-static_assert(mstd::MapType<T>);
-static_assert(mstd::HasIterTraits<mstd::iterator_of_t<UintVecMap>>);
-
-
 void test_vector_map() {
+  using UintVecMap = mstd::vector_map<uint32_t, uint32_t>;
+  static_assert(mstd::ContainerType<UintVecMap>);
+  static_assert(mstd::MapType<UintVecMap>);
+
+  using T = mstd::raw_vector_map<size_t, int>;
+  using I = typename T::iterator;
+  using RT = typename I::reference;
+  using VT = typename I::value_type;
+
+  static_assert(std::is_same_v<typename T::mapped_type, int>);
+  static_assert(std::is_same_v<mstd::mapped_type_of_t<T>, int>);
+
+  static_assert(std::copy_constructible<T>);
+  static_assert(std::is_object_v<T>);
+  static_assert(std::move_constructible<T>);
+  static_assert(std::is_lvalue_reference_v<T&>);
+  static_assert(std::common_reference_with<const std::remove_reference_t<T&>&, const std::remove_reference_t<T>&>);
+  static_assert(std::assignable_from<T&, T>);
+  static_assert(std::swappable<T>);
+  static_assert(std::assignable_from<T&, T&>);
+  static_assert(std::assignable_from<T&, const T&>);
+  static_assert(std::assignable_from<T&, const T>);
+  static_assert(std::regular<T>);
+  static_assert(std::swappable<T>);
+  static_assert(std::common_reference_with<RT&&, VT&>);
+  //[with _Tp = std::raw_vector_map_iterator<long unsigned int, int>; _Tp = std::raw_vector_map_iterator<long unsigned int, int>]
+  static_assert(std::common_reference_with<std::iter_rvalue_reference_t<I>&&, const VT&>);
+  static_assert(std::common_reference_with<
+    std::iter_rvalue_reference_t<I>&&,
+    const typename std::__detail::__iter_traits_impl<I, std::indirectly_readable_traits<I>>::type::value_type&
+  >);
+  //[with _In = std::raw_vector_map_iterator<long unsigned int, int>; _Tp = std::raw_vector_map_iterator<long unsigned int, int>
+  static_assert(std::forward_iterator<I>);
+
+  using CI = typename T::const_iterator;
+  static_assert(std::input_or_output_iterator<CI>);
+  using T1 = typename CI::reference&&;
+  using U1 = typename CI::value_type&;
+  //static_assert(std::same_as<std::common_reference_t<T1, U1>, std::common_reference_t<U1, T1>>);
+  //static_assert(std::convertible_to<T1, std::common_reference_t<T1, U1>>);
+  //static_assert(std::convertible_to<U1, std::common_reference_t<T1, U1>>);
+  static_assert(std::common_reference_with<T1, U1>);
+  static_assert(std::common_reference_with<std::iter_reference_t<CI>&&, std::iter_value_t<CI>&>);
+  static_assert(std::common_reference_with<std::iter_reference_t<CI>&&, std::iter_rvalue_reference_t<CI>&&>);
+  static_assert(std::common_reference_with<std::iter_rvalue_reference_t<CI>&&, const std::iter_value_t<CI>&>);
+  static_assert(std::indirectly_readable<CI>);
+  static_assert(std::input_iterator<CI>);
+  static_assert(std::derived_from<std::random_access_iterator_tag, std::forward_iterator_tag>);
+  static_assert(std::incrementable<CI>);
+  static_assert(std::sentinel_for<CI, CI>);
+  static_assert(std::forward_iterator<typename T::const_iterator>);
+  static_assert(mstd::IterableType<T>);
+  static_assert(mstd::ContainerType<T>);
+  static_assert(mstd::MapType<T>);
+  static_assert(mstd::HasIterTraits<mstd::iterator_of_t<UintVecMap>>);
+
   std::cout << "======> testing mstd::vector_map...\n";
   std::unordered_map<uint32_t, uint32_t> um;
   UintVecMap vm;
@@ -584,6 +587,24 @@ void test_bcc() {
   std::cout << "======> Biconnected Component infrastructure test passed\n";
 }
 
+void test_dominators() {
+  std::cout << "======> testing Dominator Tree Algorithm ...\n";
+  using MyNetwork = DefaultLabeledNetwork<void, uint32_t>; // random_net has edge-lengths that we try to shove into the dominator tree
+  using DomTree = CompatibleTree<MyNetwork, NodeDesc>; // the dominator tree stores the corresponding nodes of the input network as NodeData
+  
+  {
+    const MyNetwork N = parse_newick<MyNetwork>(random_net, Ex_edge_data{}, mstd::AnythingFromString<uint32_t>{});
+    N.print_summary(std::cout);
+    std::cout << ExtendedDisplay(N) << '\n';
+
+    NaiveDominatorOracle dom_oracle(N);
+    // NOTE: remember to extract the NodeDesc in the Network as NodeData
+    DomTree dom_tree = dom_oracle.template make_dominator_tree<DomTree>(Ex_node_data{}, mstd::IdentityFunction<>{});
+
+    std::cout << ExtendedDisplay(dom_tree) << '\n';
+  }
+  std::cout << "======> Dominator Tree Algorithm test passed\n";
+}
 
 
 int main(const int argc, const char** argv) {
@@ -598,6 +619,7 @@ int main(const int argc, const char** argv) {
   if(test(options, "-c")) test_concat_iter();
   if(test(options, "-d")) test_dfs();
   if(test(options, "-b")) test_bcc();
+  if(test(options, "-o")) test_dominators();
 
 }
 

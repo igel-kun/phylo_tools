@@ -148,6 +148,7 @@ namespace mstd {
   class iterable_bitset: public iter_traits_from_reference<mapped_type_of_t<_bucket_map>>,
                          public bucket_map_traits<_bucket_map>
   {
+#warning "TODO: add small-string optimization!"
     // NOTE: bitsets cannot provide meaningful references to their members
     using traits = iter_traits_from_reference<mapped_type_of_t<_bucket_map>>;
     using bmap_traits = bucket_map_traits<_bucket_map>;

@@ -18,9 +18,9 @@ namespace PT {
   template<OptionalPhylogenyType Phylo> using NodeDataOf = typename _NodeDataOf<Phylo>::type;
   template<OptionalPhylogenyType Phylo> using EdgeDataOf = typename _EdgeDataOf<Phylo>::type;
 
-  template<OptionalPhylogenyType Phylo> constexpr bool HasNodeLabel = !std::is_void_v<NodeLabelOf<Phylo>>;
-  template<OptionalPhylogenyType Phylo> constexpr bool HasNodeData  = !std::is_void_v<NodeDataOf<Phylo>>;
-  template<OptionalPhylogenyType Phylo> constexpr bool HasEdgeData  = !std::is_void_v<EdgeDataOf<Phylo>>;
+  template<OptionalPhylogenyType Phylo> constexpr bool HasNodeLabel = not std::is_void_v<NodeLabelOf<Phylo>>;
+  template<OptionalPhylogenyType Phylo> constexpr bool HasNodeData  = not std::is_void_v<NodeDataOf<Phylo>>;
+  template<OptionalPhylogenyType Phylo> constexpr bool HasEdgeData  = not std::is_void_v<EdgeDataOf<Phylo>>;
 
   // ----------------- using tags -----------------------
   template<DataTag Tag, OptionalPhylogenyType Phylo>

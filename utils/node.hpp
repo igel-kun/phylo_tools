@@ -219,7 +219,9 @@ namespace PT{
 
   // A Node is a ProtoNode with possible NodeData
   template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
-  class _Node: public ProtoNode<_PredStorage, _SuccStorage, _EdgeData> {
+  class _Node:
+    public ProtoNode<_PredStorage, _SuccStorage, _EdgeData>
+  {
     using Parent = ProtoNode<_PredStorage, _SuccStorage, _EdgeData>;
     _NodeData _data;
   public:

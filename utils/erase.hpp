@@ -41,14 +41,14 @@ namespace mstd {
     requires (not std::is_const_v<M> && std::is_convertible_v<const Key&, key_type_of_t<M>>)
   auto erase(M& m, const Key& key) { return m.erase(key); }
 
-  template<StrictContainerType C, class Key>
-    requires (not std::is_const_v<C> && (std::is_invocable_v<Key, mstd::value_type_of_t<C>>))
-  auto erase(C& c, const Key& key) {
+  template<StrictContainerType C, class Func>
+    requires (not std::is_const_v<C> && (std::is_invocable_v<Func, mstd::value_type_of_t<C>>))
+  auto erase(C& c, const Func& f) {
     if constexpr (VectorType<C>) {
-      return c.erase(std::remove_if(c.begin(), c.end(), key), c.end());
+      return c.erase(std::remove_if(c.begin(), c.end(), f), c.end());
     } else {
       for(auto iter = c.begin(); iter != c.end();)
-        if(key(*iter)) iter = c.erase(iter); else ++iter;
+        if(f(*iter)) iter = c.erase(iter); else ++iter;
     }
   }
 

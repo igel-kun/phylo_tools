@@ -40,6 +40,7 @@ namespace PT{
            class _LabelType = typename _Phylo::LabelType>
   using CompatibleDAG = DAG<_Phylo::PredStorage, _Phylo::SuccStorage, _RootStorage, _NodeData, _EdgeData, _LabelType>;
 
+
   // for convenience, provide defaults for predecessor and successor containers
   template<class _NodeData = void, class _EdgeData = void, class _LabelType = void>
   using DefaultNetwork = Network<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
