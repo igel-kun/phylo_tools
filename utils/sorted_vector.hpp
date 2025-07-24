@@ -36,7 +36,8 @@ namespace mstd{
   // NOTE: by default, KeysEqual is FalsePredicate, meaning that storage of duplicates is allowed (so it's a flat multimap)
   template<class _Key, class _Compare = std::less<_Key>, class _KeysEqual = pred::FalsePredicate, class Allocator = std::allocator<_Key>>
     requires (std::invocable<_Compare, _Key, _Key> && (std::is_void_v<_KeysEqual> || std::invocable<_KeysEqual, _Key, _Key>))
-  class sorted_vector: public std::vector<_Key>
+  class sorted_vector:
+    public std::vector<_Key>
   {
   public:
     using Parent = std::vector<_Key>;
@@ -94,8 +95,9 @@ namespace mstd{
       cmp(std::forward<Args>(args)...)
     { sortme(); }
 
-    sorted_vector(Compare _cmp):
-      Parent(),
+    template<class... Args>
+    sorted_vector(Compare _cmp, Args&&... args):
+      Parent(std::forward<Args>(args)...),
       cmp(std::move(_cmp))
     {}
 

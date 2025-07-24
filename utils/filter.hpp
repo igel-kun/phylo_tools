@@ -54,7 +54,7 @@ namespace mstd {
     //NOTE: this will always fix the index (doing nothing if _i == _first_invalid),
     //      if you're sure this isn't necessary, call with do_not_fix_index as first argument (see below)
     template<class ParentInit, class PredInit = Predicate>
-      requires (not mstd::IsAnyOf<ParentInit, _filtered_iterator, std::piecewise_construct_t, do_not_fix_index_tag, filter_only_tag>)
+      requires (not mstd::is_any_of<ParentInit, _filtered_iterator, std::piecewise_construct_t, do_not_fix_index_tag, filter_only_tag>)
     _filtered_iterator(ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
       Parent(std::forward<ParentInit>(parent_init)),
       pred{std::forward<PredInit>(pred_init)}

@@ -107,7 +107,7 @@ namespace PT {
     _DataExtracter_nl() = default;
 
     template<class First, class... Args>
-      requires (not mstd::IsAnyOf<First, _DataExtracter_nl, Ex_node_label>)
+      requires (not mstd::is_any_of<First, _DataExtracter_nl, Ex_node_label>)
     _DataExtracter_nl(First&& first, Args&&... args):
       get_node_label(std::forward<First>(first), std::forward<Args>(args)...)
     {}
@@ -164,14 +164,14 @@ namespace PT {
 
     // if the node-label maker is not custom, then the edge data maker gets everything
     template<class First, class... Args>
-      requires (not custom_node_label_maker and not mstd::IsAnyOf<First, _DataExtracter_ed_nl, Ex_edge_data, Ex_node_label>)
+      requires (not custom_node_label_maker and not mstd::is_any_of<First, _DataExtracter_ed_nl, Ex_edge_data, Ex_node_label>)
     _DataExtracter_ed_nl(First&& first, Args&&... args):
       Parent(),
       get_edge_data(std::forward<First>(first), std::forward<Args>(args)...)
     {}
     // if the edge_data_maker is not custom, then the node_label_maker gets everything
     template<class First, class... Args>
-      requires (not custom_edge_data_maker and not mstd::IsAnyOf<First, _DataExtracter_ed_nl, Ex_edge_data, Ex_node_label>)
+      requires (not custom_edge_data_maker and not mstd::is_any_of<First, _DataExtracter_ed_nl, Ex_edge_data, Ex_node_label>)
     _DataExtracter_ed_nl(Args&&... args):
       Parent(std::forward<Args>(args)...)
     {}
@@ -276,21 +276,21 @@ namespace PT {
       _DataExtracter(std::forward<Args>(args)...)
     {}
     template<class First, class... Args>
-      requires mstd::IsAnyOf<First, Ex_node_label, Ex_edge_data>
+      requires mstd::is_any_of<First, Ex_node_label, Ex_edge_data>
     _DataExtracter(First first, Args&&... args):
       Parent(first, std::forward<Args>(args)...)
     {}
 
     // if the other makers are not custom, then the node data maker gets everything
     template<class First, class... Args>
-      requires (not custom_edge_data_or_label_maker and not mstd::IsAnyOf<First, _DataExtracter, Ex_edge_data, Ex_node_label, Ex_node_data>)
+      requires (not custom_edge_data_or_label_maker and not mstd::is_any_of<First, _DataExtracter, Ex_edge_data, Ex_node_label, Ex_node_data>)
     _DataExtracter(First&& first, Args&&... args):
       Parent(),
       get_node_data(std::forward<First>(first), std::forward<Args>(args)...)
     {}
     // if the node-data maker is not custom, then the others get everything
     template<class First, class... Args>
-      requires (not custom_node_data_maker and not mstd::IsAnyOf<First, _DataExtracter, Ex_edge_data, Ex_node_label, Ex_node_data>)
+      requires (not custom_node_data_maker and not mstd::is_any_of<First, _DataExtracter, Ex_edge_data, Ex_node_label, Ex_node_data>)
     _DataExtracter(Args&&... args):
       Parent(std::forward<Args>(args)...)
     {}
@@ -354,7 +354,7 @@ namespace PT {
   // if we are generating data (not extracting it from another phylogeny), then the first template argument should be void, and
   //    make_data_extracter(...) just calls the constructor of DataExtracter
   // stage 1:
-  template<class First, class NL> requires (std::is_void_v<First> and not mstd::IsAnyOf<NL, Ex_node_data, Ex_edge_data, Ex_node_label>)
+  template<class First, class NL> requires (std::is_void_v<First> and not mstd::is_any_of<NL, Ex_node_data, Ex_edge_data, Ex_node_label>)
   auto make_data_extracter_nl(NL&& nl) {
     return _DataExtracter_nl<void, std::remove_reference_t<NL>>(std::forward<NL>(nl));
   }
@@ -367,7 +367,7 @@ namespace PT {
 
 
   // stage 2:
-  template<class First, class ED, class... Args> requires (std::is_void_v<First> and not mstd::IsAnyOf<ED, Ex_node_data, Ex_edge_data, Ex_node_label>)
+  template<class First, class ED, class... Args> requires (std::is_void_v<First> and not mstd::is_any_of<ED, Ex_node_data, Ex_edge_data, Ex_node_label>)
   auto make_data_extracter_ed_nl(ED&& ed, Args&&... args) {
     if constexpr (sizeof...(Args) != 0) {
       auto nl_extract = make_data_extracter_nl<void>(std::forward<Args>(args)...);
@@ -389,7 +389,7 @@ namespace PT {
 
   // stage 3:
   template<class First, class ND, class... Args>
-    requires (std::is_void_v<First> and not DataExtracterType<ND> and not mstd::IsAnyOf<ND, Ex_node_data, Ex_edge_data, Ex_node_label>)
+    requires (std::is_void_v<First> and not DataExtracterType<ND> and not mstd::is_any_of<ND, Ex_node_data, Ex_edge_data, Ex_node_label>)
   auto make_data_extracter(ND&& nd, Args&&... args) {
     if constexpr (sizeof...(Args) != 0) {
       auto ed_nl_extract = make_data_extracter_ed_nl<void>(std::forward<Args>(args)...);
@@ -398,7 +398,7 @@ namespace PT {
       return _DataExtracter<void, std::remove_reference_t<ND>, ExtractEdgeData, ExtractNodeLabel>(std::forward<ND>(nd), std::move(ed_nl_extract));
     } else return _DataExtracter<void, std::remove_reference_t<ND>, void, void>(std::forward<ND>(nd));
   }
-  template<class First, class Tag, class... Args> requires (std::is_void_v<First> and mstd::IsAnyOf<Tag, Ex_node_label, Ex_edge_data>)
+  template<class First, class Tag, class... Args> requires (std::is_void_v<First> and mstd::is_any_of<Tag, Ex_node_label, Ex_edge_data>)
   auto make_data_extracter(Tag tag, Args&&... args) {
     auto ed_nl_extract = make_data_extracter_ed_nl<void>(tag, std::forward<Args>(args)...);
     using ExtractNodeLabel = typename decltype(ed_nl_extract)::ExtractNodeLabel;

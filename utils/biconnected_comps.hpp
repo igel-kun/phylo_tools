@@ -67,7 +67,7 @@ namespace PT{
     BCCmaker() = delete; //: output_emplacer(output) {}
 
     template<class First, class... Args> 
-      requires (not mstd::IsAnyOf<First, BCCmaker, std::piecewise_construct_t>)
+      requires (not mstd::is_any_of<First, BCCmaker, std::piecewise_construct_t>)
     BCCmaker(First&& first, Args&&... args):
       output_emplacer{output, std::forward<First>(first), std::forward<Args>(args)...}
     { // the output should now be connected to the emplacer

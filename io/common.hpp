@@ -10,8 +10,11 @@
 
 namespace PT {
 
+  // RowIterators iterate through the lines in a given std::string using std::getline()
   // NOTE: we'll not give out copies of our buffer, just references; if you need to keep it, make your own copy
-  struct RowIterator: mstd::iter_traits_from_reference<const std::string&>  {
+  struct RowIterator: 
+    public mstd::iter_traits_from_reference<const std::string&> 
+  {
     using Traits = mstd::iter_traits_from_reference<const std::string&>;
     std::istream* in = nullptr;
     std::string buffer;
@@ -36,7 +39,7 @@ namespace PT {
   template<class T>
   concept NetworkParser = requires(T t) { t.parse() -> NodeContainer; };
 
-  // build phylogeny from a string and, optionally, a set of initial parameters for creating an EdgeEmplacer
+  // build phylogeny from a stringlike or istream and, optionally, a set of initial parameters for creating an EdgeEmplacer
   template<PhylogenyType Phylo, template<class> class Parser, class Instream, class... Args>
     requires mstd::is_derived_from_template_v<std::remove_cvref_t<Instream>, std::basic_istream>
   Phylo parse_network(Instream&& in, Args&&... args) {

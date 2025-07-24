@@ -8,12 +8,15 @@ namespace PT{
 
   // an edge is a node (head) with another node (->tail)
   template<class EdgeData = void> //requires std::is_default_constructible_v<PT::Adjacency<EdgeData>>
-  struct ProtoEdge: public std::pair<NodeDesc, PT::Adjacency<EdgeData>> {
-    using Data = EdgeData;
+  struct ProtoEdge:
+    public std::pair<NodeDesc, PT::Adjacency<EdgeData>>
+  {
     using Adjacency = PT::Adjacency<EdgeData>;
+    using Data = EdgeData;
+    static constexpr bool has_data = Adjacency::has_data;
+    
     using Parent = std::pair<NodeDesc, Adjacency>;
     using Parent::Parent;
-    static constexpr bool has_data = Adjacency::has_data;
 
     ProtoEdge(const reverse_edge_tag, const NodeDesc u, const Adjacency& v):
       Parent(v.get_desc(), Adjacency{u, v})
@@ -55,6 +58,8 @@ namespace PT{
   using EdgeVec = std::vector<Edge<EdgeData>>;
   template<class EdgeData = void>
   using EdgeSet = std::unordered_set<Edge<EdgeData>>;
+  template<class T, class EdgeData = void>
+  using EdgeMap = std::unordered_map<Edge<EdgeData>, T>;
 
   template<class T>
   concept StrictEdgeType = mstd::is_derived_from_template_v<T, ProtoEdge>;

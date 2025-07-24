@@ -47,7 +47,7 @@ namespace mstd {
     // if the first argument is not a BeginEndTransformation, not an IterFactoryWithBeginEnd, and not piecewise_construct,
     // then default-construct the transformation
     template<class First, class... Args>
-      requires (not mstd::IsAnyOf<First, BeginEndTransformation, IterFactoryWithBeginEnd, std::piecewise_construct_t>)
+      requires (not mstd::is_any_of<First, BeginEndTransformation, IterFactoryWithBeginEnd, std::piecewise_construct_t>)
     IterFactoryWithBeginEnd(First&& first, Args&&... args):
       Parent(std::forward<First>(first), std::forward<Args>(args)...),
       trans()

@@ -34,7 +34,7 @@ namespace mstd {
     // ------- construction & desctruction ---------
     STNode() = default;
     
-    template<class First, class... Args> requires (not has_payload and not mstd::IsAnyOf<First, STNode> and (sizeof...(Args) != 0))
+    template<class First, class... Args> requires (not has_payload and not mstd::is_any_of<First, STNode> and (sizeof...(Args) != 0))
     STNode(First&& first, Args&&... args):
       key(std::forward<First>(first), std::forward<Args>(args)...)
     {}

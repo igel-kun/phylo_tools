@@ -88,6 +88,7 @@ namespace PT {
 		size_t num_edges() const { return _num_edges; }
 		size_t num_roots() const { return _roots.size(); }
     bool is_forest() const { return _num_nodes == _num_edges + num_roots(); }
+    bool is_tree() const { return is_forest() and (num_roots() <= 1); }
     NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const { return _roots; }
 
@@ -156,6 +157,7 @@ namespace PT {
     }
 
     static constexpr bool is_forest() { return true; }
+    bool is_tree() const { return num_roots() <= 1; }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_roots() const { return _roots.size(); }
 		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - num_roots(); }
@@ -943,19 +945,6 @@ namespace PT {
     // =============== variable query ======================
     bool empty() const { return _num_nodes == 0; }
     bool edgeless() const { return num_edges() == 0; }
-    // NOTE: the empty network is considered a forest
-    bool is_forest() const {
-      if constexpr (!is_declared_tree)
-        return empty() || (num_edges() + num_roots() == _num_nodes);
-      else return true;
-    }
-    // NOTE: the empty network is considered a tree
-    bool is_tree() const {
-      if constexpr (Parent::has_unique_root)
-        return is_forest();
-      else return (num_roots() <= 1) && is_forest();
-    }
-
     size_t num_leaves() const { return leaves().to_container().size(); } // NOTE: this is slow since we have to crawl the phylogeny
 
     // =============== traversals ======================

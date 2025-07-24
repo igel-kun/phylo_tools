@@ -94,7 +94,7 @@ namespace mstd {
     
     using OutVal = std::remove_const_t<value_type_of_t<_OutputContainer>>;
 
-    static constexpr bool store_iters = IsAnyOf<OutVal, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
+    static constexpr bool store_iters = is_any_of<OutVal, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
 
     using SubsetState = std::conditional_t<store_iters, std::vector<OutVal>, ordered_bitset>;
 

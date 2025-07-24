@@ -57,10 +57,10 @@ namespace mstd {
   // TokenIter should have iterator_traits now.... hopefully
   static_assert(__LegacyInputIterator<TokenIter<>>);
 
-  template<class Delim>
+  template<class Delim = char>
   using Tokenizer = mstd::IterFactory<TokenIter<Delim>>;
 
-  template<class Delim>
+  template<class Delim = char>
   auto tokenize(const std::string_view sv, Delim&& delim) {
     return Tokenizer<Delim>(sv, std::forward<Delim>(delim));
   }

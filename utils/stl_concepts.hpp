@@ -19,18 +19,19 @@ namespace mstd {
   template<class X, class Y> constexpr bool is_pair<std::pair<X,Y>> = true;
 
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept IsPair = apply_rune_v<T, rune> or is_pair<apply_rune_t<T, rune>>;
+  concept PairType = apply_rune_v<T, rune> or is_pair<apply_rune_t<T, rune>>;
 
-
-  template<class T, TypeRune rune, class ... U> concept IsAnyOfR = (mstd::is_same_v<T, U, rune> or ...);
-  template<class T, class ... U> concept IsAnyOf = IsAnyOfR<T, TR_ConstRefOK, U...>;
+  template<class T, TypeRune rune, class ... U> static constexpr bool is_any_of_R = (mstd::is_same_v<T, U, rune> or ...);
+  template<class T, class ... U> static constexpr bool is_any_of = is_any_of_R<T, TR_ConstRefOK, U...>;
+  template<class T, TypeRune rune, class ... U> concept AnyOfR = (mstd::is_same_v<T, U, rune> or ...);
+  template<class T, class ... U> concept AnyOf = AnyOfR<T, TR_ConstRefOK, U...>;
 
   // std::is_arithmetic is false for pointers.... why?
   template<class T, TypeRune rune = TR_Strict> // NOTE: strict by default
   constexpr bool is_really_arithmetic_v = mstd::is_arithmetic_v<T, rune> || mstd::is_pointer_v<T, rune>;
 
   template<class T, TypeRune rune = TR_ConstRefOK>
-  constexpr bool is_arithmetic_pair_v = IsPair<T, rune> and
+  constexpr bool is_arithmetic_pair_v = PairType<T, rune> and
                 std::is_arithmetic_v<typename apply_rune_t<T, rune>::first_type> and 
                 std::is_arithmetic_v<typename apply_rune_t<T, rune>::second_type>;
 
@@ -275,10 +276,40 @@ namespace mstd {
   template <class T> concept StrictIterableTypeWithSize = IterableTypeWithSize<T, TR_Strict>;
   template <class T> concept OptionalIterableTypeWithSize = IterableTypeWithSize<T, TR_ConstRefVoidOK>;
 
-  template<IterableType T> using BeginType = decltype(std::begin(std::declval<T>()));
-  template<IterableType T> using EndType = decltype(std::end(std::declval<T>()));
-  template<IterableType T> using RBeginType = decltype(std::rbegin(std::declval<T>()));
-  template<IterableType T> using REndType = decltype(std::rend(std::declval<T>()));
+  // -------------------- fixing bugs in the standard ----------------
+
+  // std::begin() doesn't provide an overload for rvalue references
+  template<class T>
+  decltype(auto) begin(T&& x) requires requires(T x) {std::begin(x);} {
+    if constexpr (HasBegin<T>)
+      return std::forward<T>(x).begin();
+    else return std::begin(x);
+  }
+  template<class T>
+  decltype(auto) rbegin(T&& x) requires requires(T x) {std::begin(x);} {
+    if constexpr (HasRBegin<T>)
+      return std::forward<T>(x).rbegin();
+    else if constexpr (HasBegin<T>) { // if T has begin() but not rbegin(), then T is probably an unordered container, so just return begin
+      return std::forward<T>(x).begin();
+    } else return std::rbegin(x);    
+  }
+  template<class T>
+  decltype(auto) end(T&& x) requires requires(T x) {std::end(x);} { return std::end(x); }
+  template<class T>
+  decltype(auto) rend(T&& x) requires requires(T x) {std::end(x);} {
+    if constexpr (HasRBegin<T>)
+      return std::forward<T>(x).rend();
+    else if constexpr (HasBegin<T>) { // if T has begin() but not rbegin(), then T is probably an unordered container, so just return begin
+      return std::forward<T>(x).end();
+    } else return std::rend(x);    
+  }
+
+  // --------------------------------------------------------------------------
+
+  template<IterableType T> using BeginType = decltype(mstd::begin(std::declval<T>()));
+  template<IterableType T> using EndType = decltype(mstd::end(std::declval<T>()));
+  template<IterableType T> using RBeginType = decltype(mstd::rbegin(std::declval<T>()));
+  template<IterableType T> using REndType = decltype(mstd::rend(std::declval<T>()));
 
   // a concept for iterable types in which begin() and end() have the same type (this is apparently needed for some STL stuff like std::vector::insert)
   template<class T, TypeRune rune = TR_ConstRefOK>

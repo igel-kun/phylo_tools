@@ -5,11 +5,14 @@
 #include "utils/benchmark.hpp"
 #include "utils/command_line.hpp"
 #include "utils/token.hpp"
+#include "utils/generic_data.hpp" // for try_reading_number
 
-#include "io/newick.hpp"
+#include "io/newick.hpp" // to read newick
+#include "io/features.hpp" // to read feature matrices
+
 #include "utils/network.hpp"
 #include "utils/diversity.hpp"
-#include "utils/features.hpp"
+#include "utils/feature_diversity.hpp"
 
 #include "utils/net_generator.hpp"
 
@@ -21,7 +24,7 @@ using namespace std::literals;
 
 // no node data, but edges are annotated with p, w, and gamma
 struct EdgeData {
-  float inheritance_prob = 1;
+  float iprob = 1;
   float weight = 0;
   float gamma = 0;
 
@@ -34,27 +37,23 @@ struct EdgeData {
     if(iter) weight = std::stof(*iter);
     while(++iter && (*iter == ""));
     if(iter)
-      if(not mstd::try_reading_number<float>(*iter, inheritance_prob))
-        inheritance_prob = 1;
+      if(not mstd::try_reading_number<float>(*iter, iprob))
+        iprob = 1;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const EdgeData& ed) {
-    return os << "{inh: "<<ed.inheritance_prob<<", w: "<<ed.weight<<" gam: "<<ed.gamma<<'}';
+    return os << "{inh: "<<ed.iprob<<", w: "<<ed.weight<<" gam: "<<ed.gamma<<'}';
   }
 };
 
-// return the gamma, inheritence-probablility, and weight of an edge
-struct UtilityFunctors {
-  using Gamma = decltype(EdgeData::gamma);
-  static constexpr auto& gamma(const auto& e) { return e.data().gamma; }
-  static constexpr auto& iprob(const auto& e) { return e.data().inheritance_prob; }
-  static constexpr auto& weight(const auto& e) { return e.data().weight; }
-  static constexpr auto score(const auto& e) { return weight(e) * gamma(e); }
-};
+// FeatureMap maps each leaf label to a feature-collection containing all features of that leaf
+using FeatureMap = HashMap<std::string, PT::DefaultFeatureCollection>;
 
 using MyNetwork = DefaultLabeledNetwork<void, EdgeData>;
 using MyNode = typename MyNetwork::Node;
 using MyEdge = typename MyNetwork::Edge;
+using Weight = typename pd_score_util_w<EdgeData>::Weight;
+using SolutionAccu = mstd::SolutionAccumulator<NodeVec, Weight>;
 using NameToNode = std::unordered_map<std::string, NodeDesc>;
 
 NameToNode name_to_node;
@@ -64,45 +63,98 @@ mstd::OptionMap options;
 void parse_options(const int argc, const char** argv) {
   mstd::OptionDesc description;
   description["-v"] = {0,0};
-  description["-V"] = {0,0};
-  description["-mr"] = {0,0};
-  description["-ml"] = {0,0};
-  description["-mb"] = {0,0};
   description["-f"] = {0,0};
-  description["-l"] = {1,1};
+  description["-si"] = {0,0};
   description["-S"] = {1,1};
+  description["-s"] = {0,0};
+  description["-l"] = {1,1};
+  description["-c"] = {0,0};
+  description["-cv"] = {0,0};
+  description["-ms"] = {0,0};
+  description["-nd"] = {0,0};
+  description["-nf"] = {0,0};
+  description["-ns"] = {0,0};
+  description["-t"] = {1,1};
   description[""] = {1,2};
-  const std::string help_message(std::string(argv[0]) + " [FLAGS] <file> <<k> | -l <leaf list>>\n\
-      \tLet N be the network described in file, where each leaf is annotated with its taxon name,\n\
-      and each edge uv is annotated with 1-2 floating-point values\n\
-      the first indicating the weight, the (possible) second indicating its inheritence probability p, if any.\n\
-      This programm either computes the diversity score of the given leaves (if -l option is present),\n\
-      or computes a set of k leaves maximizing the diversity score\n\
-      (add % to k in order to express a number relative to the total number of leaves, e.g. 25%).\n\
-      See whitepaper [TODO] for definitions.\n\
-      FLAGS:\n\
+  const std::string help_message(std::string(argv[0]) + " [FLAGS] <file> <<k> | -l <leaf list> | -s>\n\
+      Let N be the network described in file in extended Newick format such that\n\
+      (1) each leaf is annotated with its taxon name and\n\
+      (2) each edge uv is annotated with 1-2 floating-point values,\n\
+           the first indicating the weight, the (possible) second indicating its inheritence probability p, if any.\n\
+      This programm can compute/optimize various diversity scores of N:\n\
+      (1) compute the diversity of a given list of leaves (use -l <leaf list>)\n\
+      (2) compute the diversity of each single leaf seperately (use -s)\n\
+      (3) find a set of k leaves maximizing the diversity score (provide k)\n\
+           NOTE: add % to k in order to express a number relative to the total number of leaves (e.g. 25%).\n\
+      This program can also compute the feature diversity of a matrix M given in <file> (use -f).\n\
+      \n\
+      We consider three types of diversity scores:\n\
+      \t(1) direct scores working with the network:\n\
+      \t\t Network Diversity [vIJSSW'25a], Network Fair Proportion, Subnet Diversity\n\
+      \t(2) scores that summarize a tree-diversity measure applied to a set of trees extracted from the network.\n\
+      \t\t tree-scores:  (1) Tree Diversity [PG'05, Steel'05], (2) Shapeley (=Fair Proportion)\n\
+      \t\t summarize by: (1) Weighted Average, (2) Maximum Likelihood\n\
+      \t\t extraction:   (1) Lowest Stable Ancestor Tree, (2) Displayed Tree \n\
+      \t\t\t\tNOTE: the LSA-tree is unique, but we need to summarize the paths represented by edges of the LSA-tree\n\
+      \t(3) Shapeley Index of any of the previous scores\n\
+      \n\
+      GENERAL FLAGS:\n\
       \t-v\tverbose output, prints network\n\
-      \t-mr\tuse alternative diversity definition (via switchings, dynamic programming for reticulations)\n\
-      \t-ml\tuse alternative diversity definition (via switchings, dynamic programming for level)\n\
-      \t-mb\tuse alternative diversity definition (via switchings, brute force)\n\
-      \t-V\tcheck solution(s) by brute-forcing switchings\n\
-      \t-S i\tnumber i of highest-scoring solutions to return (not compatible with -l)\n\
+      \t-h\tprint this help screen and exit\n\
+      \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n\
+      \t-si\tinstead of the selected diversity score, use the Shapeley-Index for that score (score type (3))\n\
+      \t-S i\tnumber i of highest-scoring solutions to return (not compatible with -l, -s)\n\
+      \t-s\tcompute the diversity score for all singleton-sets (equal to -S n with k=1; incompatible with -S, -l, k)\n\
       \t-l\tcompute the diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
-      \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n");
+      \t-c\twhere available, use a more clever implementation (f.ex. use dynamic programming with respect to level\n\
+      \t\t\tfor computing k leaves maximizing weighted average displayed tree diversity)\n\
+      \t-cv\tlike -c, but verifies against a brute-force implementation\n\
+      \t-ms\twhenever a Shapeley-calculation occurs, use the Modified Shapeley-Index [FJ'15] instead\n\
+      \n\
+      DIRECT NETWORK DIVERSITIES (score type (1)):\n\
+      \t-nd\tNetwork Diversity\n\
+      \t-nf\tNetwork Fair Proportion\n\
+      \t-ns\tNetwork Subnet Diversity\n\
+      \n\
+      TREE-DIVERSITY BASED METHODS (score type (2)):\n\
+      \t-t score,summarize,extract\tdiversity measure according to the above scheme\n\
+      \t\t(f.ex. -t 1,1,2 = use (1) tree diversity, summarize by (1) weighted avg of (2) all displayed tree)\n\
+      \t\t(f.ex. -t 2,2,1 = use (2) fair proportion on the (1) LSA-tree, whose branch-len's are the (2) max. likelihood paths in the network)\n\
+      \n\
+      WHITEPAPERS:\n\
+      [PG'05]     \thttps://doi.org/10.1371/journal.pgen.0010071\n\
+      [Steel'05]  \thttps://doi.org/10.1080/10635150590947023\n\
+      [FJ'15]     \thttps://doi.org/10.1007/s00285-014-0853-0\n\
+      [FW'18]     \thttps://doi.org/10.1016/j.mbs.2018.02.005\n\
+      [vIJSSW'25a]\tto appear in Proc. Recomb'CG'25\n\
+      [vIJSSW'25b]\tto appear in Proc. WABI'25\n");
 
   mstd::parse_options(argc, argv, description, help_message, options);
 
-  if(not file_exists(options[""].front()))
-    cfail(std::string{"couldn't open file "} + options[""].front());
-
-  if((not test(options, "-l")) && (options[""].size() < 2))
+  if((not test(options, "-l")) and (not test(options, "-s")) and (options[""].size() < 2))
     cfail(std::string{"If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n\n"} + help_message);
   
-  if(test(options, "-mr") + test(options, "-ml") + test(options, "-mb") > 1)
-    cfail("-mr, -ml and -mb are mutually exclusive, please chose a method between brute-force (-mb), level-DP (-ml) and reticulation-DP (-mr)\n");
+  if(test(options, "-nd") + test(options, "-nf") + test(options, "-ns") + test(options, "-t") + test(options, "-f") > 1)
+    cfail("-nd,-nf,-ns,-t,-f are mutually exclusive, please chose only one diversity score\n");
 
-  if(test(options, "-l") && test(options, "-S"))
-    cfail("-l and -S are mutually exclusive\n");
+  if(test(options, "-l") + test(options, "-S") + test(options, "-s") > 1)
+    cfail("-l,-s,-S are mutually exclusive\n");
+
+  if(test(options, "-c") + test(options, "-cv") > 1)
+    cfail("-c and -cv are mutually exclusive\n");
+
+  if(test(options, "-t")) {
+    size_t count = 0;
+    for(const auto tok: mstd::tokenize(options["-t"][0], ',')) {
+      ++count;
+      if((tok != "1") and (tok != "2"))
+        cfail("subargument of -t out of range: "+tok+'\n');
+    }
+    if(count != 3) cfail("-t "+options["-t"][0]+" has "+std::to_string(count)+" subarguments, but exactly 3 are expected: score,summarize,extract\n");
+  }
+
+  if(not file_exists(options[""].front()))
+    cfail(std::string{"couldn't open file "} + options[""].front());
 }
 
 size_t parse_k(const float baseline, const std::string_view k_str) {
@@ -121,7 +173,7 @@ NameVec parse_leaves(const std::string_view in) {
   return result;
 }
 
-// overwrite the emplacement-helper set_label function to store the Label-->NodeDesc mapping in name_to_node
+// overwrite the emplacement-helper set_label function to store the Label-->NodeDesc mapping in our global name_to_node
 struct MyHelper: public EdgeEmplacementHelper<MyNetwork, true> {
   using Parent = EdgeEmplacementHelper<MyNetwork, true>;
   using Parent::Parent;
@@ -143,7 +195,6 @@ MyNetwork read_network(const std::string& in) {
   }
 }
 
-using FeatureMap = HashMap<std::string, PT::DefaultFeatureCollection>;
 
 auto read_features(const std::string& filename) {
   std::ifstream in{filename};
@@ -155,6 +206,100 @@ auto read_features(const std::string& filename) {
 }
 
 
+void feature_diversity_subsystem(size_t num_solutions) {
+  std::cout << "parsing features from "<<options[""][0]<<"...\n";
+  const auto feature_map = read_features(options[""][0]);
+  DEBUG2(std::cout << "read feature map:\n" << feature_map << '\n');
+
+  if(test(options, "-s")) {
+    for(const auto& [label, collection]: feature_map)
+      std::cout << label <<": " << collection<<'\n';
+  } else if(test(options, "-l")) {
+    const NameVec leaf_names = parse_leaves(options["-l"][0]);
+    std::cout << "computing diversity score of leaves " << leaf_names << '\n';
+    auto selected_features = feature_map | std::ranges::views::filter([&](const auto& x){return test(leaf_names, x.first);})
+                                         | std::ranges::views::transform([](const auto& x)->auto& { return x.second; });
+    const auto score = feature_diversity{}(selected_features);
+    std::cout << "score = "<<score<<'\n';
+  } else {
+    const size_t k = parse_k(feature_map.size(), options[""][1]);
+    const auto before = mstd::get_time();
+    const auto solutions = optimize_feature_diversity(k, feature_map, num_solutions).solutions;
+    const auto elapsed = mstd::ms_between(before, mstd::get_time());
+    std::cout << "("<<elapsed<<"ms)\n";
+
+    for(const auto& [feats, score]: solutions)
+      std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
+  }
+}
+
+bool use_clever;
+
+template<StrictPhylogenyType Net, class... Args>
+auto dp_engine(const Net& N, Args&&... args) {
+  // select DP Engine
+  if(test(options, "-nd")) return pd_network_diversity<Net>{}(N, std::forward<Args>(args)...);
+//  else if(test(options, "-nf")) engine = pd_fair_proportion<Net>{};
+//  else if(test(options, "-ns")) engine = pd_subnet_diversity<Net>{};
+  else if(test(options, "-t")) {
+    if(options["-t"][0] == "1,1,2") {
+      // if the network is a tree, there is no need to run the AveragePD engine
+      if(N.is_tree()) {
+        return pd_tree_diversity<Net>{}(N, std::forward<Args>(args)...);
+      } else if(use_clever) {
+        return pd_average_tree_DP<Net>{}(N, std::forward<Args>(args)...);
+      } else return pd_average_tree<Net>{}(N, std::forward<Args>(args)...);
+    }
+  }
+  throw mstd::Unimplemented{"sorry, not implemented yet"};
+}
+
+
+void phylo_diversity_subsystem(size_t num_solutions) {
+  std::cout << "reading network...\n";
+  MyNetwork N(read_network(options[""][0]));
+
+  if(mstd::test(options, "-v")) {
+    std::cout << "N ("<<N.num_nodes()<<" nodes, "<<N.num_edges()<<" edges -> reti num:" << N.num_edges()-N.num_nodes()+1<<"):" << std::endl;
+    std::cout << ExtendedDisplay(N) << std::endl;
+    N.print_summary(std::cout);
+  }
+  use_clever = test(options, "-c") or test(options, "-cv");
+
+  if(test(options, "-s")) {
+    // output diversity score of all singletons
+  } else if(test(options, "-l")) {
+    // output diversity score of the given leaf-set
+    const NameVec leaf_names = parse_leaves(options["-l"][0]);
+    const auto selected_leaves = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
+    const NodeSet leaves{selected_leaves.begin(), selected_leaves.end()};
+    std::cout << "computing diversity score of leaves " << leaf_names << '\n';
+    const auto score = dp_engine(N, leaves);
+    std::cout << "score = "<<score<<'\n';
+  } else {
+    const size_t k = parse_k(N.num_leaves(), options[""][1]);
+    std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
+    const auto before = mstd::get_time();
+    const auto solutions = dp_engine(N, k, num_solutions).solutions;
+    const auto elapsed = mstd::ms_between(before, mstd::get_time());
+    std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
+    // 
+    if(test(options, "-V")) { // verify against brute-force
+      DEBUG4(std::cout << "let's check solutions against brute-force...\n");
+      for(const auto& sol: solutions) {
+        const double score = sol.second;
+        const double bf_score = pd_average_tree<MyNetwork>{}(N, sol.first);
+        if((bf_score < score - 0.01) or (bf_score > score + 0.01))
+          cfail(std::string("Uh oh, solution ") + std::to_string(sol.first) + " scoring " + std::to_string(score) +
+              " vs. " + std::to_string(bf_score) + " by brute-force\n");
+      }
+    }
+    for(const auto& [sol, score]: solutions) {
+      std::cout << std::fixed << std::setprecision(2)<< "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
+    }
+  }
+}
+
 int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
@@ -162,82 +307,8 @@ int main(const int argc, const char** argv) {
   const size_t num_solutions = test(options, "-S") ? std::stoi(options["-S"][0]) : 1;
 
   if(test(options, "-f")) {
-    std::cout << "parsing features from "<<options[""][0]<<"...\n";
-    const auto feature_map = read_features(options[""][0]);
-    DEBUG2(std::cout << "read feature map:\n" << feature_map << '\n');
-
-    if(test(options, "-l")) {
-      const NameVec leaf_names = parse_leaves(options["-l"][0]);
-      std::cout << "computing diversity score of leaves " << leaf_names << '\n';
-      auto selected_features = feature_map | std::ranges::views::filter([&](const auto& x){return test(leaf_names, x.first);})
-                                           | std::ranges::views::transform([](const auto& x)->auto& { return x.second; });
-      const auto score = _feature_diversity{}(selected_features);
-      std::cout << "score = "<<score<<'\n';
-    } else {
-      const size_t k = parse_k(feature_map.size(), options[""][1]);
-      const auto before = mstd::get_time();
-      const auto solutions = optimize_feature_diversity(k, feature_map, num_solutions).solutions;
-      const auto elapsed = mstd::ms_between(before, mstd::get_time());
-      std::cout << "("<<elapsed<<"ms)\n";
-
-      for(const auto& [feats, score]: solutions)
-        std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
-    }
-  } else {
-    std::cout << "reading network...\n";
-    MyNetwork N(read_network(options[""][0]));
-
-    if(mstd::test(options, "-v")) {
-      std::cout << "N ("<<N.num_nodes()<<" nodes, "<<N.num_edges()<<" edges -> reti num:" << N.num_edges()-N.num_nodes()+1<<"):" << std::endl;
-      std::cout << ExtendedDisplay(N) << std::endl;
-      N.print_summary(std::cout);
-    }
-
-    if(test(options, "-l")) {
-      const NameVec leaf_names = parse_leaves(options["-l"][0]);
-      const auto leaves_range = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
-      const NodeSet leaves{leaves_range.begin(), leaves_range.end()};
-      std::cout << "computing diversity score of leaves " << leaf_names << '\n';
-      const auto score = test(options, "-mb") ? 
-        pd_score_ct(N, leaves, UtilityFunctors()) :
-        ((test(options, "-ml") || test(options, "-mr")) ?
-          pd_score_ct_dp(N, leaves, UtilityFunctors()) :
-          pd_score_classic(N, leaves, UtilityFunctors())
-        );
-      std::cout << "score = "<<score<<'\n';
-    } else {
-      const size_t k = parse_k(N.num_leaves(), options[""][1]);
-      //using T = decltype(pd_score_ct<MyNetwork, NodeSet, UtilityFunctors>);
-      std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
-      const auto before = mstd::get_time();
-      const auto solutions = test(options, "-mb") ? 
-        optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_ct{}, num_solutions).solutions :
-        (test(options, "-ml") ?
-          optimize_displayed_tree_diversity_level(N, k, UtilityFunctors(), num_solutions).solutions :
-          (test(options, "-mr") ?
-            optimize_displayed_tree_diversity(N, k, UtilityFunctors(), num_solutions).solutions :
-            optimize_diversity_brute_force(N, k, UtilityFunctors(), _pd_score_classic{}, num_solutions).solutions
-          )
-        );
-      const auto elapsed = mstd::ms_between(before, mstd::get_time());
-      std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
-      // 
-      if(test(options, "-V")) { // verify against brute-force
-        DEBUG4(std::cout << "let's check solutions against brute-force...\n");
-        _pd_score_ct brute_force;
-        for(const auto& sol: solutions) {
-          const double score = sol.second;
-          const double bf_score = brute_force(N, sol.first, UtilityFunctors());
-          if((bf_score < score - 0.01) or (bf_score > score + 0.01))
-            cfail(std::string("Uh oh, solution ") + std::to_string(sol.first) + " scoring " + std::to_string(score) +
-                " vs. " + std::to_string(bf_score) + " by brute-force\n");
-        }
-      }
-      for(const auto& [sol, score]: solutions) {
-        std::cout << std::fixed << std::setprecision(2)<< "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
-      }
-    }
-  }
+    feature_diversity_subsystem(num_solutions);
+  } else phylo_diversity_subsystem(num_solutions);
 }
 
 

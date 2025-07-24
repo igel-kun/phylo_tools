@@ -72,7 +72,7 @@ namespace PTx
   template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<mstd::RBeginType<Roots>>; };
   template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots> { using type = Roots; };
   template<> struct ProtoDFSRootStorage<PT::NodeDesc> { using type = PT::NodeSingleton; };
-  template<> struct ProtoDFSRootStorage<PT::NodeDesc*> { using type = PT::NodeSingleton; };
+  template<> struct ProtoDFSRootStorage<PT::NodeDesc*> { using type = mstd::IterFactory<NodeDesc*>; };
   
   template<PT::NodeOrIterableType<mstd::TR_PtrOK> Roots>
   using DFSRootStorage = typename ProtoDFSRootStorage<Roots>::type;
@@ -81,13 +81,13 @@ namespace PTx
   template<PT::NodeOrIterableType<mstd::TR_PtrOK> _Roots,
            class _Forbidden,
            DFSSeenType _SeenSet>
-    requires (std::is_pointer_v<_Roots> || mstd::is_poppable<DFSRootStorage<_Roots>>)
+    requires (std::is_pointer_v<_Roots> or mstd::is_poppable<DFSRootStorage<_Roots>>)
   struct DFSInfo: 
     public mstd::optional_tuple<_Forbidden, _SeenSet>
   {
     using Roots = DFSRootStorage<_Roots>;
     static_assert(mstd::IterableType<Roots>);
-    static_assert(not std::is_pointer_v<_Roots> || mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
+    static_assert(not std::is_pointer_v<_Roots> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
     using Forbidden = _Forbidden;
     using SeenSet = _SeenSet;
     using Parent = mstd::optional_tuple<Forbidden, SeenSet>;
@@ -95,23 +95,32 @@ namespace PTx
     static constexpr bool has_forbidden = not std::is_void_v<Forbidden>;
     static constexpr bool has_seen = not std::is_void_v<_SeenSet>;
 
+    // if _Roots is a NodeDesc*, we'll still just use a NodeSingleton, so no indirection
     static constexpr bool roots_indirect = std::is_pointer_v<_Roots>;
     static constexpr bool forbidden_indirect = std::is_pointer_v<Forbidden>;
     static constexpr bool seen_indirect = std::is_pointer_v<SeenSet>;
 
     DFSRootStorage<_Roots> roots;
 
-    template<PT::StrictPhylogenyType Phylo, class... Args>
+    template<PT::StrictPhylogenyType Phylo, class... Args> requires (not mstd::is_same_v<_Roots, NodeDesc*>)
     DFSInfo(const Phylo& N, Args&&... args):
       Parent{std::forward<Args>(args)...},
       roots(N.roots())
     {}
 
-    template<PT::NodeOrIterableType RootsInit, class... Args>
+    template<PT::NodeOrIterableType RootsInit, class... Args> requires (not mstd::is_same_v<_Roots, NodeDesc*>)
     DFSInfo(RootsInit&& _roots, Args&&... args):
       Parent{std::forward<Args>(args)...},
       roots(std::forward<RootsInit>(_roots))
     {}
+
+    // if our root storage is just a NodeDesc*, then we'll only accept a NodeDesc* and we'll set the end of the auto_iter to one after _roots
+    template<class... Args> requires (mstd::is_same_v<_Roots, NodeDesc*>)
+    DFSInfo(const NodeDesc* _roots, Args&&... args):
+      Parent{std::forward<Args>(args)...},
+      roots(_roots, _roots + 1)
+    {}
+
 
     DFSInfo() = default;
 
@@ -219,13 +228,14 @@ namespace PTx
   };
 
 
-	// NOTE: _SeenSet may be a reference (or even void)
+	// NOTE: _SeenSet may be a pointer (or even void)
+  // _Roots may be a pointer if we use someone else's roots (the network f.ex.)
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
-           PT::NodeOrIterableType _Roots = typename _Network::RootContainer, // _Roots may be a pointer if we use someone else's roots (the network f.ex.)
+           PT::NodeOrIterableType<mstd::TR_PtrOK> _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
            DFSSeenType _SeenSet = DefaultSeenSet<_Network>> // _SeenSet may be void (unzip all retis)  or a pointer (shared SeenSet)
-    requires (std::is_pointer_v<_Roots> || mstd::is_poppable<DFSRootStorage<_Roots>>)
+    requires (std::is_pointer_v<_Roots> or mstd::is_poppable<DFSRootStorage<_Roots>>)
   struct DFSIterator:
     public DFSInfo<_Roots, _Forbidden, _SeenSet>
   {
@@ -572,7 +582,7 @@ resume_outer:
     using typename Info::Forbidden;
     using typename Info::SeenSet;
 
-    using IndirectRoots = std::conditional_t<Info::roots_indirect, Roots, std::add_pointer_t<Roots>>;
+    using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<_Roots, NodeDesc>, _Roots, std::add_pointer_t<_Roots>>;
     using IndirectForbidden = std::conditional_t<Info::has_forbidden, std::add_pointer_t<std::remove_pointer_t<Forbidden>>, void>;
     using IndirectSeen = std::conditional_t<Info::has_seen, std::add_pointer_t<std::remove_pointer_t<SeenSet>>, void>;
     using NonOwningInfo = DFSInfo<IndirectRoots, IndirectForbidden, IndirectSeen>;

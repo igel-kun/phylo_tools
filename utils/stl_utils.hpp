@@ -93,12 +93,12 @@ namespace mstd{
       return 1 + var_type_index<T, Others...>();
     } else return 1;
   }
+  template<class T>
+  constexpr size_t var_type_index() { return 1; }
 
-  template<class T, class... Ts>
-  constexpr bool is_in = (var_type_index<T, Ts...>() < sizeof...(Ts));
-
+  // convenience function to deduce the Ts
   template<class T, class... Ts, template<class...> class Var>
-  constexpr bool occurs_in(const Var<Ts...>& v) { return is_in<T, Ts...>; }
+  constexpr bool occurs_in(const Var<Ts...>& v) { return is_any_of<T, Ts...>; }
 
   template<class T, class... Ts>
   auto& get_by_type(std::variant<Ts...>& v) { return std::get<var_type_index<T, Ts...>>(v); }
@@ -463,8 +463,8 @@ namespace mstd {
 
   // ------------------------ FUNCTIONS -------------------------------------------
   // deferred function call for emplacements, thx @ Arthur O'Dwyer
-  // emplace(f(x)) = construct + move (assuming f does copy elision)
-  // emplace(deferred_call(f(x))) = (in-place) construct (assuming f does copy elision)
+  // emplace(f()) = construct + move (assuming f does copy elision)
+  // emplace(deferred_call(f())) = (in-place) construct (assuming f does copy elision)
   template<class F>
   struct deferred_call_t {
     using T = std::invoke_result_t<F>;
@@ -476,9 +476,9 @@ namespace mstd {
   template<typename F>
   inline auto deferred_call(F&& f) { return deferred_call_t<F>(std::forward<F>(f)); }
 
-//NOTE: GCCs optimizations will break the IdentityFunction for reasons beyond my understanding
-#pragma GCC push_options
-#pragma GCC optimize ("O2")
+//NOTE: GCCs optimizations will break the IdentityFunction for reasons beyond my understanding (seems to be fixed in GCC14)
+//#pragma GCC push_options
+//#pragma GCC optimize ("O2")
   // a functional that ignores everything (and hopefully gets optimized out)
   template<class ReturnType = void>
   struct IgnoreFunction {
@@ -498,7 +498,7 @@ namespace mstd {
     template<class Arg>
     constexpr decltype(auto) operator()(Arg&& x) const { return std::forward<Arg>(x); };
   };
-#pragma GCC pop_options
+//#pragma GCC pop_options
 
 
   // --------------------- MODIFIED DATA STRUCTURES ------------------------
@@ -844,21 +844,6 @@ namespace mstd {
     return os << std::visit([](const auto& x) { std::cout << x; }, var);
   }
 
-  // -------------------- fixing bugs in the standard ----------------
-
-  // std::begin() doesn't provide an overload for rvalue references
-  template<class T>
-  decltype(auto) begin(T&& x) requires requires(T x) {std::begin(x);} {
-    if constexpr (HasBegin<T>)
-      return std::forward<T>(x).begin();
-    else return std::begin(x);
-  }
-  template<class T>
-  decltype(auto) rbegin(T&& x) requires requires(T x) {std::rbegin(x);} {
-    if constexpr (HasRBegin<T>)
-      return std::forward<T>(x).rbegin();
-    else return std::rbegin(x);
-  }
 
 }
 

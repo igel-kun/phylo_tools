@@ -28,7 +28,7 @@ namespace mstd{
   public:
     DSet() = default;
     
-    template<class First, class... Args> requires (not has_payload and not mstd::IsAnyOf<First, DSet>)
+    template<class First, class... Args> requires (not has_payload and not mstd::is_any_of<First, DSet>)
     DSet(First&& first, Args&&... args):
       representative(std::forward<First>(first), std::forward<Args>(args)...), _size(1)
     {}
@@ -109,7 +109,7 @@ namespace mstd{
     // ------- construction & desctruction ---------
     DisjointSetForest() = default;
     
-    template<class First, class... Args> requires (not mstd::IsAnyOf<First, DisjointSetForest>)
+    template<class First, class... Args> requires (not mstd::is_any_of<First, DisjointSetForest>)
     DisjointSetForest(First&& first, Args&&... args):
       Parent(),
       merge_payloads(std::forward<First>(first), std::forward<Args>(args)...)
