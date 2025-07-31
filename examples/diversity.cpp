@@ -239,7 +239,7 @@ template<StrictPhylogenyType Net, class... Args>
 auto dp_engine(const Net& N, Args&&... args) {
   // select DP Engine
   if(test(options, "-nd")) return pd_network_diversity<Net>{}(N, std::forward<Args>(args)...);
-//  else if(test(options, "-nf")) engine = pd_fair_proportion<Net>{};
+  else if(test(options, "-nf")) return pd_fair_proportion<Net>{}(N, std::forward<Args>(args)...);
 //  else if(test(options, "-ns")) engine = pd_subnet_diversity<Net>{};
   else if(test(options, "-t")) {
     if(options["-t"][0] == "1,1,2") {
@@ -251,7 +251,7 @@ auto dp_engine(const Net& N, Args&&... args) {
       } else return pd_average_tree<Net>{}(N, std::forward<Args>(args)...);
     }
   }
-  throw mstd::Unimplemented{"sorry, not implemented yet"};
+  throw mstd::Unimplemented{"Selected Diversity measure"};
 }
 
 

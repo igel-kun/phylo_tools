@@ -43,11 +43,10 @@ namespace mstd {
   auto append(M& _map, Key&& _key, Args&&... args)
   { return _map.emplace(std::forward<Key>(_key), std::forward<Args>(args)...); }
 
-
   // on maps to primitives, append = try_emplace
   //NOTE: this can be used also if mapped_type is NOT a primitive, but no initialization arguments have been given
   template<MapType M, class Key, class... Args>
-    requires (std::is_convertible_v<Key, key_type_of_t<M>> && !(ContainerType<mapped_type_of_t<M>> && (sizeof...(Args) > 0)))
+    requires (std::is_convertible_v<Key, key_type_of_t<M>> and not (ContainerType<mapped_type_of_t<M>> and (sizeof...(Args) > 0)))
   auto append(M& _map, Key&& _key, Args&&... args)
   { return _map.try_emplace(std::forward<Key>(_key), std::forward<Args>(args)...); }
 

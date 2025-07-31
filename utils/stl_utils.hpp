@@ -344,7 +344,7 @@ namespace mstd{
   // --------------------------- sort and merge -------------------------------------
 
   // facepalm-time: the STL can only sort 2 things: random-access containers & std::list, that's it. So this mergesort can sort with bidirectional iters
-  // based on a post othx to @TemplateRex: https://stackoverflow.com/questions/24650626/how-to-implement-classic-sorting-algorithms-in-modern-c
+  // based on a post of @TemplateRex: https://stackoverflow.com/questions/24650626/how-to-implement-classic-sorting-algorithms-in-modern-c
 
   // advance iter num_steps steps and return the size of the sorted prefix (number of elements in order following (including) iter)
   //NOTE: is_sorted_until() *almost* does what we want, but not quite

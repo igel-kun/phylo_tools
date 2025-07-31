@@ -32,5 +32,8 @@ For each example `x`, `x -h` or `x --help` will give usage information.
 to write a random network with `<num nodes>` nodes (`num reticulations` and `num leaves` of them being reticulations and leaves, respectively) to `file` (or standard out if omitted) in extended Newick format. `-v` shows a representation of the network.
 
 ### scanwidth
-`sw` can compute a minimum-width extension tree for the input network. See [this publication](https://hal-upec-upem.archives-ouvertes.fr/hal-02353161) for preliminaries.
+`sw` can compute a minimum-width extension tree for the input network. See [this publication](https://hal.science/hal-02353161) for preliminaries.
+
+### diversity
+`diversity` can compute and optimize different diversity measures on networks, See [this](https://doi.org/10.1016/j.mbs.2018.02.005), [this](https://hal.science/hal-04895822) and [this](https://hal.science/hal-05194249) publication.
 
