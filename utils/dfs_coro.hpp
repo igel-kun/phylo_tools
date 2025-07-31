@@ -51,21 +51,21 @@ namespace PTx
   concept DFSSeenType = PT::NodeSetType<S, rune> or PT::NodeMapType<S, rune>;
 
 	// the default set of nodes to track is void for trees
-	template<class T> struct _DefaultSeenSet {};
-	template<class T> struct _DefaultSeenMap {};
+	template<class T, TraversalType tt> struct _DefaultSeenSet {};
+	template<class T, TraversalType tt> struct _DefaultSeenMap {};
   
-	template<PT::NodeType Node>
-	struct _DefaultSeenSet<Node> { using type = std::conditional_t<PT::TreeNodeType<Node>, void, PT::NodeSet>; };
-	template<PT::StrictPhylogenyType Network>
-	struct _DefaultSeenSet<Network>: public _DefaultSeenSet<typename Network::Node> {};
+	template<PT::NodeType Node, TraversalType tt>
+	struct _DefaultSeenSet<Node, tt> { using type = std::conditional_t<PT::TreeNodeType<Node> and not is_reverse_traversal(tt), void, PT::NodeSet>; };
+	template<PT::StrictPhylogenyType Network, TraversalType tt>
+	struct _DefaultSeenSet<Network, tt>: public _DefaultSeenSet<typename Network::Node, tt> {};
 
-  template<PT::NodeType Node>
-	struct _DefaultSeenMap<Node> { using type = std::conditional_t<PT::TreeNodeType<Node>, void, PT::NodeMap<PT::Degree>>; };
-	template<PT::StrictPhylogenyType Network>
-	struct _DefaultSeenMap<Network>: public _DefaultSeenMap<typename Network::Node> {};
+  template<PT::NodeType Node, TraversalType tt>
+	struct _DefaultSeenMap<Node, tt> { using type = std::conditional_t<PT::TreeNodeType<Node> and not is_reverse_traversal(tt), void, PT::NodeMap<PT::Degree>>; };
+	template<PT::StrictPhylogenyType Network, TraversalType tt>
+	struct _DefaultSeenMap<Network, tt>: public _DefaultSeenMap<typename Network::Node, tt> {};
 
-	template<class T, bool is_map = false> requires (PT::PhylogenyType<T> || PT::NodeType<T>)
-	using DefaultSeenSet = std::conditional_t<is_map, typename _DefaultSeenMap<T>::type, typename _DefaultSeenSet<T>::type>;
+	template<class T, TraversalType tt> requires (PT::PhylogenyType<T> || PT::NodeType<T>)
+	using DefaultSeenSet = std::conditional_t<is_depth_last_traversal(tt), typename _DefaultSeenMap<T, tt>::type, typename _DefaultSeenSet<T, tt>::type>;
 
   // the root storage is either a non-owning reverse auto_iter if we don't own the roots, or a poppable root container
   template<class Roots>  struct ProtoDFSRootStorage {};
@@ -234,7 +234,7 @@ namespace PTx
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType<mstd::TR_PtrOK> _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network>> // _SeenSet may be void (unzip all retis)  or a pointer (shared SeenSet)
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>> // _SeenSet may be void (unzip all retis)  or a pointer (shared SeenSet)
     requires (std::is_pointer_v<_Roots> or mstd::is_poppable<DFSRootStorage<_Roots>>)
   struct DFSIterator:
     public DFSInfo<_Roots, _Forbidden, _SeenSet>
@@ -571,7 +571,7 @@ resume_outer:
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, is_depth_last_traversal(tt)>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   struct Traversal:
     public mstd::IterFactory<DFSIterator<tt, _Network, _Roots, _Forbidden, _SeenSet>>
   {
@@ -606,21 +606,21 @@ resume_outer:
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   using NodeTraversal = Traversal<tt, _Network, _Roots, _Forbidden, _SeenSet>;
 
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   using EdgeTraversal = Traversal<tt | edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
 
   template<TraversalType tt,
            PT::StrictPhylogenyType _Network,
            PT::NodeOrIterableType _Roots = typename _Network::RootContainer,
            class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network>>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   using AllEdgesTraversal = Traversal<tt | all_edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
 
   template<TraversalType tt,

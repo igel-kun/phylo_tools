@@ -68,6 +68,7 @@ void parse_options(const int argc, const char** argv) {
   description["-S"] = {1,1};
   description["-s"] = {0,0};
   description["-l"] = {1,1};
+  description["-g"] = {0,0};
   description["-c"] = {0,0};
   description["-cv"] = {0,0};
   description["-ms"] = {0,0};
@@ -78,45 +79,47 @@ void parse_options(const int argc, const char** argv) {
   description[""] = {1,2};
   const std::string help_message(std::string(argv[0]) + " [FLAGS] <file> <<k> | -l <leaf list> | -s>\n\
       Let N be the network described in file in extended Newick format such that\n\
-      (1) each leaf is annotated with its taxon name and\n\
-      (2) each edge uv is annotated with 1-2 floating-point values,\n\
+      - each leaf is annotated with its taxon name and\n\
+      - each edge uv is annotated with 1-2 floating-point values,\n\
            the first indicating the weight, the (possible) second indicating its inheritence probability p, if any.\n\
       This programm can compute/optimize various diversity scores of N:\n\
-      (1) compute the diversity of a given list of leaves (use -l <leaf list>)\n\
-      (2) compute the diversity of each single leaf seperately (use -s)\n\
-      (3) find a set of k leaves maximizing the diversity score (provide k)\n\
+      - compute the diversity of a given list of leaves (use -l <leaf list>)\n\
+      - compute the diversity of each single leaf seperately (use -s)\n\
+      - find a set of k leaves maximizing the diversity score (provide k)\n\
            NOTE: add % to k in order to express a number relative to the total number of leaves (e.g. 25%).\n\
       This program can also compute the feature diversity of a matrix M given in <file> (use -f).\n\
       \n\
       We consider three types of diversity scores:\n\
-      \t(1) direct scores working with the network:\n\
+      \t(A) direct scores working with the network:\n\
       \t\t Network Diversity [vIJSSW'25a], Network Fair Proportion, Subnet Diversity\n\
-      \t(2) scores that summarize a tree-diversity measure applied to a set of trees extracted from the network.\n\
+      \t(B) scores that summarize a tree-diversity measure applied to a set of trees extracted from the network.\n\
       \t\t tree-scores:  (1) Tree Diversity [PG'05, Steel'05], (2) Shapeley (=Fair Proportion)\n\
       \t\t summarize by: (1) Weighted Average, (2) Maximum Likelihood\n\
       \t\t extraction:   (1) Lowest Stable Ancestor Tree, (2) Displayed Tree \n\
       \t\t\t\tNOTE: the LSA-tree is unique, but we need to summarize the paths represented by edges of the LSA-tree\n\
-      \t(3) Shapeley Index of any of the previous scores\n\
+      \t(C) Shapeley Index of any of the previous scores\n\
       \n\
       GENERAL FLAGS:\n\
       \t-v\tverbose output, prints network\n\
       \t-h\tprint this help screen and exit\n\
       \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n\
-      \t-si\tinstead of the selected diversity score, use the Shapeley-Index for that score (score type (3))\n\
+      \t-si\tinstead of the selected diversity score, use the Shapeley-Index for that score (score type (C))\n\
       \t-S i\tnumber i of highest-scoring solutions to return (not compatible with -l, -s)\n\
       \t-s\tcompute the diversity score for all singleton-sets (equal to -S n with k=1; incompatible with -S, -l, k)\n\
       \t-l\tcompute the diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
+      \t-g\tinstead of finding the best size-k set of taxa, repeatedly pick the best available taxon ('greedy')\n\
       \t-c\twhere available, use a more clever implementation (f.ex. use dynamic programming with respect to level\n\
       \t\t\tfor computing k leaves maximizing weighted average displayed tree diversity)\n\
+      \t\t\tNOTE: -g -c might make sense to compute the singleton scores more cleverly, where available\n\
       \t-cv\tlike -c, but verifies against a brute-force implementation\n\
       \t-ms\twhenever a Shapeley-calculation occurs, use the Modified Shapeley-Index [FJ'15] instead\n\
       \n\
-      DIRECT NETWORK DIVERSITIES (score type (1)):\n\
+      DIRECT NETWORK DIVERSITIES (score type (A)):\n\
       \t-nd\tNetwork Diversity\n\
       \t-nf\tNetwork Fair Proportion\n\
       \t-ns\tNetwork Subnet Diversity\n\
       \n\
-      TREE-DIVERSITY BASED METHODS (score type (2)):\n\
+      TREE-DIVERSITY BASED METHODS (score type (B)):\n\
       \t-t score,summarize,extract\tdiversity measure according to the above scheme\n\
       \t\t(f.ex. -t 1,1,2 = use (1) tree diversity, summarize by (1) weighted avg of (2) all displayed tree)\n\
       \t\t(f.ex. -t 2,2,1 = use (2) fair proportion on the (1) LSA-tree, whose branch-len's are the (2) max. likelihood paths in the network)\n\
@@ -131,17 +134,20 @@ void parse_options(const int argc, const char** argv) {
 
   mstd::parse_options(argc, argv, description, help_message, options);
 
-  if((not test(options, "-l")) and (not test(options, "-s")) and (options[""].size() < 2))
+  if(not test(options, "-l") and not test(options, "-s") and (options[""].size() < 2))
     cfail(std::string{"If you want me to compute a leaf-set maximizing the diversity score, you'll have to give me an upper bound k on the size of said leaf-set. Otherwise, I'll just take all the leaves and that's not what you want is it?\n\n"} + help_message);
   
-  if(test(options, "-nd") + test(options, "-nf") + test(options, "-ns") + test(options, "-t") + test(options, "-f") > 1)
-    cfail("-nd,-nf,-ns,-t,-f are mutually exclusive, please chose only one diversity score\n");
+  if((test(options, "-l") or test(options, "-s")) and test(options, "-g"))
+    cfail("greedy heuristic (-g) only makes sense when finding the best size-k solution, it's incompatible with -l and -s");
+
+  if(test(options, "-nd") + test(options, "-nf") + test(options, "-ns") + test(options, "-t") + test(options, "-f") + test(options, "-si") > 1)
+    cfail("-nd,-nf,-ns,-t,-f,-si are mutually exclusive, please chose only one diversity score\n");
 
   if(test(options, "-l") + test(options, "-S") + test(options, "-s") > 1)
     cfail("-l,-s,-S are mutually exclusive\n");
 
-  if(test(options, "-c") + test(options, "-cv") > 1)
-    cfail("-c and -cv are mutually exclusive\n");
+  if((test(options, "-g") or test(options, "-c")) and test(options, "-cv"))
+    cfail("-cv is incompatible with -c and -g\n");
 
   if(test(options, "-t")) {
     size_t count = 0;
@@ -226,7 +232,7 @@ void feature_diversity_subsystem(size_t num_solutions) {
     const auto before = mstd::get_time();
     const auto solutions = optimize_feature_diversity(k, feature_map, num_solutions).solutions;
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
-    std::cout << "("<<elapsed<<"ms)\n";
+    std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
 
     for(const auto& [feats, score]: solutions)
       std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
@@ -240,7 +246,7 @@ auto dp_engine(const Net& N, Args&&... args) {
   // select DP Engine
   if(test(options, "-nd")) return pd_network_diversity<Net>{}(N, std::forward<Args>(args)...);
   else if(test(options, "-nf")) return pd_fair_proportion<Net>{}(N, std::forward<Args>(args)...);
-//  else if(test(options, "-ns")) engine = pd_subnet_diversity<Net>{};
+  else if(test(options, "-ns")) return pd_subnet_diversity<Net>{}(N, std::forward<Args>(args)...);
   else if(test(options, "-t")) {
     if(options["-t"][0] == "1,1,2") {
       // if the network is a tree, there is no need to run the AveragePD engine
@@ -268,6 +274,7 @@ void phylo_diversity_subsystem(size_t num_solutions) {
 
   if(test(options, "-s")) {
     // output diversity score of all singletons
+    throw mstd::Unimplemented{"output singletons"};
   } else if(test(options, "-l")) {
     // output diversity score of the given leaf-set
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
@@ -284,7 +291,7 @@ void phylo_diversity_subsystem(size_t num_solutions) {
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
     std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
     // 
-    if(test(options, "-V")) { // verify against brute-force
+    if(test(options, "-cv")) { // verify against brute-force
       DEBUG4(std::cout << "let's check solutions against brute-force...\n");
       for(const auto& sol: solutions) {
         const double score = sol.second;
@@ -300,11 +307,14 @@ void phylo_diversity_subsystem(size_t num_solutions) {
   }
 }
 
+
 int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
   // how many solutions to return
   const size_t num_solutions = test(options, "-S") ? std::stoi(options["-S"][0]) : 1;
+
+  if(test(options, "-g")) throw mstd::Unimplemented{"greedy heuristics"};
 
   if(test(options, "-f")) {
     feature_diversity_subsystem(num_solutions);

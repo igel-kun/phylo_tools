@@ -47,24 +47,31 @@ namespace PT {
     INHERIT_ALL_CONSTRUCTORS(pd_edge_data_with_gamma, Parent);
   };
 
-  template<class T> concept has_iprob = requires(T t) { t.iprob; };
   template<class T> concept has_weight = requires(T t) { t.weight; };
+  template<class T> concept has_iprob = requires(T t) { t.iprob; };
   template<class T> concept has_gamma = requires(T t) { t.gamma; };
-  template<class T, class... Args> concept has_iprob_func = requires(T t, Args... args) { t.iprob(args...); };
   template<class T, class... Args> concept has_weight_func = requires(T t, Args... args) { t.weight(args...); };
+  template<class T, class... Args> concept has_iprob_func = requires(T t, Args... args) { t.iprob(args...); };
   template<class T, class... Args> concept has_gamma_func = requires(T t, Args... args) { t.gamma(args...); };
 
   // per default, get iprob, weight, and gamma from the edge-data
-  struct GetEdgeData { const auto& operator()(const auto& uv) const { return uv.data(); } };
-
-  template<class EdgeData> requires (has_iprob<EdgeData> or has_iprob_func<EdgeData>)
-  using DefaultIProb = GetEdgeData;
+  struct GetEdgeData {
+    const auto& operator()(const auto& uv) const { return uv.data(); }
+  };
 
   template<class EdgeData> requires (has_weight<EdgeData> or has_weight_func<EdgeData>)
-  using DefaultWeight = GetEdgeData;
-  
+  struct _DefaultWeight: public GetEdgeData {};
+  template<class T>
+  using DefaultWeight = std::conditional_t<StrictPhylogenyType<T>, _DefaultWeight<typename T::EdgeData>, _DefaultWeight<T>>;
+
+  template<class EdgeData> requires (has_iprob<EdgeData> or has_iprob_func<EdgeData>)
+  struct _DefaultIProb: public GetEdgeData {};
+  template<class T>
+  using DefaultIProb = std::conditional_t<StrictPhylogenyType<T>, _DefaultIProb<typename T::EdgeData>, _DefaultIProb<T>>;
+
+
   template<class EdgeData> 
-  struct DefaultGamma {
+  struct _DefaultGamma {
     static constexpr bool external_gamma = (has_gamma<EdgeData> or has_gamma_func<EdgeData>);
     using GammaMap = std::conditional_t<external_gamma, std::monostate, HashMap<NodePair, double>>;
     [[ no_unique_address ]] GammaMap gamma_map;
@@ -75,12 +82,15 @@ namespace PT {
       } else return gamma_map[uv.as_pair()];
     }
   };
+  template<class T>
+  using DefaultGamma = std::conditional_t<StrictPhylogenyType<T>, _DefaultGamma<typename T::EdgeData>, _DefaultGamma<T>>;
+
 
   // The default FuncWeight will try to grab the weight off of the EdgeData.
   // If you don't want that, then you'll have to provide a function mapping edges the weight weight
   template<class EdgeData, class FuncWeight = DefaultWeight<EdgeData>>
     requires (std::is_invocable_v<FuncWeight, const Edge<EdgeData>&>)
-  struct pd_score_util_w {
+  struct _pd_score_util_w {
     using weight_result = std::invoke_result_t<FuncWeight, const Edge<EdgeData>&>;
     static_assert((std::is_arithmetic_v<weight_result>) or (has_weight<weight_result>) or (has_weight_func<weight_result>));
 
@@ -95,13 +105,13 @@ namespace PT {
         return _weight(uv).weight();
       }
     }
-    using Weight = std::remove_cvref_t<decltype(std::declval<pd_score_util_w>().weight(std::declval<Edge<EdgeData>>()))>;
+    using Weight = std::remove_cvref_t<decltype(std::declval<_pd_score_util_w>().weight(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Weight>);
   };
 
   template<class EdgeData, class FuncIProb = DefaultIProb<EdgeData>>
     requires (std::is_invocable_v<FuncIProb, const Edge<EdgeData>&>)
-  struct pd_score_util_p {
+  struct _pd_score_util_p {
     using iprob_result = std::invoke_result_t<FuncIProb, const Edge<EdgeData>&>;
     static_assert((std::is_arithmetic_v<iprob_result>) or (has_iprob<iprob_result>) or (has_iprob_func<iprob_result>));
 
@@ -116,13 +126,13 @@ namespace PT {
         return _iprob(uv).iprob();
       }
     }
-    using Probability = std::remove_cvref_t<decltype(std::declval<pd_score_util_p>().iprob(std::declval<Edge<EdgeData>>()))>;
+    using Probability = std::remove_cvref_t<decltype(std::declval<_pd_score_util_p>().iprob(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Probability>);
   };
 
   template<class EdgeData, class FuncGamma = DefaultGamma<EdgeData>>
     requires (std::is_invocable_v<FuncGamma, const Edge<EdgeData>&>)
-  struct pd_score_util_g {
+  struct _pd_score_util_g {
     using gamma_result = std::invoke_result_t<FuncGamma, const Edge<EdgeData>&>;
     static_assert((std::is_arithmetic_v<gamma_result>) or (has_gamma<gamma_result>) or (has_gamma_func<gamma_result>));
 
@@ -137,14 +147,21 @@ namespace PT {
         return _gamma(uv).gamma();
       }
     }
-    using Gamma = std::remove_cvref_t<decltype(std::declval<pd_score_util_g>().gamma(std::declval<Edge<EdgeData>>()))>;
+    using Gamma = std::remove_cvref_t<decltype(std::declval<_pd_score_util_g>().gamma(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Gamma>);
   };
 
-  template<class EdgeData, class FuncWeight = DefaultWeight<EdgeData>, class FuncIProb = DefaultIProb<EdgeData>>
-  struct pd_score_util_wp: public pd_score_util_w<EdgeData, FuncWeight>, public pd_score_util_p<EdgeData, FuncIProb> {};
-  template<class EdgeData, class FuncWeight = DefaultWeight<EdgeData>, class FuncIProb = DefaultIProb<EdgeData>, class FuncGamma = DefaultGamma<EdgeData>>
-  struct pd_score_util_wpg: public pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>, public pd_score_util_g<EdgeData, FuncGamma> {};
+  template<class T, class FuncWeight = DefaultWeight<T>>
+  using pd_score_util_w = std::conditional_t<StrictPhylogenyType<T>, _pd_score_util_w<typename T::EdgeData, FuncWeight>, _pd_score_util_w<T, FuncWeight>>;
+  template<class T, class FuncIProb = DefaultIProb<T>>
+  using pd_score_util_p = std::conditional_t<StrictPhylogenyType<T>, _pd_score_util_p<typename T::EdgeData, FuncIProb>, _pd_score_util_p<T, FuncIProb>>;
+  template<class T, class FuncGamma = DefaultGamma<T>>
+  using pd_score_util_g = std::conditional_t<StrictPhylogenyType<T>, _pd_score_util_g<typename T::EdgeData, FuncGamma>, _pd_score_util_g<T, FuncGamma>>;
+
+  template<class Data, class FuncWeight = DefaultWeight<Data>, class FuncIProb = DefaultIProb<Data>>
+  struct pd_score_util_wp: public pd_score_util_w<Data, FuncWeight>, public pd_score_util_p<Data, FuncIProb> {};
+  template<class Data, class FuncWeight = DefaultWeight<Data>, class FuncIProb = DefaultIProb<Data>, class FuncGamma = DefaultGamma<Data>>
+  struct pd_score_util_wpg: public pd_score_util_wp<Data, FuncWeight, FuncIProb>, public pd_score_util_g<Data, FuncGamma> {};
 
 
   // ===================== diversity modules ==========================
@@ -155,13 +172,13 @@ namespace PT {
 
   // ===================== phylogenetic network diversity ==========================
   template<StrictPhylogenyType Network,
-    class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
     class FuncWeight = DefaultWeight<EdgeDataOf<Network>>,
+    class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
     class FuncGamma = DefaultGamma<EdgeDataOf<Network>>>
   struct pd_network_diversity:
-    public pd_score_util_wpg<typename Network::EdgeData, FuncIProb, FuncWeight, FuncGamma>
+    public pd_score_util_wpg<typename Network::EdgeData, FuncWeight, FuncIProb, FuncGamma>
   {
-    using Util = pd_score_util_wpg<typename Network::EdgeData, FuncIProb, FuncWeight, FuncGamma>;
+    using Util = pd_score_util_wpg<typename Network::EdgeData, FuncWeight, FuncIProb, FuncGamma>;
     using Gamma = typename Util::Gamma;
     using Util::iprob;
     using Util::weight;
@@ -223,13 +240,13 @@ namespace PT {
  
   // ===================== diversity (average contained-tree formulation, brute force) ==========================
   template<StrictPhylogenyType Network,
-    class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
-    class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
+    class FuncWeight = DefaultWeight<EdgeDataOf<Network>>,
+    class FuncIProb = DefaultIProb<EdgeDataOf<Network>>>
   struct pd_average_tree:
-    public pd_score_util_wp<typename Network::EdgeData, FuncIProb, FuncWeight>
+    public pd_score_util_wp<typename Network::EdgeData, FuncWeight, FuncIProb>
   {
     using EdgeData = EdgeDataOf<Network>;
-    using Util = pd_score_util_wp<EdgeData, FuncIProb, FuncWeight>;
+    using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
     using Util::iprob;
     using Util::weight;
     using typename Util::Weight;
@@ -345,7 +362,9 @@ namespace PT {
   };
 
    // ===================== network fair proportion index ==========================
-  template<StrictPhylogenyType Network, class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
+  template<StrictPhylogenyType Network,
+    class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
+    class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
   struct pd_fair_proportion:
     public pd_score_util_wp<EdgeDataOf<Network>, FuncWeight>
   {
@@ -438,7 +457,7 @@ namespace PT {
     template<NodeIterableType Nodes>
     auto operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(N, leaves_to_save); }
 
-    // to optimize the Tree-PD score for k leaves, we'll greedily take the heaviest leaf each time
+    // to optimize the NFI score for k leaves, we'll greedily take the heaviest leaf each time
     auto operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
       mstd::SolutionAccumulator<NodeVec, Weight> result(num_solutions);
       NodeVec leaves = N.leaves().to_container();
@@ -446,6 +465,39 @@ namespace PT {
       leaves.resize(k);
       result.add(leaves, operator()(N, leaves));
       return result;
+    }
+
+  };
+
+  // ===================== network subnet diversity ==========================
+  // Subnet-diversity(L) = sum of weights on all root-L-paths
+  // NOTE: this is NP-hard by reduction from SetCover so, for now, we'll do brute-force
+  template<StrictPhylogenyType Network, class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
+  struct pd_subnet_diversity:
+    public pd_score_util_w<EdgeDataOf<Network>, FuncWeight>
+  {
+    using EdgeData = EdgeDataOf<Network>;
+    using Util = pd_score_util_w<EdgeData, FuncWeight>;
+    using typename Util::Weight;
+    using Util::weight;
+    
+    Weight operator()(const Network& N, const NodeDesc leaf_to_save) const {
+      using Traversal = PT::Traversal<preorder | all_edge_traversal | reverse_traversal, Network, NodeDesc>;
+      return std::ranges::fold_left(Traversal{leaf_to_save}, Weight{0}, [&](const Weight w, const auto uv){ return w + weight(uv);});
+    }
+
+    template<NodeIterableType Nodes>
+    auto score_for_leaf_set(const Network& N, const Nodes& leaves_to_save) const {
+      using Traversal = PT::Traversal<preorder | all_edge_traversal | reverse_traversal, Network, Nodes>;
+      return std::ranges::fold_left(Traversal{leaves_to_save}, Weight{0}, [&](const Weight w, const auto uv){ return w + weight(uv);});
+    }
+
+    template<NodeIterableType Nodes>
+    auto operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(N, leaves_to_save); }
+
+    auto operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
+      const NodeVec leaves(N.leaves().to_container());
+      return mstd::brute_force(k, leaves, num_solutions, [&](const auto& S){ return score_for_leaf_set(N, S); });
     }
 
   };
