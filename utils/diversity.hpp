@@ -9,6 +9,9 @@
 #include "switchings.hpp"
 #include "diversity_avg_tree.hpp"
 
+#ifdef DFSCORO
+#include "dfs_coro.hpp"
+
 namespace PT {
   using namespace std::literals;
 
@@ -171,6 +174,10 @@ namespace PT {
   // stored directly in the edges
 
   // ===================== phylogenetic network diversity ==========================
+  // the network diversity is the expected number of features surviving when saving a given set of taxa;
+  // herein, a feature on a leaf-edge survives with prob 1 (leaf saved) or 0 (not saved),
+  // a feature of an edge going to a tree-node dies (does not survive) if it dies in all successors, and
+  // a feature of an edge going to a reticulation survives if it is inherited by the reticulation and survives below it
   template<StrictPhylogenyType Network,
     class FuncWeight = DefaultWeight<EdgeDataOf<Network>>,
     class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
@@ -239,6 +246,7 @@ namespace PT {
   };
  
   // ===================== diversity (average contained-tree formulation, brute force) ==========================
+  // the avg-tree diversity is the expected weight of a random tree displayed by the network
   template<StrictPhylogenyType Network,
     class FuncWeight = DefaultWeight<EdgeDataOf<Network>>,
     class FuncIProb = DefaultIProb<EdgeDataOf<Network>>>
@@ -299,6 +307,7 @@ namespace PT {
 
 
   // ===================== diversity (average contained-tree formulation, DP) ==========================
+  // the avg-tree diversity is the expected weight of a random tree displayed by the network
   template<StrictPhylogenyType Network,
     class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
     class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
@@ -327,6 +336,7 @@ namespace PT {
   
 
    // ===================== phylogenetic tree diversity ==========================
+   // the tree diversity is just the sum of the weights of all edges above selected leaves
   template<StrictPhylogenyType Network, class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
   struct pd_tree_diversity:
     public pd_score_util_w<EdgeDataOf<Network>, FuncWeight>
@@ -362,6 +372,8 @@ namespace PT {
   };
 
    // ===================== network fair proportion index ==========================
+   // the NFI of a leaf x is the expected modified weight of a random root-x-path,
+   // where the modified weight of uv is the ratio of the weight of uv and the expected number of taxa below v
   template<StrictPhylogenyType Network,
     class FuncIProb = DefaultIProb<EdgeDataOf<Network>>,
     class FuncWeight = DefaultWeight<EdgeDataOf<Network>>>
@@ -502,6 +514,9 @@ namespace PT {
 
   };
 
-
 }
+
+#else
+#error "diversity engine needs to be compiled with -DDFSCORO"
+#endif
 

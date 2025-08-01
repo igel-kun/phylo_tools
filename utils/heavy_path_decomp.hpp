@@ -5,7 +5,12 @@
  * This is an implementation of heavy-path decompositions for trees
  */
 #include "types.hpp"
+
+#ifdef DFSCORO
 #include "dfs_coro.hpp"
+#else
+#include "dfs.hpp"
+#endif
 
 namespace PT {
 

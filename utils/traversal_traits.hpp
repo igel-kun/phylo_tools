@@ -4,58 +4,16 @@
 #include "optional_tuple.hpp"
 #include "set_interface.hpp"
 #include "predicates.hpp"
+
 #include "types.hpp"
 #include "tags.hpp"
+#include "dfs_common.hpp"
 
 namespace PT {
-  // preorder: emit a node before all nodes below it
-  // inorder: emit a node between each two consecutive subtrees below it (f.ex. node 0 with children 1, 2, 3 --> 1 0 2 0 3)
-  // postorder: emit a node after all nodes below it
-  // add node_traversal or edge_traversal to decide on the traversal type
-  // NOTE: these can be combined freely!
-  // NOTE: an all-edge-tail-postorder is just a node-postorder with an additional auto_iter<SuccContainer> for the current node
-  enum TraversalType: uint8_t {
-    preorder = 0x01, inorder = 0x02, postorder = 0x04,
-    pre_and_inorder = 0x03, pre_and_post_order = 0x05, in_and_post_order = 0x06,
-    tail_postorder = 0x08, // NOTE: this is only for use with AllEdgesTraversal
-    reverse_traversal = 0x10,
-    // edge traversals
-    edge_traversal = 0x20,
-    // all edge traversals
-    all_edge_traversal = 0x40,
-    // NOTE: all-edge-tail-postorder is a special all-edge-postorder in which the tails occur in node-post-order; it cannot be combined with other traversals
-    all_edge_tail_postorder = 0x80
-  };
 
-  constexpr bool is_edge_traversal(const TraversalType tt) { return tt & edge_traversal; }
-  constexpr bool is_all_edge_traversal(const TraversalType tt) { return tt & all_edge_traversal; }
-  constexpr bool is_all_edge_tail_postorder(const TraversalType tt) { return tt & all_edge_tail_postorder; }
-  constexpr bool is_reverse_traversal(const TraversalType tt) { return tt & reverse_traversal; }
-  constexpr bool is_node_traversal(const TraversalType tt) { return !is_edge_traversal(tt) && !is_all_edge_traversal(tt) && !is_all_edge_tail_postorder(tt); }
-
-  // this tag can be used as sentinel to avoid the ugly "tree.template node_traversal<preoder>()" notation
-  struct proto_dfs_order_tag {};
-  template<TraversalType> struct dfs_order_tag: public proto_dfs_order_tag {};
-  template<class T>
-  concept DFSOrderTag = std::derived_from<std::remove_cvref_t<T>, proto_dfs_order_tag>;
-
-  constexpr dfs_order_tag<preorder> pre_order_t;
-  constexpr dfs_order_tag<inorder> in_order_t;
-  constexpr dfs_order_tag<postorder> post_order_t;
-
-	// the default set of nodes to track is void for trees
-	template<class T>
-	struct _DefaultSeenSet {};
-  
-	template<NodeType Node>
-	struct _DefaultSeenSet<Node> { using type = std::conditional_t<TreeNodeType<Node>, void, NodeSet>; };
-	template<StrictPhylogenyType Network>
-	struct _DefaultSeenSet<Network> { using type = std::conditional_t<TreeNodeType<typename Network::Node>, void, NodeSet>; };
-	template<class T> requires (PhylogenyType<T> || NodeType<T>)
-	using DefaultSeenSet = typename _DefaultSeenSet<T>::type;
 
 	// NOTE: _SeenSet may be a reference (or even void)
-  template<class _Forbidden, NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
+  template<class _Forbidden, DFSSeenType _SeenSet>
   struct DFSSupportSets:
     public mstd::optional_tuple<mstd::NoRef<_Forbidden>, mstd::NoRef<_SeenSet>>
   {
@@ -134,17 +92,21 @@ namespace PT {
     }
   };
 
-  template<StrictPhylogenyType _Network,
-           mstd::IterableType _ItemContainer,
-           class _Forbidden,
-           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet>
+  template<StrictPhylogenyType _Network, bool reverse>
+  using NextNodeContainer = std::conditional_t<reverse, typename _Network::ParentContainer, typename _Network::ChildContainer>;
+
+  template<TraversalType tt,
+           StrictPhylogenyType _Network,
+           class _Forbidden = void,
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   struct TraversalTraits:
     public DFSSupportSets<_Forbidden, _SeenSet>,
-    public mstd::iterator_traits<mstd::iterator_of_t<_ItemContainer>>
+    public mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, is_reverse_traversal(tt)>>>
   {
     using Parent = DFSSupportSets<_Forbidden, _SeenSet>;
+    using IterTraits = mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, is_reverse_traversal(tt)>>>;
+    using ItemContainer  = NextNodeContainer<_Network, is_reverse_traversal(tt)>;
     using Network = _Network;
-    using ItemContainer  = _ItemContainer;
     using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
     using iterator_category = std::forward_iterator_tag;
 
@@ -154,20 +116,16 @@ namespace PT {
   };
 
 
-
-  template<StrictPhylogenyType _Network, bool reverse>
-  using NextNodeContainer = std::conditional_t<reverse, typename _Network::ParentContainer, typename _Network::ChildContainer>;
-
-  template<StrictPhylogenyType _Network,
+  template<TraversalType tt,
+           StrictPhylogenyType _Network,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
-           bool reverse = false>
-  class NodeTraversalTraits:
-    public TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _Forbidden, _SeenSet>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
+  struct NodeTraversalTraits:
+    public TraversalTraits<tt, _Network, _Forbidden, _SeenSet>
   {
-    using Parent = TraversalTraits<_Network, NextNodeContainer<_Network, reverse>, _Forbidden, _SeenSet>;
-    using IterTraits = mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, reverse>>>;
-  public:
+    static constexpr bool reverse = is_reverse_traversal(tt);
+    using Parent = TraversalTraits<tt, _Network, _Forbidden, _SeenSet>;
+    using typename Parent::IterTraits;
     using typename Parent::Network;
     using typename Parent::child_iterator;
     using value_type      = const NodeDesc;
@@ -197,14 +155,16 @@ namespace PT {
   template<StrictPhylogenyType _Network, bool reverse>
   using NextEdgeContainer = std::conditional_t<reverse, typename _Network::InEdgeContainer, typename _Network::OutEdgeContainer>;
 
-  template<StrictPhylogenyType _Network,
+
+  template<TraversalType tt,
+           StrictPhylogenyType _Network,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
-           bool reverse = false>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   struct EdgeTraversalTraits:
-    public TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>,_Forbidden, _SeenSet>
+    public TraversalTraits<tt, _Network, _Forbidden, _SeenSet>
   {
-    using Parent = TraversalTraits<_Network, NextEdgeContainer<_Network, reverse>, _Forbidden, _SeenSet>;
+    static constexpr bool reverse = is_reverse_traversal(tt);
+    using Parent = TraversalTraits<tt, _Network, _Forbidden, _SeenSet>;
     using EdgeContainer = NextEdgeContainer<_Network, reverse>;
     using EdgeIter = mstd::iterator_of_t<EdgeContainer>;
     using EdgeIterTraits = mstd::iterator_traits<EdgeIter>;
@@ -254,14 +214,15 @@ namespace PT {
   //NOTE: EdgeTraversalTraits gives us the edges of a dfs-tree, but the infrastructure can be used to compute all edges below a node (except some)
   //      For this, however, we'll need to differentiate between forbidden nodes and nodes discovered during the DFS, since the former should not
   //      occur as head of any emitted edge, while the latter should not occur as tail of any emitted edge! Thus, we'll need a second storage
-  template<StrictPhylogenyType _Network,
+  template<TraversalType tt,
+           StrictPhylogenyType _Network,
            class _Forbidden = void,
-           NodeSetType<mstd::TR_PtrVoidOK> _SeenSet = DefaultSeenSet<_Network>,
-           bool reverse = false>
+           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
   struct AllEdgesTraits:
-    public EdgeTraversalTraits<_Network, _Forbidden, _SeenSet, reverse>
+    public EdgeTraversalTraits<tt, _Network, _Forbidden, _SeenSet>
   {
-    using Parent = EdgeTraversalTraits<_Network, _Forbidden, _SeenSet, reverse>;
+    static constexpr bool reverse = is_reverse_traversal(tt);
+    using Parent = EdgeTraversalTraits<tt, _Network, _Forbidden, _SeenSet>;
     using typename Parent::Network;
     using typename Parent::value_type;
     using typename Parent::child_iterator;
@@ -289,10 +250,7 @@ namespace PT {
   };
 
   template<class T>
-  static constexpr bool is_traversal_traits_v = mstd::is_derived_from_template_v<T, TraversalTraits>;
-
-  template<class T>
-  concept TraversalTraitsType = is_traversal_traits_v<T>;
+  concept TraversalTraitsType = requires (T t) { typename T::child_iterator; typename T::IterTraits; typename T::ItemContainer; };
 
 
 }

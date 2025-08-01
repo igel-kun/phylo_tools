@@ -13,10 +13,10 @@
 #ifdef DFSCORO
 #include "dfs_coro.hpp"
 #else
-#include "traversal_traits.hpp"
+#include "dfs.hpp"
 #endif
 
-namespace PT{
+namespace PT {
 
   enum class CutObject { cut_node, bridge, bcc};
 

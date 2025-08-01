@@ -5,8 +5,15 @@
 
 #include "types.hpp"
 
-namespace PT {
+#ifdef DFSCORO
+#include "dfs_coro.hpp"
+#else
+#include "dfs.hpp"
+#endif
 
+
+
+namespace PT {
   // ========== TreeDiversity ==========
   // The TreeDiversity class is a phylogenetic diversity engine that can compute
   // the PD score of a tree or a network without reticulations

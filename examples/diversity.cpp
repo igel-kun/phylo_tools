@@ -1,4 +1,8 @@
 
+
+
+#ifdef DFSCORO
+
 #include <ranges>
 #include <utility>
 
@@ -321,5 +325,8 @@ int main(const int argc, const char** argv) {
   } else phylo_diversity_subsystem(num_solutions);
 }
 
+#else
+#error "diversity program needs to be compiled with -DDFSCORO"
+#endif
 
 

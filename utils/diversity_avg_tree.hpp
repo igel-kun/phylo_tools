@@ -8,7 +8,12 @@
 #include "switchings.hpp"
 #include "biconnected_comps.hpp"
 
+#ifdef DFSCORO
 #include "dfs_coro.hpp"
+#else
+#include "dfs.hpp"
+#endif
+
 #include "diversity_tree.hpp"
 
 namespace PT {
