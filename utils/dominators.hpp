@@ -1,14 +1,12 @@
 
 #pragma once
 
-/* These are 3 implementations of LSA-Tree calculation:
+/* These are 2 implementations of LSA-Tree calculation:
  * 1. straightforward (idom(v) = LCA[in the domtree] of idom(u) for all parents u of v in N
  *    (see https://cs.stackexchange.com/questions/43105/dominator-tree-for-dag)
  *    with LCA queries resolved using LinkCutTrees (Sleator & Tarjan '85); running time O(m log n)
  * 2. Lengauer Tarjan [LT'79] (this is for general digraphs); running time: O(m \alpha(m))
  */
-
-#include "raw_vector_map.hpp"
 
 #include "network.hpp"
 #include "link_cut_tree.hpp"

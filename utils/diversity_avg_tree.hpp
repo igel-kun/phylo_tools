@@ -326,7 +326,7 @@ namespace PT {
        
         // ==== step 4: for each side S in the generator, compute proportion of switchings that the lowest edge of S is in
 #warning "TODO: improve this using a dominator tree: not all switchings need to be iterated in order to compute the proportions!"
-        for(const auto gswitching: SwitchingFactory<Generator, const NodeVec*>{Gen, gsaved_nodes_preorder}) {
+        for(const auto gswitching: SwitchingFactory<Generator, const NodeVec*>{Gen, &gsaved_nodes_preorder}) {
           Probability switching_prob = 1;
           for(const auto guv: gswitching)
             if(Generator::is_reti(guv.head()))

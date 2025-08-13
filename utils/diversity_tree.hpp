@@ -331,6 +331,7 @@ namespace PT {
     using Weight = typename ScoreMap::Weight;
     using NodeHistogram = typename ScoreMap::NodeHistogram;
     using NodesByScore = typename ScoreMap::NodesByScore;
+    using AccuTable = typename ScoreMap::AccuTable;
     
     // ------- members -------- 
   protected:
@@ -358,7 +359,7 @@ namespace PT {
     void setup_score_map() { score_map.setup_scorable_below(root); }
 
     // ------- methods: query --------
-    auto& get_root_table(const size_t sol_size) { return score_map.get_leaf_table().emplace_table(root, sol_size); }
+    AccuTable& get_root_table(const size_t sol_size) { return score_map.get_leaf_table().emplace_table(root, sol_size); }
 
     // ------- methods: modification --------
     void optimize_diversity(const size_t k) {

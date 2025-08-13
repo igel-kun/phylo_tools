@@ -266,7 +266,9 @@ namespace PT {
       helper(std::forward<Phylo>(N), std::forward<Arg1>(arg1)), data_extracter() {}
 
     template<PhylogenyType Phylo, class Arg1>
-      requires (not std::is_constructible_v<Helper, Phylo&&, Arg1&&> and std::is_constructible_v<Extracter, Arg1&&>)
+      requires (not std::is_constructible_v<Helper, Phylo&&, Arg1&&> and 
+                std::is_constructible_v<Helper, Phylo&&> and
+                std::is_constructible_v<Extracter, Arg1&&>)
     EdgeEmplacer(Phylo&& N, Arg1&& arg1):
       helper(std::forward<Phylo>(N)), data_extracter(std::forward<Arg1>(arg1)) {}
 
@@ -277,15 +279,16 @@ namespace PT {
       helper(std::forward<Phylo>(N), std::forward<Arg1>(arg1), std::forward<Arg2>(arg2)), data_extracter(std::forward<MoreArgs>(args)...) {}
 
     template<PhylogenyType Phylo, class Arg1, class Arg2, class... MoreArgs>
-      requires (not std::is_constructible_v<Helper, Phylo&&, Arg1&&, Arg2&&> &&
-                std::is_constructible_v<Helper, Phylo&&, Arg1&&> &&
+      requires (not std::is_constructible_v<Helper, Phylo&&, Arg1&&, Arg2&&> and
+                std::is_constructible_v<Helper, Phylo&&, Arg1&&> and
                 std::is_constructible_v<Extracter, Arg2&&, MoreArgs&&...>)
     EdgeEmplacer(Phylo&& N, Arg1&& arg1, Arg2&& arg2, MoreArgs&&... args):
       helper(std::forward<Phylo>(N), std::forward<Arg1>(arg1)), data_extracter(std::forward<Arg2>(arg2), std::forward<MoreArgs>(args)...) {}
 
     template<PhylogenyType Phylo, class Arg1, class Arg2, class... MoreArgs>
-      requires (not std::is_constructible_v<Helper, Phylo&&, Arg1&&, Arg2&&> &&
-                not std::is_constructible_v<Helper, Phylo&&, Arg1&&> &&
+      requires (not std::is_constructible_v<Helper, Phylo&&, Arg1&&, Arg2&&> and
+                not std::is_constructible_v<Helper, Phylo&&, Arg1&&> and
+                std::is_constructible_v<Helper, Phylo&&> and
                 std::is_constructible_v<Extracter, Arg1&&, Arg2&&, MoreArgs&&...>)
     EdgeEmplacer(Phylo&& N, Arg1&& arg1, Arg2&& arg2, MoreArgs&&... args):
       helper(std::forward<Phylo>(N)), data_extracter(std::forward<Arg1>(arg1), std::forward<Arg2>(arg2), std::forward<MoreArgs>(args)...) {}
@@ -433,7 +436,7 @@ namespace PT {
       using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
       return EdgeEmplacer<Helper, Extracter>(
           Helper(N, std::forward<OldToNewTranslation>(old_to_new)),
-          make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
+          std::forward<Args>(args)...);
     }
 
     // allow giving a custom emplacement helper
@@ -444,7 +447,7 @@ namespace PT {
       helper.N = &N; // set the network of the helper
       return EdgeEmplacer<Helper, Extracter>(
           std::forward<Helper>(helper),
-          make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
+          std::forward<Args>(args)...);
     }
 
     template<StrictPhylogenyType TargetPhylo, class T, class... Args>
@@ -454,13 +457,13 @@ namespace PT {
       using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<T>(t), std::forward<Args>(args)...));
       return EdgeEmplacer<Helper, Extracter>(
           Helper{N},
-          make_data_extracter<SourcePhylo>(std::forward<T>(t), std::forward<Args>(args)...));
+          std::forward<T>(t), std::forward<Args>(args)...);
     }
     template<StrictPhylogenyType TargetPhylo>
     static auto make_emplacer(TargetPhylo& N) {
       using Helper = EdgeEmplacementHelper<TargetPhylo, track_roots, NodeTranslation>;
-      //using Extracter = decltype(make_data_extracter<SourcePhylo>());
-      return EdgeEmplacer(Helper{N}, make_data_extracter<SourcePhylo>());
+      using Extracter = decltype(make_data_extracter<SourcePhylo>());
+      return EdgeEmplacer<Helper, Extracter>(N);
     }
   };
 

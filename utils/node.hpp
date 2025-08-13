@@ -112,7 +112,7 @@ namespace PT{
     std::pair<size_t,size_t> degrees() const { return {in_degree(), out_degree()}; }
     bool is_root() const { return predecessors().empty(); }
     bool is_tree_node() const { if constexpr(is_defined_tree_node) return true; else return in_degree() < 2; }
-    bool is_reti() const { return !is_tree_node(); }
+    bool is_reti() const { return not is_tree_node(); }
     bool is_leaf() const { return successors().empty(); }
     bool is_suppressible() const { return (in_degree() == 1) && (out_degree() == 1); }
     bool is_inner_node() const { return !successors().empty(); }
