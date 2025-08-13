@@ -1,0 +1,6 @@
+version = 1
+
+exclude_patterns = ["examples/tests.cpp"]
+
+[[analyzers]]
+name = "cxx"
