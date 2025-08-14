@@ -4,7 +4,7 @@
 /*
  * this class can handle generic node-/edge- data (also see examples/gen.cpp for how to use it)
  * use this if you're reading a network with unknown node-/edge- data **that you want to keep**
- * (if you're not interested in keeping the data, just ignore it using mstd::IgnoreFunction as a property reader)
+ * (if you're not interested in keeping the data, just ignore it using mstd::ConstFunction as a property reader)
  * To use the generic data handler, just declare your network accordingly, for example:
  * using MyNetwork = DefaultLabeledNetwork<DefaultDataVec>; // a network with node labels and generic node-data
  * using MyNetwork = DefaultNetwork<void, DefaultDataVec>; // a network without node labels but with generic edge-data

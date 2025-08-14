@@ -476,29 +476,30 @@ namespace mstd {
   template<typename F>
   inline auto deferred_call(F&& f) { return deferred_call_t<F>(std::forward<F>(f)); }
 
-//NOTE: GCCs optimizations will break the IdentityFunction for reasons beyond my understanding (seems to be fixed in GCC14)
-//#pragma GCC push_options
-//#pragma GCC optimize ("O2")
   // a functional that ignores everything (and hopefully gets optimized out)
   template<class ReturnType = void>
   struct IgnoreFunction {
-    template<class... Args> IgnoreFunction(Args&&... args) {}
-
     template<class... Args>
-    constexpr ReturnType operator()(Args&&... args) const { if constexpr (!std::is_void_v<ReturnType>) return ReturnType{}; };
+    constexpr ReturnType operator()(Args&&... args) const { if constexpr (not std::is_void_v<ReturnType>) return ReturnType{}; };
   };
+  template<auto RetVal = 0u>
+  struct ConstFunction {
+    template<class... Args>
+    constexpr decltype(auto) operator()(Args&&... args) const { return RetVal; };
+  };
+
   // a functional that just returns its argument (and hopefully gets optimized out)
   template<class T = void>
   struct IdentityFunction {
-    template<class Q> requires std::is_convertible_v<Q&&, T>
-    constexpr T operator()(Q&& x) const { return x; };
+    template<class Q, class... Args> requires std::is_convertible_v<Q&&, T>
+    constexpr T operator()(Q&& x, Args&&... args) const { return x; };
   };
   template<>
   struct IdentityFunction<void> {
-    template<class Arg>
-    constexpr decltype(auto) operator()(Arg&& x) const { return std::forward<Arg>(x); };
+    template<class Arg, class... Args>
+    constexpr decltype(auto) operator()(Arg&& x, Args&&... args) const { return std::forward<Arg>(x); };
   };
-//#pragma GCC pop_options
+
 
 
   // --------------------- MODIFIED DATA STRUCTURES ------------------------

@@ -867,14 +867,14 @@ namespace PT {
 
     // remove the subtree rooted at u
     // NOTE: LastRites can be used to say goodbye to your node(s) (remove it from other containers or whatever)
-    template<class LastRites = mstd::IgnoreFunction<void>>
+    template<class LastRites = mstd::IgnoreFunction<>>
     void remove_subtree(const NodeDesc u, LastRites&& goodbye = LastRites()) {
       const auto& C = children(u);
       while(!C.empty()) remove_subtree(mstd::back(C), goodbye);
       remove_node(u, goodbye);
     }
 
-    template<class LastRites = mstd::IgnoreFunction<void>>
+    template<class LastRites = mstd::IgnoreFunction<>>
     void clear(LastRites&& goodbye = LastRites()) {
       for(const NodeDesc v: nodes_postorder()) {
         goodbye(v);

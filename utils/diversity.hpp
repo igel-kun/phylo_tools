@@ -209,11 +209,11 @@ namespace PT {
       for(const auto uv: N.edges_postorder()) {
         auto& current_gamma = gamma(uv);
         const NodeDesc v = uv.head();
-        const Gamma p_val = (N.is_leaf(v) && (not test(leaves_to_save, v))) ? 0 : iprob(uv);
+        const Gamma p_val = (Network::is_leaf(v) && (not test(leaves_to_save, v))) ? 0 : iprob(uv);
         
         Gamma tmp = 1;
-        if(!N.is_leaf(v)) {
-          for(const auto vw: N.out_edges(v)) {
+        if(not Network::is_leaf(v)) {
+          for(const auto vw: Network::out_edges(v)) {
             const Gamma g_vw = gamma(vw);
             if(g_vw == 1) {
               tmp = 0;
@@ -259,60 +259,74 @@ namespace PT {
   // ===================== diversity (average contained-tree formulation, brute force) ==========================
   // the avg-tree diversity is the expected weight of a random tree displayed by the network
   template<StrictPhylogenyType Network,
-    class FuncWeight = GetEdgeData,
     class FuncIProb = GetEdgeData>
-  struct pd_average_tree:
-    public pd_score_util_wp<EdgeDataOf<Network>, FuncWeight, FuncIProb>
+  struct pd_average_tree_helper:
+    public pd_score_util_p<EdgeDataOf<Network>, FuncIProb>
   {
     using EdgeData = EdgeDataOf<Network>;
-    using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
+    using Util = pd_score_util_p<EdgeData, FuncIProb>;
     using Util::iprob;
-    using Util::weight;
-    using typename Util::Weight;
     using typename Util::Probability;
-    using typename Util::SolutionAccu;
-    using WeightAndProb = std::pair<Weight, Probability>;
+    using Switching = PT::Switching<Network>;
 
-    // return weight and probability of the given switching
-    template<class EdgeContainer>
-    constexpr auto score_for_switching_wp(const Network& N, const EdgeContainer& active_edges) const {
-      WeightAndProb result{0,1};
-      DEBUG5(std::cout << "\nnew switching\n");
-      for(const auto uv: active_edges) {
-        DEBUG5(std::cout << uv <<'\n');
-        result.first += weight(uv);
-        if(Network::is_reti(uv.head()))
-          result.second *= iprob(uv);
-      }
-      DEBUG5(std::cout << "switching has weight "<<result.first<<" & prob "<<result.second<<'\n');
-      return result;
-    }
-
-    template<class EdgeContainer>
-    constexpr auto score_for_switching(const Network& N, const EdgeContainer& active_edges) const {
-      const auto [_weight, _prob] = score_for_switching_wp(N, active_edges);
-      return _weight * _prob;
+    constexpr Probability probability_of_switching(const Switching& sw, const auto& leaves) const {
+      const auto multiply_probs = [&](const Probability x, const auto& uv){ return x * iprob(*(uv.second));};
+      return std::ranges::fold_left(sw.active_parent, Probability{1}, multiply_probs);
     }
     
-    template<NodeIterableType Nodes>
-    constexpr auto score_for_leaf_set(const Network& N, const Nodes& leaves_to_save) const {
+    // we require a NodeContainer here since we will iterate ALOT over the leaves
+    template<NodeContainerType Nodes, class ScoreFunc>
+    constexpr auto score_for_leaf_set(const Nodes& leaves_to_save, ScoreFunc&& score) const {
+      using Weight = decltype(score(std::declval<Switching>(), leaves_to_save));
       Weight result = 0;
       DEBUG4(size_t count = 0);
-      for(const auto switching: SwitchingFactory<Network, const Nodes*>{N, &leaves_to_save}) {
-        result += score_for_switching(N, switching);
+      for(auto sw_iter = SwitchingFactory<Network, const Nodes*>{&leaves_to_save}.begin(); sw_iter.is_valid(); ++sw_iter) {
+        const Switching& sw = sw_iter.get_switching();
+        const auto sw_prob = probability_of_switching(sw, leaves_to_save);
+        const auto sw_score = score(sw, leaves_to_save);
+        result += sw_prob * sw_score;
         DEBUG4(++count);
       }
       DEBUG4(std::cout << count << " switchings; total score: "<<result<<'\n');
       return result;
     }
+    
+    // if the leaves are given in a DFS, then it's best to copy them over into a vector since we will iterate alot over them
+    template<NodeIterableType Nodes, class ScoreFunc> requires (not NodeContainerType<Nodes>)
+    constexpr auto score_for_leaf_set(const Nodes& leaves_to_save, ScoreFunc&& score) const {
+      NodeVec leaves;
+      mstd::append(leaves, leaves_to_save);
+      return score_for_leaf_set(leaves, std::forward<ScoreFunc>(score));
+    }
+  };
+
+  template<StrictPhylogenyType Network,
+    class FuncWeight = GetEdgeData,
+    class FuncIProb = GetEdgeData>
+  struct pd_average_tree:
+    public pd_average_tree_helper<Network, FuncIProb>,
+    public pd_score_util_w<EdgeDataOf<Network>, FuncWeight>
+  {
+    using EdgeData = EdgeDataOf<Network>;
+    using Helper = pd_average_tree_helper<Network, FuncIProb>;
+    using Util = pd_score_util_w<EdgeData, FuncWeight>;
+    using Util::weight;
+    using typename Util::Weight;
+    using typename Util::SolutionAccu;
+    using Helper::score_for_leaf_set;
+    using typename Helper::Switching;
 
     template<NodeIterableType Nodes>
-    Weight operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(N, leaves_to_save); }
+    Weight operator()(const Network& N, const Nodes& leaves_to_save) const {
+      return score_for_leaf_set(leaves_to_save, [&](const Switching& sw, const auto& leaves) {
+        return std::ranges::fold_left(sw.get_active_edges(leaves), Weight{0}, [&](const Weight x, const auto& uv){ return x + weight(uv); });
+      });
+    }
 
-    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
+    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) const {
       const NodeVec leaves(N.leaves().template to_container<NodeVec>());
       DEBUG3(std::cout << leaves.size() << " leaves: " << (leaves | std::ranges::views::transform([&](const NodeDesc x){ return Network::label(x);})) << '\n');
-      return mstd::brute_force(k, leaves, num_solutions, [&](const auto& S){ return score_for_leaf_set(N, S); });
+      return mstd::brute_force(k, leaves, num_solutions, [&](const auto& S){ return operator()(N, S); });
     }
 
   };
@@ -340,7 +354,7 @@ namespace PT {
 
     // return the best num_solutions solutions of size k for N
     SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) const {
-      return optimize_displayed_tree_diversity_level(N, k, static_cast<const Util&>(*this), num_solutions);
+      return optimize_displayed_tree_diversity_level(N, k, static_cast<const Parent&>(*this), num_solutions);
       //AveragePDEngine<Network, Util, NoLeafTable<Weight>> engine(N, static_cast<const Util&>(*this), num_solutions);
       //engine.optimize_displayed_tree_diversity(k);
       //return engine.score_map.leaf_table.accus.at(k);
@@ -522,6 +536,70 @@ namespace PT {
   };
 
 
+  template<StrictPhylogenyType Network, class FuncWeight = GetEdgeData>
+  struct pd_tree_fair_proportion:
+    public pd_score_util_w<EdgeDataOf<Network>, FuncWeight>
+  {
+    using EdgeData = EdgeDataOf<Network>;
+    using Util = pd_score_util_w<EdgeData, FuncWeight>;
+    using typename Util::Weight;
+    using typename Util::SolutionAccu;
+    using Util::weight;
+
+    mutable NodeMap<size_t> num_leaves_below;
+    mutable NodeMap<Weight> mod_length_to;
+    
+    template<class Forbidden = mstd::ConstFunction<0u>>
+    size_t number_of_leaves_below(const NodeDesc x, Forbidden&& forbidden = Forbidden{}) const {
+      const auto [iter, success] = mstd::append(num_leaves_below, x, 0);
+      if(success) {
+        if(not Network::is_leaf(x)) {
+          for(const auto& y: Network::children(x))
+            if(not forbidden(x, y))
+              iter->second += number_of_leaves_below(y);
+        } else iter->second = 1;
+      }
+      return iter->second;
+    }
+
+    // return the cumulative modified length from the root to the given node
+    template<class Forbidden = mstd::ConstFunction<0u>>
+    const Weight& modified_length_to(const NodeDesc to, Forbidden&& forbidden = Forbidden{}) const {
+      const auto [iter, success] = mstd::append(mod_length_to, to, 0);
+      if(success and (Network::in_degree(to) > 0)) {
+        for(const auto& p: Network::parents(to)) {
+          if(not forbidden(p, to)) {
+            iter->second = modified_length_to(p, forbidden) + (weight(p) / number_of_leaves_below(to, forbidden));
+            break;
+          }
+        }
+      }
+      return iter->second;
+    }
+
+    Weight operator()(const Network& N, const NodeDesc leaf_to_save) const { return modified_length_to(leaf_to_save); }
+
+    template<NodeIterableType Nodes, class Forbidden = mstd::ConstFunction<0u>>
+    Weight score_for_leaf_set(const Nodes& leaves_to_save, Forbidden&& forbidden = Forbidden{}) const {
+      return std::ranges::fold_left(
+          leaves_to_save | std::ranges::views::transform([&](const NodeDesc x){ return modified_length_to(x, forbidden);}),
+          Weight{0});
+    }
+
+    template<NodeIterableType Nodes>
+    Weight operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(leaves_to_save); }
+
+    // to optimize the NFI score for k leaves, we'll greedily take the heaviest leaf each time
+    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
+      mstd::SolutionAccumulator<NodeVec, Weight> result(num_solutions);
+      NodeVec leaves = N.leaves().to_container();
+      std::ranges::nth_element(leaves, leaves.begin() + k-1, [&](const NodeDesc x, const NodeDesc y){ return modified_length_to(x) > modified_length_to(y); });
+      leaves.resize(k);
+      result.add(leaves, score_for_leaf_set(leaves));
+      return result;
+    }
+
+  };
 
 
   template<StrictPhylogenyType Network,
@@ -540,32 +618,32 @@ namespace PT {
     using Util::iprob;
     using ProbWeight = std::pair<Probability, Weight>;
 
-    // cache the expected number of descendants
-    mutable NodeMap<Weight> exp_num_descendants;
+    // cache the expected number of leaves below
+    mutable NodeMap<Weight> exp_num_leaves_below;
     
-    // return the expected number of descendants of a node, in a switching drawn according to iprob
+    // return the expected number of leaves below of a node, in a switching drawn according to iprob
     // To this end, iterate over all maximal paths starting in x, summing their probability
-    Weight expected_number_of_descendants(const NodeDesc x) const {
-      const auto [iter, success] = mstd::append(exp_num_descendants, x, 0);
+    Weight expected_number_of_leaves_below(const NodeDesc x) const {
+      const auto [iter, success] = mstd::append(exp_num_leaves_below, x, 0);
       if(success) {
         if(not Network::is_leaf(x)) {
           for(const auto& y: Network::children(x))
-            iter->second += expected_number_of_descendants(y) * iprob(y);
+            iter->second += expected_number_of_leaves_below(y) * iprob(y);
         } else iter->second = 1; // leaves have 1 expected leaf below them
       }
       return iter->second;
     }
 
-    Weight modified_weight(const auto& x) const { return weight(x) / expected_number_of_descendants(x); }
+    Weight modified_weight(const auto& x) const { return weight(x) / expected_number_of_leaves_below(x); }
     // score for a single leaf
     // (1) for a leaf a and a root-a-path p and an edge e on p, the NFI-score of e is
-    //    the weight of e divided by the expected number of descendants in a random switching
+    //    the weight of e divided by the expected number of leaves below e in a random switching
     //    (drawn according to the inheritence probabilities).
     // (2) then, the NFI-score of p is the sum over all edge e on p of their NFI-score
     // (3) then, the NFI-score of a is the expected NFI-score of the root-a-path in a switching drawn at random,
     //    in other words, its the sum over all root-a-paths, of the probability of that path times the NFI-score of that path
     //
-    // Note that the expected number of descendants of a node does not depend on the node for whom we compute the score,
+    // Note that the expected number of leaves below a node does not depend on the node for whom we compute the score,
     // so the weight of e divided by this quantity is constant for all edges and we consider that the "modified weight".
     //
     // Then, the NFI-score of a is the expected modified weight of a root-a-path drawn at random according to inh'prob's,
@@ -587,33 +665,68 @@ namespace PT {
     //           = prob(xz) * (NFI(x) + prob(path ending in x) * mod_weight(xz))
     //            +prob(yz) * (NFI(y) + prob(path ending in y) * mod_weight(yz))
     // This can be computed top-down
-    ProbWeight& expected_modified_length_to(const Network& N, const NodeDesc to) const {
+    ProbWeight& expected_modified_length_to(const NodeDesc to) const {
       return Parent::expected_length_to(to, [&](const auto& adj, const NodeDesc){ return modified_weight(adj);});
     }
 
     Weight operator()(const Network& N, const NodeDesc leaf_to_save) const {
-      return expected_modified_length_to(N, leaf_to_save).second;
+      return expected_modified_length_to(leaf_to_save).second;
     }
 
     template<NodeIterableType Nodes>
-    Weight score_for_leaf_set(const Network& N, const Nodes& leaves_to_save) const {
-      return std::ranges::fold_left(leaves_to_save | std::ranges::views::transform([&](const NodeDesc x){ return operator()(N, x);}), Weight{0});
+    Weight score_for_leaf_set(const Nodes& leaves_to_save) const {
+      return std::ranges::fold_left(
+          leaves_to_save | std::ranges::views::transform([&](const NodeDesc x){ return expected_modified_length_to(x).second;}),
+          Weight{0});
     }
 
     template<NodeIterableType Nodes>
-    Weight operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(N, leaves_to_save); }
+    Weight operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(leaves_to_save); }
 
     // to optimize the NFI score for k leaves, we'll greedily take the heaviest leaf each time
     SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
       mstd::SolutionAccumulator<NodeVec, Weight> result(num_solutions);
       NodeVec leaves = N.leaves().to_container();
-      std::ranges::sort(leaves, [&](const NodeDesc x, const NodeDesc y){ return expected_modified_length_to(N, x) > expected_modified_length_to(N, y); });
+      std::ranges::sort(leaves, [&](const NodeDesc x, const NodeDesc y){ return expected_modified_length_to(x) > expected_modified_length_to(y); });
       leaves.resize(k);
-      result.add(leaves, operator()(N, leaves));
+      result.add(leaves, score_for_leaf_set(leaves));
       return result;
     }
 
   };
+
+  template<StrictPhylogenyType Network,
+    class FuncWeight = GetEdgeData,
+    class FuncIProb = GetEdgeData>
+  struct pd_average_fair_proportion: // look how beautiful the pieces fall into place
+    public pd_average_tree_helper<Network, FuncIProb>,
+    public pd_tree_fair_proportion<Network, FuncWeight>
+  {
+    using EdgeData = EdgeDataOf<Network>;
+    using Helper = pd_average_tree_helper<Network, FuncIProb>;
+    using TreeFP = pd_tree_fair_proportion<Network, FuncWeight>;
+    using Util = pd_score_util_w<EdgeData, FuncWeight>;
+    using typename Util::Weight;
+    using typename Util::SolutionAccu;
+    using typename Helper::Switching;
+
+    template<NodeIterableType Nodes>
+    Weight operator()(const Network& N, const Nodes& leaves_to_save) const {
+      DEBUG4(std::cout << "computing average-fair-proportion score for leaf-set "<<leaves_to_save<<'\n');
+      return Helper::score_for_leaf_set(leaves_to_save, [&](const Switching& sw, const auto& leaves) {
+        // use the switching to forbid visiting switched-off arcs in N
+        return TreeFP::score_for_leaf_set(leaves, [&](const NodeDesc x, const NodeDesc y){ return sw.is_switched_off(x,y);});
+      });
+    }
+
+    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) const {
+      const NodeVec leaves(N.leaves().template to_container<NodeVec>());
+      DEBUG3(std::cout << leaves.size() << " leaves: " << (leaves | std::ranges::views::transform([&](const NodeDesc x){ return Network::label(x);})) << '\n');
+      return mstd::brute_force(k, leaves, num_solutions, [&](const auto& S){ return operator()(N, S); });
+    }
+
+  };
+
 
   // ===================== network subnet diversity ==========================
   // Subnet-diversity(L) = sum of weights on all root-L-paths

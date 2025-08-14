@@ -313,19 +313,24 @@ auto dp_engine(const MyNetwork& N, Args&&... args) {
       DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n');
       using LSATree = decltype(lsa_tree);
       if(tree_config[0] == "1") { // tree diversity
+        std::cout << "SCORE: tree-diversity of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
         return translate_solution<LSATree>(pd_tree_diversity<LSATree>{}(lsa_tree, std::forward<Args>(args)...));
       } else { // shapeley diversity
+        std::cout << "SCORE: Shapeley (aka. Fair Proportion) Index of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
         return translate_solution<LSATree>(pd_fair_proportion<LSATree>{}(lsa_tree, std::forward<Args>(args)...));
       }
     } else if(tree_config[2] == "2") { // ----------- extract displayed tree ------------------
       if(tree_config[1] == "1") { // expected value for a displayed trees
         if(tree_config[0] == "1") { // expected diversity of a displayed trees
+          std::cout << "SCORE: expected tree-diversity of any displayed tree\n";
           if(N.is_tree()) { // if the network is a tree, there is no need to run the AveragePD engine
             return pd_tree_diversity<MyNetwork>{}(N, std::forward<Args>(args)...);
           } else if(use_clever) {
             return pd_average_tree_DP<MyNetwork>{}(N, std::forward<Args>(args)...);
           } else return pd_average_tree<MyNetwork>{}(N, std::forward<Args>(args)...);
         } else if(tree_config[0] == "2") { // expected shapeley-index of a displayed tree
+          std::cout << "SCORE: expected Shapeley (aka. Fair Proportion) Index of any displayed tree\n";
+          return pd_average_fair_proportion<MyNetwork>{}(N, std::forward<Args>(args)...);
         }
       } else if(tree_config[1] == "2") { // value for the most likely displayed tree
         using MLSwitching = Tree<vecS, NodeDesc, Weight>;
@@ -336,8 +341,10 @@ auto dp_engine(const MyNetwork& N, Args&&... args) {
                   Ex_edge_data{}, pd_score_util_w<EdgeDataOf<MyNetwork>>{}); // edges store the weight of the original edge
         DEBUG3(std::cout << "constructed ML-switching:\n" << ExtendedDisplay(ml_switching) << '\n');
         if(tree_config[0] == "1") { // diversity of the ML-displayed-tree
+          std::cout << "SCORE: tree-diversity of the most probable displayed tree\n";
           return translate_solution<MLSwitching>(pd_tree_diversity<MLSwitching>{}(ml_switching, std::forward<Args>(args)...));
         } else if(tree_config[0] == "2") { // shapeley-index of the ML-displayed-tree
+          std::cout << "SCORE: Shapeley (aka. Fair Proportion) Index of the most probable displayed tree\n";
           return translate_solution<MLSwitching>(pd_fair_proportion<MLSwitching>{}(ml_switching, std::forward<Args>(args)...));
         }
       }

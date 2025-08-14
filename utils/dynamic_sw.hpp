@@ -40,7 +40,7 @@ namespace PT {
     const Output& get_sw_map() const { return out; }
 
     // add a new node u to the scanwidth calculation and return its scanwidth
-    template<class CallBack = mstd::IgnoreFunction<void>>
+    template<class CallBack = mstd::ConstFunction>
     auto update_sw(const NodeDesc u, CallBack&& save_highest_child_of = CallBack()) {
       STAT(size_t child_sw_max = 0;);
       DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
@@ -81,7 +81,7 @@ namespace PT {
 
 
     
-    template<class CallBack = mstd::IgnoreFunction<void>, NodeContainerType Nodes>
+    template<class CallBack = mstd::ConstFunction, NodeContainerType Nodes>
     sw_t update_all(const Nodes& nodes, CallBack&& save_highest_child_of = CallBack()) {
       sw_t result = 0;
       for(const NodeDesc u: nodes) {
