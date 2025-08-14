@@ -22,6 +22,7 @@ namespace mstd{
   protected:
     Key representative;    // the representative element of our set
     size_t _size = 0;
+  public:
     [[ no_unique_address ]] Payload payload;
 
     // ------- construction & desctruction ---------
@@ -107,6 +108,7 @@ namespace mstd{
     [[ no_unique_address ]] MergePayloads merge_payloads;
 
     // ------- construction & desctruction ---------
+  public:
     DisjointSetForest() = default;
     
     template<class First, class... Args> requires (not mstd::is_any_of<First, DisjointSetForest>)

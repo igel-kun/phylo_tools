@@ -12,10 +12,12 @@
 
 namespace PT {
 
-  //NOTE: if the host is single-labelled, we'll be happy to have the DisplayTable point to singleton_sets instead of vectors of nodes
-  template<bool multi_possibility = true>
-  using _NodeList = std::conditional_t<multi_possibility, NodeVec, NodeSingleton>;
+  // ========== Tree-in-Tree containment ==========
+  // Test whether a (possibly multi-labelled) host tree contains a single-labelled guest tree
 
+  // ------- Tree-in-Tree containment: helpers ---------
+ 
+  // ------- Tree-in-Tree containment: main class ---------
   // a containment checker, testing if a (possibly multi-labelled) host-tree contains a single-labeled guest tree
   // NOTE: for now, only single-rooted hosts & guests are supported
   // NOTE: while Host & Guest must be trees, they are not necessarily DECLARED to be trees (a network without reticulation is fine)
@@ -26,29 +28,24 @@ namespace PT {
            StorageEnum HostLabelStorage = singleS,
            class _NodeInfos = InducedSubtreeInfoMap>
       requires (std::is_same_v<typename Host::LabelType, typename Guest::LabelType> && Host::has_unique_root && Guest::has_unique_root)
-  class TreeInTreeContainment {
-  public:
+  struct TreeInTreeContainment {
+    // ------- static stuff --------
     static constexpr bool multi_labeled_host = (HostLabelStorage != singleS);
     static constexpr StorageEnum GuestLabelStorage = singleS; // so far we can only support single-labelled guests
     static constexpr StorageEnum MSTreeLabelStorage = vecS;
 
     using LabelType = typename Host::LabelType;
     using LabelMatching = PT::LabelMatching<Host, Guest, MSTreeLabelStorage, GuestLabelStorage>;
-    
-    using NodeList = _NodeList<multi_labeled_host>;
-    using DisplayTable = NodeMap<_NodeList<multi_labeled_host>>;
+
+    //NOTE: if the host is single-labelled, we'll be happy to have the DisplayTable point to singleton_sets instead of vectors of nodes
+    using NodeList = std::conditional_t<multi_labeled_host, NodeVec, NodeSingleton>;
+    using DisplayTable = NodeMap<NodeList>;
     
     // we'll need some infos on the nodes, in particular, their depth (dist to root) and some order number
     using NodeInfos = _NodeInfos;
-    
-   
-  protected:
-    const Guest& guest;
-    const Host& host;
 
-    NodeInfos node_infos;
-    DisplayTable table;
-
+    // in the subtree induced by the child possibilities, we'll need to keep track of which child of u can be displayed by one of our own children
+    using MatchingPossibilities = NodeMap<NodeSet>;
 
 
     static auto compute_label_matching(const Host& host, const Guest& guest) {
@@ -57,56 +54,6 @@ namespace PT {
       else
         return LabelMatching(host.nodes(), guest.nodes());
     }
-
-  public:
-
-    template<LabelMatchingType LabelMatchingInit = LabelMatching, class NodeInfoInit = _NodeInfos>
-    TreeInTreeContainment(const Host& _host,
-                          const Guest& _guest,
-                          LabelMatchingInit&& host_guest_label_match,
-                          NodeInfoInit&& _node_infos = {}):
-      guest(_guest),
-      host(_host),
-      node_infos(std::forward<NodeInfoInit>(_node_infos))
-    {
-      std::cout << "constructing Tree-in-Tree checker...\n";
-      // step 1: setup node_infos
-      if(!guest.empty()) {
-        std::cout << "using node-infos " << node_infos << '\n';
-        if(node_infos.empty()) get_induced_subtree_infos(_host, node_infos);
-        std::cout << node_infos.size() << " node infos: " << node_infos<<"\n";
-        std::cout << "label matching: " << host_guest_label_match << "\n";
-        
-        // step 2: construct base cases
-        for(auto& HG_pair: mstd::seconds(host_guest_label_match)){
-          mstd::flexible_sort(HG_pair.first.begin(), HG_pair.first.end(), sort_by_order{node_infos});
-          std::cout << "base case: "<<HG_pair<<"\n";
-          mstd::append(table, mstd::front(HG_pair.second), std::move(HG_pair.first));
-        }
-      }
-    }
-
-    template<class NodeInfoInit = _NodeInfos> requires (!LabelMatchingType<NodeInfoInit>)
-    TreeInTreeContainment(const Host& _host, const Guest& _guest, NodeInfoInit&& _node_infos = {}):
-      TreeInTreeContainment(_host, _guest, compute_label_matching(_host, _guest), std::forward<NodeInfoInit>(_node_infos))
-    {}
-
-    // lookup where the guest node u could be hosted; if u is not in the DP table yet, compute the entry
-    const NodeList& who_displays(const NodeDesc u) {
-      DEBUG2(std::cout << "who displays "<<u<<"? ");
-      const auto [iter, success] = mstd::append(table, u);
-      if(success) {
-        DEBUG2(std::cout << "\n");
-        compute_possibilities(u, iter->second);
-      } else DEBUG2(std::cout << iter->second << "\n");
-      return iter->second;
-    }
-    
-    bool displayed() { return !who_displays(guest.root()).empty(); }
-
-  protected:
-    // in the subtree induced by the child possibilities, we'll need to keep track of which child of u can be displayed by one of our own children
-    using MatchingPossibilities = NodeMap<NodeSet>;
 
     struct matching_infos {
       NodeDesc node_in_host;
@@ -145,22 +92,92 @@ namespace PT {
       decltype(auto) operator()(const Iter it1, const Iter it2) const
       { return operator()(*it1, *it2); }
     };
+
+    // return whether all children of u can be matched using the possibilities given
+    static bool perfect_child_matching(const MatchingPossibilities& poss) {
+      return bipartite_matching<MatchingPossibilities>(poss).maximum_matching().size() == poss.size();
+    }
+
+
+    // ------- members --------
+  protected:
+    const Host* host;
+    NodeInfos node_infos;
+    DisplayTable table;
+
+
+    // ------- construction & desctruction ---------
+  public:
+    template<LabelMatchingType LabelMatchingInit = LabelMatching, class NodeInfoInit = _NodeInfos>
+    TreeInTreeContainment(const Host& _host,
+                          LabelMatchingInit&& host_guest_label_match,
+                          NodeInfoInit&& _node_infos = {}):
+      host{&_host},
+      node_infos(std::forward<NodeInfoInit>(_node_infos))
+    {
+      DEBUG3(std::cout << "constructing Tree-in-Tree checker...\n");
+      // step 1: setup node_infos
+      if(not host_guest_label_match.empty()) {
+        assert(not node_infos.empty());
+        DEBUG3(std::cout << node_infos.size() << " node infos: " << node_infos<<"\n");
+        DEBUG3(std::cout << "label matching: " << host_guest_label_match << "\n");
+        
+        // step 2: construct base cases
+        for(auto&& [label, HG_pair]: host_guest_label_match) {
+          using HGFirst = std::remove_cvref_t<decltype(HG_pair.first)>;
+          mstd::flexible_sort(HG_pair.first.begin(), HG_pair.first.end(), sort_by_order{node_infos});
+          DEBUG3(std::cout << "base case: "<<HG_pair<<"\n");
+          mstd::append(table, mstd::front(HG_pair.second), std::forward<HGFirst>(HG_pair.first));
+        }
+      }
+    }
+
+    template<class NodeInfoInit = _NodeInfos> requires (not LabelMatchingType<NodeInfoInit>)
+    TreeInTreeContainment(const Host& _host, const Guest& _guest, NodeInfoInit&& _node_infos):
+      TreeInTreeContainment(_host, compute_label_matching(_host, _guest), std::forward<NodeInfoInit>(_node_infos))
+    {}
+    template<class NodeInfoInit = _NodeInfos> requires (not LabelMatchingType<NodeInfoInit>)
+    TreeInTreeContainment(const Host& _host, const Guest& _guest):
+      TreeInTreeContainment(_host, compute_label_matching(_host, _guest), get_induced_subtree_infos(_host))
+    {}
+
+
+
+    // ------- operators --------
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+    // lookup where the guest node u could be hosted; if u is not in the DP table yet, compute the entry
+    const NodeList& who_displays(const NodeDesc u) {
+      DEBUG2(std::cout << "who displays "<<u<<"? ");
+      const auto [iter, success] = mstd::append(table, u);
+      if(success) {
+        DEBUG2(std::cout << "\n");
+        compute_possibilities(u, iter->second);
+      } else DEBUG2(std::cout << iter->second << "\n");
+      return iter->second;
+    }
+    
+    bool displayed() { return not who_displays(host->root()).empty(); }
+
+
+    // ------- methods: modification -------- 
+  protected:
     
     void compute_possibilities(const NodeDesc u, NodeList& poss) {
       using Subhost = CompatibleTree<Host, matching_infos>;
       // step 1: get the subtree of host induced by the nodes that the children map to
       const auto child_poss = merge_child_poss(u);
       if(!child_poss.empty()) {
-        if(guest.out_degree(u) > 1) {
+        if(Guest::out_degree(u) > 1) {
           NodeTranslation host_to_subhost;
           DEBUG4(std::cout << "building tree induced by "<<child_poss<<" (translation @"<<&host_to_subhost<<")\n");
-          Subhost induced_subhost(get_induced_edges(host, child_poss, node_infos), host_to_subhost, [](const NodeDesc x){return x;});
+          Subhost induced_subhost(get_induced_edges(*host, child_poss, node_infos), host_to_subhost, [](const NodeDesc x){return x;});
           DEBUG4(std::cout << "induced tree:\n"<<induced_subhost<<"\n");
           DEBUG4(std::cout << "host to subhost translation: "<<host_to_subhost<<"\n");
           if(!induced_subhost.edgeless()) {
             // step 2: find all nodes v such that each child of u has a possibility that is seen by a distinct leaf of v
             // register the possibilities for all but one child of u
-            for(const NodeDesc u_child: guest.children(u)) {
+            for(const NodeDesc u_child: Guest::children(u)) {
               for(const NodeDesc v_child: who_displays(u_child)) {
                 // move upwards from v_child until we reach a node that's already seen a possibility for u_child
                 NodeDesc v_child_sh = host_to_subhost.at(v_child);
@@ -176,7 +193,7 @@ namespace PT {
             // step 3: go through the induced_subhost in postorder(!) and check containment for eligible nodes
             for(NodeDesc v: induced_subhost.nodes_postorder()){
               const auto& v_infos = node_of<Subhost>(v).data();
-              if(v_infos.nodes_for_poss.size() == guest.out_degree(u)){ // if all children of u have a child of u that can display them
+              if(v_infos.nodes_for_poss.size() == Guest::out_degree(u)){ // if all children of u have a child of u that can display them
                 DEBUG3(std::cout << "making bipartite matching from "<<v_infos.nodes_for_poss<<"\n");
                 if(perfect_child_matching(v_infos.nodes_for_poss)){ // if each child of v can be displayed by a different child of u
                   // H_v displays G_u \o/ - register and mark all ancestors uninteresting, so we don't run matching on them in the future
@@ -196,26 +213,21 @@ namespace PT {
       DEBUG2(std::cout << "found that "<< u << " is displayed at "<<poss<<"\n");
     }
 
-    // return whether all children of u can be matched using the possibilities given
-    bool perfect_child_matching(const MatchingPossibilities& poss) {
-      return bipartite_matching<MatchingPossibilities>(poss).maximum_matching().size() == poss.size();
-    }
-
     // merge the mapping possibilities of all childs into one vector; unless one of the children cannot be mapped, in which case return the empty vector
     NodeVec merge_child_poss(const NodeDesc u) {
       using NodeIter = mstd::auto_iter<typename NodeList::const_iterator>;
       using IterQueue = std::priority_queue<NodeIter, std::vector<NodeIter>, sort_by_order<true>>;
       // if u is a leaf, it should be managed by the base case, unless its label is not in the host, in which case it's not displayed
       NodeVec poss;
-      if(!guest.is_leaf(u)){
-        DEBUG4(std::cout << "merging possibilities of "<<guest.children(u)<<"\n");
+      if(not Guest::is_leaf(u)){
+        DEBUG4(std::cout << "merging possibilities of "<<Guest::children(u)<<"\n");
         // for degree up to x, merge the child possibilities by linear "inplace_merge", otherwise, merge via iterator-queue in O(n log deg)
-        if(guest.out_degree(u) > mstd::config::vector_queue_merge_threshold){
+        if(Guest::out_degree(u) > mstd::config::vector_queue_merge_threshold){
           // NOTE: priority_queue outputs the LARGEST element first, so we'll have to reverse sort_by_order by swapping its arguments
           IterQueue iter_queue(sort_by_order<true>{node_infos});
           size_t total_size = 0;
           // for each child v of u, add an auto iter to its possibility list
-          for(const NodeDesc v: guest.children(u)){
+          for(const NodeDesc v: Guest::children(u)){
             const auto& child_poss = who_displays(v);
             if(!child_poss.empty()){
               iter_queue.push(child_poss);
@@ -233,7 +245,7 @@ namespace PT {
             if(++next_iter) iter_queue.push(next_iter);
           }
         } else {
-          for(const NodeDesc v: guest.children(u)) {
+          for(const NodeDesc v: Guest::children(u)) {
             const NodeList& v_poss = who_displays(v);
             if(!v_poss.empty()){
               const size_t old_size = poss.size();
@@ -252,8 +264,15 @@ namespace PT {
       return poss;
     }
 
-
   };
+
+  // ------- Tree-in-Tree containment: factories ---------
+  
+  // ------- Tree-in-Tree containment: concepts ---------
+  
+  // ------- Tree-in-Tree containment: deduction guides ---------
+  
+  // ------- Tree-in-Tree containment: defaults ---------
 
 
 

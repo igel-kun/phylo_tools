@@ -73,6 +73,8 @@ namespace mstd {
         return is_valid() ? (other == get_iter()) : other.is_invalid();
       else return (other == get_iter());
     }   
+    template<class T> 
+    bool operator!=(const T& other) const { return not operator==(other); }
 
     _auto_iter& operator++() { ++static_cast<Parent&>(*this); return *this; }
     _auto_iter operator++(int) { _auto_iter result = *this; ++(*this); return result; }

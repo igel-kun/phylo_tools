@@ -13,16 +13,15 @@
 #endif
 
 namespace PT {
+  // ------- description --------
+  // definition: deleting all edges uv s.t. #descendants(u) >= 2*#descendants(v) + 1  yields a decomposition of T into "heavy paths"
+  // definition: the top node of every heavy path is called an "apex"
+  // now, every apex knows its parent in the parent heavy path, and each non-apex knows its apex; also, everyone knows their height in their heavy path
 
   // the heavy-path decomposition class
   // accepts a NodeOracleType (also by pointer) or void, indicating that the subtree count should be done and stored by the decomposition itself
   template<class Tree, NodeOracleType<mstd::TR_PtrVoidOK> _SubtreeSizeOracle = void>
   struct HeavyPathDecomposition {
-    // ------- description --------
-    // definition: deleting all edges uv s.t. #descendants(u) >= 2*#descendants(v) + 1  yields a decomposition of T into "heavy paths"
-    // definition: the top node of every heavy path is called an "apex"
-    // now, every apex knows its parent in the parent heavy path, and each non-apex knows its apex; also, everyone knows their height in their heavy path
-
     // ------- static stuff --------
     static constexpr bool has_size_oracle = not std::is_void_v<_SubtreeSizeOracle>;
     using SubtreeSizeOracle = std::conditional_t<has_size_oracle, _SubtreeSizeOracle, mstd::monostate>;
@@ -40,7 +39,28 @@ namespace PT {
     NodeMap<PathInfo> path_info;
     NodeDesc root;
     [[ no_unique_address ]] SubtreeSizeOracle size_oracle;
+
+    // ------- construction & desctruction ---------
   public:
+    HeavyPathDecomposition() = delete;
+
+    // pass all arguments into the size oracle construction
+    template<class... Args>
+    HeavyPathDecomposition(const NodeDesc _root, Args&&... args):
+      root{_root},
+      size_oracle(std::forward<Args>(args)...)
+    {
+      if constexpr ((not has_size_oracle) and (sizeof...(Args) == 0))
+        build_size_oracle();
+      build_decomposition();
+    };
+
+    template<class... Args>
+    HeavyPathDecomposition(const Tree& T, Args&&... args):
+      HeavyPathDecomposition(T.root(), std::forward<Args>(args)...)
+    {}
+
+
 
     // ------- operators --------
 
@@ -129,26 +149,6 @@ namespace PT {
         return path_info[x].subtree_size;
       }
     }
-
-    // ------- construction & desctruction ---------
-  public:
-    HeavyPathDecomposition() = default;
-
-    // pass all arguments into the size oracle construction
-    template<class... Args>
-    HeavyPathDecomposition(const NodeDesc _root, Args&&... args):
-      root{_root},
-      size_oracle(std::forward<Args>(args)...)
-    {
-      if constexpr ((not has_size_oracle) and (sizeof...(Args) == 0))
-        build_size_oracle();
-      build_decomposition();
-    };
-
-    template<class... Args>
-    HeavyPathDecomposition(const Tree& T, Args&&... args):
-      HeavyPathDecomposition(T.root(), std::forward<Args>(args)...)
-    {}
 
   };
 }

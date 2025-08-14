@@ -74,7 +74,7 @@ bool check_display(MyNet& N, MyTree& T)
 */
 
 
-NetAndTree create_net_and_tree() {
+auto create_net_and_tree() {
   NetAndTree result;
 
   const int num_internals = std::stoi(options["-r"][0]);
@@ -149,12 +149,12 @@ int main(const int argc, const char** argv) {
   std::cout << "\n\n starting the containment engine...\n\n";
   if(T.is_tree()) {
     if(N.is_tree()){
-      TreeInTreeContainment tc(std::move(N), std::move(T));
+      TreeInTreeContainment tc(N, T);
       if(tc.displayed())
         std::cout << "displayed\n"; // by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
       else std::cout << "not displayed\n";
     } else {
-      TreeInNetContainment tc(std::move(N), std::move(T));
+      TreeInNetContainment tc(N, T);
       if(tc.displayed())
         std::cout << "displayed\n"; // by subtrees rooted at: "<< tc.who_displays(T.root()).front() << "\n";
       else std::cout << "not displayed\n";

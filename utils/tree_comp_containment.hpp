@@ -39,7 +39,7 @@ namespace PT {
       auto emplacer = EdgeEmplacers<false, Host>::make_emplacer(T, host_to_subtree);
 
       // to construct the multi-labeled tree, we use a special edge-traversal of the host without a SeenSet, so reticulations are visited multiple times
-      EdgeTraversal<preorder, Host, void, void, void> my_dfs(u);
+      EdgeTraversal<preorder, Host, typename Host::RootContainer, void, void> my_dfs(u);
      
       const NodeDesc MULroot = emplacer.create_copy_of(u);
       emplacer.mark_root_directly(MULroot);
@@ -80,7 +80,7 @@ namespace PT {
       // use HG_label_match to fill the "guest"-side of SG_label_match
       SG_label_match(HG_label_match, [](auto&& node_sets){ return std::make_pair(MSTreeLabelNodeStorage(), std::move(node_sets.second)); } ),
       subtree(unzip_retis(_host, u, std::forward<HG_Label_Matching>(HG_label_match))),
-      subtree_display(subtree, _guest, SG_label_match) // note: the checker may move out of the label matching
+      subtree_display(subtree, SG_label_match) // note: the checker may move out of the label matching
     {
       DEBUG2(std::cout << "\tconstructed TreeInComponent checker\n subtree is:\n"<< ExtendedDisplay(subtree)<<"\nguest is at "<<&guest<<":\n"<<ExtendedDisplay(guest)<<"\n");
     }

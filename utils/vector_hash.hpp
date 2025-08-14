@@ -35,7 +35,9 @@ namespace mstd{
     class Hash = std::conditional_t<mstd::is_really_arithmetic_v<ValFor<_Key>>, mstd::IdentityFunction<void>, std::hash<ValFor<_Key>>>,
     class KeyEqual = std::equal_to<ValFor<_Key>>,
     class Allocator = std::allocator<OptFor<_Key>>>
-  class vector_hash: public std::vector<OptFor<_Key>> {
+  class vector_hash:
+    public std::vector<OptFor<_Key>> 
+  {
   public:
     using Key = ValFor<_Key>;
     using KeyOpt = OptFor<_Key>;
@@ -98,13 +100,13 @@ namespace mstd{
     enum class FindStatus:char {FS_found_key, FS_vacant, FS_shiftable};
 
     // number of values in the set
-    uintptr_t active_values = 0;
+    size_t active_values = 0;
+
+    // ANDing this to some x gives x's hash value
+    size_t mask = 0;
 
     // when this load factor is reached, double the size and trigger a rehash
     float max_load_factor = default_load_factor;
-
-    // ANDing this to some x gives x's hash value
-    uintptr_t mask = 0;
   
     // the provided hasher
     [[ no_unique_address ]] Hash hasher;
@@ -370,8 +372,8 @@ namespace mstd{
     void swap(vector_hash&& other) noexcept
     {
       active_values = other.active_values;
-      max_load_factor = other.max_load_factor;
       mask = other.mask;
+      max_load_factor = other.max_load_factor;
       Parent::swap(other);
     }
 
@@ -463,8 +465,7 @@ namespace mstd{
     void clear() { swap(vector_hash()); }
    
     template<class Container>
-    bool operator==(const Container& c) const
-    {
+    bool operator==(const Container& c) const {
       if(size() == c.size()){
         for(const auto& i: c)
           if(!contains(*this, i)) return false;

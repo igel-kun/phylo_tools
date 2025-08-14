@@ -13,27 +13,78 @@ namespace mstd {
 
   // ------- singleton_set: main class ---------
   template<Optional Container>
-  class singleton_set
+  struct singleton_set
   {
-    Container storage;
-  public:
+    // ------- static stuff --------
     using Traits = iter_traits_from_reference<typename Container::value_type&>;
     using size_type = Traits::size_type;
     using difference_type = Traits::difference_type;
     using value_type = typename Traits::value_type;
     using reference = typename Traits::reference;
     using const_reference = typename Traits::const_reference;
+
     using iterator = value_type*;
     using const_iterator = const value_type*;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-    singleton_set() = default;
-    singleton_set(const value_type& el): storage(std::in_place_t(), el) {}
-    singleton_set(value_type&& el): storage(std::in_place_t(), std::move(el)) {}
-    
+    static_assert(std::is_same_v<value_type, typename Container::value_type>);
+    static_assert(std::is_same_v<decltype(*std::declval<iterator>()), decltype(*std::declval<reverse_iterator>())>);
+
+    // ------- members --------
+  protected:
+    Container storage;
+
+    // ------- construction & desctruction ---------
+  public:
+    singleton_set() noexcept = default;
+    singleton_set(const value_type& el) noexcept: storage(std::in_place_t{}, el) {}
+    singleton_set(value_type&& el) noexcept: storage(std::in_place_t{}, std::move(el)) {}
+
+    // ------- operators --------
+    singleton_set& operator=(value_type&& x) noexcept { clear(); push_back(std::move(x)); return *this; }
+    singleton_set& operator=(const value_type& x) noexcept { clear(); push_back(x); return *this; }
+    //singleton_set& operator=(const singleton_set& s) = default;
+
+    explicit operator const_reference() const { return front(); }
+    explicit operator reference() { return front(); }
+
+    bool operator==(const singleton_set& other) const {
+      return empty() ? other.empty() : (storage == other.storage);
+    }
+    // careful with operator[] - it does not bounds-check! (use at() if you need bounds checking!)
+    reference operator[](const size_t i) { assert(i == 0); return *storage; }
+    const_reference operator[](const size_t i) const { assert(i == 0); return *storage; }
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
     bool non_empty() const { return storage.has_value(); }
     bool empty() const { return !non_empty(); }
+
+    size_type size() const { return non_empty(); }
+    reference       front() { assert(!empty()); return *storage; }
+    const_reference front() const { assert(!empty()); return *storage; }
+    reference       back() { assert(!empty()); return *storage; }
+    const_reference back() const { assert(!empty()); return *storage; }
+    iterator       find(const const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    const_iterator find(const const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    size_type count(const const_reference x) const { return non_empty() ? (x == front()) : 0; }
+    bool contains(const const_reference x) const { return count(x); }
+
+    iterator begin() { return empty() ? nullptr : &(front()); }
+    const_iterator begin() const { return empty() ? nullptr : &(front()); }
+    iterator end() { return begin() + non_empty(); }
+    const_iterator end() const { return begin() + non_empty(); }
+
+    reverse_iterator rbegin() { return reverse_iterator((empty() ? nullptr : &(front())) + 1); }
+    const_reverse_iterator rbegin() const { return const_reverse_iterator((empty() ? nullptr : &(front())) + 1); }
+    reverse_iterator rend() { return rbegin() + non_empty(); }
+    const_reverse_iterator rend() const { return rbegin() + non_empty(); }
+
+    reference at(const size_t i) { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
+    const_reference at(const size_t i) const { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
+
+    // ------- methods: modification --------    
     void clear() { storage.reset(); }
 
     void push_back(value_type&& el) {
@@ -48,10 +99,6 @@ namespace mstd {
       if(empty()) throw std::out_of_range("trying to pop from empty singleton set");
       clear();
     }
-
-    singleton_set& operator=(value_type&& x) { clear(); push_back(std::move(x)); return *this; }
-    singleton_set& operator=(const value_type& x) { clear(); push_back(x); return *this; }
-    //singleton_set& operator=(const singleton_set& s) = default;
 
     bool erase(const iterator& it) {
       if(empty() || (it != begin())) return false;
@@ -93,50 +140,18 @@ namespace mstd {
       insert(src_begin, src_end);
     }
     
-    explicit operator const_reference() const { return front(); }
-    explicit operator reference() { return front(); }
-    size_type size() const { return non_empty(); }
-    reference       front() { assert(!empty()); return *storage; }
-    const_reference front() const { assert(!empty()); return *storage; }
-    reference       back() { assert(!empty()); return *storage; }
-    const_reference back() const { assert(!empty()); return *storage; }
-    iterator       find(const const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
-    const_iterator find(const const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
-    size_type count(const const_reference x) const { return non_empty() ? (x == front()) : 0; }
-    bool contains(const const_reference x) const { return count(x); }
-    void reserve(const size_t) const {} // compatibility with vector
-
-    iterator begin() { return empty() ? nullptr : &(front()); }
-    const_iterator begin() const { return empty() ? nullptr : &(front()); }
-    iterator end() { return begin() + non_empty(); }
-    const_iterator end() const { return begin() + non_empty(); }
-
-    reverse_iterator rbegin() { return reverse_iterator((empty() ? nullptr : &(front())) + 1); }
-    const_reverse_iterator rbegin() const { return const_reverse_iterator((empty() ? nullptr : &(front())) + 1); }
-    reverse_iterator rend() { return rbegin() + non_empty(); }
-    const_reverse_iterator rend() const { return rbegin() + non_empty(); }
-
-    bool operator==(const singleton_set& other) const {
-      return empty() ? other.empty() : (storage == other.storage);
-    }
-    // careful with operator[] - it does not bounds-check! (use at() if you need bounds checking!)
-    reference operator[](const size_t i) { assert(i == 0); return *storage; }
-    const_reference operator[](const size_t i) const { assert(i == 0); return *storage; }
-
-    reference at(const size_t i) { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
-    const_reference at(const size_t i) const { if(i == 0) return front(); else throw std::out_of_range("accessing beyond bounds of a singleton set"); }
-
+    void reserve(const size_t) const {} // compatibility with vector    
   };
-
-  // ------- singleton_set: deduction guides ---
-  template<class T> requires (not Optional<T>)
-  singleton_set(T&&) -> singleton_set<optional_by_invalid<std::remove_cvref_t<T>, default_invalid_v<std::remove_cvref_t<T>>>>;
 
   // ------- singleton_set: concepts -----------
   template<class T> struct is_singleton_set: public std::false_type {};
   template<class T> struct is_singleton_set<singleton_set<T>>: public std::true_type {};
   template<class T> constexpr bool is_singleton_set_v = is_singleton_set<T>::value;
   template<class T> concept SingletonSetType = is_singleton_set_v<std::remove_cvref_t<T>>;
+
+  // ------- singleton_set: deduction guides ---
+  template<class T> requires (not Optional<T>)
+  singleton_set(T&&) -> singleton_set<optional_by_invalid<std::remove_cvref_t<T>, default_invalid_v<std::remove_cvref_t<T>>>>;
 
   // ------- singleton_set: defaults -----------
   template<class T, auto _invalid = nullptr> struct _singleton_set_by_invalid { using type = singleton_set<optional_by_invalid<T, _invalid>>; };

@@ -961,14 +961,14 @@ namespace PT {
     // list all nodes below u in order _o (default: postorder)
     template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden> 
     static auto nodes_below(Roots&& R, Forbidden&& forbidden) {
-      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
       else return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
     template<TraversalType o = postorder, NodeOrIterableType Roots> 
     static auto nodes_below(Roots&& R) {
-      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
       else return NodeTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
@@ -1099,14 +1099,14 @@ namespace PT {
     // --------------- relative edge traversals (below) ------------------
     template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden>
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
-      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
       else return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
     template<TraversalType o = postorder, NodeOrIterableType Roots>
     static auto edges_below(Roots&& R) {
-      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeSingleton, std::remove_cvref_t<Roots>>;
+      using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
       else return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
@@ -1291,9 +1291,9 @@ namespace PT {
       assert(other_x != NoNode);
       std::cout << "moving children and subtree below "<<other_x<<"...\n";
 
-#warning "TODO: uncomment this once bug 106046 is fixed: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106046"
-      //const NodeDesc target = create_node(other_x);
-      const NodeDesc target = create_node();
+//#warning "TODO: uncomment this once bug 106046 is fixed: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106046"
+      const NodeDesc target = create_node(other_x);
+      //const NodeDesc target = create_node();
 
       if constexpr (count) update_node_and_edge_numbers(other, other_x);
       if(x != NoNode) {
@@ -1344,6 +1344,10 @@ namespace PT {
     // if we just want to move a phylogeny, we can delegate to the move-construction of the parent since we do not have members
     // NOTE: we have to make sure to remove the other phylogeny's roots, otherwise its destructor will destruct the roots as well
     Phylogeny(Phylogeny&& N) = default;
+
+    Phylogeny(const Phylogeny& N):
+      Phylogeny(below_tag{}, policy_copy_tag(), N, N.roots())
+    {}
 
 
     // initialize tree from any std::IterableType containing edges, for example, std::vector<PT::Edge<>>
@@ -1437,7 +1441,7 @@ namespace PT {
       Phylogeny(below_tag{}, policy_copy_tag(), N, N.roots(), std::forward<Args>(args)...)
     {}
     // copy-constructing for the same type is not explicit
-    template<class... Args>
+    template<class... Args> requires (sizeof...(Args) > 0)
     Phylogeny(const Phylogeny& N, Args&&... args):
       Phylogeny(below_tag{}, policy_copy_tag(), N, N.roots(), std::forward<Args>(args)...)
     {}

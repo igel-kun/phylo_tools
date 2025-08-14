@@ -5,7 +5,18 @@
 #include "dfs_common.hpp"
 
 namespace PT {
+  // ========== DFS ==========
+  // This is a standard DFS, augmented by tons of functionality like
+  // -postorder, inorder, preorder or any mix thereof (nodes may be output multiple times)
+  // -edge traversals
+  // -DLS (depth-last search) to guarantee that all parents of a node have been visited before it
+  // -reversed search, starting at the bottom and going up
+  // -forbidden nodes/edges that may not be visited
 
+  // ------- DFS: helpers ---------
+  // see dfs_common.hpp
+
+  // ------- DFS: main class ---------
 	// NOTE: _SeenSet may be a pointer (or even void)
   // _Roots may be a pointer if we use someone else's roots (the network f.ex.)
   template<TraversalType tt,
@@ -17,6 +28,7 @@ namespace PT {
   struct DFSIterator:
     public DFSInfo<_Roots, _Forbidden, _SeenSet>
   {
+    // ------- static stuff --------
     using Info = DFSInfo<_Roots, _Forbidden, _SeenSet>;
     using Info::get_current_root;
     using Info::pop_root;
@@ -34,6 +46,8 @@ namespace PT {
     using AdjContainer = std::conditional_t<reverse, typename _Network::PredContainer, typename _Network::SuccContainer>;
     using AdjIter = mstd::auto_iter<AdjContainer>;
     using Edge = typename Network::Edge;
+    // on the state-stack, we store nodes along with their 
+    using state_stack = std::vector<AdjIter>;
 
     using difference_type = ptrdiff_t;
     using value_type = std::conditional_t<is_node_traversal(tt), NodeDesc, Edge>;
@@ -46,14 +60,6 @@ namespace PT {
     static constexpr bool has_forbidden_edges = mstd::is_testable<std::remove_pointer_t<Forbidden>, NodePair>;
     static constexpr bool has_forbidden_nodes = mstd::is_testable<std::remove_pointer_t<Forbidden>, NodeDesc>;
 
-    // on the state-stack, we store nodes along with their 
-    using state_stack = std::vector<AdjIter>;
-
-  protected:
-    state_stack children;
-    resume_info_t<is_inorder_traversal(tt)> resume_info;
-
-  public:
     static auto& get_adjacencies(const NodeDesc u) {
       if constexpr (reverse)
         return Network::predecessors(u);
@@ -66,6 +72,103 @@ namespace PT {
         return Edge(reverse_edge_tag{}, u, std::forward<Adj>(v));
       else return Edge(u, std::forward<Adj>(v));
     }
+
+
+
+    // ------- members --------
+  protected:
+    state_stack children;
+    resume_info_t<is_inorder_traversal(tt)> resume_info;
+
+    // ------- construction & desctruction ---------
+  public:
+    DFSIterator() = default;
+
+    template<TraversalType other_tt,
+           class OtherNetwork,
+           class OtherRoots,
+           class OtherForbidden,
+           class OtherSeenSet>
+      requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
+    DFSIterator(const DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
+      Info(static_cast<const DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
+      children(other.get_children()),
+      resume_info(other.get_resume_info())
+    {}
+
+    template<TraversalType other_tt,
+           class OtherNetwork,
+           class OtherRoots,
+           class OtherForbidden,
+           class OtherSeenSet>
+      requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
+    DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
+      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
+      children(other.get_children()),
+      resume_info(other.get_resume_info())
+    {}
+
+    template<TraversalType other_tt,
+           class OtherNetwork,
+           class OtherRoots,
+           class OtherForbidden,
+           class OtherSeenSet>
+      requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
+    DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>&& other): 
+      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&&>(other)),
+      children(std::move(other.get_children())),
+      resume_info(other.get_resume_info())
+    {}
+
+    template<PhylogenyType Phylo, class... Args>
+    DFSIterator(Phylo&& N, Args&&... args):
+      Info(std::forward<Phylo>(N), std::forward<Args>(args)...)
+    {
+      children.reserve(N.num_nodes());
+      advance();
+    }
+
+    template<NodeOrIterableType RootsInit, class... Args>
+    DFSIterator(RootsInit&& _roots, Args&&... args): 
+      Info(std::forward<RootsInit>(_roots), std::forward<Args>(args)...)
+    { advance(); }
+
+
+    // ------- operators --------
+  public:
+    value_type operator*() const {
+      if constexpr (is_node_traversal(tt))
+        if constexpr (is_inorder_traversal(tt)) {
+          return tail_on_top();
+        } else return node_on_top();
+      else {
+        if constexpr (is_inorder_traversal(tt)) {
+          return second_edge_on_top();
+        } else return edge_on_top();
+      }
+    }
+    auto operator->() const { return mstd::self_deref<value_type>(operator*()); }
+
+    DFSIterator& operator++() { advance(); return *this; }
+    DFSIterator operator++(int) { DFSIterator tmp = *this; advance(); return tmp; }
+
+    bool operator!=(const DFSIterator& other) const { return !(*this == other); }
+    bool operator==(const DFSIterator& other) const {
+      if(is_invalid()) return other.is_invalid();
+      if(other.is_invalid()) return false;
+      if(resume_info.current_pos != other.resume_info.current_pos) return false;
+      if(children.size() != other.children.size()) return false;
+      return static_cast<const Info&>(*this) == static_cast<const Info&>(other);
+    }
+
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  protected:
+    state_stack&& get_children() && { return std::move(children); }
+
+  public:
+    const state_stack& get_children() const & { return children; }
 
     // return the k'th node on the child stack (k=0 for the current node)
     NodeDesc get_kth_node_on_top(const uint32_t k) const {
@@ -111,26 +214,6 @@ namespace PT {
     // some getters are necessary in order to construct non-owning iterators from owning iterators
     auto get_resume_info() const & { return resume_info; }
     
-    const state_stack& get_children() const & { return children; }
-
-  protected:
-    state_stack&& get_children() && { return std::move(children); }
-
-    // for use with DLS: discount unvisited parents using the seen-map, return the current number of unvisited parents after discounting (as reference!)
-    void discount_parents(const NodeDesc u) {
-      if constexpr (has_seen) {
-        const auto [iter, success] = mstd::append(Info::get_seen(), u, NoDegree);
-        auto& num_parents = iter->second;
-        if(success) {
-          num_parents = Network::in_degree(u);
-          DEBUG6(std::cout << "newly inserted parent-map entry "<<*iter<<'\n');
-        }
-        --num_parents;
-        DEBUG6(std::cout << "discounting parents of "<<u<<" to " << num_parents << '\n');
-        DEBUG6(std::cout << "parent-map now: " << Info::get_seen() << '\n');
-      }
-    }
-
     // Note: if we're running a DLS, we'll have to make sure to insert u into the seen-map before calling is_seen()
     bool is_seen(const NodeDesc u) const {
       if constexpr (is_depth_last_traversal(tt)) {
@@ -152,11 +235,6 @@ namespace PT {
     }
     bool may_visit_next() const { return may_not_visit_next() == 0; }
 
-    void visit_next() {
-      const NodeDesc x = node_on_top();
-      children.emplace_back(get_adjacencies(x));
-      DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x)<<'\n');
-    }
 
     // return whether we can produce an in-order output
     // NOTE: in particular, we cannot produce an in-order output if we're doing an edge-traversal and the child-stack is size-1
@@ -167,18 +245,16 @@ namespace PT {
       return (children.size() >= 2 - is_node_traversal(tt));
     }
 
-    // prepare to descent into a child node and return whether the parent should be output before
-    bool prepare_inorder_descent() {
-      auto& num_sc = resume_info.num_successful_children;
-      assert(not num_sc.empty());
-      uint8_t& current_num_sc = mstd::back(num_sc);
-      const bool result = (current_num_sc != 0); // if we have not dived successfully into a child node, then don't output the parent
-      ++current_num_sc;
-      append(num_sc, 0); // for the child node that we are about to dive into, prepare an entry in the table
-      return result;
-    }
+    bool is_invalid() const { return roots_spent(); }
+    bool is_valid() const { return not is_invalid(); }
+    
 
-    // return the point where to pick back up on the next call
+    // ------- methods: modification --------
+    // The following function is the heart of the iterator.
+    // It emulates a stateful co-routine (C++20 coroutines must be stateless) by laveraging computed labels,
+    //    which I attribute to Miro Kneipp
+    //
+    // The function returns the point where to pick back up on the next call
     uint8_t iterate(const uint8_t start_jump) {
       static constexpr void* jump_table[] = {&&outer_loop, &&resume_roots, // 0, 1
         &&resume_descending_all_edge, &&resume_descending, &&resume_ascending, // 2, 3, 4
@@ -264,87 +340,41 @@ resume_outer:
       resume_info.current_pos = iterate(resume_info.current_pos);
     }
 
-    DFSIterator() = default;
-
-    template<TraversalType other_tt,
-           class OtherNetwork,
-           class OtherRoots,
-           class OtherForbidden,
-           class OtherSeenSet>
-      requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
-    DFSIterator(const DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
-      Info(static_cast<const DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
-      children(other.get_children()),
-      resume_info(other.get_resume_info())
-    {}
-
-    template<TraversalType other_tt,
-           class OtherNetwork,
-           class OtherRoots,
-           class OtherForbidden,
-           class OtherSeenSet>
-      requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
-    DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>& other): 
-      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&>(other)),
-      children(other.get_children()),
-      resume_info(other.get_resume_info())
-    {}
-
-    template<TraversalType other_tt,
-           class OtherNetwork,
-           class OtherRoots,
-           class OtherForbidden,
-           class OtherSeenSet>
-      requires (not mstd::is_same_v<DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>, DFSIterator>)
-    DFSIterator(DFSIterator<other_tt, OtherNetwork, OtherRoots, OtherForbidden, OtherSeenSet>&& other): 
-      Info(static_cast<DFSInfo<OtherRoots, OtherForbidden, OtherSeenSet>&&>(other)),
-      children(std::move(other.get_children())),
-      resume_info(other.get_resume_info())
-    {}
-
-    template<PhylogenyType Phylo, class... Args>
-    DFSIterator(Phylo&& N, Args&&... args):
-      Info(std::forward<Phylo>(N), std::forward<Args>(args)...)
-    {
-      children.reserve(N.num_nodes());
-      advance();
-    }
-
-    template<NodeOrIterableType RootsInit, class... Args>
-    DFSIterator(RootsInit&& _roots, Args&&... args): 
-      Info(std::forward<RootsInit>(_roots), std::forward<Args>(args)...)
-    { advance(); }
-
-
-    bool is_invalid() const { return roots_spent(); }
-    bool is_valid() const { return not is_invalid(); }
-    
-    value_type operator*() const {
-      if constexpr (is_node_traversal(tt))
-        if constexpr (is_inorder_traversal(tt)) {
-          return tail_on_top();
-        } else return node_on_top();
-      else {
-        if constexpr (is_inorder_traversal(tt)) {
-          return second_edge_on_top();
-        } else return edge_on_top();
+    // for use with DLS: discount unvisited parents using the seen-map, return the current number of unvisited parents after discounting (as reference!)
+    void discount_parents(const NodeDesc u) {
+      if constexpr (has_seen) {
+        const auto [iter, success] = mstd::append(Info::get_seen(), u, NoDegree);
+        auto& num_parents = iter->second;
+        if(success) {
+          num_parents = Network::in_degree(u);
+          DEBUG6(std::cout << "newly inserted parent-map entry "<<*iter<<'\n');
+        }
+        --num_parents;
+        DEBUG6(std::cout << "discounting parents of "<<u<<" to " << num_parents << '\n');
+        DEBUG6(std::cout << "parent-map now: " << Info::get_seen() << '\n');
       }
     }
 
-    DFSIterator& operator++() { advance(); return *this; }
-    DFSIterator operator++(int) { DFSIterator tmp = *this; advance(); return tmp; }
+    void visit_next() {
+      const NodeDesc x = node_on_top();
+      children.emplace_back(get_adjacencies(x));
+      DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x)<<'\n');
+    }
 
-    bool operator!=(const DFSIterator& other) const { return !(*this == other); }
-    bool operator==(const DFSIterator& other) const {
-      if(is_invalid()) return other.invalid();
-      if(other.invalid()) return false;
-      if(resume_info != other.resume_info) return false;
-      if(children.size() != other.children.size()) return false;
-      return static_cast<const Info&>(*this) == static_cast<const Info&>(other);
+    // prepare to descent into a child node and return whether the parent should be output before
+    bool prepare_inorder_descent() {
+      auto& num_sc = resume_info.num_successful_children;
+      assert(not num_sc.empty());
+      uint8_t& current_num_sc = mstd::back(num_sc);
+      const bool result = (current_num_sc != 0); // if we have not dived successfully into a child node, then don't output the parent
+      ++current_num_sc;
+      append(num_sc, 0); // for the child node that we are about to dive into, prepare an entry in the table
+      return result;
     }
   };
 
 
+  // ------- DFS: factories ---------
   template<TraversalType tt,
            StrictPhylogenyType _Network,
            NodeOrIterableType _Roots = typename _Network::RootContainer,
@@ -360,25 +390,24 @@ resume_outer:
     using typename Info::Forbidden;
     using typename Info::SeenSet;
 
-    using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<_Roots, NodeDesc>, _Roots, std::add_pointer_t<_Roots>>;
+    using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<_Roots, NodeDesc>, _Roots, std::add_pointer_t<const _Roots>>;
     using IndirectForbidden = std::conditional_t<Info::has_forbidden, std::add_pointer_t<std::remove_pointer_t<Forbidden>>, void>;
     using IndirectSeen = std::conditional_t<Info::has_seen, std::add_pointer_t<std::remove_pointer_t<SeenSet>>, void>;
     using NonOwningInfo = DFSInfo<IndirectRoots, IndirectForbidden, IndirectSeen>;
     using NonOwningIter = DFSIterator<tt, _Network, IndirectRoots, IndirectForbidden, IndirectSeen>;
+    using CopiedOwningIter = DFSIterator<tt, _Network, IndirectRoots, IndirectForbidden, _SeenSet>;
     using OwningIter = Iter;
 
     Traversal() = default;
     INHERIT_ALL_CONSTRUCTORS(Traversal, Parent)
     INHERIT_ASSIGNMENT(Traversal, Parent)
 
-    // note: can only draw an iterator from a const traversal if we have no SeenSet
-    auto begin() const& requires (std::is_void_v<_SeenSet>) { return NonOwningIter(static_cast<const Iter&>(*this)); }
+    auto begin() const&  { return CopiedOwningIter(static_cast<const Iter&>(*this)); }
     auto begin() & { return NonOwningIter(static_cast<Iter&>(*this)); }
     auto begin() && { return OwningIter(static_cast<Iter&&>(*this)); }
   };
 
 #warning "TODO: make a 'robust traversal' with shared ownership of the seen- and forbidden set between the iterators and the traversal. Will need shared_ptr for that..."
-
 
   template<TraversalType tt,
            StrictPhylogenyType _Network,
@@ -407,5 +436,10 @@ resume_outer:
            class _Forbidden = void,
            NodeMapType<mstd::TR_PtrVoidOK> _SeenSet = NodeMap<Degree>>
   using AllEdgesDLSTraversal = Traversal<tt | depth_last_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+
+  // ------- DFS: concepts ---------
+  // ------- DFS: deduction guides ---------
+  // ------- DFS: defaults ---------
+
 
 }

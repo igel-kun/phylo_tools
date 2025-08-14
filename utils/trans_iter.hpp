@@ -84,9 +84,9 @@ namespace mstd {
     using iterator_category = typename mstd::iterator_traits<Iterator>::iterator_category;
     static constexpr bool reference_is_rvalue = !std::is_reference_v<reference>;
 
-    transforming_iterator() = default;
-    transforming_iterator(transforming_iterator&&) = default;
-    transforming_iterator(const transforming_iterator& it):
+    transforming_iterator() noexcept = default;
+    transforming_iterator(transforming_iterator&&) noexcept = default;
+    transforming_iterator(const transforming_iterator& it) noexcept:
       Parent(it),
       trans{it.trans}
     {}
@@ -96,7 +96,8 @@ namespace mstd {
       requires ((not mstd::is_same_v<T, transforming_iterator>) and
         std::is_default_constructible_v<Transformation> and
         std::is_constructible_v<Parent, T&&>)
-    transforming_iterator(T&& iter): Parent{std::forward<T>(iter)}, trans{}
+    transforming_iterator(T&& iter) noexcept:
+      Parent{std::forward<T>(iter)}, trans{}
     {}
 
     // construct from iter and transformation
@@ -104,7 +105,7 @@ namespace mstd {
       requires ((not mstd::is_same_v<T, transforming_iterator>) and
           std::is_constructible_v<Parent, T&&> and
           std::is_constructible_v<Transformation, Args&&...>)
-    transforming_iterator(T&& iter, Args&&... args):
+    transforming_iterator(T&& iter, Args&&... args) noexcept:
       Parent{std::forward<T>(iter)}, trans{std::forward<Args>(args)...}
     {}
 
@@ -118,10 +119,10 @@ namespace mstd {
 
 
     // we have operator= and operator== for our iterator type (Iter) setting only the iterator, but not the transformation function
-    transforming_iterator& operator=(const transforming_iterator&) = default;
-    transforming_iterator& operator=(transforming_iterator&&) = default;
-    transforming_iterator& operator=(const Iterator& other) { static_cast<Parent&>(*this) = other; }
-    transforming_iterator& operator=(Iterator&& other) { static_cast<Parent&>(*this) = std::move(other); }
+    transforming_iterator& operator=(const transforming_iterator&) noexcept = default;
+    transforming_iterator& operator=(transforming_iterator&&) noexcept = default;
+    transforming_iterator& operator=(const Iterator& other) noexcept { static_cast<Parent&>(*this) = other; }
+    transforming_iterator& operator=(Iterator&& other) noexcept { static_cast<Parent&>(*this) = std::move(other); }
 
     transforming_iterator& operator++() { ++(static_cast<Parent&>(*this)); increment_trans(); return *this; }
     transforming_iterator operator++(int) { transforming_iterator result(*this); ++(*this); return result; }

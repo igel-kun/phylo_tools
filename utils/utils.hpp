@@ -119,7 +119,7 @@ namespace std::ranges {
 // now, it we inherit from an iterator and don't write our own operator=() then the inherited assignment will have the wrong return type :(
 #define INHERIT_ASSIGNMENT(myclass,base)\
   template<class Other> requires (not std::is_same_v<std::remove_cvref_t<Other>, myclass>)\
-  myclass& operator=(Other&& other) { base::operator=(std::forward<Other>(other)); }
+  myclass& operator=(Other&& other) noexcept { base::operator=(std::forward<Other>(other)); }
 
 // zero-fill
   void clear_memory(void* const start, const size_t num_bytes) {

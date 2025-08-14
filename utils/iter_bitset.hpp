@@ -5,26 +5,25 @@
 #include <set>
 #include <initializer_list>
 #include "utils.hpp"
+#include "runes.hpp"
 #include "stl_utils.hpp"
 #include "raw_vector_map.hpp"
 
 namespace mstd {
 
+  // ========== iterable_bitset ==========
+  // This is a dynamic and iterable bitset,
+  // much like vector<bool> but with an underlying unordered_map
+  // so if your bitset only contains the value 10^6, we'll only reserve 1 word of memory
+
+  // ------- iterable_bitset: helpers ---------
   using iter_bitset_default_key = size_t;
   using iter_bitset_default_bucket = uint_fast64_t; //uint64_t;
   using iter_bitset_default_bucket_map = mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>;
 
-  template<class T>
-  concept StrictIterBitsetType = requires(T t){
-    typename T::bucket_map;
-    requires MapType<typename T::bucket_map>;
-    { t.test(0) } -> std::same_as<bool>;
-  };
-  template<class T> concept IterBitsetType = StrictIterBitsetType<std::remove_reference_t<T>>;
-
-
+  // bucket_map_traits provide some common traits for the given bucket-map
   template<MapType bucket_map>
-  struct bucket_map_traits {
+  struct bucket_map_traits  {
     using bucket_type = typename bucket_map::mapped_type;
     using bucket_iter = typename bucket_map::iterator;
     using bucket_const_iter = typename bucket_map::const_iterator;
@@ -54,24 +53,37 @@ namespace mstd {
     static constexpr auto bucket_and_pos_of(const auto x) {
       return std::pair{bucket_of(x), pos_of(x)};
     }
-
   };
 
 
-  // ========================= iterators =====================================
+  // ------- iterable_bitset: concepts ---------
+  template<class T>
+  concept StrictIterBitsetType = requires(T t){
+    typename T::bucket_map;
+    requires MapType<typename T::bucket_map>;
+    { t.test(0) } -> std::same_as<bool>;
+  };
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  constexpr bool is_iterable_bitset = apply_rune_v<T, rune> or StrictIterBitsetType<apply_rune_t<T, rune>>;
   
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  concept IterBitsetType = is_iterable_bitset<T, rune>;
+
+
+  // ------- iterable_bitset: iterator ---------
   // NOTE: we do not correspond to the official standard since we do not abide by the following condition:
   // "if a and b compare equal then either they are both non-dereferenceable or *a and *b are references bound to the same object"
   // since our *-operation does not return a reference, but an integer
   // however, iteration a la "for(auto i: my_set)" works very well...
   template<MapType bucket_map = iter_bitset_default_bucket_map>
-  class bitset_iterator:
+  struct bitset_iterator:
     public iter_traits_from_reference<mapped_type_of_t<bucket_map>>,
     public bucket_map_traits<bucket_map>
   {
+    // ------- static stuff --------
     using traits = iter_traits_from_reference<mapped_type_of_t<bucket_map>>;
     using bmap_traits = bucket_map_traits<bucket_map>;
-  public:
+
     using typename bmap_traits::bucket_type;
     using bucket_iter = typename bucket_map::const_iterator;
 
@@ -81,34 +93,24 @@ namespace mstd {
     using typename traits::pointer;
     using typename traits::const_pointer;
 
+    // ------- members --------
   protected:
     const bucket_map* storage;
     bucket_iter index;
     bucket_type buffer;
 
-    // advance the index while its buffer is empty
-    // NOTE: this overwrites the current buffer, so make sure it's zero before
-    void advance_while_empty() {
-      while(is_valid()) {
-        buffer = (*index).second;
-        if(buffer) return;
-        ++index;
-      }
-    }
-
+    // ------- construction & desctruction ---------
   public:
-    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index):
+    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index) noexcept:
       storage(&_storage), index(_index)
-    {
-      advance_while_empty();
-    }
+    { advance_while_empty(); }
     
-    bitset_iterator(const bucket_map& _storage):
+    bitset_iterator(const bucket_map& _storage) noexcept:
       bitset_iterator(_storage, _storage.begin())
     {}
 
     // create an iterator at a specific bit inside storage[index]
-    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index, const unsigned char sub_index):
+    bitset_iterator(const bucket_map& _storage, const bucket_iter& _index, const unsigned char sub_index) noexcept:
       bitset_iterator(_storage, _index)
     {
       // if we didn't advance the buffer, advance the sub-index inside the buffer
@@ -116,7 +118,7 @@ namespace mstd {
         buffer &= (bmap_traits::full_bucket << sub_index);
     }
 
-    bool is_valid() const { return index != storage->end(); }
+    // ------- operators --------
     explicit operator bool() const { return is_valid(); }
     reference operator*() const { return (*index).first * bmap_traits::num_bits_in_bucket + NUM_TRAILING_ZEROSL(buffer); }
 
@@ -138,21 +140,40 @@ namespace mstd {
       if(we_at_end && they_at_end) return true;
       return (index == it.index) && (buffer == it.buffer);
     }
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
+    bool is_valid() const { return index != storage->end(); }
+    bool is_invalid() const { return not is_valid(); }
+
+    // ------- methods: modification --------
+  protected:
+    // advance the index while its buffer is empty
+    // NOTE: this overwrites the current buffer, so make sure it's zero before
+    void advance_while_empty() {
+      while(is_valid()) {
+        buffer = (*index).second;
+        if(buffer) return;
+        ++index;
+      }
+    }
   };
 
 
-  // =================== main classes ================================
-
+  // ------- iterable_bitset: main class ---------
   // ATTENTION: this does not do error checking if NDEBUG is on (except front())
+  // NOTE: bitsets cannot provide meaningful references to their members
   template<MapType _bucket_map = iter_bitset_default_bucket_map>
-  class iterable_bitset: public iter_traits_from_reference<mapped_type_of_t<_bucket_map>>,
-                         public bucket_map_traits<_bucket_map>
+  struct iterable_bitset:
+    public iter_traits_from_reference<mapped_type_of_t<_bucket_map>>,
+    public bucket_map_traits<_bucket_map>
   {
 #warning "TODO: add small-string optimization!"
-    // NOTE: bitsets cannot provide meaningful references to their members
+    // ------- static stuff --------
     using traits = iter_traits_from_reference<mapped_type_of_t<_bucket_map>>;
     using bmap_traits = bucket_map_traits<_bucket_map>;
-  public:
+
     using bucket_map = _bucket_map;
     using typename bmap_traits::bucket_type;
     using typename bmap_traits::bucket_iter;
@@ -166,24 +187,17 @@ namespace mstd {
 
     using iterator = bitset_iterator<bucket_map>;
     using const_iterator = iterator;
+    using emplace_result = std::pair<iterator, bool>;
+
+    // ------- members --------
   protected:
     size_t _capacity = 0;
     size_t _count = 0;
     bucket_map storage;
 
-    inline size_t num_buckets() const { return storage.size(); }
-
-    using bmap_traits::full_bucket;
-    using bmap_traits::num_bytes_in_bucket;
-    using bmap_traits::num_bits_in_bucket;
-    using bmap_traits::log_bits_in_bucket;
-    using bmap_traits::bucket_size_is_pow_of_two;
-    
-    using bmap_traits::bucket_of;
-    using bmap_traits::pos_of;
-    using bmap_traits::bucket_and_pos_of;
-
+    // ------- construction & desctruction ---------
   public:
+    iterable_bitset() noexcept = default;
 
     iterable_bitset(const size_t _num_bits, const bool _set_all):
       _capacity(_num_bits), storage()
@@ -191,8 +205,8 @@ namespace mstd {
       if(_set_all) set_all();
     }
 
-    iterable_bitset(const size_t _num_bits = 0):
-      iterable_bitset(_num_bits, 0)
+    iterable_bitset(const size_t _num_bits):
+      iterable_bitset(_num_bits, false)
     {}
     
     // construct with some items
@@ -217,10 +231,11 @@ namespace mstd {
         storage.emplace(xy.first, xy.second);      
     }
 
-
     iterable_bitset(const iterable_bitset&) = default;
-    iterable_bitset(iterable_bitset&&) = default;
-    iterable_bitset& operator=(iterable_bitset&& bs) = default;
+    iterable_bitset(iterable_bitset&&) noexcept = default;
+
+    // ------- operators --------
+    iterable_bitset& operator=(iterable_bitset&& bs) noexcept = default;
     iterable_bitset& operator=(const iterable_bitset& bs) = default;
 
     template<class BMap> requires (not mstd::is_same_v<BMap, bucket_map>)
@@ -229,15 +244,160 @@ namespace mstd {
       return operator=(std::move(tmp));
     }
 
+    iterable_bitset& operator&=(const iterable_bitset& bs) {
+      auto _iter = storage.begin();
+      auto _end = storage.cend();
+      auto bs_end = bs.storage.cend();
+      _count = 0;
+      while(_iter != _end){
+        bucket_type& my_bucket = (*_iter).second;
+        const auto bs_iter = bs.storage.find((*_iter).first);
+        if(bs_iter != bs_end){
+          my_bucket &= (*bs_iter).second;
+          if(my_bucket) {
+            _count += NUM_ONES_INL(my_bucket);
+            ++_iter;
+          } else storage.erase(_iter++);
+        } else storage.erase(_iter++);
+      }
+      return *this;
+    }
+   
+    iterable_bitset& operator^=(const iterable_bitset& bs) {
+      // XOR-in all elements of bs
+      for(const auto& bs_i: bs.storage){
+        const auto& their_bucket = (*bs_i).second;
+        const auto _iter = storage.find(bs_i.first);
+        if(_iter != storage.end()){
+          bucket_type& my_bucket = (*_iter).second;
+          // bs_i->first is also in our storage, so XOR them
+          _count -= NUM_ONES_INL(my_bucket);
+          if(my_bucket != their_bucket){
+            my_bucket ^= their_bucket;
+            _count += NUM_ONES_INL(my_bucket);
+          } else storage.erase(_iter);
+        } else {
+          storage[(*bs_i).first] = their_bucket;
+          _count += NUM_ONES_INL(their_bucket);
+        }
+      }
+      return *this;
+    }
 
+    iterable_bitset& operator|=(const iterable_bitset& bs) {
+      for(const auto& bs_key_value: bs.storage){
+        auto _iter = storage.find(bs_key_value.first);
+        if(_iter == storage.end()){
+          storage.emplace_hint(_iter, bs_key_value.first, bs_key_value.second);
+          _count += NUM_ONES_INL(bs_key_value.second);
+        } else {
+          bucket_type& my_bucket = (*_iter).second;
+          _count -= NUM_ONES_INL(my_bucket);
+          my_bucket |= bs_key_value.second;
+          _count += NUM_ONES_INL(my_bucket);
+        }
+      }
+      return *this;
+    }
+
+    iterable_bitset& operator-=(const iterable_bitset& bs) {
+      for(const auto& bs_key_value: bs.storage){
+        auto _iter = storage.find(bs_key_value.first);
+        if(_iter != storage.end()){
+          bucket_type& my_bucket = (*_iter).second;
+          _count -= NUM_ONES_INL(my_bucket);
+          my_bucket &= ~(bs_key_value.second);
+          _count += NUM_ONES_INL(my_bucket);
+        }
+      }
+      return *this;
+    }
+
+
+    template<IterableType Set>
+    bool operator==(const Set& s) const {
+      if(size() == s.size()) {
+        for(const value_type x: *this)
+          if(!test(s, x)) return false;
+      } else return false;
+      return true;
+    }
+
+    template<class T>
+    bool operator==(const iterable_bitset<T>& bs) const {
+      if(_count != bs._count) return false;
+      return storage == bs.storage;
+    }
+     
+    template<mstd::IterableType Container> requires (not IterBitsetType<Container>)
+    iterable_bitset& operator&=(const Container& c) {
+      auto _iter = begin();
+      const auto _end = end();
+      while(_iter != _end){
+        const value_type i = *_iter;
+        if(!c.count(i)) clear(i);
+        ++_iter;
+      }
+      return *this;
+    }
+
+    template<mstd::IterableType Container> requires (not IterBitsetType<Container>)
+    iterable_bitset& operator^=(const Container& c) {
+      for(const auto& i: c) flip(i);
+      return *this;
+    }
+
+    template<mstd::IterableType Container> requires (not IterBitsetType<Container>)
+    iterable_bitset& operator|=(const Container& c) {
+      for(const auto& i: c) insert(i);
+      return *this;
+    }
+    template<mstd::IterableType Container> requires (not IterBitsetType<Container>)
+    iterable_bitset& operator-=(const Container& c) {
+      for(const auto& i: c) erase(i);
+      return *this;
+    }
+
+    template<mstd::IterableType Container>
+    iterable_bitset operator&(const Container& c) const {
+      iterable_bitset result(*this);
+      result &= c;
+      return result;
+    }
+    template<mstd::IterableType Container>
+    iterable_bitset operator^(const Container& c) const {
+      iterable_bitset result(*this);
+      result ^= c;
+      return result;
+    }
+    template<mstd::IterableType Container>
+    iterable_bitset operator|(const Container& c) const {
+      iterable_bitset result(*this);
+      result |= c;
+      return result;
+    }
+    template<mstd::IterableType Container>
+    iterable_bitset operator-(const Container& c) const {
+      iterable_bitset result(*this);
+      result -= c;
+      return result;
+    }
+
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
+    using bmap_traits::full_bucket;
+    using bmap_traits::num_bytes_in_bucket;
+    using bmap_traits::num_bits_in_bucket;
+    using bmap_traits::log_bits_in_bucket;
+    using bmap_traits::bucket_size_is_pow_of_two;    
+    using bmap_traits::bucket_of;
+    using bmap_traits::pos_of;
+    using bmap_traits::bucket_and_pos_of;
+
+    size_t num_buckets() const { return storage.size(); }
     const bucket_map& data() const { return storage; }
-    void emplace_back(const bool bit) { if(bit) emplace(capacity()); else ++_capacity; }
-    std::pair<iterator,bool> emplace(const value_type x) { const bool res = set(x); return {find(x), res}; }
-    std::pair<iterator,bool> insert(const value_type x) { return emplace(x); }
-    bool erase(const value_type x) { return clear(x); }
-    bool unset(const value_type x) { return clear(x); }
-    bool set(const value_type x, const bool value) { if(value) return set(x); else return clear(x); }
-    void invert() { flip_all(); }
     size_t capacity() const { return _capacity; }
     size_t count() const { return _count; }    
     bool count(const value_type x) const { return test(x); }
@@ -254,6 +414,30 @@ namespace mstd {
       else
         return false;
     }
+
+    iterator begin() const { return bitset_iterator<bucket_map>(storage); }
+    iterator end() const { return bitset_iterator<bucket_map>(storage, storage.end()); }
+    iterator cbegin() const { return begin(); }
+    iterator cend() const { return end(); }
+
+    iterator find(const value_type x) const {
+      if(test(x)) {
+        const auto [bucket_num, bucket_offset] = bucket_and_pos_of(x);
+        return bitset_iterator<bucket_map>(storage, storage.find(bucket_num), bucket_offset);
+      } else return end();
+    }
+
+    // ------- methods: modification --------
+    void emplace_back(const bool bit) { if(bit) emplace(capacity()); else ++_capacity; }
+    auto emplace(const value_type x) { const bool res = set(x); return std::pair{find(x), res}; }
+    auto insert(const value_type x) { return emplace(x); }
+    bool erase(const value_type x) { return clear(x); }
+    bool unset(const value_type x) { return clear(x); }
+    bool set(const value_type x, const bool value) { if(value) return set(x); else return clear(x); }
+    void invert() { flip_all(); }
+
+    template<class _Iterator>
+    void insert(_Iterator start, const _Iterator& finish) { while(start != finish) { insert(*start); ++start; } }
 
     // set a bit & return whether the size changed (that is, if it wasn't set before)
     bool set(const value_type x) {
@@ -330,167 +514,6 @@ namespace mstd {
       }
     }
         
-    template<class _Iterator>
-    void insert(_Iterator start, const _Iterator& finish)
-    {
-      while(start != finish) insert(*(start++));
-    }
-
-      
-    iterable_bitset& operator&=(const iterable_bitset& bs)
-    {
-      auto _iter = storage.begin();
-      auto _end = storage.cend();
-      auto bs_end = bs.storage.cend();
-      _count = 0;
-      while(_iter != _end){
-        bucket_type& my_bucket = (*_iter).second;
-        const auto bs_iter = bs.storage.find((*_iter).first);
-        if(bs_iter != bs_end){
-          my_bucket &= (*bs_iter).second;
-          if(my_bucket) {
-            _count += NUM_ONES_INL(my_bucket);
-            ++_iter;
-          } else storage.erase(_iter++);
-        } else storage.erase(_iter++);
-      }
-      return *this;
-    }
-   
-    iterable_bitset& operator^=(const iterable_bitset& bs)
-    {
-      // XOR-in all elements of bs
-      for(const auto& bs_i: bs.storage){
-        const auto& their_bucket = (*bs_i).second;
-        const auto _iter = storage.find(bs_i.first);
-        if(_iter != storage.end()){
-          bucket_type& my_bucket = (*_iter).second;
-          // bs_i->first is also in our storage, so XOR them
-          _count -= NUM_ONES_INL(my_bucket);
-          if(my_bucket != their_bucket){
-            my_bucket ^= their_bucket;
-            _count += NUM_ONES_INL(my_bucket);
-          } else storage.erase(_iter);
-        } else {
-          storage[(*bs_i).first] = their_bucket;
-          _count += NUM_ONES_INL(their_bucket);
-        }
-      }
-      return *this;
-    }
-
-    iterable_bitset& operator|=(const iterable_bitset& bs)
-    {
-      for(const auto& bs_key_value: bs.storage){
-        auto _iter = storage.find(bs_key_value.first);
-        if(_iter == storage.end()){
-          storage.emplace_hint(_iter, bs_key_value.first, bs_key_value.second);
-          _count += NUM_ONES_INL(bs_key_value.second);
-        } else {
-          bucket_type& my_bucket = (*_iter).second;
-          _count -= NUM_ONES_INL(my_bucket);
-          my_bucket |= bs_key_value.second;
-          _count += NUM_ONES_INL(my_bucket);
-        }
-      }
-      return *this;
-    }
-
-    iterable_bitset& operator-=(const iterable_bitset& bs)
-    {
-      for(const auto& bs_key_value: bs.storage){
-        auto _iter = storage.find(bs_key_value.first);
-        if(_iter != storage.end()){
-          bucket_type& my_bucket = (*_iter).second;
-          _count -= NUM_ONES_INL(my_bucket);
-          my_bucket &= ~(bs_key_value.second);
-          _count += NUM_ONES_INL(my_bucket);
-        }
-      }
-      return *this;
-    }
-
-
-    template<IterableType Set>
-    bool operator==(const Set& s) const {
-      if(size() == s.size()) {
-        for(const value_type x: *this)
-          if(!test(s, x)) return false;
-      } else return false;
-      return true;
-    }
-
-    template<class T>
-    bool operator==(const iterable_bitset<T>& bs) const {
-      if(_count != bs._count) return false;
-      return storage == bs.storage;
-    }
-     
-    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
-    iterable_bitset& operator&=(const Container& c) {
-      auto _iter = begin();
-      const auto _end = end();
-      while(_iter != _end){
-        const value_type i = *_iter;
-        if(!c.count(i)) clear(i);
-        ++_iter;
-      }
-      return *this;
-    }
-
-    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
-    iterable_bitset& operator^=(const Container& c) {
-      for(const auto& i: c) flip(i);
-      return *this;
-    }
-
-    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
-    iterable_bitset& operator|=(const Container& c) {
-      for(const auto& i: c) insert(i);
-      return *this;
-    }
-    template<mstd::IterableType Container> requires (!IterBitsetType<Container>)
-    iterable_bitset& operator-=(const Container& c) {
-      for(const auto& i: c) erase(i);
-      return *this;
-    }
-
-    template<mstd::IterableType Container>
-    iterable_bitset operator&(const Container& c) const {
-      iterable_bitset result(*this);
-      result &= c;
-      return result;
-    }
-    template<mstd::IterableType Container>
-    iterable_bitset operator^(const Container& c) const {
-      iterable_bitset result(*this);
-      result ^= c;
-      return result;
-    }
-    template<mstd::IterableType Container>
-    iterable_bitset operator|(const Container& c) const {
-      iterable_bitset result(*this);
-      result |= c;
-      return result;
-    }
-    template<mstd::IterableType Container>
-    iterable_bitset operator-(const Container& c) const {
-      iterable_bitset result(*this);
-      result -= c;
-      return result;
-    }
-
-    iterator begin() const { return bitset_iterator<bucket_map>(storage); }
-    iterator end() const { return bitset_iterator<bucket_map>(storage, storage.end()); }
-    iterator cbegin() const { return begin(); }
-    iterator cend() const { return end(); }
-
-    iterator find(const value_type x) const {
-      if(test(x)) {
-        const auto [bucket_num, bucket_offset] = bucket_and_pos_of(x);
-        return bitset_iterator<bucket_map>(storage, storage.find(bucket_num), bucket_offset);
-      } else return end();
-    }
 
     friend std::ostream& operator<<(std::ostream& os, const iterable_bitset& bs) {
       for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
@@ -500,20 +523,18 @@ namespace mstd {
   };
 
 
-  //static_assert(IterableType<ordered_bitset>);
-
-
 
 
   // ------------------ unordered_map-based bitset ----------------------------
-
-  class unordered_bitset: public iterable_bitset<std::unordered_map<size_t, uint64_t> >
+  struct unordered_bitset:
+    public iterable_bitset<std::unordered_map<size_t, uint64_t>>
   {
-    using Parent = iterable_bitset<std::unordered_map<size_t, uint64_t> >;
+    using Parent = iterable_bitset<std::unordered_map<size_t, uint64_t>>;
+  protected:
     using Parent::storage;
+  public:
     using Parent::bucket_of;
     using Parent::pos_of;
-  public:
     using Parent::Parent;
     using Parent::clear;
 
@@ -541,25 +562,26 @@ namespace mstd {
       }
       _capacity = new_capacity;
     }
-
   };
 
 
   // ------------------ vector-based bitset ----------------------------
-
-
-  class ordered_bitset: public iterable_bitset<mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>>
+  struct ordered_bitset:
+    public iterable_bitset<mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>>
   {
+    // ------- static stuff --------
     using Parent = iterable_bitset<mstd::raw_vector_map<iter_bitset_default_key, iter_bitset_default_bucket>>;
-    using Parent::bucket_of;
-    using Parent::pos_of;
-    using Parent::storage;
-    using Parent::num_buckets;
-    using Parent::_count;
-    using Parent::Parent;
-  public:
-    using Parent::clear;
     using typename Parent::value_type;
+    
+    friend class unordered_bitset; 
+
+    // ------- members --------
+  protected:
+    using Parent::storage;
+    using Parent::_count;
+
+    // ------- construction & desctruction ---------
+    using Parent::Parent;
 
     ordered_bitset(const size_t _num_bits, const bool _set_all = 0):
       Parent(_num_bits, 0)
@@ -573,11 +595,27 @@ namespace mstd {
       DEBUG5(std::cout << "made ordered_bitset with "<<size()<<" bits set and "<<capacity()<<" bits capacity\n");
     }
 
-    void clear() { clear_all(); }
-    void clear_all() {
-      clear_memory(storage.data(), num_buckets() * num_bytes_in_bucket);
-      _count = 0;
+    // ------- operators --------
+    ordered_bitset& operator++() {
+      const size_t lowest_zero = std::min(num_trailing_ones() + 1, _capacity);
+      flip_lowest_k(lowest_zero);
+      return *this;
     }
+    ordered_bitset operator++(int) { ordered_bitset result = *this; ++(*this); return result; }
+
+    ordered_bitset& operator--() {
+      const size_t lowest_one = std::min(num_trailing_zeros() + 1, _capacity);
+      flip_lowest_k(lowest_one);
+      return *this;
+    }
+    ordered_bitset operator--(int) { ordered_bitset result = *this; ++(*this); return result; }
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
+    using Parent::bucket_of;
+    using Parent::pos_of;
+    using Parent::num_buckets;
 
     value_type min() const {
       value_type result = 0;
@@ -598,20 +636,6 @@ namespace mstd {
     }
 
     value_type front() const { return min(); }
-
-    //! set the k'th unset bit (k = 0 corresponding to the first unset bit), and return its index
-    value_type set_kth_unset(value_type k) {
-      value_type result = index_of_kth_zero(k);
-      set(result);
-      return result;
-      
-    }
-
-    value_type clear_kth_set(value_type k) {
-      value_type result = index_of_kth_one(k);
-      clear(result);
-      return result;
-    }
 
     //! get the index of the k'th zero
     //! NOTE: counting starts with 0, so you get the index of the least significant zero by passing k = 0
@@ -672,6 +696,61 @@ namespace mstd {
     size_t num_trailing_ones() const { return index_of_kth_zero(0); }
     size_t num_trailing_zeros() const { return index_of_kth_one(0); }
 
+    //! count the items whose value is at least x
+    size_t count_larger_or_equal(const value_type x) const {
+      if(x < _capacity){
+        const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
+        size_t accu = NUM_ONES_INL(storage[first_bucket] >> first_offset);
+        for(size_t i = first_bucket + 1; i < num_buckets(); ++i)
+          accu += NUM_ONES_INL(storage[i]);
+        return accu;
+      } else return 0;
+    }
+
+    //! count the items whose value is at most x
+    size_t count_smaller(const value_type x) const {
+      if(x < _capacity){
+        const auto [last_bucket, bits_in_last_bucket] = bucket_and_pos_of(x);
+        size_t accu = 0;
+        for(size_t i = 0; i < last_bucket; ++i)
+          accu += NUM_ONES_INL(storage[i]);
+        accu += NUM_ONES_INL(storage[last_bucket] << (num_bits_in_bucket - bits_in_last_bucket));
+        return accu;
+      } else return count();
+    }
+
+    void print(auto& ostr) const {
+      const std::vector<bucket_type>& vec = storage;
+      for(auto it = vec.rbegin(); it != vec.rend(); ++it) {
+        auto x = *it;
+        ostr << std::bitset<num_bits_in_bucket>(x) << ' ';
+      }
+      ostr << "(size "<<size()<<" capacity "<<capacity()<<')';
+    }
+
+
+    // ------- methods: modification --------
+  public:
+    void clear() { clear_all(); }
+    void clear_all() {
+      clear_memory(storage.data(), num_buckets() * num_bytes_in_bucket);
+      _count = 0;
+    }
+
+    //! set the k'th unset bit (k = 0 corresponding to the first unset bit), and return its index
+    value_type set_kth_unset(value_type k) {
+      value_type result = index_of_kth_zero(k);
+      set(result);
+      return result;
+      
+    }
+
+    value_type clear_kth_set(value_type k) {
+      value_type result = index_of_kth_one(k);
+      Parent::clear(result);
+      return result;
+    }
+
     //! flip lowest k bits
     void flip_lowest_k(value_type k) {
       if(k > _capacity) _capacity = k;
@@ -690,17 +769,6 @@ namespace mstd {
         _count -= 2 * NUM_ONES_INL(buffer & xor_op);
         buffer ^= xor_op;
       }
-    }
-
-    //! count the items whose value is at least x
-    size_t count_larger_or_equal(const value_type x) const {
-      if(x < _capacity){
-        const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
-        size_t accu = NUM_ONES_INL(storage[first_bucket] >> first_offset);
-        for(size_t i = first_bucket + 1; i < num_buckets(); ++i)
-          accu += NUM_ONES_INL(storage[i]);
-        return accu;
-      } else return 0;
     }
 
     void set_capacity(const size_t new_capacity) {
@@ -762,55 +830,20 @@ namespace mstd {
         }
       } else return 0;
     }
-   
-    //! count the items whose value is at most x
-    size_t count_smaller(const value_type x) const {
-      if(x < _capacity){
-        const auto [last_bucket, bits_in_last_bucket] = bucket_and_pos_of(x);
-        size_t accu = 0;
-        for(size_t i = 0; i < last_bucket; ++i)
-          accu += NUM_ONES_INL(storage[i]);
-        accu += NUM_ONES_INL(storage[last_bucket] << (num_bits_in_bucket - bits_in_last_bucket));
-        return accu;
-      } else return count();
-    }
-
-    ordered_bitset& operator++() {
-      const size_t lowest_zero = std::min(num_trailing_ones() + 1, _capacity);
-      flip_lowest_k(lowest_zero);
-      return *this;
-    }
-    ordered_bitset operator++(int) { ordered_bitset result = *this; ++(*this); return result; }
-
-    ordered_bitset& operator--() {
-      const size_t lowest_one = std::min(num_trailing_zeros() + 1, _capacity);
-      flip_lowest_k(lowest_one);
-      return *this;
-    }
-    ordered_bitset operator--(int) { ordered_bitset result = *this; ++(*this); return result; }
-
-    void print(auto& ostr) const {
-      const std::vector<bucket_type>& vec = storage;
-      for(auto it = vec.rbegin(); it != vec.rend(); ++it) {
-        auto x = *it;
-        ostr << std::bitset<num_bits_in_bucket>(x) << ' ';
-      }
-      ostr << "(size "<<size()<<" capacity "<<capacity()<<')';
-    }
-
-    friend class unordered_bitset; 
   };
   
-
-
-//  std::ostream& operator<<(std::ostream& os, const ordered_bitset& bs) {
-//    return os << static_cast<const iterable_bitset<mstd::raw_vector_map<size_t, uint64_t>>>(bs);
-//  }
-
 
   template<class C, class = void> struct is_bitset: public std::false_type {};
   template<class C> struct is_bitset<C, std::void_t<typename C::bucket_map>>: public std::true_type {};
   template<class C> constexpr bool is_bitset_v = is_bitset<std::remove_cvref_t<C>>::value;
+
+  // ------- iterable_bitset: factories ---------
+  
+  
+  // ------- iterable_bitset: deduction guides ---------
+  
+  // ------- iterable_bitset: defaults ---------
+
 
 }
 

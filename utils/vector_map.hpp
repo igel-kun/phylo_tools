@@ -1,6 +1,4 @@
 
-//  this is a vector_map that can decide if an item is already in the map, thus allowing proper handling of emplace() and insert()
-
 #pragma once
 
 #include "utils.hpp"
@@ -11,43 +9,35 @@
 
 namespace mstd{
 
-  template<class Iter>
+  // ========== vector_map ==========
+  //  a vector that can decide if an item is present of not,
+  //  thus allowing proper handling of emplace() and insert().
+
+  // ------- vector_map: helpers ---------
+   template<class Iter>
   using proto_vector_map_iterator = filtered_iterator<Iter, HasValuePredicate>;
 
   template<class Key, class Iter>
   using vector_map_iterator = transforming_iterator<proto_vector_map_iterator<Iter>, PairFromVectorIter<Key, proto_vector_map_iterator<Iter>>, true>;
 
-
+ 
+  // ------- vector_map: main class ---------
   template<class _Key,
            class _Element,
            class Allocator = std::allocator<OptFor<_Element>>>
-  class vector_map: public raw_vector_map<_Key, OptFor<_Element>, Allocator>
+  struct vector_map:
+    public raw_vector_map<_Key, OptFor<_Element>, Allocator>
   {
-    using Element = OptFor<_Element>;
+    // ------- static stuff --------
     using Parent = raw_vector_map<_Key, OptFor<_Element>, Allocator>;
-    using Parent::data;
-
-    size_t _count = 0;
-
-    bool is_valid(const Element& x) const { 
-      return HasValuePredicate::value(x);
-    }
-
-    bool erase(Element& x) {
-      if(is_valid(x)) {
-        x.reset();
-        --_count;
-        return true;
-      } else return false;
-    }
-
-  public:
     using Parent::Parent;
     using typename Parent::Vector;
     using typename Parent::key_type;
     using typename Parent::mapped_type;
     using typename Parent::VectorIter;
     using typename Parent::VectorConstIter;
+
+    using Element = OptFor<_Element>;
 
     static_assert(std::is_same_v<Vector, std::vector<OptFor<_Element>, Allocator>>);
     static_assert(std::is_same_v<mapped_type, typename Vector::value_type>);
@@ -61,12 +51,17 @@ namespace mstd{
     using const_iterator = vector_map_iterator<_Key, VectorConstIter>;
     using insert_result = std::pair<iterator, bool>;
 
-    size_t size() const { return count(); }
-    bool contains(const key_type x) const { return is_valid(data()[x]); }
-    
-    size_t count() const { return _count; }
-    bool count(const key_type x) const { return contains(x); }
-    
+    // ------- members --------
+  protected:
+    size_t _count = 0;
+
+    // ------- construction & desctruction ---------
+    // ------- operators --------
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  protected:
+    using Parent::data;
+
     template<class... Args>
     auto make_iterator(const VectorIter raw_it, Args&&... args)
     { return iterator(FilterIter{std::forward<Args>(args)..., AutoIter{raw_it, Parent::end()}}, data()); }
@@ -74,7 +69,48 @@ namespace mstd{
     template<class... Args>
     auto make_iterator(const VectorConstIter raw_it, Args&&... args) const
     { return const_iterator(FilterConstIter{std::forward<Args>(args)..., AutoConstIter{raw_it, Parent::end()}}, data()); }
-   
+
+  public:
+    bool is_valid(const Element& x) const { return HasValuePredicate::value(x); }
+
+    size_t size() const { return count(); }
+    bool contains(const key_type x) const { return is_valid(data()[x]); }
+    
+    size_t count() const { return _count; }
+    bool count(const key_type x) const { return contains(x); }
+
+    iterator begin() { return make_iterator(Vector::begin()); }
+    const_iterator begin() const { return make_iterator(Vector::begin()); }
+    auto end() { return Parent::end(); } //make_iterator(Vector::end(), do_not_fix_index_tag()); }
+    auto end() const { return Parent::end(); } //make_iterator(Vector::end(), do_not_fix_index_tag()); }
+    auto vm_end() const { make_iterator(Vector::end(), do_not_fix_index_tag()); }                                       
+
+    iterator find(const key_type key) { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
+    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
+
+    // ------- methods: modification --------
+  protected:
+    bool erase(Element& x) {
+      if(is_valid(x)) {
+        x.reset();
+        --_count;
+        return true;
+      } else return false;
+    }
+
+  public:
+    bool erase(const key_type key) {
+      if(key < Parent::size()) {
+        return erase(data()[key]);
+      } else return false;
+    }
+    bool erase(const AutoIter it) { return erase(*it); }
+
+
+    void clear() {
+      Parent::clear();
+      _count = 0;
+    }
 
     template<class... Args>
 	  insert_result try_emplace(const key_type key, Args&&... args) {
@@ -101,29 +137,12 @@ namespace mstd{
     template<class... Args>
     insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, std::forward<Args>(args)...); }
     insert_result insert(const std::pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
-
-    bool erase(const key_type key) {
-      if(key < Parent::size()) {
-        return erase(data()[key]);
-      } else return false;
-    }
-    bool erase(const AutoIter it) { return erase(*it); }
-
-
-    void clear() {
-      Parent::clear();
-      _count = 0;
-    }
-
-    iterator begin() { return make_iterator(Vector::begin()); }
-    const_iterator begin() const { return make_iterator(Vector::begin()); }
-    auto end() { return Parent::end(); } //make_iterator(Vector::end(), do_not_fix_index_tag()); }
-    auto end() const { return Parent::end(); } //make_iterator(Vector::end(), do_not_fix_index_tag()); }
-    auto vm_end() const { make_iterator(Vector::end(), do_not_fix_index_tag()); }                                       
-
-    iterator find(const key_type key) { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
-    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
   };
+
+  // ------- vector_map: factories --------- 
+  // ------- vector_map: concepts ---------
+  // ------- vector_map: deduction guides ---------
+  // ------- vector_map: defaults ---------
 
 }
 

@@ -1187,9 +1187,7 @@ namespace PT {
     void apply() {
       std::cout << "\n ===== REDUCTION RULES ======\n\n";
       std::cout << "reti-m queue: "<<reti_merge.node_queue << "\n";
-      std::cout << "host:\n" << contain.host << "\nguest:\n" << contain.guest << "\ncomp-DAG:\n";
-      contain.comp_info.comp_DAG.print_subtree(std::cout, [](const NodeDesc u){ return std::to_string(u); });
-        
+      contain.print_info(std::cout);        
 
       remove_orphans.init_queue();
       remove_orphans.apply();

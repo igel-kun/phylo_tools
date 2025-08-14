@@ -100,6 +100,7 @@ namespace PT {
   struct DFSInfo: 
     public mstd::optional_tuple<_Forbidden, _SeenSet>
   {
+    // ------- static stuff --------
     using Roots = DFSRootStorage<_Roots>;
     static_assert(mstd::IterableType<Roots>);
     static_assert(not std::is_pointer_v<_Roots> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
@@ -115,7 +116,12 @@ namespace PT {
     static constexpr bool forbidden_indirect = std::is_pointer_v<Forbidden>;
     static constexpr bool seen_indirect = std::is_pointer_v<SeenSet>;
 
+    // ------- members --------
     DFSRootStorage<_Roots> roots;
+
+
+    // ------- construction & desctruction ---------
+    DFSInfo() = default;
 
     template<StrictPhylogenyType Phylo, class... Args> requires (not mstd::is_same_v<_Roots, NodeDesc*>)
     DFSInfo(const Phylo& N, Args&&... args):
@@ -135,9 +141,6 @@ namespace PT {
       Parent{std::forward<Args>(args)...},
       roots(_roots, _roots + 1)
     {}
-
-
-    DFSInfo() = default;
 
     // initialization of indirections from containers is already implemented in mstd::optional_tuple,
     // and we'll forbid initializing containers from indirections (for now)
@@ -176,30 +179,22 @@ namespace PT {
       roots(std::move(other.roots))
     {}
 
+
+    // ------- operators --------
+    bool operator!=(const DFSInfo& other) const {
+      if constexpr (has_seen)
+        if(get_seen() != other.get_seen()) return true;
+      return roots != other.roots;
+    }
+    bool operator==(const DFSInfo& other) const { return not operator!=(other); }
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
     const auto& get_roots() const { return roots; }
     const auto& get_forbidden() const requires (has_forbidden) { return mstd::access(this->template get<0>()); }
     auto& get_forbidden() requires (has_forbidden) { return mstd::access(this->template get<0>()); }
     const auto& get_seen() const requires (has_seen) { return mstd::access(this->template get<1>()); }
-
-  protected:
-    auto& get_seen() requires (has_seen) { return mstd::access(this->template get<1>()); }
-    auto& get_roots() { return roots; }
-
-    template<class... Args>
-    void mark_seen(const NodeDesc u, Args&&... args) { 
-      if constexpr (has_seen) {
-        mstd::append(get_seen(), u, std::forward<Args>(args)...);
-        DEBUG6(std::cout << "seen: "<< get_seen() << '\n');
-      }
-    }
-
-    void pop_root() {
-      if constexpr (roots_indirect) // if our roots are indirect, then we have an auto_iter onto the container, so advance that one
-        ++get_roots();
-      else mstd::pop_back(get_roots()); // if our roots are direct, then pop the last root
-    }
-
-  public:
 
     bool is_forbidden(const auto x) const {
       if constexpr (has_forbidden) {
@@ -223,13 +218,33 @@ namespace PT {
         return get_roots().is_invalid();
       else return get_roots().empty();
     }
+
+  protected:
+    auto& get_seen() requires (has_seen) { return mstd::access(this->template get<1>()); }
+    auto& get_roots() { return roots; }
+
+    // ------- methods: modification --------
+  protected:
+    template<class... Args>
+    void mark_seen(const NodeDesc u, Args&&... args) { 
+      if constexpr (has_seen) {
+        mstd::append(get_seen(), u, std::forward<Args>(args)...);
+        DEBUG6(std::cout << "seen: "<< get_seen() << '\n');
+      }
+    }
+
+    void pop_root() {
+      if constexpr (roots_indirect) // if our roots are indirect, then we have an auto_iter onto the container, so advance that one
+        ++get_roots();
+      else mstd::pop_back(get_roots()); // if our roots are direct, then pop the last root
+    }
   };
+
 
   // helper structure for resuming the iteration; it has to be the same for all template-instanciations, so it needs to be outside the class
   template<bool doing_inorder_traversal>
   struct resume_info_t {
     uint8_t current_pos = 0; // this contains the point at which we want to resume iteration
-    bool operator!=(const resume_info_t& other) const = default; 
   };
   template<>
   struct resume_info_t<true>:

@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <ranges>
+
 #include "types.hpp"
 #include "node.hpp"
 #include "heavy_path_decomp.hpp"
@@ -22,6 +24,8 @@ namespace PT {
   // NOTE: this one does not become invalid when the tree changes
 	template<class Tree, NodeContainerType SeenSet = NodeSet> //requires PhylogenyType<Phylo> // NOTE: this will cause 'concept depends on itself'
 	struct NaiveTreeLCAOracle {
+    NaiveTreeLCAOracle() = default;
+    NaiveTreeLCAOracle(const Tree&) {}
 
     // if z is not seen, then mark it as seen and walk to the parent
     // return whether z had been seen before
@@ -61,7 +65,6 @@ namespace PT {
   {
     // ------- static stuff --------
     using Parent = HeavyPathDecomposition<Tree, SubtreeSizeOracle>;
-    using Parent::parent;
 
     // to climb heavy paths we'll need to know some things about the two nodes
     struct ClimbInfo {
@@ -189,7 +192,7 @@ namespace PT {
       if(x != y) {
         // filter from the common ancestors those who don't have a child that is also a common ancestor
         const SeenSet common = get_common_ancestors(x, y);
-        append(result, common | std::ranges::views::filter([&](const NodeDesc u){ return get_intersection(common, Net::children(u)).empty(); }));
+        append(result, common | std::ranges::filter_view([&](const NodeDesc u){ return get_intersection(common, Net::children(u)).empty(); }));
       } else append(result, x);
 			return result;
 		}

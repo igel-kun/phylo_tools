@@ -1,6 +1,5 @@
 #pragma once
 
-/* compute the smallest subtree spanning a list L of nodes in O(|L|) LCA-queries, see Cole et al., SIAM J. Comput., 1996 */
 
 #include <memory>
 #include <vector>
@@ -8,8 +7,31 @@
 #include "types.hpp"
 #include "tags.hpp"
 
+#include "lca.hpp"
+
 namespace PT{
 
+  // ========== induced_subtree ==========
+  // compute the smallest subtree spanning a list L of nodes in O(|L|) LCA-queries, see Cole et al., SIAM J. Comput., 1996 
+
+  
+  // ------- induced_subtree: concepts ---------
+  struct SparseInducedSubtreeInfo;
+  struct InducedSubtreeInfo;
+
+  template<class T> 
+  concept StrictSubtreeInfo = std::derived_from<T, SparseInducedSubtreeInfo>;
+  template<class T> 
+  concept SubtreeInfo = StrictSubtreeInfo<std::remove_reference_t<T>>;
+
+  template<class M>
+  concept StrictSubtreeInfoMap = mstd::MapType<M> && SubtreeInfo<typename M::mapped_type>;
+  template<class T> 
+  concept SubtreeInfoMap = StrictSubtreeInfoMap<std::remove_reference_t<T>>;
+
+
+
+  // ------- induced_subtree: helpers ---------
   struct SparseInducedSubtreeInfo {
     size_t dist_to_root;
 
@@ -32,18 +54,6 @@ namespace PT{
   };
   using InducedSubtreeInfoMap = PT::NodeMap<InducedSubtreeInfo>;
 
-  template<class T> 
-  concept StrictSubtreeInfo = std::derived_from<T, SparseInducedSubtreeInfo>;
-  template<class T> 
-  concept SubtreeInfo = StrictSubtreeInfo<std::remove_reference_t<T>>;
-
-  template<class M>
-  concept StrictSubtreeInfoMap = mstd::MapType<M> && SubtreeInfo<typename M::mapped_type>;
-  template<class T> 
-  concept SubtreeInfoMap = StrictSubtreeInfoMap<std::remove_reference_t<T>>;
-
-
-
   // compute necessary information from a tree
   template<StrictPhylogenyType Tree, StrictSubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap>
   void get_induced_subtree_infos(const NodeDesc root, NodeInfoMap& node_infos) {
@@ -58,44 +68,116 @@ namespace PT{
       mstd::append(node_infos, *iter, node_infos.at(parent).dist_to_root + 1, ++counter);
     }
   }
-
   template<StrictPhylogenyType Tree, StrictSubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap>
+  NodeInfoMap get_induced_subtree_infos(const NodeDesc root) {
+    NodeInfoMap result;
+    get_induced_subtree_infos<Tree, NodeInfoMap>(root, result);
+    return result;
+  }
+
+  template<StrictPhylogenyType Tree, StrictSubtreeInfoMap NodeInfoMap>
   void get_induced_subtree_infos(const Tree& t, NodeInfoMap& node_infos) {
     get_induced_subtree_infos<Tree, NodeInfoMap>(t.root(), node_infos);
   }
- 
+  template<StrictSubtreeInfoMap NodeInfoMap = InducedSubtreeInfoMap, StrictPhylogenyType Tree>
+  NodeInfoMap get_induced_subtree_infos(const Tree& t) {
+    return get_induced_subtree_infos<Tree, NodeInfoMap>(t.root());
+  }
+
+  // sort a given list of leaves by their order numbers
+  template<NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap>
+  void sort_by_order_number(LeafList&& _leaves, const NodeInfoMap& node_infos) {
+    auto sort_by_order = [&](const auto& a, const auto& b){ return node_infos.at(a).order_number > node_infos.at(b).order_number; };
+    // move the given leaflist into a sortable range & sort
+    mstd::flexible_sort(_leaves.begin(), _leaves.end(), sort_by_order);
+  }
+
+  // ------- induced_subtree: main class ---------
   //NOTE: the input MUST be a tree, but not necessarily declared as tree (a network without reticulations is fine)
   //NOTE: we'll need to know for each node u its distance to the root, and we'd also like the leaflist L to be in some order (any of pre-/in-/post- will do)
   //      so if the caller doesn't provide them, we'll compute them from the given supertree
   //NOTE: if the infos are provided, then this runs in O(|L| * LCA-query in supertree), otherwise, an O(|supertree|) DFS is prepended
   //NOTE: when passed as a const container, the nodes are assumed to be in order; ATTENTION: this is not verified!
   template<StrictPhylogenyType Tree, NodeIterableType LeafList, SubtreeInfoMap NodeInfoMap>
-  class _induced_subtree_edges {
-  protected:
-    using LCAOracle = typename Tree::TreeLCAOracle;
+  struct _induced_subtree_edges {
+    // ------- static stuff --------
+    using LCAOracle = DefaultStaticTreeLCAOracle<Tree>;
     using EdgeVec = PT::EdgeVec<>;
     using NodeWithDepth = NodeWith<uint_fast32_t>;
 
-    const Tree& supertree;
+    static void append_unless_equal(EdgeVec& ev, const NodeDesc u, const NodeDesc v) { if(u != v) mstd::append(ev, u, v); }
+
+    // ------- members --------
+  protected:
+    [[ no_unique_address ]] LCAOracle supertree_LCA;
     LeafList leaves_sorted;
     NodeInfoMap node_infos;
     std::vector<NodeWithDepth> inner_nodes;
     std::vector<ssize_t> v_left_idx, v_right_idx;
 
+    // ------- construction & desctruction ---------
   public:
-
     template<class LeafListInit = LeafList, class NodeInfoMapInit = NodeInfoMap>
     _induced_subtree_edges(const Tree& _supertree, LeafListInit&& _leaves_sorted, NodeInfoMapInit&& _node_infos = NodeInfoMapInit()):
-      supertree(_supertree),
+      supertree_LCA(_supertree),
       leaves_sorted(std::forward<LeafList>(_leaves_sorted)),
       node_infos(std::forward<NodeInfoMapInit>(_node_infos))
     {
-      if(node_infos.empty() && !supertree.edgeless()) {
-        get_induced_subtree_infos(supertree, node_infos);
+      if(node_infos.empty() and not _supertree.edgeless()) {
+        get_induced_subtree_infos(_supertree, node_infos);
       }
       prepare_nodes();
     }
 
+    // ------- operators --------
+    // ------- methods: initialization --------
+  protected:
+    template<bool direction> // forward = true, backward = false
+    void compute_nearest_above(std::vector<ssize_t>& result) const {
+      result.resize(inner_nodes.size());
+      // keep indices of inner_nodes along with their depths on a stack
+      std::stack<std::pair<size_t, size_t>> depth_stack;
+      for(size_t i = 0; i != inner_nodes.size(); ++i){
+        const size_t index = direction ? i : inner_nodes.size() - i - 1;
+        const size_t u_depth = inner_nodes[index].second;
+        while(!depth_stack.empty() && (depth_stack.top().second >= u_depth)) depth_stack.pop();
+        result[index] = (depth_stack.empty()) ? -1 : depth_stack.top().first;
+        depth_stack.emplace(index, u_depth);
+      }
+    }
+
+    void compute_inner_nodes() {
+      inner_nodes.reserve(leaves_sorted.size() - 1);
+      for(auto iter = leaves_sorted.begin(); iter != leaves_sorted.end();){
+        const NodeDesc u = *iter;
+        if(++iter == leaves_sorted.end()) break;
+        const NodeDesc l = supertree_LCA(u, *iter);
+        DEBUG4(std::cout << "adding LCA("<<u<<", "<<*iter<<") = "<<l<<" as inner node with dist " << node_infos.at(l).dist_to_root<<"\n");
+        mstd::append(inner_nodes, l, node_infos.at(l).dist_to_root);
+      }
+    }
+
+    void prepare_nodes() {
+      if(leaves_sorted.size() > 1){
+        DEBUG4(std::cout << "leaves:\t"<<leaves_sorted<<"\n");
+        // step 2: compute stepwise LCAs
+        compute_inner_nodes();
+        DEBUG4(std::cout << "inner nodes:\t"<<inner_nodes<<"\n");
+        // step 3: compute v_left and v_right for each internal node v
+        //         (v_x = the closest node x on the left/right of v whose dist to root is strictly smaller than v's)
+        compute_nearest_above<1>(v_left_idx);
+        compute_nearest_above<0>(v_right_idx);
+      }
+    }
+
+    // ------- methods: query --------
+  public:
+    // choose the right parent between a choice of two indices in inner_nodes (which may be -1)
+    ssize_t choose_parent(const ssize_t u_idx, const ssize_t v_idx) const {
+      if(u_idx == -1) return v_idx;
+      if(v_idx == -1) return u_idx;
+      return (inner_nodes[u_idx].second < inner_nodes[v_idx].second) ? v_idx : u_idx;
+    }
 
     EdgeVec get_edges() {
       EdgeVec result;
@@ -123,64 +205,15 @@ namespace PT{
       }
       return result;
     }
-
-  protected:
-    void append_unless_equal(EdgeVec& ev, const NodeDesc u, const NodeDesc v) { if(u != v) mstd::append(ev, u, v); }
-    // choose the right parent between a choice of two indices in inner_nodes (which may be -1)
-    ssize_t choose_parent(const ssize_t u_idx, const ssize_t v_idx) const {
-      if(u_idx == -1) return v_idx;
-      if(v_idx == -1) return u_idx;
-      return (inner_nodes[u_idx].second < inner_nodes[v_idx].second) ? v_idx : u_idx;
-    }
-
-    void compute_inner_nodes() {
-      inner_nodes.reserve(leaves_sorted.size() - 1);
-      const LCAOracle LCA = supertree.LCA();
-      for(auto iter = leaves_sorted.begin(); iter != leaves_sorted.end();){
-        const NodeDesc u = *iter;
-        if(++iter == leaves_sorted.end()) break;
-        const NodeDesc l = LCA(u, *iter);
-        DEBUG4(std::cout << "adding LCA("<<u<<", "<<*iter<<") = "<<l<<" as inner node with dist " << node_infos.at(l).dist_to_root<<"\n");
-        mstd::append(inner_nodes, l, node_infos.at(l).dist_to_root);
-      }
-    }
-
-    template<bool direction> // forward = true, backward = false
-    void compute_nearest_above(std::vector<ssize_t>& result) const {
-      result.resize(inner_nodes.size());
-      // keep indices of inner_nodes along with their depths on a stack
-      std::stack<std::pair<size_t, size_t>> depth_stack;
-      for(size_t i = 0; i != inner_nodes.size(); ++i){
-        const size_t index = direction ? i : inner_nodes.size() - i - 1;
-        const size_t u_depth = inner_nodes[index].second;
-        while(!depth_stack.empty() && (depth_stack.top().second >= u_depth)) depth_stack.pop();
-        result[index] = (depth_stack.empty()) ? -1 : depth_stack.top().first;
-        depth_stack.emplace(index, u_depth);
-      }
-    }
-
-    void prepare_nodes() {
-      if(leaves_sorted.size() > 1){
-        DEBUG4(std::cout << "leaves:\t"<<leaves_sorted<<"\n");
-        // step 2: compute stepwise LCAs
-        compute_inner_nodes();
-        DEBUG4(std::cout << "inner nodes:\t"<<inner_nodes<<"\n");
-        // step 3: compute v_left and v_right for each internal node v
-        //         (v_x = the closest node x on the left/right of v whose dist to root is strictly smaller than v's)
-        compute_nearest_above<1>(v_left_idx);
-        compute_nearest_above<0>(v_right_idx);
-      }
-    }
+    
+    // ------- methods: modification -------- 
 
   };
 
-  template<class LeafList, SubtreeInfoMap NodeInfoMap>
-  void sort_by_order_number(LeafList&& _leaves, const NodeInfoMap& node_infos) {
-    auto sort_by_order = [&](const auto& a, const auto& b){ return node_infos.at(a).order_number > node_infos.at(b).order_number; };
-    // move the given leaflist into a sortable range & sort
-    mstd::flexible_sort(_leaves.begin(), _leaves.end(), sort_by_order);
-  }
 
+  // ------- induced_subtree: factories --------- 
+  // ------- induced_subtree: deduction guides ---------
+  // ------- induced_subtree: defaults ---------
 
   // the following functions manage the, frankly, complicated construction variants for the induced-suptree computation class
   // NOTE: in all variants, the caller can give us an empty map of nodes to node_infos and we'll fill it

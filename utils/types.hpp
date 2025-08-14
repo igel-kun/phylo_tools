@@ -74,24 +74,23 @@ namespace PT{
 #ifdef DEBUGNODES
   struct NodeDesc {
     uintptr_t data = reinterpret_cast<uintptr_t>(nullptr);
-    constexpr NodeDesc() {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
-    constexpr NodeDesc(const NodeDesc& other): data(other.data) {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
-    constexpr NodeDesc(NodeDesc&& other): data(std::move(other.data)) {} //std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    constexpr NodeDesc() noexcept {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    constexpr NodeDesc(const NodeDesc& other) noexcept: data(other.data) {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
+    constexpr NodeDesc(NodeDesc&& other) noexcept: data(std::move(other.data)) {} //std::cout << "creating new ND pointing to "<<data<<"\n"; }
 
     template<class T>
-    constexpr NodeDesc(const T* t): data(reinterpret_cast<uintptr_t>(t)) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
-    constexpr NodeDesc(const nullptr_t n): data(reinterpret_cast<uintptr_t>(static_cast<void*>(n))) {}
-    constexpr NodeDesc(const uintptr_t t): data(t) {}
+    constexpr NodeDesc(const T* t) noexcept: data(reinterpret_cast<uintptr_t>(t)) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
+    constexpr NodeDesc(const nullptr_t n) noexcept: data(reinterpret_cast<uintptr_t>(static_cast<void*>(n))) {}
+    constexpr NodeDesc(const uintptr_t t) noexcept: data(t) {}
 
 
-    NodeDesc& operator=(const NodeDesc& other) {
+    NodeDesc& operator=(const NodeDesc& other) noexcept {
       data = other.data;
       //std::cout << "assigned new ND pointing to "<<data<<"\n";
       return *this;
     }
-    NodeDesc& operator=(NodeDesc&& other) {
+    NodeDesc& operator=(NodeDesc&& other) noexcept {
       data = std::move(other.data);
-      //std::cout << "assigned new ND pointing to "<<data<<"\n";
       return *this;
     }
 
