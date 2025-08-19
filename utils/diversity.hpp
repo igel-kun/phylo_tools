@@ -17,6 +17,11 @@
 namespace PT {
   using namespace std::literals;
 
+  // tags for the data extracter
+  struct pd_weight_tag {};
+  struct pd_iprob_tag {};
+  struct pd_gamma_tag {};
+
   // if you want to use diversity modules on your network, you can make the networks EdgeData
   // inherit from the following
   // alternatively, you can provide 2 functors returning inheritence probs and weights, or
@@ -116,6 +121,7 @@ namespace PT {
       }
     }
     decltype(auto) operator()(const auto& uv) const { return weight(uv); }
+    decltype(auto) operator()(const pd_weight_tag, const auto& uv) const { return weight(uv); }
 
     using Weight = std::remove_cvref_t<decltype(std::declval<pd_score_util_w>().weight(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Weight>);
@@ -142,6 +148,7 @@ namespace PT {
       }
     }
     decltype(auto) operator()(const auto& uv) const { return iprob(uv); }
+    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { return iprob(uv); }
 
     using Probability = std::remove_cvref_t<decltype(std::declval<pd_score_util_p>().iprob(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Probability>);
@@ -166,15 +173,171 @@ namespace PT {
       }
     }
     auto& operator()(const auto& uv) const { return gamma(uv); }
+    auto& operator()(const pd_gamma_tag, const auto& uv) const { return gamma(uv); }
 
     using Gamma = std::remove_cvref_t<decltype(std::declval<pd_score_util_g>().gamma(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Gamma>);
   };
 
   template<class EdgeData, class FuncWeight = GetEdgeData, class FuncIProb = GetEdgeData>
-  struct pd_score_util_wp: public pd_score_util_w<EdgeData, FuncWeight>, public pd_score_util_p<EdgeData, FuncIProb> {};
+  struct pd_score_util_wp:
+    public pd_score_util_w<EdgeData, FuncWeight>,
+    public pd_score_util_p<EdgeData, FuncIProb>
+  {
+    decltype(auto) operator()(const pd_weight_tag, const auto& uv) const { return this->weight(uv); }
+    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { return this->iprob(uv); }
+  };
   template<class EdgeData, class FuncWeight = GetEdgeData, class FuncIProb = GetEdgeData, class FuncGamma = DefaultGamma<EdgeData>>
-  struct pd_score_util_wpg: public pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>, public pd_score_util_g<EdgeData, FuncGamma> {};
+  struct pd_score_util_wpg:
+    public pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>,
+    public pd_score_util_g<EdgeData, FuncGamma>
+  {
+    decltype(auto) operator()(const pd_weight_tag, const auto& uv) const { return this->weight(uv); }
+    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { return this->iprob(uv); }
+    decltype(auto) operator()(const pd_gamma_tag, const auto& uv) const { return this->gamma(uv); }
+  };
+
+
+  // ===================== advanced helper classes ==========================
+  // these helper classes can extract 
+  // 1. maximum-probability-path-lengths and
+  // 2. expected path-lengths
+
+  // the accumulators can be plugged into the following length-getter
+  // NOTE: the ProbWeightGetter must inherit from pd_score_util_p
+  template<StrictPhylogenyType Network,
+    class ProbWeightGetter,
+    class LengthAccumulator>
+      requires mstd::is_derived_from_template_v<ProbWeightGetter, pd_score_util_p>
+  struct ProtoLengthGetter:
+    public ProbWeightGetter
+  {
+    using EdgeData = EdgeDataOf<Network>;
+    using Adjacency = AdjacencyOf<Network>;
+
+    static_assert(std::is_invocable_v<ProbWeightGetter, pd_weight_tag, const Adjacency&>);
+
+    using Weight = std::remove_cvref_t<std::invoke_result_t<ProbWeightGetter, pd_weight_tag, const Adjacency&>>;
+    using typename ProbWeightGetter::Probability;
+    using typename ProbWeightGetter::SolutionAccu;
+    using ProbWeight = std::pair<Probability, Weight>;
+    using ProbWeightGetter::iprob;
+    
+    static_assert(std::is_invocable_v<LengthAccumulator, ProbWeight&, ProbWeight, ProbWeight>);
+
+    [[ no_unique_address ]] LengthAccumulator accumulate_prob_len;
+    
+    NodeDesc from = NoNode;
+    mutable NodeMap<ProbWeight> length_cache;
+
+    ProtoLengthGetter() = default;
+
+    ProtoLengthGetter(const NodeDesc _from):
+      from{_from}
+    {}
+
+    template<class ProbWeightInit, class... Args>
+    ProtoLengthGetter(const NodeDesc _from, ProbWeightInit&& pw_init, Args&&... args):
+      ProbWeightGetter{std::forward<ProbWeightInit>(pw_init)},
+      accumulate_prob_len{std::forward<Args>(args)...},
+      from{_from}
+    {}
+
+    template<EdgePredicateType<Network> Forbidden = mstd::ConstFunction<0u>>
+    ProbWeight& length_to(const NodeDesc to, Forbidden&& forbidden = {}) const {
+      const auto [iter, success] = mstd::append(length_cache, to, 0, 0);
+      if(success) {
+        if((to != from) and not Network::is_root(to)) [[likely]] {
+          for(const auto& x: Network::parents(to)) {
+            if(not forbidden(x, to)) {
+              const Weight x_to_len = ProbWeightGetter::operator()(pd_weight_tag{}, x);
+              DEBUG6(std::cout << "iprob("<<NodeDesc{x}<<") = "<<iprob(x)<<"\t\t length("<<NodeDesc{x}<<") = "<<x_to_len<<'\n');
+              accumulate_prob_len(iter->second, length_to(x), ProbWeight{iprob(x), x_to_len});
+            }
+          }
+          DEBUG6(std::cout << "found that "<<to<<" has length prob-length "<<iter->second<<'\n');
+        } else iter->second.first = 1;
+      }
+      return iter->second;
+    }
+
+    template<NodeIterableType Nodes, EdgePredicateType<Network> Forbidden = mstd::ConstFunction<0u>>
+    Weight score_for_leaf_set(const Nodes& leaves_to_save, Forbidden&& forbidden = {}) const {
+      return std::ranges::fold_left(
+          leaves_to_save | std::ranges::views::transform([&](const NodeDesc x){ return length_to(x, forbidden).second;}),
+          Weight{0});
+    }
+
+    template<NodeIterableType Nodes, EdgePredicateType<Network> Forbidden = mstd::ConstFunction<0u>>
+    Weight operator()(const Network& N, const Nodes& leaves_to_save, Forbidden&& forbidden = {}) const {
+      return score_for_leaf_set(leaves_to_save, forbidden);
+    }
+
+    // to optimize the score for k leaves, we'll greedily take the heaviest leaf each time
+    template<EdgePredicateType<Network> Forbidden = mstd::ConstFunction<0u>>
+    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1, Forbidden&& forbidden = {}) const {
+      mstd::SolutionAccumulator<NodeVec, Weight> result(num_solutions);
+      NodeVec leaves = N.leaves().to_container();
+      std::ranges::sort(leaves, [&](const NodeDesc x, const NodeDesc y){ return length_to(x) > length_to(y); });
+      leaves.resize(k);
+      result.add(leaves, score_for_leaf_set(leaves));
+      return result;
+    }
+
+  };
+
+  // how the maximum-likelihood strategy accumulates probabilities and weights
+  struct accumulate_prob_len_ML {
+    void operator()(auto& accu, const auto to_parent, const auto parent_to_us) const {
+      const auto new_prob = to_parent.first * parent_to_us.first;
+      if(new_prob > accu.first)
+        accu = {new_prob, to_parent.second + parent_to_us.second};
+    }
+  };
+  // this is a helper class to compute maximum-likelihood paths
+  template<StrictPhylogenyType Network,
+    class ProbWeightGetter = pd_score_util_wp<EdgeDataOf<Network>, GetEdgeData, GetEdgeData>>
+  using pd_ML_path_lengths = ProtoLengthGetter<Network, ProbWeightGetter, accumulate_prob_len_ML>;
+  
+  // how the expected-path-length strategy accumulates probabilities and weights
+  struct accumulate_prob_len_exp {
+    void operator()(auto& accu, const auto to_parent, const auto parent_to_us) const {
+      // NOTE: the events that a path comes from one neighbor or the other are INDEPENDENT (no path enters from both parents)
+      //    and the prob's can thus be summed
+      accu.first += (to_parent.first * parent_to_us.first);
+      // NOTE: to get the expected length of a 'from'-'to'-path
+      //    we add the new length times the old probability to it and multiply everything by the parent->us probability
+      accu.second += (parent_to_us.second * to_parent.first + to_parent.second) * parent_to_us.first;
+    }
+  };
+  // this is a helper class to compute expected path lengths
+  template<StrictPhylogenyType Network,
+    class ProbWeightGetter = pd_score_util_wp<EdgeDataOf<Network>, GetEdgeData, GetEdgeData>>
+  using pd_expected_path_lengths = ProtoLengthGetter<Network, ProbWeightGetter, accumulate_prob_len_exp>;
+
+
+  // this helper class is used to get switchings with maximum probability
+  template<StrictPhylogenyType Network,
+    class FuncWeight = GetEdgeData,
+    class FuncIProb = GetEdgeData>
+  struct pd_ML:
+    public pd_score_util_wp<EdgeDataOf<Network>, FuncWeight, FuncIProb>
+  {
+    using EdgeData = EdgeDataOf<Network>;
+    using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
+    using Util::iprob;
+
+    // extract the most probable switching as a list of edges
+    // NOTE: we always remove dangling leaves
+    template<NodeIterableType Nodes>
+    auto get_ML_switching(const Nodes& leaves) const {
+      const auto prob_of = [&](const auto& adj){ return iprob(adj); };
+      // we'll use the 'parent_select'-functor of the switching to select the most probable parent for each reticulation
+      const auto most_probable_parent = [&](const NodeDesc r){ return std::ranges::max_element(Network::parents(r), std::ranges::less{}, prob_of); };
+      return Switching<Network>{}.get_active_edges(leaves, most_probable_parent);
+    }
+    auto get_ML_switching(const Network& N) const { return get_ML_switching(N.leaves()); }
+  };
 
 
   // ===================== diversity modules ==========================
@@ -233,16 +396,8 @@ namespace PT {
         NodeSet leaf_set{std::begin(leaves_to_save), std::end(leaves_to_save)};
         compute_gammas(N, leaf_set);
       } else compute_gammas(N, leaves_to_save);
-      // NOTE: (note: we're not using std::accumulate since N.edges().end() has different type than it's begin())
-      // TODO: in C++23, use std::ranges::fold_left
-      Gamma D = 0.0;
-      for(const auto e: N.edges()) {
-        const auto score = weight(e) * gamma(e);
-        D += score;
-        DEBUG3(std::cout << "collecting score "<<score<<" from edge "<<e<<" --- sum is now "<<D<<'\n');
-      }
-      DEBUG3(std::cout << "final score: "<<D<<'\n');
-      return D;
+
+      return std::ranges::fold_left(N.edges(), Weight{0}, [&](const Weight x, const auto& uv){ return x + weight(uv) * gamma(uv);} );
     }
 
     template<NodeIterableType Nodes>
@@ -335,12 +490,12 @@ namespace PT {
   // ===================== diversity (average contained-tree formulation, DP) ==========================
   // the avg-tree diversity is the expected weight of a random tree displayed by the network
   template<StrictPhylogenyType Network,
-    class FuncIProb = GetEdgeData,
-    class FuncWeight = GetEdgeData>
+    class FuncWeight = GetEdgeData,
+    class FuncIProb = GetEdgeData>
   struct pd_average_tree_DP:
-    public pd_average_tree<Network, FuncIProb, FuncWeight>
+    public pd_average_tree<Network, FuncWeight, FuncIProb>
   {
-    using Parent = pd_average_tree<Network, FuncIProb, FuncWeight>;
+    using Parent = pd_average_tree<Network, FuncWeight, FuncIProb>;
     using typename Parent::Util;
     using typename Util::Weight;
     using typename Util::SolutionAccu;
@@ -400,300 +555,83 @@ namespace PT {
 
   };
 
-   // ===================== network fair proportion index ==========================
-   // the NFI of a leaf x is the expected modified weight of a random root-x-path,
-   // where the modified weight of uv is the ratio of the weight of uv and the expected number of taxa below v
 
-  // this is a helper class to compute maximum-likelihood paths
-  template<StrictPhylogenyType Network,
-    class FuncIProb = GetEdgeData,
-    class FuncWeight = GetEdgeData>
-  struct pd_ML_path_lengths:
+  // ===================== network fair proportion index ==========================
+  // the NFI of a leaf x is the expected modified weight of a random root-x-path,
+  // where the modified weight of uv is the ratio of the weight of uv and the expected number of taxa below v
+
+  template<class Network, class FuncWeight, class FuncIProb>
+  struct NetFairProportionScore:
     public pd_score_util_wp<EdgeDataOf<Network>, FuncWeight, FuncIProb>
   {
-    using EdgeData = EdgeDataOf<Network>;
-    using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
-    using typename Util::Weight;
-    using typename Util::Probability;
-    using Util::weight;
-    using Util::iprob;
-    using ProbWeight = std::pair<Probability, Weight>;
+    using Weights = pd_score_util_w<EdgeDataOf<Network>, FuncWeight>;
+    using Probs = pd_score_util_p<EdgeDataOf<Network>, FuncIProb>;
+    using typename Weights::Weight;
+    using Weights::weight;
 
-    NodeDesc from = NoNode;
-    // cache the length of an ML-path from x to y at index [y][x], as well as the probability of such a path
-    mutable NodeMap<ProbWeight> ML_length;
-    
-    pd_ML_path_lengths() = default;
-    
-    template<class... Args>
-    pd_ML_path_lengths(const NodeDesc _from, Args&&... args):
-      Util{std::forward<Args>(args)...},
-      from{_from}
-    {}
-
-
-    ProbWeight& ML_length_to(const NodeDesc to, auto&& get_length) const {
-      const auto [iter, success] = mstd::append(ML_length, to, 0, 0);
-      if(success) {
-        auto& [to_path_prob, to_length] = iter->second;
-        if(to != from) [[likely]] {
-          for(const auto& x: Network::parents(to)) {
-            DEBUG6(std::cout << "iprob("<<NodeDesc{x}<<") = "<<iprob(x)<<"\t\t length("<<NodeDesc{x}<<") = "<<get_length(x, to)<<'\n');
-            auto& [x_path_prob, x_length] = ML_length_to(x, get_length);
-            const Probability to_via_x_prob = to_path_prob * iprob(x);
-            if(to_via_x_prob > to_path_prob) {
-              to_path_prob = to_via_x_prob;
-              to_length = x_length + get_length(x, to);
-            }
-          }
-          DEBUG6(std::cout << "found that "<<to<<" has length "<<to_length<<" with path-probability "<<to_path_prob<<'\n');
-        } else to_path_prob = 1;
-      }
-      return iter->second;
-    }
-    // per default, use Util::weight as edge-length
-    ProbWeight& ML_length_to(const NodeDesc to) const {
-      return ML_length_to(to, [&](const auto& adj, const NodeDesc){ return weight(adj); });
-    }
-  };
-
-  // this is a helper class to compute expected path-lengths
-  template<StrictPhylogenyType Network,
-    class FuncIProb = GetEdgeData,
-    class FuncWeight = GetEdgeData>
-  struct pd_expected_path_lengths:
-    public pd_score_util_wp<EdgeDataOf<Network>, FuncWeight, FuncIProb>
-  {
-    using EdgeData = EdgeDataOf<Network>;
-    using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
-    using typename Util::Weight;
-    using typename Util::Probability;
-    using Util::weight;
-    using Util::iprob;
-    using ProbWeight = std::pair<Probability, Weight>;
-
-    NodeDesc from = NoNode;
-    // cache the expected length of a path from x to y at index [y][x], as well as the probability of such a path
-    mutable NodeMap<ProbWeight> expected_length;
-
-    pd_expected_path_lengths() = default;
-    
-    template<class... Args>
-    pd_expected_path_lengths(const NodeDesc _from, Args&&... args):
-      Util{std::forward<Args>(args)...},
-      from{_from}
-    {}
-
-
-    ProbWeight& expected_length_to(const NodeDesc to, auto&& get_length) const {
-      const auto [iter, success] = mstd::append(expected_length, to, 0, 0);
-      if(success) {
-        auto& [to_path_prob, to_length] = iter->second;
-        if(to != from) [[likely]] {
-          for(const auto& x: Network::parents(to)) {
-            DEBUG6(std::cout << "iprob("<<NodeDesc{x}<<") = "<<iprob(x)<<"\t\t length("<<NodeDesc{x}<<") = "<<get_length(x, to)<<'\n');
-            auto& [x_path_prob, x_length] = expected_length_to(x, get_length);
-            const Probability x_to_prob = iprob(x);
-            // NOTE: the events that a path comes from one neighbor or the other are INDEPENDENT (no path enters from both parents)
-            //    and the prob's can thus be summed
-            to_path_prob += (x_path_prob * x_to_prob);
-            // NOTE: to get the expected length of a 'from'-'to'-path
-            //    we add the new length times x_path_prob to it and multiply everything by iprob(y).
-            to_length += (get_length(x, to) * x_path_prob + x_length) * x_to_prob;
-          }
-          DEBUG6(std::cout << "found that "<<to<<" has length "<<to_length<<" with path-probability "<<to_path_prob<<'\n');
-        } else to_path_prob = 1;
-      }
-      return iter->second;
-    }
-    // per default, use Util::weight as edge-length
-    ProbWeight& expected_length_to(const NodeDesc to) const {
-      return expected_length_to(to, [&](const auto& adj, const NodeDesc){ return weight(adj); });
-    }
-  };
-
-
-  template<StrictPhylogenyType Network,
-    class FuncIProb = GetEdgeData,
-    class FuncWeight = GetEdgeData>
-  struct pd_ML:
-    public pd_score_util_wp<EdgeDataOf<Network>, FuncWeight, FuncIProb>
-  {
-    using EdgeData = EdgeDataOf<Network>;
-    using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
-    using Util::iprob;
-
-    // extract the most probable switching as a list of edges
-    // NOTE: we always remove dangling leaves
-    template<NodeIterableType Nodes>
-    auto get_ML_switching(const Nodes& leaves) const {
-      const auto prob_of = [&](const auto& adj){ return iprob(adj); };
-      // we'll use the 'parent_select'-functor of the switching to select the most probable parent for each reticulation
-      const auto most_probable_parent = [&](const NodeDesc r){ return std::ranges::max_element(Network::parents(r), std::ranges::less{}, prob_of); };
-      return Switching<Network>{}.get_active_edges(leaves, most_probable_parent);
-    }
-    auto get_ML_switching(const Network& N) const { return get_ML_switching(N.leaves()); }
-  };
-
-
-  template<StrictPhylogenyType Network, class FuncWeight = GetEdgeData>
-  struct pd_tree_fair_proportion:
-    public pd_score_util_w<EdgeDataOf<Network>, FuncWeight>
-  {
-    using EdgeData = EdgeDataOf<Network>;
-    using Util = pd_score_util_w<EdgeData, FuncWeight>;
-    using typename Util::Weight;
-    using typename Util::SolutionAccu;
-    using Util::weight;
-
-    mutable NodeMap<size_t> num_leaves_below;
-    mutable NodeMap<Weight> mod_length_to;
-    
-    template<class Forbidden = mstd::ConstFunction<0u>>
-    size_t number_of_leaves_below(const NodeDesc x, Forbidden&& forbidden = Forbidden{}) const {
-      const auto [iter, success] = mstd::append(num_leaves_below, x, 0);
+    // cache the expected number of leaves below
+    mutable NodeMap<Weight> num_leaf_cache = {};
+ 
+    // return the expected number of leaves below of a node, in a switching drawn according to iprob
+    // To this end, iterate over all maximal paths starting in x, summing their probability
+    template<EdgePredicateType<Network> Forbidden = mstd::ConstFunction<0u>>
+    Weight expected_number_of_leaves_below(const NodeDesc x, Forbidden&& forbidden = {}) const {
+      const auto [iter, success] = mstd::append(num_leaf_cache, x, 0);
       if(success) {
         if(not Network::is_leaf(x)) {
           for(const auto& y: Network::children(x))
             if(not forbidden(x, y))
-              iter->second += number_of_leaves_below(y);
-        } else iter->second = 1;
-      }
-      return iter->second;
-    }
-
-    // return the cumulative modified length from the root to the given node
-    template<class Forbidden = mstd::ConstFunction<0u>>
-    const Weight& modified_length_to(const NodeDesc to, Forbidden&& forbidden = Forbidden{}) const {
-      const auto [iter, success] = mstd::append(mod_length_to, to, 0);
-      if(success and (Network::in_degree(to) > 0)) {
-        for(const auto& p: Network::parents(to)) {
-          if(not forbidden(p, to)) {
-            iter->second = modified_length_to(p, forbidden) + (weight(p) / number_of_leaves_below(to, forbidden));
-            break;
-          }
-        }
-      }
-      return iter->second;
-    }
-
-    Weight operator()(const Network& N, const NodeDesc leaf_to_save) const { return modified_length_to(leaf_to_save); }
-
-    template<NodeIterableType Nodes, class Forbidden = mstd::ConstFunction<0u>>
-    Weight score_for_leaf_set(const Nodes& leaves_to_save, Forbidden&& forbidden = Forbidden{}) const {
-      return std::ranges::fold_left(
-          leaves_to_save | std::ranges::views::transform([&](const NodeDesc x){ return modified_length_to(x, forbidden);}),
-          Weight{0});
-    }
-
-    template<NodeIterableType Nodes>
-    Weight operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(leaves_to_save); }
-
-    // to optimize the NFI score for k leaves, we'll greedily take the heaviest leaf each time
-    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
-      mstd::SolutionAccumulator<NodeVec, Weight> result(num_solutions);
-      NodeVec leaves = N.leaves().to_container();
-      std::ranges::nth_element(leaves, leaves.begin() + k-1, [&](const NodeDesc x, const NodeDesc y){ return modified_length_to(x) > modified_length_to(y); });
-      leaves.resize(k);
-      result.add(leaves, score_for_leaf_set(leaves));
-      return result;
-    }
-
-  };
-
-
-  template<StrictPhylogenyType Network,
-    class FuncIProb = GetEdgeData,
-    class FuncWeight = GetEdgeData>
-  struct pd_fair_proportion:
-    public pd_expected_path_lengths<Network, FuncIProb, FuncWeight>
-  {
-    using Parent = pd_expected_path_lengths<Network, FuncIProb, FuncWeight>;
-    using EdgeData = EdgeDataOf<Network>;
-    using typename Parent::Util;
-    using typename Util::Weight;
-    using typename Util::Probability;
-    using typename Util::SolutionAccu;
-    using Util::weight;
-    using Util::iprob;
-    using ProbWeight = std::pair<Probability, Weight>;
-
-    // cache the expected number of leaves below
-    mutable NodeMap<Weight> exp_num_leaves_below;
-    
-    // return the expected number of leaves below of a node, in a switching drawn according to iprob
-    // To this end, iterate over all maximal paths starting in x, summing their probability
-    Weight expected_number_of_leaves_below(const NodeDesc x) const {
-      const auto [iter, success] = mstd::append(exp_num_leaves_below, x, 0);
-      if(success) {
-        if(not Network::is_leaf(x)) {
-          for(const auto& y: Network::children(x))
-            iter->second += expected_number_of_leaves_below(y) * iprob(y);
+              iter->second += expected_number_of_leaves_below(y) * Probs::operator()(y);
         } else iter->second = 1; // leaves have 1 expected leaf below them
       }
       return iter->second;
     }
 
-    Weight modified_weight(const auto& x) const { return weight(x) / expected_number_of_leaves_below(x); }
-    // score for a single leaf
-    // (1) for a leaf a and a root-a-path p and an edge e on p, the NFI-score of e is
-    //    the weight of e divided by the expected number of leaves below e in a random switching
-    //    (drawn according to the inheritence probabilities).
-    // (2) then, the NFI-score of p is the sum over all edge e on p of their NFI-score
-    // (3) then, the NFI-score of a is the expected NFI-score of the root-a-path in a switching drawn at random,
-    //    in other words, its the sum over all root-a-paths, of the probability of that path times the NFI-score of that path
-    //
-    // Note that the expected number of leaves below a node does not depend on the node for whom we compute the score,
-    // so the weight of e divided by this quantity is constant for all edges and we consider that the "modified weight".
-    //
-    // Then, the NFI-score of a is the expected modified weight of a root-a-path drawn at random according to inh'prob's,
-    // sum_{path p ending in a} prob(p) * mod_weight(p)
-    // where
-    // prob(p) = prod_{e on p} prob(e)
-    // mod_weight(p) = sum_{e on p} mod_weight(e)
-    //
-    // To compute this, we can compute top-down for all nodes x the values
-    // 1. prob(path ending in x) = sum_{path p ending in x} prob(p)
-    // 2. NFI(x) = sum_{path p ending in x} prob(p) * mod_weight(p)
-    //
-    // so, if node z has parents x and y, then we can compute:
-    // 1. prob(path ending in z) = prob(path ending in x) * prob(xz) + prob(path ending in y) * prob(yz)
-    // since no path ends in both x and y, the events are independent, so the probabilities add up
-    // 2. NFI(z) = sum_{path p ending in z} prob(p) * mod_weight(p)
-    //           = sum_{path p ending in x} prob(p) * prob(xz) * (mod_weight(p) + mod_weight(xz))
-    //            +sum_{path p ending in y} prob(p) * prob(yz) * (mod_weight(p) + mod_weight(yz))
-    //           = prob(xz) * (NFI(x) + prob(path ending in x) * mod_weight(xz))
-    //            +prob(yz) * (NFI(y) + prob(path ending in y) * mod_weight(yz))
-    // This can be computed top-down
-    ProbWeight& expected_modified_length_to(const NodeDesc to) const {
-      return Parent::expected_length_to(to, [&](const auto& adj, const NodeDesc){ return modified_weight(adj);});
-    }
-
-    Weight operator()(const Network& N, const NodeDesc leaf_to_save) const {
-      return expected_modified_length_to(leaf_to_save).second;
-    }
-
-    template<NodeIterableType Nodes>
-    Weight score_for_leaf_set(const Nodes& leaves_to_save) const {
-      return std::ranges::fold_left(
-          leaves_to_save | std::ranges::views::transform([&](const NodeDesc x){ return expected_modified_length_to(x).second;}),
-          Weight{0});
-    }
-
-    template<NodeIterableType Nodes>
-    Weight operator()(const Network& N, const Nodes& leaves_to_save) const { return score_for_leaf_set(leaves_to_save); }
-
-    // to optimize the NFI score for k leaves, we'll greedily take the heaviest leaf each time
-    SolutionAccu operator()(const Network& N, const size_t k, const size_t num_solutions = 1) {
-      mstd::SolutionAccumulator<NodeVec, Weight> result(num_solutions);
-      NodeVec leaves = N.leaves().to_container();
-      std::ranges::sort(leaves, [&](const NodeDesc x, const NodeDesc y){ return expected_modified_length_to(x) > expected_modified_length_to(y); });
-      leaves.resize(k);
-      result.add(leaves, score_for_leaf_set(leaves));
-      return result;
-    }
-
+    Weight operator()(const pd_weight_tag, const auto& x) const { return weight(x) / expected_number_of_leaves_below(x); }
   };
+
+  // score for a single leaf
+  // (1) for a leaf a and a root-a-path p and an edge e on p, the NFI-score of e is
+  //    the weight of e divided by the expected number of leaves below e in a random switching
+  //    (drawn according to the inheritence probabilities).
+  // (2) then, the NFI-score of p is the sum over all edge e on p of their NFI-score
+  // (3) then, the NFI-score of a is the expected NFI-score of the root-a-path in a switching drawn at random,
+  //    in other words, its the sum over all root-a-paths, of the probability of that path times the NFI-score of that path
+  //
+  // Note that the expected number of leaves below a node does not depend on the node for whom we compute the score,
+  // so the weight of e divided by this quantity is constant for all edges and we consider that the "modified weight".
+  //
+  // Then, the NFI-score of a is the expected modified weight of a root-a-path drawn at random according to inh'prob's,
+  // sum_{path p ending in a} prob(p) * mod_weight(p)
+  // where
+  // prob(p) = prod_{e on p} prob(e)
+  // mod_weight(p) = sum_{e on p} mod_weight(e)
+  //
+  // To compute this, we can compute top-down for all nodes x the values
+  // 1. prob(path ending in x) = sum_{path p ending in x} prob(p)
+  // 2. NFI(x) = sum_{path p ending in x} prob(p) * mod_weight(p)
+  //
+  // so, if node z has parents x and y, then we can compute:
+  // 1. prob(path ending in z) = prob(path ending in x) * prob(xz) + prob(path ending in y) * prob(yz)
+  // since no path ends in both x and y, the events are independent, so the probabilities add up
+  // 2. NFI(z) = sum_{path p ending in z} prob(p) * mod_weight(p)
+  //           = sum_{path p ending in x} prob(p) * prob(xz) * (mod_weight(p) + mod_weight(xz))
+  //            +sum_{path p ending in y} prob(p) * prob(yz) * (mod_weight(p) + mod_weight(yz))
+  //           = prob(xz) * (NFI(x) + prob(path ending in x) * mod_weight(xz))
+  //            +prob(yz) * (NFI(y) + prob(path ending in y) * mod_weight(yz))
+  template<StrictPhylogenyType Network,
+    class FuncWeight = GetEdgeData,
+    class FuncIProb = GetEdgeData>
+  using pd_fair_proportion = pd_expected_path_lengths<Network, NetFairProportionScore<Network, FuncWeight, FuncIProb>>;
+
+  // on trees, all edge-probabilities are 1
+  // there is really no significantly more efficient way than just passing the 1-function as probability-function
+  template<class Network, class FuncWeight>
+  using TreeFairProportionScore = NetFairProportionScore<Network, FuncWeight, mstd::ConstFunction<1u>>;
+
+  template<StrictPhylogenyType Network, class FuncWeight = GetEdgeData>
+  using pd_tree_fair_proportion = pd_expected_path_lengths<Network, TreeFairProportionScore<Network, FuncWeight>>;
+
 
   template<StrictPhylogenyType Network,
     class FuncWeight = GetEdgeData,
@@ -709,6 +647,7 @@ namespace PT {
     using typename Util::Weight;
     using typename Util::SolutionAccu;
     using typename Helper::Switching;
+
 
     template<NodeIterableType Nodes>
     Weight operator()(const Network& N, const Nodes& leaves_to_save) const {
@@ -731,6 +670,8 @@ namespace PT {
   // ===================== network subnet diversity ==========================
   // Subnet-diversity(L) = sum of weights on all root-L-paths
   // NOTE: this is NP-hard by reduction from SetCover so, for now, we'll do brute-force
+  // NOTE: this is as if you assigned prob=1 to all edges and ran expected-switching-PD
+  // NOTE: conversely, any sensible way to using the inheritence probabilities will give you the expected-switching-PD
   template<StrictPhylogenyType Network, class FuncWeight = GetEdgeData>
   struct pd_subnet_diversity:
     public pd_score_util_w<EdgeDataOf<Network>, FuncWeight>
@@ -741,11 +682,6 @@ namespace PT {
     using typename Util::SolutionAccu;
     using Util::weight;
     
-    Weight operator()(const Network& N, const NodeDesc leaf_to_save) const {
-      using Traversal = PT::Traversal<preorder | all_edge_traversal | reverse_traversal, Network, NodeDesc>;
-      return std::ranges::fold_left(Traversal{leaf_to_save}, Weight{0}, [&](const Weight w, const auto uv){ return w + weight(uv);});
-    }
-
     template<NodeIterableType Nodes>
     auto score_for_leaf_set(const Network& N, const Nodes& leaves_to_save) const {
       using Traversal = PT::Traversal<preorder | all_edge_traversal | reverse_traversal, Network, Nodes>;

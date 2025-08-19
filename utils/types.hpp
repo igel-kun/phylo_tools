@@ -283,10 +283,12 @@ namespace PT {
   concept NodePredicateType = mstd::predicate<F, rune, NodeDesc>;
 
   template<class F, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept NodePairPredicateType = mstd::predicate<F, rune, NodePair>;
+  concept NodePairPredicateType = mstd::predicate<F, rune, NodePair> or mstd::predicate<F, rune, NodeDesc, NodeDesc>;
 
   template<class F, class Net, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept EdgePredicateType = mstd::predicate<F, rune, EdgeOf<Net>>;
+  concept EdgePredicateType = mstd::predicate<F, rune, EdgeOf<Net>> or
+                              mstd::predicate<F, rune, NodeDesc, AdjacencyOf<Net>> or
+                              mstd::predicate<F, rune, AdjacencyOf<Net>, NodeDesc>;
 
   // for LCA oracles, or subtree oracles, etc
   template<class Oracle, class Key, mstd::TypeRune rune = mstd::TR_ConstRefOK>
