@@ -344,6 +344,7 @@ namespace PT {
 
   // NOTE: this is external to the engine since it has to partition the network before constructing the generator
   //        (which runs in the constructor of the engine)
+  // NOTE: make sure Utility has callable functions weight() and iprob() returning the weight/probability of an adjacency
   template<StrictPhylogenyType Net, class Utility>
   auto optimize_displayed_tree_diversity_level(const Net& N, const size_t k, Utility&& util, const size_t num_solutions = 1) {
     // ===== treat Biconnected Components individually =====

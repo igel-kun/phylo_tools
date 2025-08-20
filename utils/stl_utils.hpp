@@ -259,6 +259,15 @@ namespace mstd{
     else return t;
   }
 
+  // access either a key in a map or call a function
+  template<class T, class K>
+  decltype(auto) access(T&& t, K&& key) {
+    using Container = decltype(access(t));
+    if constexpr (MapType<Container> and not mstd::is_invocable_v<Container, mstd::TR_ConstRefOK, K&&>)
+      return access(std::forward<T>(t)).at(std::forward<K>(key));
+    else return access(std::forward<T>(t))(std::forward<K>(key));
+  }
+
   // a function composition, allows using pointers to functions
   template<class F1, class F2>
   struct PointwiseCompose {
@@ -293,15 +302,6 @@ namespace mstd{
   template<class T, class... Qs> requires (std::is_invocable_v<T, Qs...>)
   struct _invoke_or_lookup_result<T, Qs...> { using type = std::invoke_result_t<T, Qs...>; };
   template<class T, class... Qs> using invoke_or_lookup_result = typename _invoke_or_lookup_result<T, Qs...>::type;
-
-  /*
-  template<class _Iterator>
-  constexpr bool is_forward_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::forward_iterator_tag>;
-  template<class _Iterator>
-  constexpr bool is_bidirectional_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::bidirectional_iterator_tag>;
-  template<class _Iterator>
-  constexpr bool is_random_access_iterator = std::is_same_v<typename iterator_traits<_Iterator>::iterator_category, std::random_access_iterator_tag>;
-  */
 
   // compare iterators with their reverse versions
   template<typename T>

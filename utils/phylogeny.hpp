@@ -876,10 +876,19 @@ namespace PT {
 
     template<class LastRites = mstd::IgnoreFunction<>>
     void clear(LastRites&& goodbye = LastRites()) {
+#ifdef NDEBUG
       for(const NodeDesc v: nodes_postorder()) {
         goodbye(v);
         Parent::delete_node(v);
       }
+#else
+      // NOTE: the debug messages in the DFS code cause memory access on freed nodes, so we copy the nodes into a vector first
+      const NodeVec all_nodes = nodes_preorder().to_container();
+      for(const NodeDesc v: all_nodes) {
+        goodbye(v);
+        Parent::delete_node(v);
+      }
+#endif
       Parent::clear();
       assert(edgeless());
       assert(empty());

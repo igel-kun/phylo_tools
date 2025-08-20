@@ -84,7 +84,7 @@ namespace PT {
 
   // the root storage is either a non-owning reverse auto_iter if we don't own the roots, or a poppable root container
   template<class Roots>  struct ProtoDFSRootStorage {};
-  template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<mstd::RBeginType<Roots>>; };
+  template<mstd::IterableType<mstd::TR_ConstOK> Roots>  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<mstd::RBeginType<Roots>>; };
   template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots> { using type = Roots; };
   template<> struct ProtoDFSRootStorage<NodeDesc> { using type = NodeSingleton; };
   template<> struct ProtoDFSRootStorage<NodeDesc*> { using type = mstd::IterFactory<NodeDesc*>; };

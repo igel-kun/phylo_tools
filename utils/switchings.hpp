@@ -1,13 +1,16 @@
 
 #pragma once
 
+#include "runes.hpp"
+
 #include "types.hpp"
 #include "iter_factory.hpp"
 
 namespace PT {
 
-  template<StrictPhylogenyType Net>
+  template<StrictPhylogenyType _Net>
   struct Switching {
+    using Net = _Net;
     using ParentContainer = typename Net::ParentContainer;
     using ParentIter = mstd::iterator_of_t<ParentContainer>;
     using Edge = Net::Edge;
@@ -71,7 +74,23 @@ namespace PT {
     bool operator==(const Switching& other) { return active_parent == other.active_parent; }
   };
 
-  // this is an iterator for switchings of a network
+  //------------- concepts ------------------
+  template<class T>
+  struct is_switching { static constexpr bool value = false; };
+  template<StrictPhylogenyType Net>
+  struct is_switching<Switching<Net>> { static constexpr bool value = true; };
+
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  constexpr bool is_switching_v = mstd::apply_rune_v<T, rune> or is_switching<mstd::apply_rune_t<T, rune>>::value;
+
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept SwitchingType = is_switching_v<T, rune>;
+
+  // ---------------- helpers ----------------
+  template<SwitchingType S>
+  struct _NetworkOf<S> { using type = S::Net; };
+
+  // --------------- iterators ---------------------
   template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> _Leaves = void, mstd::VectorType OutputVec = NetEdgeVec<Net>>
   struct SwitchingIter:
     public mstd::iter_traits_from_reference<OutputVec>
@@ -160,5 +179,5 @@ namespace PT {
   //------------- deduction guides ------------------
   template<typename Net>
   SwitchingIter(Net) -> SwitchingIter<Net, NodeVec>;
-
+  
 }

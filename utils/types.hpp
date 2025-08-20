@@ -229,7 +229,6 @@ namespace PT {
   template<class N> concept NodeType = StrictNodeType<std::remove_cvref_t<N>>;
   template<class N> concept TreeNodeType = (NodeType<N> && (N::is_tree_node));
 
-
   template<class P> 
   concept StrictPhylogenyType = requires(NodeDesc u) {
     typename P::Node;
@@ -252,6 +251,11 @@ namespace PT {
   concept TreeType = StrictTreeType<std::remove_reference_t<P>>;
   template<class P>
   concept OptionalTreeType = (std::is_void_v<std::remove_reference_t<P>> || TreeType<P>);
+
+  // specialize this as you like
+  template<class T> struct _NetworkOf {};
+  template<StrictPhylogenyType T> struct _NetworkOf<T> { using type = T; };
+  template<class T> using NetworkOf = typename _NetworkOf<T>::type;
 
   using NodeTranslation = NodeMap<NodeDesc>;
 

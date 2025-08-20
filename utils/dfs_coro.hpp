@@ -358,7 +358,7 @@ resume_outer:
     void visit_next() {
       const NodeDesc x = node_on_top();
       children.emplace_back(get_adjacencies(x));
-      DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x)<<'\n');
+      DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x) << "\n");
     }
 
     // prepare to descent into a child node and return whether the parent should be output before

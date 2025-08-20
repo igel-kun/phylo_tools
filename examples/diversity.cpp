@@ -65,6 +65,11 @@ using MyEdge = typename MyNetwork::Edge;
 using SolutionAccu = mstd::SolutionAccumulator<NodeVec, Weight>;
 using NameToNode = std::unordered_map<std::string, NodeDesc>;
 
+// the nodes of the LSA-tree know their corresponding node in N; the edges know the weight of the corresponding path in N
+using LSATree = Tree<vecS, NodeDesc, Weight>;
+
+
+
 NameToNode name_to_node;
 
 mstd::OptionMap options;
@@ -102,7 +107,7 @@ We consider three types of diversity scores:\n\
 \t(A) direct scores working with the network:\n\
 \t\t Network Diversity [vIJSSW'25a], Network Fair Proportion, Subnet Diversity\n\
 \t(B) scores that summarize a tree-diversity measure applied to a set of trees extracted from the network.\n\
-\t\t tree-scores:  (1) Tree Diversity [PG'05, Steel'05], (2) Shapeley (=Fair Proportion)\n\
+\t\t tree-scores:  (1) Tree Diversity [PG'05, Steel'05], (2) Fair Proportion, (3) Shapeley (=Fair Prop. for singletons)\n\
 \t\t summarize by: (1) Weighted Average, (2) Maximum Likelihood\n\
 \t\t extraction:   (1) Lowest Stable Ancestor Tree, (2) Switching Tree \n\
 \t\t\t\tNOTE: the LSA-tree is unique, but we need to summarize the paths represented by edges of the LSA-tree\n\
@@ -170,7 +175,7 @@ WHITEPAPERS:\n\
     size_t count = 0;
     for(const auto tok: mstd::tokenize(options["-t"][0], ',')) {
       ++count;
-      if((tok != "1") and (tok != "2"))
+      if((tok != "1") and (tok != "2") and (tok != "3"))
         cfail("subargument of -t out of range: "+tok+'\n');
     }
     if(count != 3)
@@ -270,11 +275,9 @@ auto get_ML_path_length(const NodeDesc start, const NodeDesc finish) {
   return pd_ML_path_lengths<MyNetwork>{start}.length_to(finish).second;
 }
 
-auto get_lsa_tree(const MyNetwork& N, const bool expected_lengths) {
-  // the nodes of the LSA-tree know their corresponding node in N; the edges know the weight of the corresponding path in N
-  using LSATree = Tree<vecS, NodeDesc, Weight>;
+auto get_lsa_tree(const MyNetwork& N, const bool expected_lengths, NodeTranslation& old_to_new) {
   // step 1: get the dominator tree topology with links to the nodes in N
-  LSATree T = NaiveDominatorOracle<MyNetwork>(N).template make_dominator_tree<LSATree>(Ex_node_data{}, mstd::IdentityFunction<NodeDesc>{});
+  LSATree T = NaiveDominatorOracle<MyNetwork>(N).template make_dominator_tree<LSATree>(old_to_new, Ex_node_data{}, mstd::IdentityFunction<NodeDesc>{});
   // step 2: populate the branch-lengths
   for(auto uv: T.edges()) {
     const auto [u, v] = uv.as_pair();
@@ -289,68 +292,96 @@ auto get_lsa_tree(const MyNetwork& N, const bool expected_lengths) {
 
 // NOTE: if diversity is computed by a proxy (like the LSA-tree or the ML-tree), then the solution will
 //        contain NodeDesc's for the proxy, so we'll have to translate those back to original nodes
-template<StrictPhylogenyType Net, class SolAccu, class Translate>
-auto translate_solution(SolAccu&& accu, Translate&& translate) {
+template<class SolAccu, class Translate>
+  requires (not NodeContainerType<SolAccu>)
+auto translate_leaves(SolAccu&& accu, Translate&& translate) {
   using Result = std::remove_cvref_t<SolAccu>;
   if constexpr (not mstd::is_arithmetic_v<SolAccu>) {
     for(auto& [sol, score]: accu.solutions)
       for(auto& v: sol)
-        v = translate(v);
+        v = mstd::access(translate, v);
   }
   return Result(std::forward<SolAccu>(accu));
+}
+template<NodeContainerType Nodes, class Translate>
+auto translate_leaves(Nodes&& nodes, Translate&& translate) {
+  NodeVec result;
+  result.reserve(nodes.size());
+  for(const NodeDesc x: nodes)
+    mstd::append(result, mstd::access(translate, x));
+  return result;
 }
 
 // per default, the original node for a node is stored as NodeData
 template<StrictPhylogenyType Net, class SolAccu>
   requires (Net::has_node_data and std::is_convertible_v<typename Net::NodeData, NodeDesc>)
-auto translate_solution(SolAccu&& solutions) {
-  return translate_solution<Net>(std::forward<SolAccu>(solutions), [](const NodeDesc v){ return Net::data(v); });
+auto translate_leaves(SolAccu&& solutions) {
+  return translate_leaves(std::forward<SolAccu>(solutions), [](const NodeDesc v){ return Net::data(v); });
 }
 
-template<class... Args>
-auto LSA_based_diversity(const auto& tree_config, const MyNetwork& N, Args&&... args) {
+// we'll generate the LSA-tree and stuff that into the PD-measure
+// NOTE: we'll have to be cautious, since the nodes of the LSA-tree are NOT the nodes of the network
+//        this means that we'll have to translate both the input leaf-set and the output leaf-sets
+template<class First, class... Args>
+auto LSA_based_diversity(const auto& tree_config, const MyNetwork& N, First&& first, Args&&... args) {
   const bool use_expected_weights = tree_config[1] == "1";
-  const auto lsa_tree = get_lsa_tree(N, use_expected_weights);
+  NodeTranslation net_to_lsa;
+  const LSATree lsa_tree = get_lsa_tree(N, use_expected_weights, net_to_lsa);
   DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n');
-  using LSATree = decltype(lsa_tree);
   if(tree_config[0] == "1") { // tree diversity
     std::cout << "SCORE: tree-diversity of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
-    return translate_solution<LSATree>(pd_tree_diversity<LSATree>{}(lsa_tree, std::forward<Args>(args)...));
-  } else { // shapeley diversity
-    std::cout << "SCORE: Shapeley (aka. Fair Proportion) Index of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
-    return translate_solution<LSATree>(pd_fair_proportion<LSATree>{}(lsa_tree, std::forward<Args>(args)...));
+    return translate_leaves<LSATree>(pd_tree_diversity<LSATree>()(
+        lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
+  } else if(tree_config[0] == "2") { // Fair-Proportion index
+    std::cout << "SCORE: Fair-Proportion Index of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+    return translate_leaves<LSATree>(pd_fair_proportion<LSATree>()(
+        lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
+  } else if(tree_config[0] == "3") { // Shapeley index
+    std::cout << "SCORE: Shapeley Index of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+    return translate_leaves<LSATree>(pd_tree_shapeley<LSATree>()(
+        lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
   }
   throw mstd::Unimplemented{"Selected LSA-tree-based diversity measure"};
 }
 
-template<class... Args>
-auto switching_based_diversity(const auto& tree_config, const MyNetwork& N, Args&&... args) {
+template<class First, class... Args>
+auto switching_based_diversity(const auto& tree_config, const MyNetwork& N, First&& first, Args&&... args) {
   if(tree_config[1] == "1") { // expected value for a switching
     if(tree_config[0] == "1") { // expected diversity of a switchings
       std::cout << "SCORE: expected tree-diversity of any switching\n";
       if(N.is_tree()) { // if the network is a tree, there is no need to run the AveragePD engine
-        return pd_tree_diversity<MyNetwork>{}(N, std::forward<Args>(args)...);
+        return pd_tree_diversity<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
       } else if(use_clever) {
-        return pd_average_tree_DP<MyNetwork>{}(N, std::forward<Args>(args)...);
-      } else return pd_average_tree<MyNetwork>{}(N, std::forward<Args>(args)...);
-    } else if(tree_config[0] == "2") { // expected shapeley-index of a switching
-      std::cout << "SCORE: expected Shapeley (aka. Fair Proportion) Index of any switching\n";
-      return pd_average_fair_proportion<MyNetwork>{}(N, std::forward<Args>(args)...);
+        return pd_average_tree_DP<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+      } else return pd_average_tree<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+    } else if(tree_config[0] == "2") { // expected Fair-Proportion-index of a switching
+      std::cout << "SCORE: expected Fair-Proportion Index of any switching\n";
+      return pd_average_fair_proportion<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+    } else if(tree_config[0] == "3") { // expected shapeley-index of a switching
+      std::cout << "SCORE: expected Shapeley Index of any switching\n";
+      return pd_average_shapeley<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
     }
   } else if(tree_config[1] == "2") { // value for the most likely switching
     using MLSwitching = Tree<vecS, NodeDesc, Weight>;
+    NodeTranslation net_to_ml;
     // make the ML-tree from the maximum-probability switching edgelist
     // NOTE: the diversity measures require all leaves to be selectable, so we remove all dangling leaves from the switching
-    MLSwitching ml_switching(pd_ML<MyNetwork>{}.get_ML_switching(N),
+    MLSwitching ml_switching(pd_ML<MyNetwork>().get_ML_switching(N), net_to_ml,
               Ex_node_data{}, mstd::IdentityFunction<NodeDesc>{}, // nodes store their original node in the network
-              Ex_edge_data{}, pd_score_util_w<EdgeDataOf<MyNetwork>>{}); // edges store the weight of the original edge
+              Ex_edge_data{}, pd_score_util_w<EdgeDataOf<MyNetwork>>()); // edges store the weight of the original edge
     DEBUG3(std::cout << "constructed ML-switching:\n" << ExtendedDisplay(ml_switching) << '\n');
     if(tree_config[0] == "1") { // diversity of the ML-switching
       std::cout << "SCORE: tree-diversity of the most probable switching\n";
-      return translate_solution<MLSwitching>(pd_tree_diversity<MLSwitching>{}(ml_switching, std::forward<Args>(args)...));
-    } else if(tree_config[0] == "2") { // shapeley-index of the ML-switching
-      std::cout << "SCORE: Shapeley (aka. Fair Proportion) Index of the most probable switching\n";
-      return translate_solution<MLSwitching>(pd_fair_proportion<MLSwitching>{}(ml_switching, std::forward<Args>(args)...));
+      return translate_leaves<MLSwitching>(pd_tree_diversity<MLSwitching>()(
+            ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
+    } else if(tree_config[0] == "2") { // Fair-Proportion index of the ML-switching
+      std::cout << "SCORE: Fair-Proportion Index of the most probable switching\n";
+      return translate_leaves<MLSwitching>(pd_fair_proportion<MLSwitching>()(
+            ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
+    } else if(tree_config[0] == "3") { // shapeley-index of the ML-switching
+      std::cout << "SCORE: Shapeley Index of the most probable switching\n";
+      return translate_leaves<MLSwitching>(pd_tree_shapeley<MLSwitching>()(
+            ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
     }
   }
   throw mstd::Unimplemented{"Selected switching-based diversity measure"};
@@ -360,9 +391,9 @@ auto switching_based_diversity(const auto& tree_config, const MyNetwork& N, Args
 template<class... Args>
 auto dp_engine(const MyNetwork& N, Args&&... args) {
   // select DP Engine
-  if(test(options, "-nd")) return pd_network_diversity<MyNetwork>{}(N, std::forward<Args>(args)...);
-  else if(test(options, "-nf")) return pd_fair_proportion<MyNetwork>{}(N, std::forward<Args>(args)...);
-  else if(test(options, "-ns")) return pd_subnet_diversity<MyNetwork>{}(N, std::forward<Args>(args)...);
+  if(test(options, "-nd")) return pd_network_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
+  else if(test(options, "-nf")) return pd_fair_proportion<MyNetwork>()(N, std::forward<Args>(args)...);
+  else if(test(options, "-ns")) return pd_subnet_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
   else if(test(options, "-t")) {
     const auto tree_config = mstd::tokenize(options["-t"][0], ',').template to_container<std::vector<std::string_view>>();
     if(tree_config[2] == "1") { // ------------------ extract LSA-tree ---------------------
@@ -388,7 +419,7 @@ void phylo_diversity_subsystem(size_t num_solutions) {
 
   if(test(options, "-s")) {
     // output diversity score of all singletons
-    std::cout << "computing diversity score of each leaf:\n";
+    std::cout << "computing diversity score of each leaf ("<<N.leaves()<<"):\n";
     for(const NodeDesc x: N.leaves())
       std::cout << MyNetwork::label(x) << ":\t" << dp_engine(N, NodeSingleton{x}) << '\n';
   } else if(test(options, "-l")) {
