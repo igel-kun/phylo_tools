@@ -36,7 +36,6 @@ using Probability = float;
 struct EdgeData {
   Probability iprob = 1;
   Weight weight = 0;
-  Weight gamma = 0;
 
   EdgeData() = default;
 
@@ -52,7 +51,7 @@ struct EdgeData {
   }
 
   friend std::ostream& operator<<(std::ostream& os, const EdgeData& ed) {
-    return os << "{inh: "<<ed.iprob<<", w: "<<ed.weight<<" gam: "<<ed.gamma<<'}';
+    return os << "p: "<<ed.iprob<<", w: "<<ed.weight;
   }
 };
 
@@ -69,6 +68,53 @@ using NameToNode = std::unordered_map<std::string, NodeDesc>;
 using LSATree = Tree<vecS, NodeDesc, Weight>;
 
 
+struct config_t {
+  bool verbose = false;
+  bool all_leaves = false;
+  bool optimize = false;
+  bool compute_for_leafset = false;
+  bool use_clever = false;
+  bool verify = false;
+  bool greedy_heuristic = false;
+  bool feature_diversity = false;
+  bool shapeley_modified = false;
+  bool shapeley_index_of_score = false;
+  bool score_network_diversity = false;
+  bool score_network_fair_proportion = false;
+  bool score_subnet_diversity = false;
+  bool score_tree_extract = false;
+  unsigned char score, summary, extraction;
+  uint32_t num_solutions;
+
+  config_t() = default;
+
+  config_t(const mstd::OptionMap& o):
+    verbose{test(o, "-v")},
+    all_leaves{test(o, "-s")},
+    optimize{o.at("").size() >= 2},
+    compute_for_leafset{test(o, "-l")},
+    use_clever{test(o, "-c") or test(o,"-cv")},
+    verify{test(o, "-cv")},
+    greedy_heuristic{test(o, "-g")},
+    feature_diversity{test(o, "-f")},
+    shapeley_modified{test(o, "-ms")},
+    shapeley_index_of_score{test(o, "-si")},
+    score_network_diversity{test(o, "-nd")},
+    score_network_fair_proportion{test(o, "-nf")},
+    score_subnet_diversity{test(o, "-ns")},
+    score_tree_extract{test(o, "-t")},
+    num_solutions{test(o, "-S") ? stoX<uint32_t>(o.at("-S")[0]) : 1u}
+  {
+    if(score_tree_extract) {
+      const auto tree_config = mstd::tokenize(o.at("-t")[0], ',').template to_container<std::vector<std::string_view>>();
+      score = std::stoi(tree_config[0]);
+      summary = std::stoi(tree_config[1]);
+      extraction = std::stoi(tree_config[2]);
+    }
+  }
+  config_t& operator=(config_t&&) = default;
+  config_t& operator=(const mstd::OptionMap& o) { config_t tmp(o); *this = std::move(tmp); return *this; }
+} conf;
 
 NameToNode name_to_node;
 
@@ -114,7 +160,7 @@ We consider three types of diversity scores:\n\
 \t(C) Shapeley Index of any of the previous scores\n\
 \n\
 GENERAL FLAGS:\n\
-\t-v\tverbose output, prints network\n\
+\t-v\tverbose output, prints network and mentions scores\n\
 \t-h\tprint this help screen and exit\n\
 \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n\
 \t-si\tinstead of the selected diversity score, use the Shapeley-Index for that score (score type (C))\n\
@@ -145,7 +191,7 @@ WHITEPAPERS:\n\
 [FJ'15]     \thttps://doi.org/10.1007/s00285-014-0853-0\n\
 [FW'18]     \thttps://doi.org/10.1016/j.mbs.2018.02.005\n\
 [vIJSSW'25a]\tto appear in Proc. Recomb CG'25\n\
-[vIJSSW'25b]\tto appear in Proc. WABI'25\n");
+[vIJSSW'25b]\thttps://doi.org/10.4230/LIPIcs.WABI.2025.15\n");
 
   mstd::parse_options(argc, argv, description, help_message, options);
 
@@ -184,6 +230,8 @@ WHITEPAPERS:\n\
 
   if(not file_exists(options[""].front()))
     cfail(std::string{"couldn't open file "} + options[""].front());
+
+  conf = options;
 }
 
 size_t parse_k(const float baseline, const std::string_view k_str) {
@@ -235,16 +283,16 @@ auto read_features(const std::string& filename) {
 }
 
 
-void feature_diversity_subsystem(size_t num_solutions) {
+void feature_diversity_subsystem() {
   std::cout << "parsing features from "<<options[""][0]<<"...\n";
   const auto feature_map = read_features(options[""][0]);
   DEBUG2(std::cout << "read feature map:\n" << feature_map << '\n');
 
-  if(test(options, "-s")) {
+  if(conf.all_leaves) {
     std::cout << "feature diversity score of each leaf:\n";
     for(const auto& [label, collection]: feature_map)
       std::cout << label <<": " << collection<<'\n';
-  } else if(test(options, "-l")) {
+  } else if(conf.compute_for_leafset) {
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
     std::cout << "computing diversity score of leaves " << leaf_names << '\n';
     auto selected_features = feature_map | std::ranges::views::filter([&](const auto& x){return test(leaf_names, x.first);})
@@ -254,7 +302,7 @@ void feature_diversity_subsystem(size_t num_solutions) {
   } else {
     const size_t k = parse_k(feature_map.size(), options[""][1]);
     const auto before = mstd::get_time();
-    const auto solutions = optimize_feature_diversity(k, feature_map, num_solutions).solutions;
+    const auto solutions = optimize_feature_diversity(k, feature_map, conf.num_solutions).solutions;
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
     std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
 
@@ -262,8 +310,6 @@ void feature_diversity_subsystem(size_t num_solutions) {
       std::cout << "maximum feature-diversity = " << score << ":\n" << mstd::Linewise{feats, false} << '\n';
   }
 }
-
-bool use_clever;
 
 // return the average length of a path in N, weighted by their probability
 auto get_expected_path_length(const NodeDesc start, const NodeDesc finish) {
@@ -323,21 +369,21 @@ auto translate_leaves(SolAccu&& solutions) {
 // NOTE: we'll have to be cautious, since the nodes of the LSA-tree are NOT the nodes of the network
 //        this means that we'll have to translate both the input leaf-set and the output leaf-sets
 template<class First, class... Args>
-auto LSA_based_diversity(const auto& tree_config, const MyNetwork& N, First&& first, Args&&... args) {
-  const bool use_expected_weights = tree_config[1] == "1";
+auto LSA_based_diversity(const MyNetwork& N, First&& first, Args&&... args) {
+  const bool expected_weights = conf.summary == 1;
   NodeTranslation net_to_lsa;
-  const LSATree lsa_tree = get_lsa_tree(N, use_expected_weights, net_to_lsa);
+  const LSATree lsa_tree = get_lsa_tree(N, expected_weights, net_to_lsa);
   DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n');
-  if(tree_config[0] == "1") { // tree diversity
-    std::cout << "SCORE: tree-diversity of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+  if(conf.score == 1) { // tree diversity
+    if(conf.verbose) std::cout << "SCORE: tree-diversity of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_tree_diversity<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
-  } else if(tree_config[0] == "2") { // Fair-Proportion index
-    std::cout << "SCORE: Fair-Proportion Index of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+  } else if(conf.score == 2) { // Fair-Proportion index
+    if(conf.verbose) std::cout << "SCORE: Fair-Proportion Index of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_fair_proportion<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
-  } else if(tree_config[0] == "3") { // Shapeley index
-    std::cout << "SCORE: Shapeley Index of LSA-tree with " << (use_expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+  } else if(conf.score == 3) { // Shapeley index
+    if(conf.verbose) std::cout << "SCORE: Shapeley Index of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_tree_shapeley<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
   }
@@ -345,23 +391,26 @@ auto LSA_based_diversity(const auto& tree_config, const MyNetwork& N, First&& fi
 }
 
 template<class First, class... Args>
-auto switching_based_diversity(const auto& tree_config, const MyNetwork& N, First&& first, Args&&... args) {
-  if(tree_config[1] == "1") { // expected value for a switching
-    if(tree_config[0] == "1") { // expected diversity of a switchings
-      std::cout << "SCORE: expected tree-diversity of any switching\n";
-      if(N.is_tree()) { // if the network is a tree, there is no need to run the AveragePD engine
-        return pd_tree_diversity<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
-      } else if(use_clever) {
-        return pd_average_tree_DP<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
-      } else return pd_average_tree<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
-    } else if(tree_config[0] == "2") { // expected Fair-Proportion-index of a switching
-      std::cout << "SCORE: expected Fair-Proportion Index of any switching\n";
-      return pd_average_fair_proportion<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
-    } else if(tree_config[0] == "3") { // expected shapeley-index of a switching
-      std::cout << "SCORE: expected Shapeley Index of any switching\n";
-      return pd_average_shapeley<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+auto switching_based_diversity(const MyNetwork& N, First&& first, Args&&... args) {
+  if(conf.summary == 1) { // expected value for a switching
+    switch(conf.score) {
+      case 1:
+        if(conf.verbose) std::cout << "SCORE: expected tree-diversity of any switching\n";
+        if(N.is_tree()) { // if the network is a tree, there is no need to run the AveragePD engine
+          return pd_tree_diversity<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+        } else if(conf.use_clever) {
+          return pd_average_tree_DP<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+        } else return pd_average_tree<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+
+      case 2:
+        if(conf.verbose) std::cout << "SCORE: expected Fair-Proportion Index of any switching\n";
+        return pd_average_fair_proportion<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
+
+      case 3:
+        if(conf.verbose) std::cout << "SCORE: expected Shapeley Index of any switching\n";
+        return pd_average_shapeley<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
     }
-  } else if(tree_config[1] == "2") { // value for the most likely switching
+  } else if(conf.summary == 2) { // value for the most likely switching
     using MLSwitching = Tree<vecS, NodeDesc, Weight>;
     NodeTranslation net_to_ml;
     // make the ML-tree from the maximum-probability switching edgelist
@@ -370,18 +419,21 @@ auto switching_based_diversity(const auto& tree_config, const MyNetwork& N, Firs
               Ex_node_data{}, mstd::IdentityFunction<NodeDesc>{}, // nodes store their original node in the network
               Ex_edge_data{}, pd_score_util_w<EdgeDataOf<MyNetwork>>()); // edges store the weight of the original edge
     DEBUG3(std::cout << "constructed ML-switching:\n" << ExtendedDisplay(ml_switching) << '\n');
-    if(tree_config[0] == "1") { // diversity of the ML-switching
-      std::cout << "SCORE: tree-diversity of the most probable switching\n";
-      return translate_leaves<MLSwitching>(pd_tree_diversity<MLSwitching>()(
-            ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
-    } else if(tree_config[0] == "2") { // Fair-Proportion index of the ML-switching
-      std::cout << "SCORE: Fair-Proportion Index of the most probable switching\n";
-      return translate_leaves<MLSwitching>(pd_fair_proportion<MLSwitching>()(
-            ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
-    } else if(tree_config[0] == "3") { // shapeley-index of the ML-switching
-      std::cout << "SCORE: Shapeley Index of the most probable switching\n";
-      return translate_leaves<MLSwitching>(pd_tree_shapeley<MLSwitching>()(
-            ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
+    switch(conf.score){
+      case 1:
+        std::cout << "SCORE: tree-diversity of the most probable switching\n";
+        return translate_leaves<MLSwitching>(pd_tree_diversity<MLSwitching>()(
+              ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
+
+      case 2:
+        std::cout << "SCORE: Fair-Proportion Index of the most probable switching\n";
+        return translate_leaves<MLSwitching>(pd_fair_proportion<MLSwitching>()(
+              ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
+      
+      case 3:
+        std::cout << "SCORE: Shapeley Index of the most probable switching\n";
+        return translate_leaves<MLSwitching>(pd_tree_shapeley<MLSwitching>()(
+              ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
     }
   }
   throw mstd::Unimplemented{"Selected switching-based diversity measure"};
@@ -391,38 +443,36 @@ auto switching_based_diversity(const auto& tree_config, const MyNetwork& N, Firs
 template<class... Args>
 auto dp_engine(const MyNetwork& N, Args&&... args) {
   // select DP Engine
-  if(test(options, "-nd")) return pd_network_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
-  else if(test(options, "-nf")) return pd_fair_proportion<MyNetwork>()(N, std::forward<Args>(args)...);
-  else if(test(options, "-ns")) return pd_subnet_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
-  else if(test(options, "-t")) {
-    const auto tree_config = mstd::tokenize(options["-t"][0], ',').template to_container<std::vector<std::string_view>>();
-    if(tree_config[2] == "1") { // ------------------ extract LSA-tree ---------------------
-      return LSA_based_diversity(tree_config, N, std::forward<Args>(args)...);
-    } else if(tree_config[2] == "2") { // ----------- extract switching ------------------
-      return switching_based_diversity(tree_config, N, std::forward<Args>(args)...);
+  if(conf.score_network_diversity) return pd_network_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
+  else if(conf.score_network_fair_proportion) return pd_fair_proportion<MyNetwork>()(N, std::forward<Args>(args)...);
+  else if(conf.score_subnet_diversity) return pd_subnet_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
+  else if(conf.score_tree_extract) {
+    if(conf.extraction == 1) { // ------------------ extract LSA-tree ---------------------
+      return LSA_based_diversity(N, std::forward<Args>(args)...);
+    } else if(conf.extraction == 2) { // ----------- extract switching ------------------
+      return switching_based_diversity(N, std::forward<Args>(args)...);
     }
   }
   throw mstd::Unimplemented{"Selected diversity measure"};
 }
 
 
-void phylo_diversity_subsystem(size_t num_solutions) {
+void phylo_diversity_subsystem() {
   std::cout << "reading network...\n";
   MyNetwork N(read_network(options[""][0]));
 
-  if(mstd::test(options, "-v")) {
+  if(conf.verbose) {
     std::cout << "N ("<<N.num_nodes()<<" nodes, "<<N.num_edges()<<" edges -> reti num:" << N.num_edges()-N.num_nodes()+1<<"):" << std::endl;
     std::cout << ExtendedDisplay(N) << std::endl;
     N.print_summary(std::cout);
   }
-  use_clever = test(options, "-c") or test(options, "-cv");
 
-  if(test(options, "-s")) {
+  if(conf.all_leaves) {
     // output diversity score of all singletons
     std::cout << "computing diversity score of each leaf ("<<N.leaves()<<"):\n";
     for(const NodeDesc x: N.leaves())
       std::cout << MyNetwork::label(x) << ":\t" << dp_engine(N, NodeSingleton{x}) << '\n';
-  } else if(test(options, "-l")) {
+  } else if(conf.compute_for_leafset) {
     // output diversity score of the given leaf-set
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
     const auto selected_leaves = leaf_names | rv::transform([&](const std::string& lname){ return name_to_node.at(lname); });
@@ -437,11 +487,11 @@ void phylo_diversity_subsystem(size_t num_solutions) {
     const size_t k = parse_k(N.num_leaves(), options[""][1]);
     std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
     const auto before = mstd::get_time();
-    const auto solutions = dp_engine(N, k, num_solutions).solutions;
+    const auto solutions = dp_engine(N, k, conf.num_solutions).solutions;
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
     std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
     // 
-    if(test(options, "-cv")) { // verify against brute-force
+    if(conf.verify) { // verify against brute-force
       DEBUG4(std::cout << "let's check solutions against brute-force...\n");
       for(const auto& sol: solutions) {
         const double score = sol.second;
@@ -462,15 +512,13 @@ int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
   // how many solutions to return
-  const size_t num_solutions = test(options, "-S") ? std::stoi(options["-S"][0]) : 1;
+  if(conf.greedy_heuristic) throw mstd::Unimplemented{"greedy heuristics"};
+  if(conf.shapeley_index_of_score) throw mstd::Unimplemented{"shapeley-index modifier"};
+  if(conf.shapeley_modified) throw mstd::Unimplemented{"modified shapeley"};
 
-  if(test(options, "-g")) throw mstd::Unimplemented{"greedy heuristics"};
-  if(test(options, "-si")) throw mstd::Unimplemented{"shapeley-index modifier"};
-  if(test(options, "-ms")) throw mstd::Unimplemented{"modified shapeley"};
-
-  if(test(options, "-f")) {
-    feature_diversity_subsystem(num_solutions);
-  } else phylo_diversity_subsystem(num_solutions);
+  if(conf.feature_diversity) {
+    feature_diversity_subsystem();
+  } else phylo_diversity_subsystem();
 }
 
 #else
