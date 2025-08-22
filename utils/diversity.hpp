@@ -201,7 +201,7 @@ namespace PT {
     Weight operator()(const pd_weight_tag, const Edge<EdgeData>& uv) const { return weight(uv) * gamma(uv.head()); }
   };
 
-  // score module for Shapeley scoring
+  // score module for Shapley scoring
   template<class NetOrSwitch, class FuncWeight = GetEdgeData>
     requires (StrictPhylogenyType<NetOrSwitch> or SwitchingType<NetOrSwitch>)
   struct pd_score_ws:
@@ -723,10 +723,10 @@ namespace PT {
   };
 
 
-  // ===================== Shapeley index ==========================
-  // Shapeley scores each taxon with the average contribution it brings when added as a last leaf to any set of leaves ("coalition")
+  // ===================== Shapley index ==========================
+  // Shapley scores each taxon with the average contribution it brings when added as a last leaf to any set of leaves ("coalition")
   //    NOTE: for trees, this is equivalent to the Fair-Proportion index [FJ'15]
-  // For a set S of taxa, the Shapeley-score is the average contribution of adding this entire set to the coalition
+  // For a set S of taxa, the Shapley-score is the average contribution of adding this entire set to the coalition
   //    NOTE: this can be seen as "merging" all leaves in S into a new "player" joining the coalition
   //    NOTE: a closed form for this is: sum_{e above S} len(e)/(#(non-S descendant-leaves of e) + 1)
   //    NOTE: note that this coincides with the singleton defintion for |S|=1

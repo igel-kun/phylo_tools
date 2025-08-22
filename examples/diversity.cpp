@@ -153,17 +153,17 @@ We consider three types of diversity scores:\n\
 \t(A) direct scores working with the network:\n\
 \t\t Network Diversity [vIJSSW'25a], Network Fair Proportion, Subnet Diversity\n\
 \t(B) scores that summarize a tree-diversity measure applied to a set of trees extracted from the network.\n\
-\t\t tree-scores:  (1) Tree Diversity [PG'05, Steel'05], (2) Fair Proportion, (3) Shapeley (=Fair Prop. for singletons)\n\
+\t\t tree-scores:  (1) Tree Diversity [PG'05, Steel'05], (2) Fair Proportion, (3) Shapley (=Fair Prop. for singletons)\n\
 \t\t summarize by: (1) Weighted Average, (2) Maximum Likelihood\n\
 \t\t extraction:   (1) Lowest Stable Ancestor Tree, (2) Switching Tree \n\
 \t\t\t\tNOTE: the LSA-tree is unique, but we need to summarize the paths represented by edges of the LSA-tree\n\
-\t(C) Shapeley Index of any of the previous scores\n\
+\t(C) Shapley Index of any of the previous scores\n\
 \n\
 GENERAL FLAGS:\n\
 \t-v\tverbose output, prints network and mentions scores\n\
 \t-h\tprint this help screen and exit\n\
 \t-f\tinstead of phylo-diversity, compute feature-diversity of the features given as a matrix in <file>\n\
-\t-si\tinstead of the selected diversity score, use the Shapeley-Index for that score (score type (C))\n\
+\t-si\tinstead of the selected diversity score, use the Shapley-Index for that score (score type (C))\n\
 \t-S i\tnumber i of highest-scoring solutions to return (not compatible with -l, -s)\n\
 \t-s\tcompute the diversity score for all singleton-sets (equal to -S n with k=1; incompatible with -S, -l, k)\n\
 \t-l\tcompute the diversity score for the given list of leaves (comma separated list of taxa, no spaces)\n\
@@ -172,7 +172,7 @@ GENERAL FLAGS:\n\
 \t\t\tfor computing k leaves maximizing the weighted average diversity of a switching)\n\
 \t\t\tNOTE: -g -c might make sense to compute the singleton scores more cleverly, where available\n\
 \t-cv\tlike -c, but verifies against a brute-force implementation\n\
-\t-ms\twhenever a Shapeley-calculation occurs, use the Modified Shapeley-Index [FJ'15] instead\n\
+\t-ms\twhenever a Shapley-calculation occurs, use the Modified Shapley-Index [FJ'15] instead\n\
 \n\
 DIRECT NETWORK DIVERSITIES (score type (A)):\n\
 \t-nd\tNetwork Diversity\n\
@@ -212,7 +212,7 @@ WHITEPAPERS:\n\
     cfail("The greedy heuristic (-g) only makes sense when finding the best size-k solution, it's incompatible with -l and -s.");
 
   if(test(options, "-nd") + test(options, "-nf") + test(options, "-ns") + test(options, "-t") + test(options, "-f") != 1)
-    cfail("Please chose exactly one diversity score among {-nd,-nf,-ns,-t,-f}. You can add -si for the Shapeley-Index of that score.\n");
+    cfail("Please chose exactly one diversity score among {-nd,-nf,-ns,-t,-f}. You can add -si for the Shapley-Index of that score.\n");
 
   if((test(options, "-g") or test(options, "-c")) and test(options, "-cv"))
     cfail("-cv is incompatible with -c and -g\n");
@@ -382,8 +382,8 @@ auto LSA_based_diversity(const MyNetwork& N, First&& first, Args&&... args) {
     if(conf.verbose) std::cout << "SCORE: Fair-Proportion Index of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_fair_proportion<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
-  } else if(conf.score == 3) { // Shapeley index
-    if(conf.verbose) std::cout << "SCORE: Shapeley Index of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+  } else if(conf.score == 3) { // Shapley index
+    if(conf.verbose) std::cout << "SCORE: Shapley Index of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_tree_shapeley<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
   }
@@ -407,7 +407,7 @@ auto switching_based_diversity(const MyNetwork& N, First&& first, Args&&... args
         return pd_average_fair_proportion<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
 
       case 3:
-        if(conf.verbose) std::cout << "SCORE: expected Shapeley Index of any switching\n";
+        if(conf.verbose) std::cout << "SCORE: expected Shapley Index of any switching\n";
         return pd_average_shapeley<MyNetwork>()(N, std::forward<First>(first), std::forward<Args>(args)...);
     }
   } else if(conf.summary == 2) { // value for the most likely switching
@@ -431,7 +431,7 @@ auto switching_based_diversity(const MyNetwork& N, First&& first, Args&&... args
               ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
       
       case 3:
-        std::cout << "SCORE: Shapeley Index of the most probable switching\n";
+        std::cout << "SCORE: Shapley Index of the most probable switching\n";
         return translate_leaves<MLSwitching>(pd_tree_shapeley<MLSwitching>()(
               ml_switching, translate_leaves(std::forward<First>(first), net_to_ml), std::forward<Args>(args)...));
     }
