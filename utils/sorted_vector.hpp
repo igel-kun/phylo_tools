@@ -34,16 +34,16 @@ namespace mstd{
 
   // a flat set, if you pass std::less, then the smallest value will be first
   // NOTE: by default, KeysEqual is FalsePredicate, meaning that storage of duplicates is allowed (so it's a flat multimap)
-  template<class _Key, class _Compare = std::less<_Key>, class _KeysEqual = pred::FalsePredicate, class Allocator = std::allocator<_Key>>
-    requires (std::invocable<_Compare, _Key, _Key> && (std::is_void_v<_KeysEqual> || std::invocable<_KeysEqual, _Key, _Key>))
+  template<class Key_, class Compare_ = std::less<Key_>, class KeysEqual_ = pred::FalsePredicate, class Allocator = std::allocator<Key_>>
+    requires (std::invocable<Compare_, Key_, Key_> && (std::is_void_v<KeysEqual_> || std::invocable<KeysEqual_, Key_, Key_>))
   class sorted_vector:
-    public std::vector<_Key>
+    public std::vector<Key_>
   {
   public:
-    using Parent = std::vector<_Key>;
-    using Key = _Key;
-    using Compare = _Compare;
-    using KeysEqual = _KeysEqual;
+    using Parent = std::vector<Key_>;
+    using Key = Key_;
+    using Compare = Compare_;
+    using KeysEqual = KeysEqual_;
 
     using typename Parent::iterator;
     using typename Parent::const_iterator;

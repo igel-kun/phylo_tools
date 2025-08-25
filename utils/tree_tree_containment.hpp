@@ -26,7 +26,7 @@ namespace PT {
            StrictPhylogenyType Guest,
            bool leaf_labels_only = true,
            StorageEnum HostLabelStorage = singleS,
-           class _NodeInfos = InducedSubtreeInfoMap>
+           class NodeInfos_ = InducedSubtreeInfoMap>
       requires (std::is_same_v<typename Host::LabelType, typename Guest::LabelType> && Host::has_unique_root && Guest::has_unique_root)
   struct TreeInTreeContainment {
     // ------- static stuff --------
@@ -42,7 +42,7 @@ namespace PT {
     using DisplayTable = NodeMap<NodeList>;
     
     // we'll need some infos on the nodes, in particular, their depth (dist to root) and some order number
-    using NodeInfos = _NodeInfos;
+    using NodeInfos = NodeInfos_;
 
     // in the subtree induced by the child possibilities, we'll need to keep track of which child of u can be displayed by one of our own children
     using MatchingPossibilities = NodeMap<NodeSet>;
@@ -108,7 +108,7 @@ namespace PT {
 
     // ------- construction & desctruction ---------
   public:
-    template<LabelMatchingType LabelMatchingInit = LabelMatching, class NodeInfoInit = _NodeInfos>
+    template<LabelMatchingType LabelMatchingInit = LabelMatching, class NodeInfoInit = NodeInfos>
     TreeInTreeContainment(const Host& _host,
                           LabelMatchingInit&& host_guest_label_match,
                           NodeInfoInit&& _node_infos = {}):
@@ -132,11 +132,11 @@ namespace PT {
       }
     }
 
-    template<class NodeInfoInit = _NodeInfos> requires (not LabelMatchingType<NodeInfoInit>)
+    template<class NodeInfoInit = NodeInfos> requires (not LabelMatchingType<NodeInfoInit>)
     TreeInTreeContainment(const Host& _host, const Guest& _guest, NodeInfoInit&& _node_infos):
       TreeInTreeContainment(_host, compute_label_matching(_host, _guest), std::forward<NodeInfoInit>(_node_infos))
     {}
-    template<class NodeInfoInit = _NodeInfos> requires (not LabelMatchingType<NodeInfoInit>)
+    template<class NodeInfoInit = NodeInfos> requires (not LabelMatchingType<NodeInfoInit>)
     TreeInTreeContainment(const Host& _host, const Guest& _guest):
       TreeInTreeContainment(_host, compute_label_matching(_host, _guest), get_induced_subtree_infos(_host))
     {}

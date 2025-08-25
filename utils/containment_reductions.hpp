@@ -962,9 +962,9 @@ namespace PT {
 
 
   // a class managing the application of all reduction rules in the correct order
-  template<class _Containment>
+  template<class Containment_>
   struct ReductionManager {
-    using Containment = _Containment;
+    using Containment = Containment_;
     using ComponentInfos = std::remove_reference_t<typename Containment::ComponentInfos>;
     using ComponentDAG = typename ComponentInfos::ComponentDAG;
     using Host = typename Containment::Host;

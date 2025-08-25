@@ -217,11 +217,11 @@ namespace mstd {
       for(const auto& x: init) set(x);
     }
 
-    template<IterableType _InitSet>
-    iterable_bitset(const typename _InitSet::const_iterator _begin, const typename _InitSet::const_iterator _end, const size_t _num_bits = 0):
+    template<IterableType InitSet_>
+    iterable_bitset(const typename InitSet_::const_iterator _begin, const typename InitSet_::const_iterator _end, const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {
-      for(typename _InitSet::const_iterator i = _begin; i != _end; ++i) set(*i);
+      for(typename InitSet_::const_iterator i = _begin; i != _end; ++i) set(*i);
     }
 
     // make from another iterable_bitset (different bucket map)
@@ -436,8 +436,8 @@ namespace mstd {
     bool set(const value_type x, const bool value) { if(value) return set(x); else return clear(x); }
     void invert() { flip_all(); }
 
-    template<class _Iterator>
-    void insert(_Iterator start, const _Iterator& finish) { while(start != finish) { insert(*start); ++start; } }
+    template<class Iterator_>
+    void insert(Iterator_ start, const Iterator_& finish) { while(start != finish) { insert(*start); ++start; } }
 
     // set a bit & return whether the size changed (that is, if it wasn't set before)
     bool set(const value_type x) {
@@ -478,7 +478,7 @@ namespace mstd {
         
         buffer ^= bit_set;
         const bool bit_now_set = (buffer & bit_set != 0);
-        _count = _count + 2 * bit_now_set - 1;
+        _count = _count + 2 * size_t{bit_now_set} - 1;
         if(!buffer) storage.erase(bucket_of(x));
         return bit_now_set;
       } else return set(x);

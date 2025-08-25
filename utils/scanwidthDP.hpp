@@ -33,7 +33,7 @@ namespace PT {
 
   // this DP table entry recomputes the scanwidth each time, but only stores the essentials (the extension)
   template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
-  struct _DPEntryLowMem: public ProtoDPEntry {
+  struct DPEntryLowMem_: public ProtoDPEntry {
     using Parent = ProtoDPEntry;
 
     using Parent::hash;
@@ -47,7 +47,7 @@ namespace PT {
     // copy the other entry's Extension, replacing our own prefix
     // NOTE: it's important that the prefix contains the same nodes!
     // NOTE: only friends can do this since they know what they are doing
-    void replace_prefix(const _DPEntryLowMem& other) {
+    void replace_prefix(const DPEntryLowMem_& other) {
       assert(ex.size() >= other.ex.size());
       assert(std::ranges::is_permutation(other.ex, NodeSpan{ex}.subspan(0, other.ex.size())));
       std::ranges::copy(other.ex, ex.begin());
@@ -57,28 +57,28 @@ namespace PT {
     using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
     using SWInfo = std::pair<sw_t, DynamicSW>;
 
-    _DPEntryLowMem() = default;
-    _DPEntryLowMem(const _DPEntryLowMem&) = default;
-    _DPEntryLowMem(_DPEntryLowMem&&) = default;
+    DPEntryLowMem_() = default;
+    DPEntryLowMem_(const DPEntryLowMem_&) = default;
+    DPEntryLowMem_(DPEntryLowMem_&&) = default;
 
     // we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
     // NOTE: please be careful with this!
-    explicit constexpr _DPEntryLowMem(const Parent p): Parent{p} {}
-    explicit constexpr _DPEntryLowMem(const size_t _hash): Parent{_hash} {}
+    explicit constexpr DPEntryLowMem_(const Parent p): Parent{p} {}
+    explicit constexpr DPEntryLowMem_(const size_t _hash): Parent{_hash} {}
    
     template<NodeIterableType Nodes>
-    explicit _DPEntryLowMem(Nodes&& nodes):
+    explicit DPEntryLowMem_(Nodes&& nodes):
       Parent{hash(ex)},
       ex(std::forward<Nodes>(nodes))
     {}
 
-    _DPEntryLowMem& operator=(const _DPEntryLowMem& other) = default;
-    _DPEntryLowMem& operator=(_DPEntryLowMem&& other) = default;
-    _DPEntryLowMem& operator=(ProtoDPEntry other) { Parent::operator=(other); ex.clear(); return *this; }
+    DPEntryLowMem_& operator=(const DPEntryLowMem_& other) = default;
+    DPEntryLowMem_& operator=(DPEntryLowMem_&& other) = default;
+    DPEntryLowMem_& operator=(ProtoDPEntry other) { Parent::operator=(other); ex.clear(); return *this; }
 
 
 
-    bool operator==(const _DPEntryLowMem&) const = default;
+    bool operator==(const DPEntryLowMem_&) const = default;
 
     SWInfo get_dynamic_scanwidth() const {
       SWInfo result;
@@ -109,8 +109,8 @@ namespace PT {
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
   template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
-  struct _DPEntry: public _DPEntryLowMem<Network> {
-    using Parent = _DPEntryLowMem<Network>;
+  struct DPEntry_: public DPEntryLowMem_<Network> {
+    using Parent = DPEntryLowMem_<Network>;
     using Edge = typename Network::Edge;
     using Parent::ex;
     using typename Parent::DynamicSW;
@@ -118,11 +118,11 @@ namespace PT {
 
     using Parent::Parent;
     
-    bool operator==(const _DPEntry& other) const { return Parent::operator==(other); }
-    _DPEntry& operator=(ProtoDPEntry other) { Parent::operator=(other); ds.clear(); scanwidth = 0; return *this; }
+    bool operator==(const DPEntry_& other) const { return Parent::operator==(other); }
+    DPEntry_& operator=(ProtoDPEntry other) { Parent::operator=(other); ds.clear(); scanwidth = 0; return *this; }
 
    
-    explicit constexpr _DPEntry(const ProtoDPEntry p):
+    explicit constexpr DPEntry_(const ProtoDPEntry p):
       Parent(p)
     {}
 
@@ -130,7 +130,7 @@ namespace PT {
     DynamicSW ds;
     sw_t scanwidth = 0;
     
-    void replace_prefix(const _DPEntry& other) {
+    void replace_prefix(const DPEntry_& other) {
       Parent::replace_prefix(other);
       ds = other.ds;
       scanwidth = other.scanwidth;
@@ -163,7 +163,7 @@ namespace PT {
   };
 
   template<PhylogenyType Network, bool low_mem = false, class NetworkDegrees = DefaultDegrees<Network>>
-  using SWDPEntry = std::conditional_t<low_mem, _DPEntryLowMem<Network, NetworkDegrees>, _DPEntry<Network, NetworkDegrees>>;
+  using SWDPEntry = std::conditional_t<low_mem, DPEntryLowMem_<Network, NetworkDegrees>, DPEntry_<Network, NetworkDegrees>>;
 
   template<StrictPhylogenyType Network, class EdgeWeightExtracter = void>
   struct WeightedDegrees {
@@ -217,7 +217,7 @@ namespace PT {
   
   public:
 
-    ScanwidthDP(Network& _N): N(_N) {}
+    ScanwidthDP(Network& N_): N(N_) {}
 
     // NOTE: you can pass either an extension or a callable to register nodes in order
     //       if you pass any iterable, then we will append each node's NodeData to it in order
@@ -300,12 +300,12 @@ namespace PT {
 
 namespace mstd {
   // in order to use DPEntries with optional_by_invalid's, we'll use the default-constructed DPEntry with hash = 1 as invalid
-  template<class P, class Q> struct default_invalid<PT::_DPEntryLowMem<P, Q>> { static constexpr auto value() { return PT::ProtoDPEntry{1}; }; };
-  template<class P, class Q> struct default_invalid<PT::_DPEntry<P, Q>> { static constexpr auto value() { return PT::ProtoDPEntry{1}; }; };
+  template<class P, class Q> struct default_invalid<PT::DPEntryLowMem_<P, Q>> { static constexpr auto value() { return PT::ProtoDPEntry{1}; }; };
+  template<class P, class Q> struct default_invalid<PT::DPEntry_<P, Q>> { static constexpr auto value() { return PT::ProtoDPEntry{1}; }; };
 }
 namespace std {
-  template<class P, class Q> struct hash<PT::_DPEntryLowMem<P,Q>> { auto operator()(const PT::_DPEntryLowMem<P,Q>& x) const { return x.hash(); } };
-  template<class P, class Q> struct hash<PT::_DPEntry<P,Q>> { auto operator()(const PT::_DPEntry<P,Q>& x) const { return x.hash(); } };
+  template<class P, class Q> struct hash<PT::DPEntryLowMem_<P,Q>> { auto operator()(const PT::DPEntryLowMem_<P,Q>& x) const { return x.hash(); } };
+  template<class P, class Q> struct hash<PT::DPEntry_<P,Q>> { auto operator()(const PT::DPEntry_<P,Q>& x) const { return x.hash(); } };
 }
 
 

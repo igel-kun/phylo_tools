@@ -16,9 +16,9 @@
 namespace PT{
 
   // ------ WRITE OUTPUT --------
-  template<PhylogenyType _Network, DataExtracterType Extracter = DefaultDataExtracter<_Network>>
+  template<PhylogenyType Network_, DataExtracterType Extracter = DefaultDataExtracter<Network_>>
   void write_edgelist(std::ostream& os,
-                      const _Network& N,
+                      const Network_& N,
                       Extracter&& extracter = Extracter())
   {
     NodeMap<size_t> node_number;
@@ -58,8 +58,8 @@ namespace PT{
   }
 
   // compute the extended newick string for a network N 
-  template<StrictPhylogenyType _Network, class... Args>
-  std::string get_edgelist(const _Network& N, Args&&... args) {
+  template<StrictPhylogenyType Network_, class... Args>
+  std::string get_edgelist(const Network_& N, Args&&... args) {
     std::stringstream os;
     write_edgelist(os, N, std::forward<Args>(args)...);
     return os.str();

@@ -116,9 +116,9 @@ namespace mstd {
     }
 
     // construct items directly by their type
-    template<class... _Items>
-    DataVec(std::piecewise_construct_t x, _Items&&... items, bool shrink = true) {
-      emplace_items(std::piecewise_construct_t{}, std::forward<_Items>(items)...);
+    template<class... Items_>
+    DataVec(std::piecewise_construct_t x, Items_&&... items, bool shrink = true) {
+      emplace_items(std::piecewise_construct_t{}, std::forward<Items_>(items)...);
       if(shrink) Parent::shrink_to_fit();
     }
 

@@ -9,34 +9,34 @@
 
 namespace PT{
 
-  template<class _Network, class _LabelMap>
+  template<class Network_, class LabelMap_>
   class Mapper
   {
   protected:
 #error TODO: we need to make a copy of N here, in order to apply preprocessing rules!
-    const _Network& N;
+    const Network_& N;
     const Tree& T;
 
     // a mapping of leaf labels of N to leaf-labels of T
-    const _LabelMap* const my_own_labelmap;
-    const _LabelMap& labelmap;
+    const LabelMap_* const my_own_labelmap;
+    const LabelMap_& labelmap;
     
     // a node in T can be displayed by many nodes of N
     DisplayMap display_map;
 
-    typedef typename _LabelMap::mapped_type::first_type LabelType;
+    typedef typename LabelMap_::mapped_type::first_type LabelType;
   public:
 
-    Mapper(const _Network& _N, const Tree& _T, const _LabelMap& _labelmap):
-      N(_N), T(_T), my_own_labelmap(nullptr), labelmap(_labelmap) 
+    Mapper(const Network_& N_, const Tree& T_, const LabelMap_& _labelmap):
+      N(N_), T(T_), my_own_labelmap(nullptr), labelmap(_labelmap) 
     {
       assert(T.is_preordered());
       initialize();
     }
 
     // build our own labelmap instead of receiving it
-    Mapper(const _Network& _N, const Tree& _T):
-      N(_N), T(_T), my_own_labelmap(build_leaf_labelmap(_N, _T, my_own_labelmap)), labelmap(*my_own_labelmap)
+    Mapper(const Network_& N_, const Tree& T_):
+      N(N_), T(T_), my_own_labelmap(build_leaf_labelmap(N_, T_, my_own_labelmap)), labelmap(*my_own_labelmap)
     {
       assert(T.is_preordered());
       DEBUG3(std::cout << "label map:\n");

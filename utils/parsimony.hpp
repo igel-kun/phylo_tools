@@ -50,21 +50,21 @@ namespace PT {
   };
 
   template<class T>
-  struct _CharacterSetRefOf {};
+  struct CharacterSetRefOf_ {};
   template<NodeMapType GetCharacterState>
-  struct _CharacterSetRefOf<GetCharacterState> {
+  struct CharacterSetRefOf_<GetCharacterState> {
     using type = mstd::mapped_type_of_t<GetCharacterState>&;
     using const_type = const mstd::mapped_type_of_t<GetCharacterState>&;
   };
   template<NodeFunctionType GetCharacterState>
-  struct _CharacterSetRefOf<GetCharacterState> {
+  struct CharacterSetRefOf_<GetCharacterState> {
     using type = std::invoke_result_t<GetCharacterState, NodeDesc>;
     using const_type = std::invoke_result_t<const GetCharacterState, NodeDesc>;
   };
   template<class GetCharacterState>
-  using CharacterSetRefOf = typename _CharacterSetRefOf<GetCharacterState>::type;
+  using CharacterSetRefOf = typename CharacterSetRefOf_<GetCharacterState>::type;
   template<class GetCharacterState>
-  using CharacterSetConstRefOf = typename _CharacterSetRefOf<GetCharacterState>::const_type;
+  using CharacterSetConstRefOf = typename CharacterSetRefOf_<GetCharacterState>::const_type;
 
 
   template<PhylogenyType Phylo, class GetCharacterState>
@@ -101,8 +101,8 @@ namespace PT {
 
   public:
     template<class PhyloInit, class ExtInit, class CSInit>
-    Parsimony_HW_DP(PhyloInit&& _N, ExtInit&& _ext, CSInit&& _cs, size_t _num_states):
-      N{std::forward<PhyloInit>(_N)}, ext{std::forward<ExtInit>(_ext)}, cs{std::forward<CSInit>(_cs)}, num_states{_num_states}
+    Parsimony_HW_DP(PhyloInit&& N_, ExtInit&& _ext, CSInit&& _cs, size_t _num_states):
+      N{std::forward<PhyloInit>(N_)}, ext{std::forward<ExtInit>(_ext)}, cs{std::forward<CSInit>(_cs)}, num_states{_num_states}
     { create_all_bags(); }
 
   protected:
@@ -186,17 +186,17 @@ namespace PT {
   };
 
 
-  template<PhylogenyType _Phylo, class _CharacterStates>
-  auto make_parsimony_HW_DP(_Phylo&& N, const Extension& ext, _CharacterStates&& cs, const size_t num_states) {
+  template<PhylogenyType Phylo_, class CharacterStates_>
+  auto make_parsimony_HW_DP(Phylo_&& N, const Extension& ext, CharacterStates_&& cs, const size_t num_states) {
     // if phylo/character_states are passed-in by ralue-reference, then we will store our own 'copy'
-    constexpr bool own_phylo = std::is_rvalue_reference_v<_Phylo&&>;
-    constexpr bool own_cs = std::is_rvalue_reference_v<_CharacterStates&&>;
-    using PlainPhylo = std::remove_reference_t<_Phylo>;
-    using PlainCS = std::remove_reference_t<_CharacterStates>;
+    constexpr bool own_phylo = std::is_rvalue_reference_v<Phylo_&&>;
+    constexpr bool own_cs = std::is_rvalue_reference_v<CharacterStates_&&>;
+    using PlainPhylo = std::remove_reference_t<Phylo_>;
+    using PlainCS = std::remove_reference_t<CharacterStates_>;
     using Phylo = std::conditional_t<own_phylo, PlainPhylo, PlainPhylo&>;
     using CS = std::conditional_t<own_cs, PlainCS, PlainCS&>;
 
-    return Parsimony_HW_DP<Phylo, CS>(std::forward<_Phylo>(N), ext, std::forward<_CharacterStates>(cs), num_states);
+    return Parsimony_HW_DP<Phylo, CS>(std::forward<Phylo_>(N), ext, std::forward<CharacterStates_>(cs), num_states);
   }
 
 }

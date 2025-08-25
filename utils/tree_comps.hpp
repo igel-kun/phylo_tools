@@ -3,12 +3,12 @@
 
 #include "network.hpp"
 
-#define NO_ROOT UINT32_MAX
-
 namespace PT{
 
   class ComponentRootInfo{
   public:
+    static constexpr uint32_t NO_ROOT = UINT32_MAX;
+
     typedef Network CompRootDAG;
 
   protected:
@@ -58,9 +58,9 @@ namespace PT{
 
   public:
 
-    ComponentRootInfo(const Network& _N):
-      N(_N),
-      my_root((uint32_t*)malloc(_N.num_nodes() * sizeof(uint32_t)))
+    ComponentRootInfo(const Network& N_):
+      N(N_),
+      my_root((uint32_t*)malloc(N_.num_nodes() * sizeof(uint32_t)))
     {
       // step 1: compute the vector of component roots
       compute_comp_roots(N.get_root());

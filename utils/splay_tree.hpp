@@ -15,12 +15,12 @@ namespace mstd {
 
   // ------- SplayTree: helpers ---------
   // NOTE: we'll allow tagging the left pointer, to work well with LCTrees (that need 1 bit per node)
-  template<class Key, class _Payload = void, uint8_t _tag_size = 0>
+  template<class Key, class Payload_ = void, uint8_t _tag_size = 0>
   struct STNode {
     // ------- static stuff --------
     static constexpr uint8_t tag_size = _tag_size;
-    static constexpr bool has_payload = not std::is_void_v<_Payload>;
-    using Payload = std::conditional_t<has_payload, _Payload, mstd::monostate>;
+    static constexpr bool has_payload = not std::is_void_v<Payload_>;
+    using Payload = std::conditional_t<has_payload, Payload_, mstd::monostate>;
     // NOTE: we'll have to compute a lower bound on the alignment of STNode since the compiler cannot figure out the alignment of incomplete types
     using STPointer = std::conditional_t<tag_size == 0, STNode*, mstd::TaggedPtr<STNode*, tag_size, 3*sizeof(uintptr_t)+sizeof(Key)>>;
     
@@ -135,8 +135,8 @@ namespace mstd {
     }
   };
 
-  template<class Key, class _Payload, uint8_t _tag_size>
-  std::ostream& operator<<(std::ostream& os, STNode<Key, _Payload, _tag_size>* const x) {
+  template<class Key, class Payload_, uint8_t _tag_size>
+  std::ostream& operator<<(std::ostream& os, STNode<Key, Payload_, _tag_size>* const x) {
     if(x != nullptr) {
       os << static_cast<void*>(x) << " ("<<x->key<<") {P: ";
       if(x->parent != nullptr)
@@ -154,8 +154,8 @@ namespace mstd {
     return os;
   }
 
-  template<class Key, class _Payload, uint8_t _tag_size>
-  std::ostream& print_splay_tree_rooted_at(std::ostream& os, STNode<Key, _Payload, _tag_size>* const root, const size_t indent = 0) {
+  template<class Key, class Payload_, uint8_t _tag_size>
+  std::ostream& print_splay_tree_rooted_at(std::ostream& os, STNode<Key, Payload_, _tag_size>* const root, const size_t indent = 0) {
     os << std::string(indent, ' ');
     if(root != nullptr) {
       os << root << '\n';
@@ -167,8 +167,8 @@ namespace mstd {
     } else return os << "(NULL)\n";
   }
  
-  template<class Key, class _Payload, uint8_t _tag_size>
-  std::ostream& print_splay_tree_of(std::ostream& os, STNode<Key, _Payload, _tag_size>* root) {
+  template<class Key, class Payload_, uint8_t _tag_size>
+  std::ostream& print_splay_tree_of(std::ostream& os, STNode<Key, Payload_, _tag_size>* root) {
     if(root != nullptr) {
       while(not root->is_root()) root = root->parent;
       return print_splay_tree_rooted_at(os, root);

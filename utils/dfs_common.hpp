@@ -65,22 +65,22 @@ namespace PT {
   concept DFSSeenType = NodeSetType<S, rune> or NodeMapType<S, rune>;
 
 	// the default set of nodes to track is void for trees
-	template<class T, TraversalType tt> struct _DefaultSeenSet {};
-	template<class T, TraversalType tt> struct _DefaultSeenMap {};
+	template<class T, TraversalType tt> struct DefaultSeenSet_ {};
+	template<class T, TraversalType tt> struct DefaultSeenMap_ {};
   
 	template<NodeType Node, TraversalType tt>
-	struct _DefaultSeenSet<Node, tt> { using type = std::conditional_t<TreeNodeType<Node> and not is_reverse_traversal(tt), void, NodeSet>; };
+	struct DefaultSeenSet_<Node, tt> { using type = std::conditional_t<TreeNodeType<Node> and not is_reverse_traversal(tt), void, NodeSet>; };
 	template<StrictPhylogenyType Network, TraversalType tt>
-	struct _DefaultSeenSet<Network, tt>: public _DefaultSeenSet<typename Network::Node, tt> {};
+	struct DefaultSeenSet_<Network, tt>: public DefaultSeenSet_<typename Network::Node, tt> {};
 
   template<NodeType Node, TraversalType tt>
-	struct _DefaultSeenMap<Node, tt> { using type = std::conditional_t<TreeNodeType<Node> and not is_reverse_traversal(tt), void, NodeMap<Degree>>; };
+	struct DefaultSeenMap_<Node, tt> { using type = std::conditional_t<TreeNodeType<Node> and not is_reverse_traversal(tt), void, NodeMap<Degree>>; };
 	template<StrictPhylogenyType Network, TraversalType tt>
-	struct _DefaultSeenMap<Network, tt>: public _DefaultSeenMap<typename Network::Node, tt> {};
+	struct DefaultSeenMap_<Network, tt>: public DefaultSeenMap_<typename Network::Node, tt> {};
 
 	template<class T, TraversalType tt> requires (PhylogenyType<T> or NodeType<T>)
 	using DefaultSeenSet = std::conditional_t<is_depth_last_traversal(tt),
-        typename _DefaultSeenMap<std::remove_cvref_t<T>, tt>::type, typename _DefaultSeenSet<T, tt>::type>;
+        typename DefaultSeenMap_<std::remove_cvref_t<T>, tt>::type, typename DefaultSeenSet_<T, tt>::type>;
 
   // the root storage is either a non-owning reverse auto_iter if we don't own the roots, or a poppable root container
   template<class Roots>  struct ProtoDFSRootStorage {};
@@ -93,50 +93,50 @@ namespace PT {
   using DFSRootStorage = typename ProtoDFSRootStorage<Roots>::type;
 
   // store roots, forbidden and seen
-  template<NodeOrIterableType<mstd::TR_PtrOK> _Roots,
-           class _Forbidden,
-           DFSSeenType _SeenSet>
-    requires (std::is_pointer_v<_Roots> or mstd::is_poppable<DFSRootStorage<_Roots>>)
+  template<NodeOrIterableType<mstd::TR_PtrOK> Roots_,
+           class Forbidden_,
+           DFSSeenType SeenSet_>
+    requires (std::is_pointer_v<Roots_> or mstd::is_poppable<DFSRootStorage<Roots_>>)
   struct DFSInfo: 
-    public mstd::optional_tuple<_Forbidden, _SeenSet>
+    public mstd::optional_tuple<Forbidden_, SeenSet_>
   {
     // ------- static stuff --------
-    using Roots = DFSRootStorage<_Roots>;
+    using Roots = DFSRootStorage<Roots_>;
     static_assert(mstd::IterableType<Roots>);
-    static_assert(not std::is_pointer_v<_Roots> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
-    using Forbidden = _Forbidden;
-    using SeenSet = _SeenSet;
+    static_assert(not std::is_pointer_v<Roots_> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
+    using Forbidden = Forbidden_;
+    using SeenSet = SeenSet_;
     using Parent = mstd::optional_tuple<Forbidden, SeenSet>;
 
     static constexpr bool has_forbidden = not std::is_void_v<Forbidden>;
-    static constexpr bool has_seen = not std::is_void_v<_SeenSet>;
+    static constexpr bool has_seen = not std::is_void_v<SeenSet_>;
 
-    // if _Roots is a NodeDesc*, we'll still just use a NodeSingleton, so no indirection
-    static constexpr bool roots_indirect = std::is_pointer_v<_Roots>;
+    // if Roots_ is a NodeDesc*, we'll still just use a NodeSingleton, so no indirection
+    static constexpr bool roots_indirect = std::is_pointer_v<Roots_>;
     static constexpr bool forbidden_indirect = std::is_pointer_v<Forbidden>;
     static constexpr bool seen_indirect = std::is_pointer_v<SeenSet>;
 
     // ------- members --------
-    DFSRootStorage<_Roots> roots;
+    DFSRootStorage<Roots_> roots;
 
 
     // ------- construction & desctruction ---------
     DFSInfo() = default;
 
-    template<StrictPhylogenyType Phylo, class... Args> requires (not mstd::is_same_v<_Roots, NodeDesc*>)
+    template<StrictPhylogenyType Phylo, class... Args> requires (not mstd::is_same_v<Roots_, NodeDesc*>)
     DFSInfo(const Phylo& N, Args&&... args):
       Parent{std::forward<Args>(args)...},
       roots(N.roots())
     {}
 
-    template<NodeOrIterableType RootsInit, class... Args> requires (not mstd::is_same_v<_Roots, NodeDesc*>)
+    template<NodeOrIterableType RootsInit, class... Args> requires (not mstd::is_same_v<Roots_, NodeDesc*>)
     DFSInfo(RootsInit&& _roots, Args&&... args):
       Parent{std::forward<Args>(args)...},
       roots(std::forward<RootsInit>(_roots))
     {}
 
     // if our root storage is just a NodeDesc*, then we'll only accept a NodeDesc* and we'll set the end of the auto_iter to one after _roots
-    template<class... Args> requires (mstd::is_same_v<_Roots, NodeDesc*>)
+    template<class... Args> requires (mstd::is_same_v<Roots_, NodeDesc*>)
     DFSInfo(const NodeDesc* _roots, Args&&... args):
       Parent{std::forward<Args>(args)...},
       roots(_roots, _roots + 1)
@@ -144,38 +144,38 @@ namespace PT {
 
     // initialization of indirections from containers is already implemented in mstd::optional_tuple,
     // and we'll forbid initializing containers from indirections (for now)
-    template<NodeOrIterableType<mstd::TR_PtrOK> Other_Roots,
-            class Other_Forbidden,
-            DFSSeenType Other_SeenSet>
-      requires (not std::is_same_v<DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>, DFSInfo> and
-          (roots_indirect >= std::is_pointer_v<Other_Roots>) and // do not allow initializing the root container from a root-indirection!
-          ((not has_forbidden) or (forbidden_indirect >= std::is_pointer_v<Other_Forbidden>)) and
-          ((not has_seen) or (seen_indirect >= std::is_pointer_v<Other_SeenSet>)))
-    DFSInfo(const DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>& other):
-      Parent(static_cast<const typename DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>::Parent&>(other)),
+    template<NodeOrIterableType<mstd::TR_PtrOK> OtherRoots_,
+            class OtherForbidden_,
+            DFSSeenType OtherSeenSet_>
+      requires (not std::is_same_v<DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>, DFSInfo> and
+          (roots_indirect >= std::is_pointer_v<OtherRoots_>) and // do not allow initializing the root container from a root-indirection!
+          ((not has_forbidden) or (forbidden_indirect >= std::is_pointer_v<OtherForbidden_>)) and
+          ((not has_seen) or (seen_indirect >= std::is_pointer_v<OtherSeenSet_>)))
+    DFSInfo(const DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>& other):
+      Parent(static_cast<const typename DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>::Parent&>(other)),
       roots(other.roots)
     {}
-    template<NodeOrIterableType<mstd::TR_PtrOK> Other_Roots,
-            class Other_Forbidden,
-            DFSSeenType Other_SeenSet>
-      requires (not std::is_same_v<DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>, DFSInfo> and
-          (roots_indirect >= std::is_pointer_v<Other_Roots>) and // do not allow initializing the root container from a root-indirection!
-          ((not has_forbidden) or (forbidden_indirect >= std::is_pointer_v<Other_Forbidden>)) and
-          ((not has_seen) or (seen_indirect >= std::is_pointer_v<Other_SeenSet>)))
-    DFSInfo(DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>& other):
-      Parent(static_cast<typename DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>::Parent&>(other)),
+    template<NodeOrIterableType<mstd::TR_PtrOK> OtherRoots_,
+            class OtherForbidden_,
+            DFSSeenType OtherSeenSet_>
+      requires (not std::is_same_v<DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>, DFSInfo> and
+          (roots_indirect >= std::is_pointer_v<OtherRoots_>) and // do not allow initializing the root container from a root-indirection!
+          ((not has_forbidden) or (forbidden_indirect >= std::is_pointer_v<OtherForbidden_>)) and
+          ((not has_seen) or (seen_indirect >= std::is_pointer_v<OtherSeenSet_>)))
+    DFSInfo(DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>& other):
+      Parent(static_cast<typename DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>::Parent&>(other)),
       roots(other.roots)
     {}
 
-    template<NodeOrIterableType<mstd::TR_PtrOK> Other_Roots,
-            class Other_Forbidden,
-            DFSSeenType Other_SeenSet>
-      requires (not std::is_same_v<DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>, DFSInfo> and
-          (roots_indirect >= std::is_pointer_v<Other_Roots>) and // do not allow initializing the root container from a root-indirection!
-          ((not has_forbidden) || (forbidden_indirect >= std::is_pointer_v<Other_Forbidden>)) and
-          ((not has_seen) || (seen_indirect >= std::is_pointer_v<Other_SeenSet>)))
-    DFSInfo(DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>&& other):
-      Parent(static_cast<typename DFSInfo<Other_Roots, Other_Forbidden, Other_SeenSet>::Parent&&>(other)),
+    template<NodeOrIterableType<mstd::TR_PtrOK> OtherRoots_,
+            class OtherForbidden_,
+            DFSSeenType OtherSeenSet_>
+      requires (not std::is_same_v<DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>, DFSInfo> and
+          (roots_indirect >= std::is_pointer_v<OtherRoots_>) and // do not allow initializing the root container from a root-indirection!
+          ((not has_forbidden) || (forbidden_indirect >= std::is_pointer_v<OtherForbidden_>)) and
+          ((not has_seen) || (seen_indirect >= std::is_pointer_v<OtherSeenSet_>)))
+    DFSInfo(DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>&& other):
+      Parent(static_cast<typename DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>::Parent&&>(other)),
       roots(std::move(other.roots))
     {}
 

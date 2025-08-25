@@ -14,9 +14,9 @@ namespace PT {
   // ------- FeatureCollection: helpers ---------
 
   // a feature-list is an ordered(!) list of features (each leaf gets one?)
-  template<class T> struct _FeatureList { using type = std::vector<T>; };
-  template<> struct _FeatureList<bool> { using type = mstd::ordered_bitset; };
-  template<class T> using FeatureList = typename _FeatureList<std::remove_cvref_t<T>>::type;
+  template<class T> struct FeatureList_ { using type = std::vector<T>; };
+  template<> struct FeatureList_<bool> { using type = mstd::ordered_bitset; };
+  template<class T> using FeatureList = typename FeatureList_<std::remove_cvref_t<T>>::type;
 
 
   template<template<class> class FeatClass, class... Feats>

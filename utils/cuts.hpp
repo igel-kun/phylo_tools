@@ -228,17 +228,17 @@ namespace PT {
   template<StrictPhylogenyType Network,
            TraversalType tt,
            class ChainDecomp,
-           template<StrictPhylogenyType, TraversalType, class> class _CutIt>
-  struct _CutIterFactory: public mstd::IterFactoryWithBeginEnd<
-                            typename _CutIt<Network, tt, ChainDecomp>::Iterator,
-                            WithChains<_CutIt<Network, tt, ChainDecomp>>
+           template<StrictPhylogenyType, TraversalType, class> class CutIt_>
+  struct CutIterFactory_: public mstd::IterFactoryWithBeginEnd<
+                            typename CutIt_<Network, tt, ChainDecomp>::Iterator,
+                            WithChains<CutIt_<Network, tt, ChainDecomp>>
                           >
   {
-    using Parent = mstd::IterFactoryWithBeginEnd<typename _CutIt<Network, tt, ChainDecomp>::Iterator, WithChains<_CutIt<Network, tt, ChainDecomp>>>;
-    _CutIterFactory(const Network& N): // construct the DFSIterator and the WithChains object with the network N
+    using Parent = mstd::IterFactoryWithBeginEnd<typename CutIt_<Network, tt, ChainDecomp>::Iterator, WithChains<CutIt_<Network, tt, ChainDecomp>>>;
+    CutIterFactory_(const Network& N): // construct the DFSIterator and the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(N), std::forward_as_tuple(N))
     {}
-    _CutIterFactory(const Network& N, const NodeDesc u): // construct the DFSIterator with the given node u & the WithChains object with the network N
+    CutIterFactory_(const Network& N, const NodeDesc u): // construct the DFSIterator with the given node u & the WithChains object with the network N
       Parent(std::piecewise_construct, std::forward_as_tuple(u), std::forward_as_tuple(N))
     {}
   };
@@ -251,7 +251,7 @@ namespace PT {
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>,
            class ChainDecomp = ChainDecomposition<Network, CutObject::cut_node>>
-  using CutNodeIterFactory = _CutIterFactory<Network, tt, ChainDecomp, CutNodeIter>;
+  using CutNodeIterFactory = CutIterFactory_<Network, tt, ChainDecomp, CutNodeIter>;
 
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::bridge>,
@@ -260,7 +260,7 @@ namespace PT {
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::bridge>,
            class ChainDecomp = ChainDecomposition<Network, CutObject::bridge>>
-  using BridgeIterFactory = _CutIterFactory<Network, tt, ChainDecomp, BridgeIter>;
+  using BridgeIterFactory = CutIterFactory_<Network, tt, ChainDecomp, BridgeIter>;
 
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::bcc>,
@@ -269,7 +269,7 @@ namespace PT {
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::bcc>,
            class ChainDecomp = ChainDecomposition<Network, CutObject::bcc>>
-  using BCCCutIterFactory = _CutIterFactory<Network, tt, ChainDecomp, BCCCutIter>;
+  using BCCCutIterFactory = CutIterFactory_<Network, tt, ChainDecomp, BCCCutIter>;
 
   template<StrictPhylogenyType Network,
            TraversalType tt = default_tt_for_cut_object<CutObject::cut_node>,

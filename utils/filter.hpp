@@ -21,10 +21,10 @@ namespace mstd {
   //       one has to derive a filtered_view object from the container and one can then iterate this filtered view object
   //       while, here, we want the iterator to do the filtering!
   // NOTE: the above doesn't seem to make sense, please re-evaluate
-  template<HasIterCategory NormalIterator, class _Predicate, bool pass_iterator = false>
+  template<HasIterCategory NormalIterator, class Predicate_, bool pass_iterator = false>
   class _filtered_iterator: public MakeVerifyable<NormalIterator> {
     using Parent = MakeVerifyable<NormalIterator>;
-    [[no_unique_address]] _Predicate pred;
+    [[no_unique_address]] Predicate_ pred;
 
     bool apply_pred() const { if constexpr (pass_iterator) return access(pred)(*this); else return access(pred)(**this); }
     bool apply_pred() { if constexpr (pass_iterator) return access(pred)(*this); else return access(pred)(**this); }
@@ -39,7 +39,7 @@ namespace mstd {
              } else std::cout << "after fixing, we're invalid\n";);
     }
   public:
-    using Predicate = _Predicate;
+    using Predicate = Predicate_;
     using Iterator = Parent;
     using typename Parent::value_type;
     using typename Parent::reference;

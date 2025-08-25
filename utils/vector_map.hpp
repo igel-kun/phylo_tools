@@ -22,14 +22,16 @@ namespace mstd{
 
  
   // ------- vector_map: main class ---------
-  template<class _Key,
-           class _Element,
-           class Allocator = std::allocator<OptFor<_Element>>>
+  template<class T_Key,
+           class T_Element,
+           class Allocator = std::allocator<OptFor<T_Element>>>
   struct vector_map:
-    public raw_vector_map<_Key, OptFor<_Element>, Allocator>
+    public raw_vector_map<T_Key, OptFor<T_Element>, Allocator>
   {
     // ------- static stuff --------
-    using Parent = raw_vector_map<_Key, OptFor<_Element>, Allocator>;
+    using Key = T_Key;
+    using Element = OptFor<T_Element>;
+    using Parent = raw_vector_map<Key, Element, Allocator>;
     using Parent::Parent;
     using typename Parent::Vector;
     using typename Parent::key_type;
@@ -37,9 +39,8 @@ namespace mstd{
     using typename Parent::VectorIter;
     using typename Parent::VectorConstIter;
 
-    using Element = OptFor<_Element>;
 
-    static_assert(std::is_same_v<Vector, std::vector<OptFor<_Element>, Allocator>>);
+    static_assert(std::is_same_v<Vector, std::vector<Element, Allocator>>);
     static_assert(std::is_same_v<mapped_type, typename Vector::value_type>);
 
     using FilterIter = proto_vector_map_iterator<VectorIter>;
@@ -47,8 +48,8 @@ namespace mstd{
     using AutoIter = typename FilterIter::Iterator;
     using AutoConstIter = typename FilterConstIter::Iterator;
 
-    using iterator = vector_map_iterator<_Key, VectorIter>;
-    using const_iterator = vector_map_iterator<_Key, VectorConstIter>;
+    using iterator = vector_map_iterator<Key, VectorIter>;
+    using const_iterator = vector_map_iterator<Key, VectorConstIter>;
     using insert_result = std::pair<iterator, bool>;
 
     // ------- members --------
@@ -86,7 +87,7 @@ namespace mstd{
     auto vm_end() const { make_iterator(Vector::end(), do_not_fix_index_tag()); }                                       
 
     iterator find(const key_type key) { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
-    const_iterator find(const _Key& key) const { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
+    const_iterator find(const Key& key) const { if(contains(key)) return make_iterator(Vector::begin() + key, do_not_fix_index_tag()); else return vm_end(); }
 
     // ------- methods: modification --------
   protected:
@@ -136,7 +137,7 @@ namespace mstd{
     // insert and emplace are (almost) synonymous to try_emplace
     template<class... Args>
     insert_result emplace(const key_type x, Args&&... args) { return try_emplace(x, std::forward<Args>(args)...); }
-    insert_result insert(const std::pair<key_type, _Element>& x) { return try_emplace(x.first, x.second); }
+    insert_result insert(const std::pair<key_type, Element>& x) { return try_emplace(x.first, x.second); }
   };
 
   // ------- vector_map: factories --------- 

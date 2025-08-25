@@ -40,16 +40,16 @@ namespace PT{
    
 
     // construction
-    TreeComponentInfos(Network& _N):
-      N(_N)
+    TreeComponentInfos(Network& N_):
+      N(N_)
     {
       if(not N.empty())
         compute_comp_DAG();
     }
 
     // we want to be able to give a new Network-reference when copy-constructing
-    TreeComponentInfos(TreeComponentInfos&& tc, Network& _N):
-      N(_N), N_to_comp_DAG(std::move(tc.N_to_comp_DAG)), comp_DAG(std::move(tc.comp_DAG))
+    TreeComponentInfos(TreeComponentInfos&& tc, Network& N_):
+      N(N_), N_to_comp_DAG(std::move(tc.N_to_comp_DAG)), comp_DAG(std::move(tc.comp_DAG))
     {}
 
     NodeDesc comp_root_of(const NodeDesc x) const {

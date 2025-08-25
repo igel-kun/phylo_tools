@@ -9,10 +9,10 @@
 
 namespace PT{
 
-  template<class _Network>
-  class MULNetworkMapper: public Mapper<_Network, MULabelMap>
+  template<class Network_>
+  class MULNetworkMapper: public Mapper<Network_, MULabelMap>
   {
-    using Parent = Mapper<_Network, MULabelMap>;
+    using Parent = Mapper<Network_, MULabelMap>;
     using Parent::N;
     using Parent::T;
     using Parent::labelmap;

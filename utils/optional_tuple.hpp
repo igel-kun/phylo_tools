@@ -93,55 +93,55 @@ namespace mstd {
 
     _optional_tuple() = default;
 
-    template<class _LastT, class... _Rest>
-      requires (not std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>> and
-          std::is_constructible_v<Item, _LastT&&> and
-          std::is_constructible_v<Parent, _Rest&&...>)
-    _optional_tuple(_LastT&& last, _Rest&&... rest):
-      Item(std::forward<_LastT>(last)),
-      Parent(std::forward<_Rest>(rest)...)
+    template<class LastT_, class... Rest_>
+      requires (not std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<LastT_>> and
+          std::is_constructible_v<Item, LastT_&&> and
+          std::is_constructible_v<Parent, Rest_&&...>)
+    _optional_tuple(LastT_&& last, Rest_&&... rest):
+      Item(std::forward<LastT_>(last)),
+      Parent(std::forward<Rest_>(rest)...)
     {}
 
-    template<class _LastT, class... _Rest>
-        requires(std::is_constructible_v<Parent, _Rest&&...>)
-    _optional_tuple(const std::piecewise_construct_t, _LastT&& last, _Rest&&... rest):
-      Item(std::make_from_tuple(std::forward<_LastT>(last))),
-      Parent(std::piecewise_construct, std::forward<_Rest>(rest)...)
+    template<class LastT_, class... Rest_>
+        requires(std::is_constructible_v<Parent, Rest_&&...>)
+    _optional_tuple(const std::piecewise_construct_t, LastT_&& last, Rest_&&... rest):
+      Item(std::make_from_tuple(std::forward<LastT_>(last))),
+      Parent(std::piecewise_construct, std::forward<Rest_>(rest)...)
     {}
 
     // construct from any other optional tuple
     // NOTE: if the field i in the other optional tuple is 'void' then we skip initialization of field i of this optional tuple
-    template<class _LastT, class... _Rest>
-    _optional_tuple(const _optional_tuple<i, _LastT, _Rest...>& other):
-      Item(static_cast<const typename _optional_tuple<i, _LastT, _Rest...>::Item&>(other).value),
-      Parent(static_cast<const typename _optional_tuple<i, _LastT, _Rest...>::Parent&>(other))
+    template<class LastT_, class... Rest_>
+    _optional_tuple(const _optional_tuple<i, LastT_, Rest_...>& other):
+      Item(static_cast<const typename _optional_tuple<i, LastT_, Rest_...>::Item&>(other).value),
+      Parent(static_cast<const typename _optional_tuple<i, LastT_, Rest_...>::Parent&>(other))
     {}
-    template<class... _Rest>
-    _optional_tuple(const _optional_tuple<i, void, _Rest...>& other):
-      Parent(static_cast<const typename _optional_tuple<i, void, _Rest...>::Parent&>(other))
-    {}
-
-    template<class _LastT, class... _Rest>
-    _optional_tuple(_optional_tuple<i, _LastT, _Rest...>& other):
-      Item(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Item&>(other).value),
-      Parent(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Parent&>(other))
-    {}
-    template<class... _Rest>
-    _optional_tuple(_optional_tuple<i, void, _Rest...>& other):
-      Parent(static_cast<typename _optional_tuple<i, void, _Rest...>::Parent&>(other))
+    template<class... Rest_>
+    _optional_tuple(const _optional_tuple<i, void, Rest_...>& other):
+      Parent(static_cast<const typename _optional_tuple<i, void, Rest_...>::Parent&>(other))
     {}
 
-    template<class _LastT, class... _Rest>
-    _optional_tuple(_optional_tuple<i, _LastT, _Rest...>&& other):
-      Item(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Item&&>(other).value),
-      Parent(static_cast<typename _optional_tuple<i, _LastT, _Rest...>::Parent&&>(other))
+    template<class LastT_, class... Rest_>
+    _optional_tuple(_optional_tuple<i, LastT_, Rest_...>& other):
+      Item(static_cast<typename _optional_tuple<i, LastT_, Rest_...>::Item&>(other).value),
+      Parent(static_cast<typename _optional_tuple<i, LastT_, Rest_...>::Parent&>(other))
     {}
-    template<class... _Rest>
-    _optional_tuple(_optional_tuple<i, void, _Rest...>&& other):
-      Parent(static_cast<typename _optional_tuple<i, void, _Rest...>::Parent&&>(other))
+    template<class... Rest_>
+    _optional_tuple(_optional_tuple<i, void, Rest_...>& other):
+      Parent(static_cast<typename _optional_tuple<i, void, Rest_...>::Parent&>(other))
+    {}
+
+    template<class LastT_, class... Rest_>
+    _optional_tuple(_optional_tuple<i, LastT_, Rest_...>&& other):
+      Item(static_cast<typename _optional_tuple<i, LastT_, Rest_...>::Item&&>(other).value),
+      Parent(static_cast<typename _optional_tuple<i, LastT_, Rest_...>::Parent&&>(other))
+    {}
+    template<class... Rest_>
+    _optional_tuple(_optional_tuple<i, void, Rest_...>&& other):
+      Parent(static_cast<typename _optional_tuple<i, void, Rest_...>::Parent&&>(other))
     {}
     // base case: default initialize everything that hasn't been initialized by the other tuple
-    template<class _LastT, class... _Rest>
+    template<class LastT_, class... Rest_>
     _optional_tuple(_optional_tuple<i>&& other) {}
 
   };
@@ -157,30 +157,30 @@ namespace mstd {
     _optional_tuple(){};
 
     // NOTE: void fields DO NOT consume passed arguments unless piecewise_construct is given!!!
-    template<class _LastT, class... _Rest> requires (!std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<_LastT>>)
-    _optional_tuple(_LastT&& last, _Rest&&... rest):
-      Parent(std::forward<_LastT>(last), std::forward<_Rest>(rest)...)
+    template<class LastT_, class... Rest_> requires (!std::is_base_of_v<_optional_tuple<i + 1 + sizeof...(Rest)>, std::remove_cvref_t<LastT_>>)
+    _optional_tuple(LastT_&& last, Rest_&&... rest):
+      Parent(std::forward<LastT_>(last), std::forward<Rest_>(rest)...)
     {}
 
-    template<class _LastT, class... _Rest>
-    _optional_tuple(const std::piecewise_construct_t, _LastT&& last, _Rest&&... rest):
-      Parent(std::piecewise_construct, std::forward<_Rest>(rest)...)
+    template<class LastT_, class... Rest_>
+    _optional_tuple(const std::piecewise_construct_t, LastT_&& last, Rest_&&... rest):
+      Parent(std::piecewise_construct, std::forward<Rest_>(rest)...)
     {}
 
     // construct from any other optional tuple
-    template<class _LastT, class... _Rest>
-    _optional_tuple(const _optional_tuple<i, _LastT, _Rest...>& other):
-      Parent(static_cast<const _optional_tuple<i+1, _Rest...>&>(other))
+    template<class LastT_, class... Rest_>
+    _optional_tuple(const _optional_tuple<i, LastT_, Rest_...>& other):
+      Parent(static_cast<const _optional_tuple<i+1, Rest_...>&>(other))
     {}
 
-    template<class _LastT, class... _Rest>
-    _optional_tuple(_optional_tuple<i, _LastT, _Rest...>& other):
-      Parent(static_cast<_optional_tuple<i+1, _Rest...>&>(other))
+    template<class LastT_, class... Rest_>
+    _optional_tuple(_optional_tuple<i, LastT_, Rest_...>& other):
+      Parent(static_cast<_optional_tuple<i+1, Rest_...>&>(other))
     {}
 
-    template<class _LastT, class... _Rest>
-    _optional_tuple(_optional_tuple<i, _LastT, _Rest...>&& other):
-      Parent(static_cast<_optional_tuple<i+1, _Rest...>&&>(other))
+    template<class LastT_, class... Rest_>
+    _optional_tuple(_optional_tuple<i, LastT_, Rest_...>&& other):
+      Parent(static_cast<_optional_tuple<i+1, Rest_...>&&>(other))
     {}
 
   };

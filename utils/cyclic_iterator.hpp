@@ -77,8 +77,8 @@ namespace mstd {
 
     reference operator*() const { return *i; }
   
-    template<class _Container, class SecondIterator>
-    friend int64_t distance(const cyclic_iterator<_Container, SecondIterator>& it1, const cyclic_iterator<_Container, SecondIterator>& it2)
+    template<class Container_, class SecondIterator>
+    friend int64_t distance(const cyclic_iterator<Container_, SecondIterator>& it1, const cyclic_iterator<Container_, SecondIterator>& it2)
     {
       // the distance of two cyclic vectors is the difference between their underlying iterator
       //    plus the difference in remaining loops times the size of the container

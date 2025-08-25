@@ -12,11 +12,11 @@ namespace mstd{
 
   // ------- DIsjointSetForest: helpers ---------
   
-  template<class Key, class _Payload = void>
+  template<class Key, class T_Payload = void>
   struct DSet {
     // ------- static stuff --------
-    static constexpr bool has_payload = not std::is_void_v<_Payload>;
-    using Payload = std::conditional_t<has_payload, _Payload, mstd::monostate>;
+    static constexpr bool has_payload = not std::is_void_v<T_Payload>;
+    using Payload = std::conditional_t<has_payload, T_Payload, mstd::monostate>;
 
     // ------- members --------
   protected:
@@ -66,8 +66,8 @@ namespace mstd{
 
   
 
-    template<class _Key, class Payload, class _MergePayloads>
-      requires (not std::is_void_v<Payload> or std::is_same_v<_MergePayloads, mstd::IgnoreFunction<void>>)
+    template<class Key_, class Payload_, class MergePayloads_>
+      requires (not std::is_void_v<Payload_> or std::is_same_v<MergePayloads_, mstd::IgnoreFunction<void>>)
     friend class DisjointSetForest;
   };
 

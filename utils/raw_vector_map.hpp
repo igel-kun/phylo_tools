@@ -28,32 +28,33 @@ namespace mstd {
     ret_val operator()(const auto& it) const { return {&(*it) - start, *it}; }
   };
 
-  template<class _Key, class _Iter>
-  using raw_vector_map_iterator = transforming_iterator<_Iter, PairFromVectorIter<_Key, _Iter>, true>;
+  template<class T_Key, class T_Iter>
+  using raw_vector_map_iterator = transforming_iterator<T_Iter, PairFromVectorIter<T_Key, T_Iter>, true>;
  
   // ------- raw_vector_map: main class ---------
-  template<std::unsigned_integral _Key, VectorType _base_container> 
+  template<std::unsigned_integral T_Key, VectorType _base_container> 
   struct _raw_vector_map:
     public _base_container
   {
     // ------- static stuff --------
+    using Key = T_Key;
     using Vector = _base_container;
     using Traits = iterator_traits<Vector>;
     using VectorIter = iterator_of_t<Vector>;
     using VectorConstIter = const_iterator_of_t<Vector>;
-    using iterator = raw_vector_map_iterator<_Key, VectorIter>;
-    using const_iterator = raw_vector_map_iterator<_Key, VectorConstIter>;
+    using iterator = raw_vector_map_iterator<Key, VectorIter>;
+    using const_iterator = raw_vector_map_iterator<Key, VectorConstIter>;
     using reverse_iterator = std::reverse_iterator<iterator>;
     using reverse_const_iterator = std::reverse_iterator<const_iterator>;
 
-    using key_type = const _Key;
+    using key_type = const Key;
     using mapped_type = typename Traits::value_type;
     using value_type = std::pair<key_type, mapped_type>;
 
     using insert_result = std::pair<iterator, bool>;
 
     static_assert(std::is_constructible_v<VectorIter, mapped_type*>);
-    static_assert(std::is_constructible_v<PairFromVectorIter<_Key, VectorIter>, mapped_type*>);
+    static_assert(std::is_constructible_v<PairFromVectorIter<Key, VectorIter>, mapped_type*>);
     static_assert(std::is_constructible_v<iterator, mapped_type*, mapped_type*>);
     
     friend class ordered_bitset; 
@@ -155,14 +156,14 @@ namespace mstd {
     }
   };
 
-  template<std::unsigned_integral _Key, class _Element, class Allocator = std::allocator<_Element>>
-  using raw_vector_map = _raw_vector_map<_Key, std::vector<_Element, Allocator>>;
+  template<std::unsigned_integral Key, class Element, class Allocator = std::allocator<Element>>
+  using raw_vector_map = _raw_vector_map<Key, std::vector<Element, Allocator>>;
 
   // ------- raw_vector_map: factories ---------
   
   // ------- raw_vector_map: concepts ---------
-  template<std::unsigned_integral _Key, VectorType _base_container>
-  constexpr bool is_vector_v<_raw_vector_map<_Key, _base_container>> = false;
+  template<std::unsigned_integral Key, VectorType base_container>
+  constexpr bool is_vector_v<_raw_vector_map<Key, base_container>> = false;
  
   // ------- raw_vector_map: deduction guides ---------
   // ------- raw_vector_map: defaults ---------

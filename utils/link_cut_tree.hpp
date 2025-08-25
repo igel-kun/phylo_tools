@@ -20,10 +20,10 @@ namespace mstd {
   // ------- Link-Cut Tree: helpers ---------
   
   // ------- Link-Cut Tree: main class ---------
-  template<class Key, class _Payload = void>
+  template<class Key, class Payload_ = void>
   struct LinkCutTree {
     // ------- static stuff --------
-    static constexpr bool has_payload = not std::is_void_v<_Payload>;
+    static constexpr bool has_payload = not std::is_void_v<Payload_>;
     
     // the tree is partitioned into preferred paths, each of which is represented by a splay tree in the background
 
@@ -31,7 +31,7 @@ namespace mstd {
     //        of the preferred path represented by the splay tree to point to the parent node in the parent preferred path
     //        this *should* not mess with the splay-tree data structure...
     // NOTE: just to reiterate: tag == 1 means the node is the topmost in its preferred path
-    using Node = STNode<Key, _Payload, 1>;
+    using Node = STNode<Key, Payload_, 1>;
 
     // the LCT owns all the splay-tree nodes and they'll be destroyed when the LCT is
     using KeyToNode = std::unordered_map<Key, std::unique_ptr<Node>>;
@@ -212,8 +212,8 @@ namespace mstd {
     */
   };
 
-  template<class Key, class _Payload>
-  std::ostream& print_link_cut_tree(std::ostream& os, const LinkCutTree<Key, _Payload>& tree) {
+  template<class Key, class Payload_>
+  std::ostream& print_link_cut_tree(std::ostream& os, const LinkCutTree<Key, Payload_>& tree) {
     os << "preferred paths in the splay tree:\n";
     for(const auto& [key, node]: tree.key_to_node) {
       assert(node != nullptr);

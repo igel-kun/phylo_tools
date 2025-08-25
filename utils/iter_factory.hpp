@@ -5,10 +5,10 @@
 
 namespace mstd {
 
-  template<HasIterCategory Iterator, class _EndIter = CorrespondingEndIter<Iterator>>
-  struct ProtoIterFactory: public auto_iter<Iterator, _EndIter>
+  template<HasIterCategory Iterator, class EndIter_ = CorrespondingEndIter<Iterator>>
+  struct ProtoIterFactory: public auto_iter<Iterator, EndIter_>
   {
-    using Parent = auto_iter<Iterator, _EndIter>;
+    using Parent = auto_iter<Iterator, EndIter_>;
     using Parent::get_iter;
     using Parent::get_end;
 
@@ -71,12 +71,12 @@ namespace mstd {
   };
 
   template<HasIterCategory Iterator, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<Iterator>>
-  struct _IterFactory { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation, EndIter>; };
+  struct IterFactory_ { using type = IterFactoryWithBeginEnd<Iterator, BeginEndTransformation, EndIter>; };
   template<HasIterCategory Iterator, class EndIter>
-  struct _IterFactory<Iterator, void, EndIter> { using type = ProtoIterFactory<Iterator, EndIter>; };
+  struct IterFactory_<Iterator, void, EndIter> { using type = ProtoIterFactory<Iterator, EndIter>; };
 
   template<class IterOrContainer, class BeginEndTransformation = void, class EndIter = CorrespondingEndIter<iterator_of_t<IterOrContainer>>>
-  using IterFactory = typename _IterFactory<iterator_of_t<IterOrContainer>, BeginEndTransformation, EndIter>::type;
+  using IterFactory = typename IterFactory_<iterator_of_t<IterOrContainer>, BeginEndTransformation, EndIter>::type;
 
   static_assert(mstd::IterableType<IterFactory<int*>>);
 }

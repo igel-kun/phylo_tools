@@ -5,10 +5,10 @@
 
 namespace PT {
 
-  template<class _Network>
+  template<class Network_>
   class TC_Preprocessor
   {
-    using Network = _Network;
+    using Network = Network_;
 
     Network& N;
     LSATree& lsa;
@@ -44,8 +44,8 @@ namespace PT {
 
   public:
     
-    TC_Preprocessor(Network& _N, LSATree& _lsa, ComponentRootInfo& _cr_info):
-      N(_N),
+    TC_Preprocessor(Network& N_, LSATree& _lsa, ComponentRootInfo& _cr_info):
+      N(N_),
       lsa(_lsa),
       cr_info(_cr_info)
     {

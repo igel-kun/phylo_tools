@@ -84,7 +84,7 @@ namespace PT{
   struct LTDominatorOracle {
     NodeMap<NodeDesc> dominator;
 #warning "TODO: write me"
-    LTDominatorOracle(const Network& _N) {}
+    LTDominatorOracle(const Network& N_) {}
 
     NodeDesc operator[](const NodeDesc v) const { return dominator.at(v); }
     const auto& get_dominator_map() const { return dominator; }

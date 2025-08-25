@@ -95,8 +95,8 @@ namespace mstd {
       } else return false;
     }
 
-    template<class _Data> requires (std::is_same_v<std::remove_cvref_t<_Data>, Data>)
-    static constexpr auto get_begin(_Data&& _data) noexcept { return forward<_Data>(_data).begin(); }
+    template<class Data_> requires (std::is_same_v<std::remove_cvref_t<Data_>, Data>)
+    static constexpr auto get_begin(Data_&& _data) noexcept { return forward<Data_>(_data).begin(); }
     static constexpr auto get_end(const Data&) noexcept { return GenericEndIterator{}; }
 
     friend bool operator==(const typename uninitialized_array<T, _capacity>::iterator it, const mstd::GenericEndIterator)
@@ -146,10 +146,10 @@ namespace mstd {
       } else return false;
     }
 
-    template<class _Data> requires (std::is_same_v<std::remove_reference_t<_Data>, Data>)
-    static constexpr auto get_begin(T&& _data) noexcept { return forward<_Data>(_data).begin(); }
-    template<class _Data> requires (std::is_same_v<std::remove_reference_t<_Data>, Data>)
-    static constexpr auto get_end(_Data&& _data) noexcept { return forward<_Data>(_data).end(); }
+    template<class Data_> requires (std::is_same_v<std::remove_reference_t<Data_>, Data>)
+    static constexpr auto get_begin(T&& _data) noexcept { return forward<Data_>(_data).begin(); }
+    template<class Data_> requires (std::is_same_v<std::remove_reference_t<Data_>, Data>)
+    static constexpr auto get_end(Data_&& _data) noexcept { return forward<Data_>(_data).end(); }
   };
 
 

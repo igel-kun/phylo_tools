@@ -8,7 +8,7 @@
 
 namespace mstd {
   // given a vector of indirections (iterators) to T, return a set of k indirections whose combined score is maximum
-  template<OptionalContainerType _OutputContainer = void, StrictIterableType Container, class ScoreFunc = SetSize, class Cmp = std::greater<>>
+  template<OptionalContainerType OutputContainer_ = void, StrictIterableType Container, class ScoreFunc = SetSize, class Cmp = std::greater<>>
     requires (mstd::is_invocable_v<ScoreFunc, mstd::TR_ConstRefOK, const Container&>)
   auto brute_force(const linear_interval<uint32_t> subset_size_bounds, const Container& container,
       size_t keep_best_solutions = 1, ScoreFunc&& score = ScoreFunc{}, Cmp&& better = Cmp{}) {
@@ -19,7 +19,7 @@ namespace mstd {
     DEBUG5(std::cout << "container "<<type_name<Container>()<<" is RandomAccess? "<<container_ra<<'\n');
     // by default, the output container has the same type as the input container
     using ContainerFromInput = std::conditional_t<ContainerType<Container>, Container, std::vector<Value>>;
-    using OutputContainer = FirstNonVoid<_OutputContainer, ContainerFromInput>;
+    using OutputContainer = FirstNonVoid<OutputContainer_, ContainerFromInput>;
     using SubsetInternal = std::conditional_t<container_ra, OutputContainer, std::vector<Iter>>;
     using Subsets = BoundedSubsetFactory<const Container, SubsetInternal>;
     DEBUG5(std::cout << "storing iters? "<< Subsets::store_iters << "\ninternal: "<<type_name<SubsetInternal>()<<'\n');
@@ -48,9 +48,9 @@ namespace mstd {
     } else return accu;
   }
  
-  template<OptionalIterableType _OutputContainer = void, IterableType Container, class ScoreFunc, class Cmp = std::greater<>>
+  template<OptionalIterableType OutputContainer_ = void, IterableType Container, class ScoreFunc, class Cmp = std::greater<>>
   auto brute_force(const uint32_t k, Container& container, size_t keep_best_solutions, ScoreFunc&& score, Cmp&& better = Cmp{}) {
-    return brute_force<_OutputContainer>(
+    return brute_force<OutputContainer_>(
         linear_interval{k,k},
         container,
         keep_best_solutions,
@@ -58,9 +58,9 @@ namespace mstd {
         std::forward<Cmp>(better));
   }
 
-  template<OptionalIterableType _OutputContainer = void, IterableType Container, class ScoreFunc, class Cmp = std::greater<>>
+  template<OptionalIterableType OutputContainer_ = void, IterableType Container, class ScoreFunc, class Cmp = std::greater<>>
   auto brute_force(const Container& container, size_t keep_best_solutions, ScoreFunc&& score, Cmp&& better = Cmp{}) {
-    return brute_force<_OutputContainer>(
+    return brute_force<OutputContainer_>(
         linear_interval<uint32_t>{0,UINT32_MAX},
         container,
         keep_best_solutions,

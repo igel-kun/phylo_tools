@@ -15,11 +15,11 @@ namespace mstd {
 
   // keep only a certain number of best solutions
   // NOTE: if ScoreExtracterOrScore is a type that cannot be called with a Solution, then ScoreExtracter *ITSELF* is used as ScoreType
-  //        (unless overwritten by _ScoreType)
-  template<class Solution, class ScoreExtracterOrScore = void, class ScoreCmp = std::greater<>, class _ScoreType = void>
+  //        (unless overwritten by ScoreType_)
+  template<class Solution, class ScoreExtracterOrScore = void, class ScoreCmp = std::greater<>, class ScoreType_ = void>
   struct SolutionAccumulator {
     using ScoreTypeFromExtracter = typename GetScoreType<ScoreExtracterOrScore, Solution>::type;
-    using ScoreType = mstd::FirstNonVoid<_ScoreType, ScoreTypeFromExtracter>;
+    using ScoreType = mstd::FirstNonVoid<ScoreType_, ScoreTypeFromExtracter>;
     static_assert(std::is_invocable_v<ScoreCmp, ScoreType, ScoreType>);
     using SolutionWithScore = std::pair<Solution, ScoreType>;
     using GetSecond = mstd::selector<1>;

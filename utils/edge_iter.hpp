@@ -25,34 +25,34 @@ namespace PT{
   template<class Adj> using ReverseEdgeMaker = ProtoEdgeMaker<Adj, true>;
 
 
-  template<mstd::IterableType AdjContainer, class _EdgeMaker = EdgeMaker<AdjContainer>>
-  using InOutEdgeIterator = mstd::transforming_iterator<mstd::iterator_of_t<AdjContainer>, _EdgeMaker>;
+  template<mstd::IterableType AdjContainer, class EdgeMaker_ = EdgeMaker<AdjContainer>>
+  using InOutEdgeIterator = mstd::transforming_iterator<mstd::iterator_of_t<AdjContainer>, EdgeMaker_>;
 
   // make an edge container from a head and a container of tails
-  template<mstd::IterableType _AdjContainer>
-  using InEdgeIterator = InOutEdgeIterator<_AdjContainer, ReverseEdgeMaker<_AdjContainer>>;
+  template<mstd::IterableType AdjContainer_>
+  using InEdgeIterator = InOutEdgeIterator<AdjContainer_, ReverseEdgeMaker<AdjContainer_>>;
   // make an edge container from a tail and a container of heads
-  template<mstd::IterableType _AdjContainer>
-  using OutEdgeIterator = InOutEdgeIterator<_AdjContainer>;
+  template<mstd::IterableType AdjContainer_>
+  using OutEdgeIterator = InOutEdgeIterator<AdjContainer_>;
 
 
   // factories
-  template<mstd::IterableType _AdjContainer, class BeginEndTransformation = void>
-  using InEdgeFactory = mstd::IterFactory<InEdgeIterator<_AdjContainer>, BeginEndTransformation, mstd::iterator_of_t<_AdjContainer>>;
-  template<mstd::IterableType _AdjContainer, class BeginEndTransformation = void>
-  using OutEdgeFactory = mstd::IterFactory<OutEdgeIterator<_AdjContainer>, BeginEndTransformation, mstd::iterator_of_t<_AdjContainer>>;
+  template<mstd::IterableType AdjContainer_, class BeginEndTransformation = void>
+  using InEdgeFactory = mstd::IterFactory<InEdgeIterator<AdjContainer_>, BeginEndTransformation, mstd::iterator_of_t<AdjContainer_>>;
+  template<mstd::IterableType AdjContainer_, class BeginEndTransformation = void>
+  using OutEdgeFactory = mstd::IterFactory<OutEdgeIterator<AdjContainer_>, BeginEndTransformation, mstd::iterator_of_t<AdjContainer_>>;
 
   // convenience functions
-  template<mstd::IterableType _AdjContainer, class BeginEndTransformation = void>
-  auto make_inedge_factory(const NodeDesc u, _AdjContainer& c) {
-    return InEdgeFactory<_AdjContainer, BeginEndTransformation>{std::piecewise_construct,
+  template<mstd::IterableType AdjContainer_, class BeginEndTransformation = void>
+  auto make_inedge_factory(const NodeDesc u, AdjContainer_& c) {
+    return InEdgeFactory<AdjContainer_, BeginEndTransformation>{std::piecewise_construct,
       std::forward_as_tuple(std::begin(c), u), // make first part of the auto_iter
       std::forward_as_tuple(std::end(c)) // make end-iterator of the auto_iter
     };
   }
-  template<mstd::IterableType _AdjContainer, class BeginEndTransformation>
-  auto make_inedge_factory(const NodeDesc u, _AdjContainer& c, BeginEndTransformation&& trans) {
-    return InEdgeFactory<_AdjContainer, std::remove_cvref_t<BeginEndTransformation>>{
+  template<mstd::IterableType AdjContainer_, class BeginEndTransformation>
+  auto make_inedge_factory(const NodeDesc u, AdjContainer_& c, BeginEndTransformation&& trans) {
+    return InEdgeFactory<AdjContainer_, std::remove_cvref_t<BeginEndTransformation>>{
       std::forward<BeginEndTransformation>(trans),
       std::piecewise_construct,
       std::forward_as_tuple(std::begin(c), u),
@@ -60,16 +60,16 @@ namespace PT{
     };
   }
 
-  template<mstd::IterableType _AdjContainer, class BeginEndTransformation = void>
-  auto make_outedge_factory(const NodeDesc u, _AdjContainer& c) {
-    return OutEdgeFactory<_AdjContainer, BeginEndTransformation>{std::piecewise_construct,
+  template<mstd::IterableType AdjContainer_, class BeginEndTransformation = void>
+  auto make_outedge_factory(const NodeDesc u, AdjContainer_& c) {
+    return OutEdgeFactory<AdjContainer_, BeginEndTransformation>{std::piecewise_construct,
       std::forward_as_tuple(std::begin(c), u), // make first part of the auto_iter
       std::forward_as_tuple(std::end(c))  // make end-iterator of the auto_iter
     };
   }
-  template<mstd::IterableType _AdjContainer, class BeginEndTransformation>
-  auto make_outedge_factory(const NodeDesc u, _AdjContainer& c, BeginEndTransformation&& trans) {
-    return OutEdgeFactory<_AdjContainer, std::remove_cvref_t<BeginEndTransformation>>{
+  template<mstd::IterableType AdjContainer_, class BeginEndTransformation>
+  auto make_outedge_factory(const NodeDesc u, AdjContainer_& c, BeginEndTransformation&& trans) {
+    return OutEdgeFactory<AdjContainer_, std::remove_cvref_t<BeginEndTransformation>>{
       std::forward<BeginEndTransformation>(trans),
       std::piecewise_construct,
       std::forward_as_tuple(std::begin(c), u), // make first part of the auto_iter

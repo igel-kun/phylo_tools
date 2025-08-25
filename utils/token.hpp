@@ -13,9 +13,9 @@ namespace mstd {
   template<class DelimRef = char>
   class TokenIter {
     // if Delim is basically a char*, then make it a const char* instead
-    using _Delim = std::remove_cvref_t<DelimRef>;
-    using Delim = std::conditional_t<std::is_pointer_v<_Delim> || std::is_array_v<_Delim>,
-                    const std::remove_pointer_t<std::decay_t<_Delim>>*, _Delim>;
+    using Delim_ = std::remove_cvref_t<DelimRef>;
+    using Delim = std::conditional_t<std::is_pointer_v<Delim_> || std::is_array_v<Delim_>,
+                    const std::remove_pointer_t<std::decay_t<Delim_>>*, Delim_>;
     static constexpr bool single_delim = std::is_same_v<Delim, char>;
 
     std::string_view s;
@@ -70,12 +70,12 @@ namespace mstd {
   // Converter provides operator()<T>(string_view) that parses a T from a string_view
   // NOTE: if the Converter is not invocable with a string_view,
   //    then it is interpreted as part of the tuple template args and a default converter is used
-  template<class _Converter, class... Args>
+  template<class Converter_, class... Args>
   struct TupleParser {
-    static constexpr bool conv_invocable = std::is_invocable_v<_Converter, std::string_view>;
+    static constexpr bool conv_invocable = std::is_invocable_v<Converter_, std::string_view>;
     
     // if the first template argument is not invocable with string_view, then interpret it as first tuple element and use the default converter
-    using Converter = std::conditional_t<conv_invocable, _Converter, AnythingFromString<>>;
+    using Converter = std::conditional_t<conv_invocable, Converter_, AnythingFromString<>>;
     using Tuple = std::conditional_t<conv_invocable, std::tuple<Args...>, std::tuple<Converter, Args...>>;
     static constexpr size_t num_items = std::tuple_size_v<Tuple>;
 

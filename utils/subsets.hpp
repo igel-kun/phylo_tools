@@ -81,39 +81,39 @@ namespace mstd {
 
 
   // ------- Subset Iteration: main class ---------
-  template<StrictIterableType _Container, bool _partial = false, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
-    requires (not std::is_const_v<_OutputContainer>)
+  template<StrictIterableType Container_, bool _partial = false, StrictContainerType OutputContainer_ = std::remove_const_t<Container_>>
+    requires (not std::is_const_v<OutputContainer_>)
   struct SubsetIterator:
-    public iter_traits_from_reference<_OutputContainer>
+    public iter_traits_from_reference<OutputContainer_>
   {
-    using Traits = iter_traits_from_reference<_OutputContainer>;
+    using Traits = iter_traits_from_reference<OutputContainer_>;
     using typename Traits::reference;
     using typename Traits::pointer;
 
     static constexpr bool partial = _partial;
     
-    using OutVal = std::remove_const_t<value_type_of_t<_OutputContainer>>;
+    using OutVal = std::remove_const_t<value_type_of_t<OutputContainer_>>;
 
-    static constexpr bool store_iters = is_any_of<OutVal, iterator_of_t<_Container>, const_iterator_of_t<_Container>>;
+    static constexpr bool store_iters = is_any_of<OutVal, iterator_of_t<Container_>, const_iterator_of_t<Container_>>;
 
     using SubsetState = std::conditional_t<store_iters, std::vector<OutVal>, ordered_bitset>;
 
-    _Container* c = nullptr;
+    Container_* c = nullptr;
     SubsetState state;
     [[ no_unique_address ]] std::conditional_t<_partial, uint32_t, mstd::monostate> upper_bound;
 
-    SubsetIterator(_Container& _c): c(&_c)
+    SubsetIterator(Container_& _c): c(&_c)
     {
       if constexpr (not store_iters)
         state.set_capacity(_c.size());
     }
 
-    SubsetIterator(_Container& _c, uint32_t low, uint32_t high) requires(partial):
+    SubsetIterator(Container_& _c, uint32_t low, uint32_t high) requires(partial):
       SubsetIterator(_c) 
     {
       DEBUG4(std::cout << "constructing SubsetIterator for partial subsets of sizes "<<low<<" -- "<<high<<'\n');
-      DEBUG6(std::cout << "input container: "<<type_name<_Container>() <<'\n');
-      DEBUG6(std::cout << "output container: "<<type_name<_OutputContainer>() <<'\n');
+      DEBUG6(std::cout << "input container: "<<type_name<Container_>() <<'\n');
+      DEBUG6(std::cout << "output container: "<<type_name<OutputContainer_>() <<'\n');
       DEBUG6(std::cout << "SubsetState: "<<type_name<SubsetState>() << " (storing iters: "<<store_iters<<")\n");
       if(low > high) std::swap(low, high);
       if(low <= _c.size()) {
@@ -130,10 +130,10 @@ namespace mstd {
     }
 
     template<class T> requires (partial)
-    SubsetIterator(_Container& _c, const linear_interval<T> bounds):
+    SubsetIterator(Container_& _c, const linear_interval<T> bounds):
       SubsetIterator(_c, bounds.low(), bounds.high())
     {}
-    SubsetIterator(_Container& _c, const uint32_t low) requires (partial):
+    SubsetIterator(Container_& _c, const uint32_t low) requires (partial):
       SubsetIterator(_c, low, low) 
     {}
 
@@ -160,7 +160,7 @@ namespace mstd {
 
     auto deref() const {
       if constexpr (not store_iters) {
-        _OutputContainer out;
+        OutputContainer_ out;
         auto it = std::begin(*c);
         size_t last = 0;
         DEBUG4(std::cout << "collecting items of "<<*c<<" with mask "; state.print(std::cout); std::cout << '\n');
@@ -202,15 +202,15 @@ namespace mstd {
   static_assert(HasIterTraits<SubsetIterator<std::vector<int>>>);
 
   // ------- Subset Iteration: factories ---------
-  template<StrictIterableType _Container, bool partial = false, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
-  using SubsetFactory = IterFactory<SubsetIterator<_Container, partial, _OutputContainer>>;
+  template<StrictIterableType Container_, bool partial = false, StrictContainerType OutputContainer_ = std::remove_const_t<Container_>>
+  using SubsetFactory = IterFactory<SubsetIterator<Container_, partial, OutputContainer_>>;
 
-  template<StrictIterableType _Container, StrictContainerType _OutputContainer = std::remove_const_t<_Container>>
-  using BoundedSubsetFactory = IterFactory<SubsetIterator<_Container, true, _OutputContainer>>;
+  template<StrictIterableType Container_, StrictContainerType OutputContainer_ = std::remove_const_t<Container_>>
+  using BoundedSubsetFactory = IterFactory<SubsetIterator<Container_, true, OutputContainer_>>;
 
   // ------- Subset Iteration: concepts ---------
   // ------- Subset Iteration: deduction guides ---------
-  template<StrictIterableType _Container> SubsetIterator(_Container&&) -> SubsetIterator<_Container>;
+  template<StrictIterableType Container_> SubsetIterator(Container_&&) -> SubsetIterator<Container_>;
 
   template<class T = void, IterableType Container> requires (std::is_void_v<T> || CompatibleValueTypes<T, std::remove_cvref_t<Container>>)
   auto make_subset_factory(Container&& C, uint32_t lo, uint32_t hi) {

@@ -6,44 +6,44 @@
 namespace PT{
 #warning TODO: if T is binary and its depth is less than 64, we can encode each path in vertex indices, allowing lightning fast LCA queries!
 
-  template<StorageEnum _SuccStorage,
-           class _NodeData = void,
-           class _EdgeData = void,
-           class _LabelType = void,
-           template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
-  using Tree = Phylogeny<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType, singleS, _Node>;
+  template<StorageEnum SuccStorage_,
+           class NodeData_ = void,
+           class EdgeData_ = void,
+           class LabelType_ = void,
+           template<StorageEnum, StorageEnum, class, class, class> class Node_ = PT::DefaultNode>
+  using Tree = Phylogeny<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_, singleS, Node_>;
 
-  template<StorageEnum _SuccStorage,
-           StorageEnum _RootStorage,
-           class _NodeData = void,
-           class _EdgeData = void,
-           class _LabelType = void,
-           template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
-  using Forest = Phylogeny<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node>;
+  template<StorageEnum SuccStorage_,
+           StorageEnum RootStorage_,
+           class NodeData_ = void,
+           class EdgeData_ = void,
+           class LabelType_ = void,
+           template<StorageEnum, StorageEnum, class, class, class> class Node_ = PT::DefaultNode>
+  using Forest = Phylogeny<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>;
 
   // if you have a tree and want a forest that uses the same NodeType, you can use these to declare the forest (or vice versa)
-  template<StrictPhylogenyType _Phylo,
-    class _NodeData = typename _Phylo::NodeData,
-    class _EdgeData = typename _Phylo::EdgeData,
-    class _LabelType = typename _Phylo::LabelType>
-  using CompatibleTree = Tree<_Phylo::SuccStorage, _NodeData, _EdgeData, _LabelType>;
+  template<StrictPhylogenyType Phylo_,
+    class NodeData_ = typename Phylo_::NodeData,
+    class EdgeData_ = typename Phylo_::EdgeData,
+    class LabelType_ = typename Phylo_::LabelType>
+  using CompatibleTree = Tree<Phylo_::SuccStorage, NodeData_, EdgeData_, LabelType_>;
 
-  template<StrictPhylogenyType _Phylo,
-           StorageEnum _RootStorage = _Phylo::RootStorage,
-           class _NodeData = typename _Phylo::NodeData,
-           class _EdgeData = typename _Phylo::EdgeData,
-           class _LabelType = typename _Phylo::LabelType>
-  using CompatibleForest = Forest<_Phylo::SuccStorage, _RootStorage, _NodeData, _EdgeData, _LabelType>;
+  template<StrictPhylogenyType Phylo_,
+           StorageEnum RootStorage_ = Phylo_::RootStorage,
+           class NodeData_ = typename Phylo_::NodeData,
+           class EdgeData_ = typename Phylo_::EdgeData,
+           class LabelType_ = typename Phylo_::LabelType>
+  using CompatibleForest = Forest<Phylo_::SuccStorage, RootStorage_, NodeData_, EdgeData_, LabelType_>;
 
   // for convenience, provide defaults for predecessor and successor containers
-  template<class _NodeData = void, class _EdgeData = void, class _LabelType = void>
-  using DefaultTree = Tree<vecS, _NodeData, _EdgeData, _LabelType>;
-  template<class _NodeData = void, class _EdgeData = void, class _LabelType = void>
-  using DefaultForest = Forest<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
-  template<class _NodeData = void, class _EdgeData = void, class _LabelType = std::string>
-  using DefaultLabeledTree = Tree<vecS, _NodeData, _EdgeData, _LabelType>;
-  template<class _NodeData = void, class _EdgeData = void, class _LabelType = std::string>
-  using DefaultLabeledForest = Forest<vecS, vecS, _NodeData, _EdgeData, _LabelType>;
+  template<class NodeData_ = void, class EdgeData_ = void, class LabelType_ = void>
+  using DefaultTree = Tree<vecS, NodeData_, EdgeData_, LabelType_>;
+  template<class NodeData_ = void, class EdgeData_ = void, class LabelType_ = void>
+  using DefaultForest = Forest<vecS, vecS, NodeData_, EdgeData_, LabelType_>;
+  template<class NodeData_ = void, class EdgeData_ = void, class LabelType_ = std::string>
+  using DefaultLabeledTree = Tree<vecS, NodeData_, EdgeData_, LabelType_>;
+  template<class NodeData_ = void, class EdgeData_ = void, class LabelType_ = std::string>
+  using DefaultLabeledForest = Forest<vecS, vecS, NodeData_, EdgeData_, LabelType_>;
 
 
 }

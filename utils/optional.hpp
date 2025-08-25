@@ -144,32 +144,32 @@ namespace mstd {
   // ------- optional_by_invalid: defaults -----------
 
   // OptFor tries its best to guess an Optional for a given type T
-  template<class T, auto ts> struct _OptFor { };
+  template<class T, auto ts> struct OptFor_ { };
   // if T is already an Optional, just use that one
-  template<Optional T, auto ts> struct _OptFor<T, ts> { using type = T; };
+  template<Optional T, auto ts> struct OptFor_<T, ts> { using type = T; };
   // otherwise, use optional_by_invalid
   template<class T, auto ts> requires (not Optional<T>)
-  struct _OptFor<T, ts> { using type = mstd::optional_by_invalid<T, ts>; };
+  struct OptFor_<T, ts> { using type = mstd::optional_by_invalid<T, ts>; };
   
   template<class T, auto ts = default_invalid_v<std::remove_cvref_t<T>>>
-  using OptFor = typename _OptFor<T, ts>::type;
+  using OptFor = typename OptFor_<T, ts>::type;
  
   // ValFor guesses the value of something that may be an Optional
-  template<class T> struct _ValFor { using type = T; };
+  template<class T> struct ValFor_ { using type = T; };
   template<Optional T>
-  struct _ValFor<T> { using type = typename T::value_type; };
+  struct ValFor_<T> { using type = typename T::value_type; };
   
   template<class T>
-  using ValFor = typename _ValFor<T>::type;
+  using ValFor = typename ValFor_<T>::type;
 
 
   template<bool invert = false>
-  struct _HasValuePredicate {
+  struct HasValuePredicate_ {
     static constexpr bool value(const auto& x) { return (x.has_value()) != invert; }
     constexpr bool operator()(const auto& x) const { return value(x); }
   };
-  using HasValuePredicate = _HasValuePredicate<false>;
-  using HasNoValuePredicate = _HasValuePredicate<true>;
+  using HasValuePredicate = HasValuePredicate_<false>;
+  using HasNoValuePredicate = HasValuePredicate_<true>;
 
 }
 

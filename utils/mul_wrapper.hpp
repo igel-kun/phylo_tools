@@ -5,9 +5,9 @@
 namespace PT{
 
   // the fake mul tree keeps a network and a root (any vertex inside the network) around and minicks a MUL tree
-  template<PhylogenyType _Network>
+  template<PhylogenyType Network_>
   class FakeMULTree {
-    using Network = _Network;
+    using Network = Network_;
     using Node = typename Network::Node;
 
     const Network& N;
@@ -15,7 +15,7 @@ namespace PT{
     const size_t num_vertices;
     
   public:
-    FakeMULTree(const Network& _N, const Node _root): N(_N), root(_root) {}
+    FakeMULTree(const Network& N_, const Node _root): N(N_), root(_root) {}
 
   };
 }

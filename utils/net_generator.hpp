@@ -129,16 +129,16 @@ namespace PT {
     } // forall nodes in post-order
   }
 
-  template<PhylogenyType _Generator = void, class _GetData = void>
+  template<PhylogenyType Generator_ = void, class GetData_ = void>
   auto compute_generator(auto&& N) requires (PhylogenyType<decltype(N)>) {
     using Network = std::remove_reference_t<decltype(N)>;
-    using Generator = mstd::FirstNonVoid<_Generator, GeneratorFor<Network>>;
+    using Generator = mstd::FirstNonVoid<Generator_, GeneratorFor<Network>>;
     using EdgeInfo = GeneratorEdgeInfo<typename Network::Adjacency>;
     static constexpr bool internal_possible = std::is_convertible_v<typename Generator::NodeData, GeneratorNodeInfo> &&
                                               std::is_convertible_v<typename Generator::EdgeData, EdgeInfo>;
     using MyGetData = std::conditional_t<internal_possible, InternalDataAccess<Generator>, ExternalDataAccess<GeneratorNodeInfo, EdgeInfo>>;
-    using GetData = mstd::FirstNonVoid<_GetData, MyGetData>;
-    static_assert(internal_possible || not std::is_void_v<_Generator>);
+    using GetData = mstd::FirstNonVoid<GetData_, MyGetData>;
+    static_assert(internal_possible || not std::is_void_v<Generator_>);
     static_assert((not internal_possible) || std::is_invocable_v<GetData, NodeDesc>);
     static_assert((not internal_possible) || std::is_invocable_v<GetData, NodeDesc, typename Generator::Adjacency>);
 

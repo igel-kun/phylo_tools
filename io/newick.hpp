@@ -33,16 +33,16 @@ namespace PT{
 
   // ------ WRITE OUTPUT --------
   // compute the extended newick string for a subnetwork rooted at sub_root of a network N with retis_seen reticulations considered as treated
-  template<StrictPhylogenyType _Network,
-           DataExtracterType _Extracter = DefaultDataExtracter<_Network>,
+  template<StrictPhylogenyType Network_,
+           DataExtracterType Extracter_ = DefaultDataExtracter<Network_>,
            NodeMapType HybNum = NodeMap<uint32_t>>
   void write_extended_newick_below(std::ostream& os,
-                             const _Network& N,
+                             const Network_& N,
                              const auto sub_root,
-                             _Extracter&& extracter = _Extracter(),
+                             Extracter_&& extracter = Extracter_(),
                              HybNum&& hybrid_number = HybNum())
   {
-    using Extracter = std::remove_cvref_t<_Extracter>;
+    using Extracter = std::remove_cvref_t<Extracter_>;
     ssize_t hn = -1;
     bool register_node = true;
     if(not N.is_leaf(sub_root)) {
@@ -83,8 +83,8 @@ namespace PT{
   }
 
   // write the extended newick string for a network N onto a stream
-  template<StrictPhylogenyType _Network, DataExtracterType Extracter = DefaultDataExtracter<_Network>>
-  void write_extended_newick(std::ostream& os, const _Network& N, Extracter&& extracter = Extracter()) {
+  template<StrictPhylogenyType Network_, DataExtracterType Extracter = DefaultDataExtracter<Network_>>
+  void write_extended_newick(std::ostream& os, const Network_& N, Extracter&& extracter = Extracter()) {
     write_extended_newick_below(os, N, N.root(), std::forward<Extracter>(extracter));
 
     // finally, write the node-data of the root
@@ -98,8 +98,8 @@ namespace PT{
   }
 
   // compute the extended newick string for a network N (only the part below sub_root)
-  template<StrictPhylogenyType _Network, class... Args>
-  std::string get_extended_newick(const _Network& N, const NodeDesc sub_root, Args&&... args) {
+  template<StrictPhylogenyType Network_, class... Args>
+  std::string get_extended_newick(const Network_& N, const NodeDesc sub_root, Args&&... args) {
     std::stringstream os;
     write_extended_newick_below(os, N, sub_root, std::forward<Args>(args)...);
     os << ';';
@@ -107,8 +107,8 @@ namespace PT{
   }
 
   // compute the extended newick string for a network N
-  template<StrictPhylogenyType _Network>
-  std::string get_extended_newick(const _Network& N) { return get_extended_newick(N, N.root()); }
+  template<StrictPhylogenyType Network_>
+  std::string get_extended_newick(const Network_& N) { return get_extended_newick(N, N.root()); }
 
 
   // ------ READ INPUT --------

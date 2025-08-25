@@ -161,28 +161,28 @@ namespace mstd{
   // ------------------ ITERATORS -----------------------------------
 
   // a lightweight end-iterator dummy that can be returned by calls to end() and compared to by other iterators
-  template<class> class _GenericEndIterator;
+  template<class> class GenericEndIterator_;
 
   template<>
-  struct _GenericEndIterator<void> {
+  struct GenericEndIterator_<void> {
     static bool is_valid() { return false; }
-    bool operator==(const _GenericEndIterator&) const { return true; }
-    template<VerifyableIter Other> requires (not mstd::is_same_v<Other, _GenericEndIterator>)
+    bool operator==(const GenericEndIterator_&) const { return true; }
+    template<VerifyableIter Other> requires (not mstd::is_same_v<Other, GenericEndIterator_>)
     bool operator==(const Other& x) const { return not x.is_valid(); }
-    template<class Other> requires (not VerifyableIter<Other> && not mstd::is_same_v<Other, _GenericEndIterator>)
+    template<class Other> requires (not VerifyableIter<Other> && not mstd::is_same_v<Other, GenericEndIterator_>)
     bool operator==(const Other& x) const { return x.operator==(*this); }
   };
 
   template<class Sentinel>
-  struct _GenericEndIterator: public _GenericEndIterator<void> {
+  struct GenericEndIterator_: public GenericEndIterator_<void> {
     Sentinel s;
     template<class Other>
     bool operator==(const Other* x) const { assert(x != nullptr); return *x == s; }
   };
-  using GenericEndIterator = _GenericEndIterator<void>;
+  using GenericEndIterator = GenericEndIterator_<void>;
 
   template<VerifyableIter Iter, class T>
-  bool operator!=(const Iter& other, const _GenericEndIterator<T>&) { return other.is_valid(); }
+  bool operator!=(const Iter& other, const GenericEndIterator_<T>&) { return other.is_valid(); }
 
   // wrap a pointer in an iterator shell that has all the required types and can be inherited from
   template<class Ptr>
@@ -805,14 +805,14 @@ namespace mstd {
 
 
   // functions returning void are treated differently from functions returning anything, even if that anything is then ignored; we unify the two here
-  template<class P, template<class> class Q> struct _UnlessVoid { using type = Q<P>; };
-  template<template<class> class Q> struct _UnlessVoid<void, Q> { using type = void; };
-  template<class P, template<class> class Q> using UnlessVoid = typename _UnlessVoid<P,Q>::type;
+  template<class P, template<class> class Q> struct UnlessVoid_ { using type = Q<P>; };
+  template<template<class> class Q> struct UnlessVoid_<void, Q> { using type = void; };
+  template<class P, template<class> class Q> using UnlessVoid = typename UnlessVoid_<P,Q>::type;
 
-  template<class... T> struct _FirstNonVoid {};
-  template<class T, class... Else> requires (!std::is_void_v<T>) struct _FirstNonVoid<T, Else...> { using type = T; };
-  template<class T, class... Else> requires (std::is_void_v<T>) struct _FirstNonVoid<T, Else...>: public _FirstNonVoid<Else...> {};
-  template<class... T> using FirstNonVoid = typename _FirstNonVoid<T...>::type;
+  template<class... T> struct FirstNonVoid_ {};
+  template<class T, class... Else> requires (!std::is_void_v<T>) struct FirstNonVoid_<T, Else...> { using type = T; };
+  template<class T, class... Else> requires (std::is_void_v<T>) struct FirstNonVoid_<T, Else...>: public FirstNonVoid_<Else...> {};
+  template<class... T> using FirstNonVoid = typename FirstNonVoid_<T...>::type;
 
 
   template<class T, class Else = uint_fast8_t> using ReturnableType = FirstNonVoid<T, Else>;

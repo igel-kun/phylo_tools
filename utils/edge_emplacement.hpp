@@ -53,18 +53,18 @@ namespace PT {
   // NOTE: if track_roots is false, the user is resposable to mark the root(s) in the new network
   // NOTE: moving the old_to_new translation into the Helper class was the easiest way to allow for it to be a reference
   //       while still letting the compiler infer the template parameters of the EdgeEmplacer. I apologize for the dirty hack.
-  template<StrictPhylogenyType _TargetPhylo,
+  template<StrictPhylogenyType TargetPhylo_,
            bool _track_roots = true,
-           OptionalMapsToNode _OldToNewTranslation = NodeTranslation>
+           OptionalMapsToNode OldToNewTranslation_ = NodeTranslation>
   struct EdgeEmplacementHelper:
-    public mstd::optional_tuple<mstd::NoRef<_OldToNewTranslation>, std::conditional_t<_track_roots, NodeSet, void>>
+    public mstd::optional_tuple<mstd::NoRef<OldToNewTranslation_>, std::conditional_t<_track_roots, NodeSet, void>>
   {
-    using OldToNewTranslation = mstd::NoRef<_OldToNewTranslation>;
-    using TargetPhylo = _TargetPhylo;
+    using OldToNewTranslation = mstd::NoRef<OldToNewTranslation_>;
+    using TargetPhylo = TargetPhylo_;
     using Parent = mstd::optional_tuple<OldToNewTranslation, std::conditional_t<_track_roots, NodeSet, void>>;
 
     static constexpr bool indirect_translation = std::is_pointer_v<OldToNewTranslation>;
-    static constexpr bool translating = not std::is_void_v<_OldToNewTranslation>;
+    static constexpr bool translating = not std::is_void_v<OldToNewTranslation_>;
     static constexpr bool track_roots = _track_roots;
     TargetPhylo* N = nullptr;
     EmplacerOptions options;
@@ -82,24 +82,24 @@ namespace PT {
 
     template<MapsToNode<mstd::TR_ConstRefPtrOK> OldToNew>
       requires (not std::is_void_v<OldToNewTranslation>)
-    EdgeEmplacementHelper(TargetPhylo& _N, EmplacerOptions opts, OldToNew&& old_to_new):
+    EdgeEmplacementHelper(TargetPhylo& N_, EmplacerOptions opts, OldToNew&& old_to_new):
       Parent(std::forward<OldToNew>(old_to_new)),
-      N{&_N},
+      N{&N_},
       options{opts}
     {}
 
     template<MapsToNode<mstd::TR_ConstRefPtrOK> OldToNew>
       requires (not std::is_void_v<OldToNewTranslation>)
-    EdgeEmplacementHelper(TargetPhylo& _N, OldToNew&& old_to_new):
-      EdgeEmplacementHelper(_N, EmplacerOptions{}, std::forward<OldToNew>(old_to_new))
+    EdgeEmplacementHelper(TargetPhylo& N_, OldToNew&& old_to_new):
+      EdgeEmplacementHelper(N_, EmplacerOptions{}, std::forward<OldToNew>(old_to_new))
     {}
 
-    EdgeEmplacementHelper(TargetPhylo& _N, EmplacerOptions opts):
-      Parent(), N{&_N}, options{opts}
+    EdgeEmplacementHelper(TargetPhylo& N_, EmplacerOptions opts):
+      Parent(), N{&N_}, options{opts}
     {}
 
-    EdgeEmplacementHelper(TargetPhylo& _N):
-      EdgeEmplacementHelper(_N, EmplacerOptions{})
+    EdgeEmplacementHelper(TargetPhylo& N_):
+      EdgeEmplacementHelper(N_, EmplacerOptions{})
     {}
 
     EdgeEmplacementHelper() = default;
@@ -209,11 +209,11 @@ namespace PT {
   // ============== Edge Emplacer =================
   // ------- Edge Emplacer: helpers -----------
   // ------- Edge Emplacer: main class --------
-  template<StrictEmplacementHelperType _Helper, StrictDataExtracterType _Extracter>
+  template<StrictEmplacementHelperType Helper_, StrictDataExtracterType Extracter_>
   struct EdgeEmplacer {
 #warning "TODO: make this inherit from the Helper"
-    using Helper = _Helper;
-    using Extracter = _Extracter;
+    using Helper = Helper_;
+    using Extracter = Extracter_;
     using TargetPhylo = typename Helper::TargetPhylo;
     using OldToNewTranslation = typename Helper::OldToNewTranslation;
     static constexpr bool track_roots = Helper::track_roots;
@@ -404,8 +404,8 @@ namespace PT {
   };
 
   // -------- Edge Emplacer: deduction guides --------------
-  template<EmplacementHelperType _Helper, DataExtracterType Extracter>
-  EdgeEmplacer(_Helper&&, Extracter&&) -> EdgeEmplacer<std::remove_cvref_t<_Helper>, std::remove_cvref_t<Extracter>>;
+  template<EmplacementHelperType Helper_, DataExtracterType Extracter>
+  EdgeEmplacer(Helper_&&, Extracter&&) -> EdgeEmplacer<std::remove_cvref_t<Helper_>, std::remove_cvref_t<Extracter>>;
 
   // -------- Edge Emplacer: concepts --------------
   template<class T> concept StrictEdgeEmplacerType = EmplacementHelperType<typename T::Helper>;

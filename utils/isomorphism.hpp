@@ -34,10 +34,10 @@ namespace PT{
   //NOTE: you may customize the possibility-set type to your needs:
   //    for example, for single-labeled trees, we recommend a singleton_set,
   //    for low-multiply labeled trees & low-level networks an unordered_set<NodeDesc> should be good
-  template<class NetworkA, class NetworkB, class _PossSet = mstd::unordered_bitset>
+  template<class NetworkA, class NetworkB, class PossSet_ = mstd::unordered_bitset>
   class IsomorphismMapper
   {
-    using PossSet     = _PossSet;
+    using PossSet     = PossSet_;
     using MappingPossibility = NodeMap<PossSet>;
     using UpdateSet   = mstd::unordered_bitset;
     using UpdateOrder = std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair> >;
@@ -48,7 +48,7 @@ namespace PT{
     const NetworkB& N2;
     const LabelMatch& lmatch; // a label-matching matching nodes of N1 with nodes of N2 if they all have the same label
 
-    const size_t size_N;  // nodes in each of the input networks
+    const size_t sizeN_;  // nodes in each of the input networks
     size_t nr_fix = 0;    // number of fixed nodes
 
     MappingPossibility mapping; // indicates for each node of N1 to which nodes of N2 it may map in an isomorphism
@@ -148,14 +148,14 @@ namespace PT{
 
 
 
-    IsomorphismMapper(const NetworkA& _N1,
-                      const NetworkB& _N2,
+    IsomorphismMapper(const NetworkA& N1_,
+                      const NetworkB& N2_,
                       const uint32_t _size_N,
                       const LabelMatch& _lmatch,
                       const unsigned char _flags,
                       const MappingPossibility& _mapping = MappingPossibility()):
-      N1(_N1),
-      N2(_N2),
+      N1(N1_),
+      N2(N2_),
       lmatch(_lmatch),
       size_N(_size_N),
       mapping(_mapping),
@@ -173,11 +173,11 @@ namespace PT{
     IsomorphismMapper(IsomorphismMapper&& _mapper) = default;
 
   public:
-    IsomorphismMapper(const NetworkA& _N1,
-                      const NetworkB& _N2,
+    IsomorphismMapper(const NetworkA& N1_,
+                      const NetworkB& N2_,
                       const LabelMatch& _lmatch,
                       const unsigned char _flags):
-      IsomorphismMapper(_N1, _N2, _N1.num_nodes(), _lmatch, _flags)
+      IsomorphismMapper(N1_, N2_, N1_.num_nodes(), _lmatch, _flags)
     {
       DEBUG3(std::cout << "#nodes: "<<N1.num_nodes()<<" & "<<N2.num_nodes()<<"\t\t#edges: "<<N1.num_edges()<<" & "<<N2.num_edges()<<std::endl;);
       if((N1.num_nodes() == N2.num_nodes()) && (N1.num_edges() == N2.num_edges())){
@@ -305,14 +305,14 @@ namespace PT{
 
   template<StrictPhylogenyType NetworkA, StrictPhylogenyType NetworkB>
   IsomorphismMapper<NetworkA, NetworkB>
-  make_iso_mapper(const NetworkA& _N1,
-                  const NetworkB& _N2,
+  make_iso_mapper(const NetworkA& N1_,
+                  const NetworkB& N2_,
                   const unsigned char _flags,
                   const LabelMatching<NetworkA, NetworkB>* _lmatch = nullptr)
   {
     if(_lmatch){
-      return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, *_lmatch, _flags);
-    } else return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, get_label_matching(_N1, _N2), _flags);
-    //} else return IsomorphismMapper<NetworkA, NetworkB>(_N1, _N2, (_lmatch ? *_lmatch : get_label_matching(_N1, _N2)), _flags);
+      return IsomorphismMapper<NetworkA, NetworkB>(N1_, N2_, *_lmatch, _flags);
+    } else return IsomorphismMapper<NetworkA, NetworkB>(N1_, N2_, get_label_matching(N1_, N2_), _flags);
+    //} else return IsomorphismMapper<NetworkA, NetworkB>(N1_, N2_, (_lmatch ? *_lmatch : get_label_matching(N1_, N2_)), _flags);
   }
 }

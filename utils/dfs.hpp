@@ -10,15 +10,15 @@
 
 namespace PT{
 
-  template<class _Roots, mstd::TypeRune rune = mstd::TR_Strict> concept DFSRootStorageType =
-    (mstd::VerifyableIter<_Roots, rune> or NodeContainerType<_Roots, rune> or mstd::is_same_v<_Roots, NodeDesc, rune>);
+  template<class Roots_, mstd::TypeRune rune = mstd::TR_Strict> concept DFSRootStorageType =
+    (mstd::VerifyableIter<Roots_, rune> or NodeContainerType<Roots_, rune> or mstd::is_same_v<Roots_, NodeDesc, rune>);
 
   // NOTE: for future reference: I tried using C++20 coroutines to simplify DFS iteration, but such coroutines are NOT copyable!
   //       Thus, any iterator based on coroutines could not be copied (only moved) which made it impossible to use range-based 'for' on them
   //       Therefore, I gave up coroutines for DFS iteration and, should anyone retry this, please be aware of the described pitfall!
-  template<TraversalType tt, DFSRootStorageType _Roots, TraversalTraitsType Traits>
+  template<TraversalType tt, DFSRootStorageType Roots_, TraversalTraitsType Traits>
   struct DFSIterator: public Traits {
-    using Roots = std::conditional_t<std::is_same_v<_Roots, NodeDesc>, NodeSingleton, _Roots>;
+    using Roots = std::conditional_t<std::is_same_v<Roots_, NodeDesc>, NodeSingleton, Roots_>;
     using typename Traits::Network;
     using Traits::track_nodes;
     using Traits::is_seen;
@@ -219,30 +219,30 @@ namespace PT{
   };
 
 
-  template<class _Roots, StrictPhylogenyType _Net> struct _RootsOr {
+  template<class Roots_, StrictPhylogenyType Net_> struct RootsOr_ {
     // if Roots is a const container, then we'll use an auto_iter into that container
     // if Roots is a const iterator, we'll just remove the const
-    using RIter = std::remove_const_t<_Roots>;
-    using RContainer = std::conditional_t<std::is_const_v<_Roots>,
-          std::conditional_t<mstd::SingletonSetType<_Roots>, std::remove_const_t<_Roots>, mstd::auto_iter<_Roots, void>>, _Roots>;
+    using RIter = std::remove_const_t<Roots_>;
+    using RContainer = std::conditional_t<std::is_const_v<Roots_>,
+          std::conditional_t<mstd::SingletonSetType<Roots_>, std::remove_const_t<Roots_>, mstd::auto_iter<Roots_, void>>, Roots_>;
 
-    static constexpr bool roots_container = mstd::ContainerType<_Roots>;
+    static constexpr bool roots_container = mstd::ContainerType<Roots_>;
     using type = std::conditional_t<roots_container, RContainer, RIter>;
   };
   // if Roots set is not given, it's the same as the network's root set;
-  template<class _Roots, StrictPhylogenyType _Net> using RootsOr = mstd::FirstNonVoid<_Roots, typename _Net::RootContainer>;
+  template<class Roots_, StrictPhylogenyType Net_> using RootsOr = mstd::FirstNonVoid<Roots_, typename Net_::RootContainer>;
 
 
   template<TraversalType tt,
-           PhylogenyType _Network,
-           class _Roots = void,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
-      requires (is_node_traversal(tt) and DFSRootStorageType<_Roots, mstd::TR_VoidOK>)
+           PhylogenyType Network_,
+           class Roots_ = void,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+      requires (is_node_traversal(tt) and DFSRootStorageType<Roots_, mstd::TR_VoidOK>)
   struct DFSNodeIterator:
-    public DFSIterator<tt, RootsOr<_Roots, _Network>, NodeTraversalTraits<tt,_Network, _Forbidden, _SeenSet>>
+    public DFSIterator<tt, RootsOr<Roots_, Network_>, NodeTraversalTraits<tt,Network_, Forbidden_, SeenSet_>>
   {
-    using Parent = DFSIterator<tt, RootsOr<_Roots, _Network>, NodeTraversalTraits<tt, _Network, _Forbidden, _SeenSet>>;
+    using Parent = DFSIterator<tt, RootsOr<Roots_, Network_>, NodeTraversalTraits<tt, Network_, Forbidden_, SeenSet_>>;
     using Parent::node_on_top;
     using typename Parent::reference;
     using typename Parent::pointer;
@@ -268,15 +268,15 @@ namespace PT{
   };
 
   template<TraversalType tt,
-           PhylogenyType _Network,
-           DFSRootStorageType<mstd::TR_VoidOK> _Roots = void,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>,
-           template<TraversalType, class, class, class> class _Traits = EdgeTraversalTraits>
+           PhylogenyType Network_,
+           DFSRootStorageType<mstd::TR_VoidOK> Roots_ = void,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>,
+           template<TraversalType, class, class, class> class Traits_ = EdgeTraversalTraits>
   struct DFSEdgeIterator:
-    public DFSIterator<tt, RootsOr<_Roots, _Network>, _Traits<tt, _Network, _Forbidden, _SeenSet>>
+    public DFSIterator<tt, RootsOr<Roots_, Network_>, Traits_<tt, Network_, Forbidden_, SeenSet_>>
   {
-    using Parent = DFSIterator<tt, RootsOr<_Roots, _Network>, _Traits<tt, _Network, _Forbidden, _SeenSet>>;
+    using Parent = DFSIterator<tt, RootsOr<Roots_, Network_>, Traits_<tt, Network_, Forbidden_, SeenSet_>>;
     using Parent::node_on_top;
     using Parent::is_seen;
     using typename Parent::Network;
@@ -285,7 +285,7 @@ namespace PT{
     using Parent::child_history;
       
     static_assert(is_edge_traversal(tt) or is_all_edge_traversal(tt));
-    static_assert(TraversalTraitsType<_Traits<tt, _Network, _Forbidden, _SeenSet>>);
+    static_assert(TraversalTraitsType<Traits_<tt, Network_, Forbidden_, SeenSet_>>);
 
     pointer operator->() { return operator*(); }
     pointer operator->() const { return operator*(); }
@@ -314,7 +314,7 @@ namespace PT{
       DFSEdgeIterator(mstd::singleton_set{rt}, std::forward<Args>(args)...) {}
 
     template<class... Args>
-    DFSEdgeIterator(const _Network& N, Args&&... args):
+    DFSEdgeIterator(const Network_& N, Args&&... args):
       DFSEdgeIterator(N.roots(), std::forward<Args>(args)...) {}
 
     DFSEdgeIterator& operator++() { ++static_cast<Parent&>(*this); return *this; }
@@ -322,23 +322,23 @@ namespace PT{
   };
 
   template<TraversalType tt,
-           PhylogenyType _Network,
-           class _Roots = void,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
-             requires (is_all_edge_traversal(tt) and DFSRootStorageType<_Roots, mstd::TR_VoidOK>)
-  using DFSAllEdgesIterator = DFSEdgeIterator<tt, _Network, RootsOr<_Roots, _Network>, _Forbidden, _SeenSet, AllEdgesTraits>;
+           PhylogenyType Network_,
+           class Roots_ = void,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+             requires (is_all_edge_traversal(tt) and DFSRootStorageType<Roots_, mstd::TRVoidOK_>)
+  using DFSAllEdgesIterator = DFSEdgeIterator<tt, Network_, RootsOr<Roots_, Network_>, Forbidden_, SeenSet_, AllEdgesTraits>;
 
   // NOTE: an all-edge-tail-postorder is just a node-postorder with an additional auto_iter<SuccContainer> for the current node
-  template<PhylogenyType _Network,
+  template<PhylogenyType Network_,
            class Roots = void,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, postorder | all_edge_traversal>>
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, postorder | all_edge_traversal>>
     requires DFSRootStorageType<Roots, mstd::TR_VoidOK>
-  class DFSAllEdgesTailPOIterator: public DFSNodeIterator<postorder, _Network, Roots, _Forbidden, _SeenSet> {
-    using Parent = DFSNodeIterator<postorder, _Network, Roots, _Forbidden, _SeenSet>;
-    using Traits = AllEdgesTraits<postorder | all_edge_traversal, _Network, _Forbidden, _SeenSet>;
-    using InternalIter = mstd::auto_iter<typename _Network::SuccContainer>;
+  class DFSAllEdgesTailPOIterator: public DFSNodeIterator<postorder, Network_, Roots, Forbidden_, SeenSet_> {
+    using Parent = DFSNodeIterator<postorder, Network_, Roots, Forbidden_, SeenSet_>;
+    using Traits = AllEdgesTraits<postorder | all_edge_traversal, Network_, Forbidden_, SeenSet_>;
+    using InternalIter = mstd::auto_iter<typename Network_::SuccContainer>;
     InternalIter current_children;
 
     void advance_dfs_nodes() {
@@ -346,7 +346,7 @@ namespace PT{
         while(1) {
           Parent::operator++();
           if(Parent::is_valid()) {
-            auto& u_node = node_of<_Network>(Parent::operator*());
+            auto& u_node = node_of<Network_>(Parent::operator*());
             if(not u_node.is_leaf()) {
               current_children = InternalIter(u_node.children());
               return;
@@ -397,31 +397,31 @@ namespace PT{
 
   template<TraversalType tt>
   struct _choose_iterator {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, DFSSeenType _SeenSet>
-    using type = DFSNodeIterator<tt, _Network, Roots, _Forbidden, _SeenSet>;
+    template<StrictPhylogenyType Network_, class Roots, class Forbidden_, DFSSeenType SeenSet_>
+    using type = DFSNodeIterator<tt, Network_, Roots, Forbidden_, SeenSet_>;
   };
   template<TraversalType tt> requires (is_edge_traversal(tt))
   struct _choose_iterator<tt> {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, DFSSeenType _SeenSet>
-    using type = DFSEdgeIterator<tt, _Network, Roots, _Forbidden, _SeenSet>;
+    template<StrictPhylogenyType Network_, class Roots, class Forbidden_, DFSSeenType SeenSet_>
+    using type = DFSEdgeIterator<tt, Network_, Roots, Forbidden_, SeenSet_>;
   };
   template<TraversalType tt> requires (is_all_edge_traversal(tt))
   struct _choose_iterator<tt> {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, DFSSeenType _SeenSet>
-    using type = DFSAllEdgesIterator<tt, _Network, Roots, _Forbidden, _SeenSet>;
+    template<StrictPhylogenyType Network_, class Roots, class Forbidden_, DFSSeenType SeenSet_>
+    using type = DFSAllEdgesIterator<tt, Network_, Roots, Forbidden_, SeenSet_>;
   };
   template<>
   struct _choose_iterator<all_edge_tail_postorder> {
-    template<StrictPhylogenyType _Network, class Roots, class _Forbidden, DFSSeenType _SeenSet>
-    using type = DFSAllEdgesTailPOIterator<_Network, Roots, _Forbidden, _SeenSet>;
+    template<StrictPhylogenyType Network_, class Roots, class Forbidden_, DFSSeenType SeenSet_>
+    using type = DFSAllEdgesTailPOIterator<Network_, Roots, Forbidden_, SeenSet_>;
   };
-  template<TraversalType tt, StrictPhylogenyType _Network, class Roots, class _Forbidden, DFSSeenType _SeenSet>
-  using choose_iterator = typename _choose_iterator<tt>::template type<_Network, Roots, _Forbidden, _SeenSet>;
+  template<TraversalType tt, StrictPhylogenyType Network_, class Roots, class Forbidden_, DFSSeenType SeenSet_>
+  using choose_iterator = typename _choose_iterator<tt>::template type<Network_, Roots, Forbidden_, SeenSet_>;
 
 
   // this guy is our factory; begin()/end() can be called on it
-  //NOTE: Traversal has its own _SeenSet so that multiple calls to begin() can be given the same set of forbidden nodes
-  //      Thus, you can either call begin() - which uses the Traversal's _SeenSet, or you call begin(bla, ...) to construct a new _SeenSet from bla, ...
+  //NOTE: Traversal has its own SeenSet_ so that multiple calls to begin() can be given the same set of forbidden nodes
+  //      Thus, you can either call begin() - which uses the Traversal's SeenSet_, or you call begin(bla, ...) to construct a new SeenSet_ from bla, ...
   //NOTE: per default, the Traversal's SeenSet is used direcly by the DFS iterator, so don't call begin() twice with a non-empty SeenSet!
   //      if you want to reuse the same SeenSet for multiple DFS' you have the following options:
   //      (a) reset the SeenSet between calls to begin()
@@ -429,17 +429,17 @@ namespace PT{
 #warning "TODO: check if this can be an auto_iter"
   template<TraversalType tt,
            PhylogenyType Network,
-           NodeOrIterableType _Roots = typename Network::RootContainer,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<Network, tt>>
+           NodeOrIterableType Roots_ = typename Network::RootContainer,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network, tt>>
   struct Traversal:
-    public DFSSupportSets<_Forbidden, _SeenSet>,
-    public mstd::iterator_traits<choose_iterator<tt, Network, _Roots,
-      typename DFSSupportSets<_Forbidden, _SeenSet>::ForbiddenRef,
-      typename DFSSupportSets<_Forbidden, _SeenSet>::SeenSetRef>>
+    public DFSSupportSets<Forbidden_, SeenSet_>,
+    public mstd::iterator_traits<choose_iterator<tt, Network, Roots_,
+      typename DFSSupportSets<Forbidden_, SeenSet_>::ForbiddenRef,
+      typename DFSSupportSets<Forbidden_, SeenSet_>::SeenSetRef>>
   {
-    using Helper = DFSSupportSets<_Forbidden, _SeenSet>;
-    using Roots = std::conditional_t<std::is_same_v<_Roots, NodeDesc>, NodeSingleton, _Roots>;
+    using Helper = DFSSupportSets<Forbidden_, SeenSet_>;
+    using Roots = std::conditional_t<std::is_same_v<Roots_, NodeDesc>, NodeSingleton, Roots_>;
     using typename Helper::Forbidden;
     using typename Helper::SeenSet;
     using typename Helper::SeenSetRef;
@@ -462,7 +462,7 @@ namespace PT{
 
 
     using Iter = choose_iterator<tt, Network, Roots, ForbiddenRef, SeenSetRef>;
-    using OwningIter = choose_iterator<tt, Network, Roots, _Forbidden, _SeenSet>;
+    using OwningIter = choose_iterator<tt, Network, Roots, Forbidden_, SeenSet_>;
     using iterator = Iter;
     using const_iterator = iterator;
    
@@ -561,15 +561,15 @@ namespace PT{
 
   template<TraversalType tt,
            PhylogenyType Network,
-           class _Roots,
+           class Roots_,
            class Forbidden = void,
            DFSSeenType SeenSet = DefaultSeenSet<Network, tt>>
     requires (not std::is_reference_v<SeenSet>)
   struct Traversal:
-    public DFSSupportSets<tt, Network, _Roots, Forbidden, SeenSet>,
-    public mstd::iterator_traits<typename DFSSupportSets<tt, Network, _Roots, Forbidden, SeenSet>::Iter>
+    public DFSSupportSets<tt, Network, Roots_, Forbidden, SeenSet>,
+    public mstd::iterator_traits<typename DFSSupportSets<tt, Network, Roots_, Forbidden, SeenSet>::Iter>
   {
-    using Roots = _Roots;
+    using Roots = Roots_;
     using Parent = DFSSupportSets<tt, Network, Roots, Forbidden, SeenSet>;
     using Traits = mstd::iterator_traits<typename Parent::Iter>;
     using iterator = typename Parent::Iter;

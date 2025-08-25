@@ -27,10 +27,10 @@ namespace PT {
     Network& N;
     EdgeWeightExtract edge_weight;
 
-    ScanwidthPreprocessor(Network& _N, EdgeWeightExtract&& _edge_weight):
-      N(_N), edge_weight(_edge_weight)
+    ScanwidthPreprocessor(Network& N_, EdgeWeightExtract&& _edge_weight):
+      N(N_), edge_weight(_edge_weight)
     {}
-    ScanwidthPreprocessor(Network& _N): N(_N) {}
+    ScanwidthPreprocessor(Network& N_): N(N_) {}
 
     DataRef get_edge_weight(const Edge& uv) {
       if constexpr (call_with_adj) {

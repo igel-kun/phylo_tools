@@ -11,10 +11,10 @@
 
 namespace PT{
 
-  template<class _Network>
-  class NetworkMapper: public Mapper<_Network, LabelMap>
+  template<class Network_>
+  class NetworkMapper: public Mapper<Network_, LabelMap>
   {
-    using Parent = Mapper<_Network, LabelMap>;
+    using Parent = Mapper<Network_, LabelMap>;
     using Parent::N;
     using Parent::T;
     using Parent::labelmap;
@@ -64,10 +64,10 @@ namespace PT{
 
   public:
 
-    NetworkMapper(const _Network& _N, const Tree& _T):
-      Parent(_N, _T),
-      lsa(_N),
-      cr_info(_N)
+    NetworkMapper(const Network_& N_, const Tree& T_):
+      Parent(N_, T_),
+      lsa(N_),
+      cr_info(N_)
     {
       preprocess();
     }

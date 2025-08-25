@@ -35,18 +35,18 @@ namespace PT {
 	// and networks manifest (for example, for networks, we have to count the number of edges)
 
 	// general proto phylogeny implementing node and edge interaction
-  template<StorageEnum _PredStorage,
-           StorageEnum _SuccStorage,
-           class _NodeData = void,
-           class _EdgeData = void,
-           class _LabelType = void,
-           StorageEnum _RootStorage = singleS,
-           template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
-  class ProtoPhylogeny: public NodeAccess<_Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType>> {
+  template<StorageEnum PredStorage_,
+           StorageEnum SuccStorage_,
+           class NodeData_ = void,
+           class EdgeData_ = void,
+           class LabelType_ = void,
+           StorageEnum RootStorage_ = singleS,
+           template<StorageEnum, StorageEnum, class, class, class> class Node_ = PT::DefaultNode>
+  class ProtoPhylogeny: public NodeAccess<Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_>> {
   public:
-    static constexpr StorageEnum RootStorage = _RootStorage;
+    static constexpr StorageEnum RootStorage = RootStorage_;
     static constexpr bool has_unique_root = (RootStorage == singleS);
-    using RootContainer = StorageClass<_RootStorage, NodeDesc>;
+    using RootContainer = StorageClass<RootStorage_, NodeDesc>;
     using DefaultSeen = NodeSet;
   protected:
 #warning "TODO: make counting nodes and edges optional by template!"
@@ -114,18 +114,18 @@ namespace PT {
 	};
 
 	// proto phylogeny with maximum in-degree 1 (for use as trees/forests)
-  template<StorageEnum _SuccStorage,
-           class _NodeData,
-           class _EdgeData,
-           class _LabelType,
-           StorageEnum _RootStorage,
-           template<StorageEnum, StorageEnum, class, class, class> class _Node>
-  class ProtoPhylogeny<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node>:
-    public NodeAccess<_Node<singleS, _SuccStorage, _NodeData, _EdgeData, _LabelType>> {
+  template<StorageEnum SuccStorage_,
+           class NodeData_,
+           class EdgeData_,
+           class LabelType_,
+           StorageEnum RootStorage_,
+           template<StorageEnum, StorageEnum, class, class, class> class Node_>
+  class ProtoPhylogeny<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>:
+    public NodeAccess<Node_<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_>> {
   public:
-    static constexpr StorageEnum RootStorage = _RootStorage;
+    static constexpr StorageEnum RootStorage = RootStorage_;
     static constexpr bool has_unique_root = (RootStorage == singleS);
-    using RootContainer = StorageClass<_RootStorage, NodeDesc>;
+    using RootContainer = StorageClass<RootStorage_, NodeDesc>;
     using DefaultSeen = void;
   protected:
     RootContainer _roots;
@@ -177,15 +177,15 @@ namespace PT {
 	};
 
 
-  template<StorageEnum _PredStorage,
-           StorageEnum _SuccStorage,
-           class _NodeData = void,
-           class _EdgeData = void,
-           class _LabelType = void,
-           StorageEnum _RootStorage = singleS,
-           template<StorageEnum, StorageEnum, class, class, class> class _Node = PT::DefaultNode>
-  class Phylogeny: public ProtoPhylogeny<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node> {
-    using Parent = ProtoPhylogeny<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType, _RootStorage, _Node>;
+  template<StorageEnum PredStorage_,
+           StorageEnum SuccStorage_,
+           class NodeData_ = void,
+           class EdgeData_ = void,
+           class LabelType_ = void,
+           StorageEnum RootStorage_ = singleS,
+           template<StorageEnum, StorageEnum, class, class, class> class Node_ = PT::DefaultNode>
+  class Phylogeny: public ProtoPhylogeny<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_> {
+    using Parent = ProtoPhylogeny<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>;
   public:
     using typename Parent::Node;
     using typename Parent::RootContainer;
@@ -495,7 +495,7 @@ namespace PT {
       }
       children(source).erase(w_iter);
       // if the PredStorage can be modified in place, we'll just change the node of the parent-adjacency of w to target
-      if constexpr (is_inplace_modifyable<_PredStorage>) {
+      if constexpr (is_inplace_modifyable<PredStorage_>) {
         // set the target in-place
         sw_iter->nd = target;
         // insert a new adjacency into target's children
@@ -729,20 +729,20 @@ namespace PT {
 			count_node();
     }
 
-    template<AdjacencyType Adj, EdgeType _Edge, class DataMaker = bool>
-    void subdivide_edge(_Edge&& uv, Adj&& w, DataMaker&& make_data = DataMaker()) {
-      subdivide_edge(uv.tail(), std::forward<_Edge>(uv).head(), std::forward<Adj>(w), make_data);
+    template<AdjacencyType Adj, EdgeType Edge_, class DataMaker = bool>
+    void subdivide_edge(Edge_&& uv, Adj&& w, DataMaker&& make_data = DataMaker()) {
+      subdivide_edge(uv.tail(), std::forward<Edge_>(uv).head(), std::forward<Adj>(w), make_data);
     }
 
     // subdivide an edge, creating a new node
     // NOTE: if a NodeFunctionType or a DataExtracterType is passed, then we try to initialize the node data with it
     //       if DataMaker is invocable with 2 Adjacencies, then we use it to set the edge data
-    template<EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    void subdivide_edge(_Edge&& uv, DataMaker&& data_maker = DataMaker()) {
+    template<EdgeType Edge_, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    void subdivide_edge(Edge_&& uv, DataMaker&& data_maker = DataMaker()) {
       if constexpr (DataExtracterType<DataMaker> || NodeFunctionType<DataMaker>)
-        subdivide_edge(std::forward<_Edge>(uv), create_node(data_maker), data_maker);
+        subdivide_edge(std::forward<Edge_>(uv), create_node(data_maker), data_maker);
       else
-        subdivide_edge(std::forward<_Edge>(uv), create_node(), data_maker);
+        subdivide_edge(std::forward<Edge_>(uv), create_node(), data_maker);
     }
 
 
@@ -767,8 +767,8 @@ namespace PT {
       return contract_up<uniqueness>(v, mstd::front(parents(v)), make_data);
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    size_t contract_up(const _Edge& uv, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    size_t contract_up(const Edge_& uv, DataMaker&& make_data = DataMaker()) {
       assert(in_degree(uv.head()) == 1);
       return contract_up<uniqueness>(uv.head(), uv.tail(), make_data);
     }
@@ -811,8 +811,8 @@ namespace PT {
       return contract_down<uniqueness>(u, mstd::front(children(u)), make_data);
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType _Edge, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    size_t contract_down(const _Edge& uv, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    size_t contract_down(const Edge_& uv, DataMaker&& make_data = DataMaker()) {
       assert(out_degree(uv.tail()) == 1);
       return contract_down<uniqueness>(uv.tail(), uv.head(), make_data);
     }
@@ -1276,7 +1276,7 @@ namespace PT {
 
     // move the subtree below other_x into us by changing the parents of other_x to {x}
     // NOTE: the edge x --> other_x will be initialized using "args"
-    // NOTE: _Phylo needs to have the same NodeType as we do!
+    // NOTE: Phylo_ needs to have the same NodeType as we do!
     // NOTE: if keep_other_x is true, then other_x survives in the other phylogeny
     template<bool count = true, StrictPhylogenyType Phylo, class... Args> requires std::is_same_v<Node, typename Phylo::Node>
     void place_below_by_move(Phylo&& other, const NodeDesc other_x, const NodeDesc x, Args&&... args) {
@@ -1363,7 +1363,7 @@ namespace PT {
     template<mstd::IterableType Edges, class... EmplacerArgs> requires (not PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges, EmplacerArgs&&... args) {
       using GivenEdge = mstd::value_type_of_t<Edges>;
-      using SourcePhyloFromEdgeData = Phylogeny<_PredStorage, _SuccStorage, void, DataOf<GivenEdge>>;
+      using SourcePhyloFromEdgeData = Phylogeny<PredStorage_, SuccStorage_, void, DataOf<GivenEdge>>;
         
       build_from_edges(std::forward<Edges>(edges), EdgeEmplacers<true, SourcePhyloFromEdgeData>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...));
       DEBUG3(print_summary(std::cout));
@@ -1611,8 +1611,8 @@ namespace PT {
 
 
 
-  template<StrictPhylogenyType _Phylo>
-  std::ostream& operator<<(std::ostream& os, const _Phylo& T) {
+  template<StrictPhylogenyType Phylo_>
+  std::ostream& operator<<(std::ostream& os, const Phylo_& T) {
     if(!T.empty()) {
       T.print_subtree(os);
       return os;

@@ -31,16 +31,16 @@ namespace mstd{
   using vector_hash_iterator = converting_iterator<vector_hash_filter_iter<Iterator>, Element>;
 
   template<
-    class _Key,
-    class Hash = std::conditional_t<mstd::is_really_arithmetic_v<ValFor<_Key>>, mstd::IdentityFunction<void>, std::hash<ValFor<_Key>>>,
-    class KeyEqual = std::equal_to<ValFor<_Key>>,
-    class Allocator = std::allocator<OptFor<_Key>>>
+    class Key_,
+    class Hash = std::conditional_t<mstd::is_really_arithmetic_v<ValFor<Key_>>, mstd::IdentityFunction<void>, std::hash<ValFor<Key_>>>,
+    class KeyEqual = std::equal_to<ValFor<Key_>>,
+    class Allocator = std::allocator<OptFor<Key_>>>
   class vector_hash:
-    public std::vector<OptFor<_Key>> 
+    public std::vector<OptFor<Key_>> 
   {
   public:
-    using Key = ValFor<_Key>;
-    using KeyOpt = OptFor<_Key>;
+    using Key = ValFor<Key_>;
+    using KeyOpt = OptFor<Key_>;
 
     using Parent = std::vector<KeyOpt, Allocator>;
 
@@ -499,8 +499,8 @@ namespace mstd{
 //    friend class filtered_iterator;
   };
 
-  template<class _Key, class Hash, class KeyEqual, class Allocator>
-  constexpr bool is_vector_v<vector_hash<_Key, Hash, KeyEqual, Allocator>> = false;
+  template<class Key_, class Hash, class KeyEqual, class Allocator>
+  constexpr bool is_vector_v<vector_hash<Key_, Hash, KeyEqual, Allocator>> = false;
 
   static_assert(SetType<vector_hash<int>>);
 }// namespace

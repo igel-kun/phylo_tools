@@ -8,9 +8,9 @@
 
 namespace PT {
 
-  template<StrictPhylogenyType _Net>
+  template<StrictPhylogenyType Net_>
   struct Switching {
-    using Net = _Net;
+    using Net = Net_;
     using ParentContainer = typename Net::ParentContainer;
     using ParentIter = mstd::iterator_of_t<ParentContainer>;
     using Edge = Net::Edge;
@@ -88,18 +88,18 @@ namespace PT {
 
   // ---------------- helpers ----------------
   template<SwitchingType S>
-  struct _NetworkOf<S> { using type = S::Net; };
+  struct NetworkOf_<S> { using type = S::Net; };
 
   // --------------- iterators ---------------------
-  template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> _Leaves = void, mstd::VectorType OutputVec = NetEdgeVec<Net>>
+  template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> Leaves_ = void, mstd::VectorType OutputVec = NetEdgeVec<Net>>
   struct SwitchingIter:
     public mstd::iter_traits_from_reference<OutputVec>
   {
     using Traits = mstd::iter_traits_from_reference<OutputVec>;
     using EdgeVec = NetEdgeVec<Net>;
     using AdjVec = NetAdjVec<Net>;
-    static constexpr bool has_leaves = not std::is_void_v<_Leaves>;
-    using Leaves = std::conditional_t<has_leaves, _Leaves, mstd::monostate>;
+    static constexpr bool has_leaves = not std::is_void_v<Leaves_>;
+    using Leaves = std::conditional_t<has_leaves, Leaves_, mstd::monostate>;
     using NetPtr = std::conditional_t<has_leaves, mstd::monostate, const Net*>;
     using typename Traits::value_type;
     using typename Traits::pointer;
@@ -131,13 +131,13 @@ namespace PT {
       leaves{std::forward<First>(first), std::forward<Args>(args)...}
     { cache = sw.get_active_edges(get_leaves()); }
 
-    SwitchingIter(const Net* _N) {
+    SwitchingIter(const Net* N_) {
       if constexpr (has_leaves) {
-        _N->leaves().to_container(get_leaves());
-      } else N = _N;
+        N_->leaves().to_container(get_leaves());
+      } else N = N_;
       cache = sw.get_active_edges(get_leaves());
     }
-    SwitchingIter(const Net& _N): SwitchingIter(&_N) {}
+    SwitchingIter(const Net& N_): SwitchingIter(&N_) {}
     
     auto active_adjacencies() const { return sw.template get_active_edges<AdjVec>(get_leaves());}
     auto active_edges() const { return sw.template get_active_edges<EdgeVec>(get_leaves());}

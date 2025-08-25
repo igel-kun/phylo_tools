@@ -35,23 +35,23 @@ namespace PT{
     singleS  // store a single item (like the parent for a tree node)
   };
 
-  template<StorageEnum storage, class Element> struct _StorageClass { };
-  template<class Element> struct _StorageClass<vecS, Element>     { using type = std::vector<Element>; };
-  template<class Element> struct _StorageClass<sortvecS, Element> { using type = mstd::sorted_vector<Element>; };
-  template<class Element> struct _StorageClass<setS, Element>     { using type = std::set<Element>; };
-  template<class Element> struct _StorageClass<hashsetS, Element> { using type = std::unordered_set<Element>; };
-  template<class Element> struct _StorageClass<multisetS, Element>{ using type = std::unordered_multiset<Element>; };
-  template<class Element> struct _StorageClass<vecsetS, Element>  { using type = mstd::vector_hash<Element>; };
-  template<mstd::PointerType Element> struct _StorageClass<singleS, Element>  {
+  template<StorageEnum storage, class Element> struct StorageClass_ { };
+  template<class Element> struct StorageClass_<vecS, Element>     { using type = std::vector<Element>; };
+  template<class Element> struct StorageClass_<sortvecS, Element> { using type = mstd::sorted_vector<Element>; };
+  template<class Element> struct StorageClass_<setS, Element>     { using type = std::set<Element>; };
+  template<class Element> struct StorageClass_<hashsetS, Element> { using type = std::unordered_set<Element>; };
+  template<class Element> struct StorageClass_<multisetS, Element>{ using type = std::unordered_multiset<Element>; };
+  template<class Element> struct StorageClass_<vecsetS, Element>  { using type = mstd::vector_hash<Element>; };
+  template<mstd::PointerType Element> struct StorageClass_<singleS, Element>  {
     using type = mstd::singleton_set<mstd::optional_by_invalid<Element, nullptr>>;
   };
-  template<std::unsigned_integral Element> struct _StorageClass<singleS, Element>  {
+  template<std::unsigned_integral Element> struct StorageClass_<singleS, Element>  {
     using type = mstd::singleton_set<mstd::optional_by_invalid<Element>>;
   };
-  template<class Element> struct _StorageClass<singleS, Element>  {
+  template<class Element> struct StorageClass_<singleS, Element>  {
     using type = mstd::singleton_set<std::optional<Element>>;
   };
-  template<StorageEnum storage, class Element> using StorageClass = typename _StorageClass<storage, Element>::type;
+  template<StorageEnum storage, class Element> using StorageClass = typename StorageClass_<storage, Element>::type;
 
   template<StorageEnum storage>
   constexpr bool is_inplace_modifyable = ((storage == vecS) or (storage == singleS));
@@ -125,7 +125,7 @@ namespace PT {
 
   using OptionalNodeDesc = mstd::optional_by_invalid<NodeDesc>;
 
-  template<> struct _StorageClass<singleS, NodeDesc>  {
+  template<> struct StorageClass_<singleS, NodeDesc>  {
     using type = mstd::singleton_set<OptionalNodeDesc>;
   };
 
@@ -149,9 +149,9 @@ namespace PT {
 
 
   template<class T> concept has_data = (not std::is_void_v<typename std::remove_reference_t<T>::Data>);
-  template<class T> struct _DataOf { using type = void; };
-  template<class T> requires has_data<T> struct _DataOf<T> { using type = T::Data; };
-  template<class T> using DataOf = typename _DataOf<T>::type;
+  template<class T> struct DataOf_ { using type = void; };
+  template<class T> requires has_data<T> struct DataOf_<T> { using type = T::Data; };
+  template<class T> using DataOf = typename DataOf_<T>::type;
 
   template<class C> constexpr bool has_node_value = std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>;
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
@@ -253,9 +253,9 @@ namespace PT {
   concept OptionalTreeType = (std::is_void_v<std::remove_reference_t<P>> || TreeType<P>);
 
   // specialize this as you like
-  template<class T> struct _NetworkOf {};
-  template<StrictPhylogenyType T> struct _NetworkOf<T> { using type = T; };
-  template<class T> using NetworkOf = typename _NetworkOf<T>::type;
+  template<class T> struct NetworkOf_ {};
+  template<StrictPhylogenyType T> struct NetworkOf_<T> { using type = T; };
+  template<class T> using NetworkOf = typename NetworkOf_<T>::type;
 
   using NodeTranslation = NodeMap<NodeDesc>;
 

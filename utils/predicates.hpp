@@ -24,10 +24,10 @@ namespace pred {
   using BinaryUnequalPredicate = NotPredicate<BinaryEqualPredicate>;
 
   // a predicate returning true/or false depending on whether the query is in a given set
-  template<mstd::IterableType<mstd::TR_PtrOK> _Container, bool invert = false>
+  template<mstd::IterableType<mstd::TR_PtrOK> Container_, bool invert = false>
   struct ContainmentPredicate {
     // replace references by pointers
-    using Container = _Container;
+    using Container = Container_;
     using Storage = std::remove_pointer_t<Container>;
     static constexpr bool is_indirect = std::is_pointer_v<Container>;
 
@@ -43,8 +43,8 @@ namespace pred {
   };
 
   // if P is iterable, get its containment predicate
-  template<class P> struct _AsContainmentPred { using type = P; };
-  template<mstd::IterableType P> struct _AsContainmentPred<P> { using type = ContainmentPredicate<P>; };
-  template<class P> using AsContainmentPred = typename _AsContainmentPred<P>::type;
+  template<class P> struct AsContainmentPred_ { using type = P; };
+  template<mstd::IterableType P> struct AsContainmentPred_<P> { using type = ContainmentPredicate<P>; };
+  template<class P> using AsContainmentPred = typename AsContainmentPred_<P>::type;
 
 }

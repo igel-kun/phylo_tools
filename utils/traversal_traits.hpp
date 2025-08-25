@@ -12,19 +12,19 @@
 namespace PT {
 
 
-	// NOTE: _SeenSet may be a reference (or even void)
-  template<class _Forbidden, DFSSeenType _SeenSet>
+	// NOTE: SeenSet_ may be a reference (or even void)
+  template<class Forbidden_, DFSSeenType SeenSet_>
   struct DFSSupportSets:
-    public mstd::optional_tuple<mstd::NoRef<_Forbidden>, mstd::NoRef<_SeenSet>>
+    public mstd::optional_tuple<mstd::NoRef<Forbidden_>, mstd::NoRef<SeenSet_>>
   {
 #warning "make it possible to forbid edges instead of vertices"
-    static constexpr bool has_forbidden = !std::is_void_v<_Forbidden>;
-    static constexpr bool has_seen = !std::is_void_v<_SeenSet>;
+    static constexpr bool has_forbidden = !std::is_void_v<Forbidden_>;
+    static constexpr bool has_seen = !std::is_void_v<SeenSet_>;
     static constexpr bool track_nodes = has_seen || has_forbidden;
 
-    // NOTE: if _SeenSet is a reference, we replace it with a pointer in order to not lose assignment
-    using Forbidden = mstd::NoRef<_Forbidden>; //mstd::FirstNonVoid<mstd::NoRef<_Forbidden>, mstd::monostate>;
-    using SeenSet = mstd::NoRef<_SeenSet>; //mstd::FirstNonVoid<mstd::NoRef<_SeenSet>, mstd::monostate>;
+    // NOTE: if SeenSet_ is a reference, we replace it with a pointer in order to not lose assignment
+    using Forbidden = mstd::NoRef<Forbidden_>; //mstd::FirstNonVoid<mstd::NoRef<Forbidden_>, mstd::monostate>;
+    using SeenSet = mstd::NoRef<SeenSet_>; //mstd::FirstNonVoid<mstd::NoRef<SeenSet_>, mstd::monostate>;
     using Parent = mstd::optional_tuple<Forbidden, SeenSet>;
     
     DFSSupportSets() = default;
@@ -68,7 +68,7 @@ namespace PT {
     }
 /*    bool is_forbidden(const NodePair uv) const {
       if constexpr (has_forbidden) {
-        if constexpr (mstd::is_testable<_Forbidden, NodePair>)
+        if constexpr (mstd::is_testable<Forbidden_, NodePair>)
           return mstd::test(mstd::access(this->template get<0>()), uv);
         else if constexpr (reverse) {
           return is_forbidden(uv.first);
@@ -92,21 +92,21 @@ namespace PT {
     }
   };
 
-  template<StrictPhylogenyType _Network, bool reverse>
-  using NextNodeContainer = std::conditional_t<reverse, typename _Network::ParentContainer, typename _Network::ChildContainer>;
+  template<StrictPhylogenyType Network_, bool reverse>
+  using NextNodeContainer = std::conditional_t<reverse, typename Network_::ParentContainer, typename Network_::ChildContainer>;
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
+           StrictPhylogenyType Network_,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
   struct TraversalTraits:
-    public DFSSupportSets<_Forbidden, _SeenSet>,
-    public mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, is_reverse_traversal(tt)>>>
+    public DFSSupportSets<Forbidden_, SeenSet_>,
+    public mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<Network_, is_reverse_traversal(tt)>>>
   {
-    using Parent = DFSSupportSets<_Forbidden, _SeenSet>;
-    using IterTraits = mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<_Network, is_reverse_traversal(tt)>>>;
-    using ItemContainer  = NextNodeContainer<_Network, is_reverse_traversal(tt)>;
-    using Network = _Network;
+    using Parent = DFSSupportSets<Forbidden_, SeenSet_>;
+    using IterTraits = mstd::iterator_traits<mstd::iterator_of_t<NextNodeContainer<Network_, is_reverse_traversal(tt)>>>;
+    using ItemContainer  = NextNodeContainer<Network_, is_reverse_traversal(tt)>;
+    using Network = Network_;
     using child_iterator  = mstd::auto_iter<mstd::iterator_of_t<ItemContainer>>;
     using iterator_category = std::forward_iterator_tag;
 
@@ -117,14 +117,14 @@ namespace PT {
 
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
+           StrictPhylogenyType Network_,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
   struct NodeTraversalTraits:
-    public TraversalTraits<tt, _Network, _Forbidden, _SeenSet>
+    public TraversalTraits<tt, Network_, Forbidden_, SeenSet_>
   {
     static constexpr bool reverse = is_reverse_traversal(tt);
-    using Parent = TraversalTraits<tt, _Network, _Forbidden, _SeenSet>;
+    using Parent = TraversalTraits<tt, Network_, Forbidden_, SeenSet_>;
     using typename Parent::IterTraits;
     using typename Parent::Network;
     using typename Parent::child_iterator;
@@ -152,23 +152,23 @@ namespace PT {
     static constexpr NodeDesc get_node(const NodeDesc u) { return u; }
   };
 
-  template<StrictPhylogenyType _Network, bool reverse>
-  using NextEdgeContainer = std::conditional_t<reverse, typename _Network::InEdgeContainer, typename _Network::OutEdgeContainer>;
+  template<StrictPhylogenyType Network_, bool reverse>
+  using NextEdgeContainer = std::conditional_t<reverse, typename Network_::InEdgeContainer, typename Network_::OutEdgeContainer>;
 
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
+           StrictPhylogenyType Network_,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
   struct EdgeTraversalTraits:
-    public TraversalTraits<tt, _Network, _Forbidden, _SeenSet>
+    public TraversalTraits<tt, Network_, Forbidden_, SeenSet_>
   {
     static constexpr bool reverse = is_reverse_traversal(tt);
-    using Parent = TraversalTraits<tt, _Network, _Forbidden, _SeenSet>;
-    using EdgeContainer = NextEdgeContainer<_Network, reverse>;
+    using Parent = TraversalTraits<tt, Network_, Forbidden_, SeenSet_>;
+    using EdgeContainer = NextEdgeContainer<Network_, reverse>;
     using EdgeIter = mstd::iterator_of_t<EdgeContainer>;
     using EdgeIterTraits = mstd::iterator_traits<EdgeIter>;
-    // NOTE: the DFS traversal stack will hold auto-iters for iterators into _Network::(Out)EdgeContainer (which is an IterFactory)
+    // NOTE: the DFS traversal stack will hold auto-iters for iterators into Network_::(Out)EdgeContainer (which is an IterFactory)
     //       such iterators construct edges from the child/parent-adjacencies on the fly when they are de-referenced (rvalues instead of lvalue references).
     //       Note that these edges **DO NOT EXIST IN MEMORY** (only on the return-stack), so we also return rvalues here.
     using typename Parent::Network;
@@ -178,7 +178,7 @@ namespace PT {
     using const_reference = typename EdgeIterTraits::const_reference;
     using pointer         = typename EdgeIterTraits::pointer;
     using const_pointer   = typename EdgeIterTraits::const_pointer;
-    using Adjacency = typename _Network::Adjacency;
+    using Adjacency = typename Network_::Adjacency;
     using Parent::mark_seen;
     using Parent::is_seen;
 
@@ -215,14 +215,14 @@ namespace PT {
   //      For this, however, we'll need to differentiate between forbidden nodes and nodes discovered during the DFS, since the former should not
   //      occur as head of any emitted edge, while the latter should not occur as tail of any emitted edge! Thus, we'll need a second storage
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
+           StrictPhylogenyType Network_,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
   struct AllEdgesTraits:
-    public EdgeTraversalTraits<tt, _Network, _Forbidden, _SeenSet>
+    public EdgeTraversalTraits<tt, Network_, Forbidden_, SeenSet_>
   {
     static constexpr bool reverse = is_reverse_traversal(tt);
-    using Parent = EdgeTraversalTraits<tt, _Network, _Forbidden, _SeenSet>;
+    using Parent = EdgeTraversalTraits<tt, Network_, Forbidden_, SeenSet_>;
     using typename Parent::Network;
     using typename Parent::value_type;
     using typename Parent::child_iterator;

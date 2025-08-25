@@ -19,11 +19,11 @@ namespace PT {
 
   // an adjacency is a node-description with edgedata
   // NOTE: the adjacency's edge data can be either constructed from arguments (new() will be called by the constructor) or from another adjacency (shallow copy of the pointer)
-  template<class _EdgeData>
+  template<class EdgeData_>
   struct Adjacency: public ProtoAdjacency {
     using Parent = ProtoAdjacency;
-    using EdgeData = _EdgeData;
-    using Edge = PT::Edge<_EdgeData>;
+    using EdgeData = EdgeData_;
+    using Edge = PT::Edge<EdgeData_>;
     static constexpr bool has_data = true;
   
   protected:
@@ -69,7 +69,7 @@ namespace PT {
     EdgeData& data() const { assert(data_ptr); return *data_ptr; }
 
     friend std::ostream& operator<<(std::ostream& os, const Adjacency& a) {
-      if constexpr (mstd::Printable<_EdgeData>) {
+      if constexpr (mstd::Printable<EdgeData_>) {
         if(a.data_ptr)
           return os << a.nd << '[' << *(a.data_ptr) << ']';
         else

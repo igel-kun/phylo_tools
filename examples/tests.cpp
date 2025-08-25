@@ -192,13 +192,13 @@ void test_vector_map() {
   static_assert(std::regular<T>);
   static_assert(std::swappable<T>);
   static_assert(std::common_reference_with<RT&&, VT&>);
-  //[with _Tp = std::raw_vector_map_iterator<long unsigned int, int>; _Tp = std::raw_vector_map_iterator<long unsigned int, int>]
+  //[with Tp_ = std::raw_vector_map_iterator<long unsigned int, int>; Tp_ = std::raw_vector_map_iterator<long unsigned int, int>]
   static_assert(std::common_reference_with<std::iter_rvalue_reference_t<I>&&, const VT&>);
   static_assert(std::common_reference_with<
     std::iter_rvalue_reference_t<I>&&,
     const typename std::__detail::__iter_traits_impl<I, std::indirectly_readable_traits<I>>::type::value_type&
   >);
-  //[with _In = std::raw_vector_map_iterator<long unsigned int, int>; _Tp = std::raw_vector_map_iterator<long unsigned int, int>
+  //[with In_ = std::raw_vector_map_iterator<long unsigned int, int>; Tp_ = std::raw_vector_map_iterator<long unsigned int, int>
   static_assert(std::forward_iterator<I>);
 
   using CI = typename T::const_iterator;

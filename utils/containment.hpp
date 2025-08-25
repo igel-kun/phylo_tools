@@ -17,14 +17,14 @@ namespace PT {
   // ------- Tree-in-Network containment: main class ---------
   //NOTE: if an invisible tree component is encountered, we will branch on which subtree to display in the component
   //NOTE: this can be used to solve multi-labeled host networks: just add a reticulation for each multiply occuring label
-  template<StrictPhylogenyType _Host,
-           StrictPhylogenyType _Guest,
+  template<StrictPhylogenyType Host_,
+           StrictPhylogenyType Guest_,
            StorageEnum HostLabelStorage = singleS,
            bool leaf_labels_only = true>
   struct TreeInNetContainment {
     // ------- static stuff --------
-    using Host = _Host;
-    using Guest = _Guest;
+    using Host = Host_;
+    using Guest = Guest_;
 
     using GuestLCAOracle = DefaultStaticTreeLCAOracle<Guest>;
     using LabelMatching = PT::LabelMatching<Host, Guest, HostLabelStorage, singleS>;

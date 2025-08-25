@@ -64,10 +64,10 @@ namespace mstd {
   }
 
   // parses an argument with only a subset of valid values, throwing std::invalid_argument if the argument doesn't pass the test(s)
-  template<class _ExtractArgFromString, class _ValidityChecker>
+  template<class ExtractArgFromString_, class ValidityChecker_>
   struct ConstraintArgumentParser {
-    using ExtractArgFromString = _ExtractArgFromString;
-    using ValidityChecker = _ValidityChecker;
+    using ExtractArgFromString = ExtractArgFromString_;
+    using ValidityChecker = ValidityChecker_;
 
     const std::vector<std::string>& arguments;
     ExtractArgFromString extract;

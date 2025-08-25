@@ -11,16 +11,16 @@ namespace mstd {
   // NOTE: you can choose to pass the iterator to the transformation instead of its dereference
   // **IMPORTANT NOTE**: dereferencing such an iterator may (depending on the transformation) generate and return an rvalue, not an lvalue reference
   //                     Thus, users must avoid drawing non-const references from the result of de-referencing such iterators (otherwise: ref to temporary)
-  template<class _Iter, class _Transformation, bool pass_iterator = false>
-    requires (std::is_invocable_v<_Transformation, std::conditional_t<pass_iterator, _Iter, reference_of_t<_Iter>>>)
-  class transforming_iterator: public InheritableIter<_Iter>
+  template<class Iter_, class Transformation_, bool pass_iterator = false>
+    requires (std::is_invocable_v<Transformation_, std::conditional_t<pass_iterator, Iter_, reference_of_t<Iter_>>>)
+  class transforming_iterator: public InheritableIter<Iter_>
   {
-    using Parent = InheritableIter<_Iter>; 
-    [[no_unique_address]] _Transformation trans;
+    using Parent = InheritableIter<Iter_>; 
+    [[no_unique_address]] Transformation_ trans;
     
     decltype(auto) deref() const {
-      const InheritableIter<_Iter>& intermediate = static_cast<const InheritableIter<_Iter>&>(*this);
-      const _Iter& p = static_cast<const _Iter&>(intermediate);
+      const InheritableIter<Iter_>& intermediate = static_cast<const InheritableIter<Iter_>&>(*this);
+      const Iter_& p = static_cast<const Iter_&>(intermediate);
 		  if constexpr (pass_iterator) return p; else return *p;
     }
 
@@ -46,27 +46,27 @@ namespace mstd {
 
     template<class T>
     decltype(auto) apply_trans(T&& t) {
-      if constexpr (std::is_pointer_v<_Transformation>) {
+      if constexpr (std::is_pointer_v<Transformation_>) {
         assert(trans != nullptr);
         return (*trans)(std::forward<T>(t));
       } else return trans(std::forward<T>(t));
     }
     template<class T>
     decltype(auto) apply_trans(T&& t) const {
-      if constexpr (std::is_pointer_v<_Transformation>) {
+      if constexpr (std::is_pointer_v<Transformation_>) {
         assert(trans != nullptr);
         return (*trans)(std::forward<T>(t));
       } else {
-        //std::cout << "mark (trans type is "<<mstd::type_name<_Transformation>()<<"\n";
+        //std::cout << "mark (trans type is "<<mstd::type_name<Transformation_>()<<"\n";
         return trans(std::forward<T>(t));
       }
     }
 
   public:
-    using Transformation = _Transformation;
-    using Iterator = _Iter;
-    using UnderlyingIterator = _Iter;
-    using ParentDeref = typename std::iterator_traits<_Iter>::reference;
+    using Transformation = Transformation_;
+    using Iterator = Iter_;
+    using UnderlyingIterator = Iter_;
+    using ParentDeref = typename std::iterator_traits<Iter_>::reference;
     using TransInput = std::conditional_t<pass_iterator, transforming_iterator, ParentDeref>;
     // this will not compile if pass_iter == true, since transforming_iterator is not fully defined yet
     //static_assert(std::is_invocable_v<Transformation, TransInput>); 

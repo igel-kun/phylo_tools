@@ -20,11 +20,11 @@ namespace PT {
 
   // the heavy-path decomposition class
   // accepts a NodeOracleType (also by pointer) or void, indicating that the subtree count should be done and stored by the decomposition itself
-  template<class Tree, NodeOracleType<mstd::TR_PtrVoidOK> _SubtreeSizeOracle = void>
+  template<class Tree, NodeOracleType<mstd::TR_PtrVoidOK> SubtreeSizeOracle_ = void>
   struct HeavyPathDecomposition {
     // ------- static stuff --------
-    static constexpr bool has_size_oracle = not std::is_void_v<_SubtreeSizeOracle>;
-    using SubtreeSizeOracle = std::conditional_t<has_size_oracle, _SubtreeSizeOracle, mstd::monostate>;
+    static constexpr bool has_size_oracle = not std::is_void_v<SubtreeSizeOracle_>;
+    using SubtreeSizeOracle = std::conditional_t<has_size_oracle, SubtreeSizeOracle_, mstd::monostate>;
 
     // if the user doesn't provide a size oracle, we'll store subtree sizes in the path_infos
     struct PathInfo {

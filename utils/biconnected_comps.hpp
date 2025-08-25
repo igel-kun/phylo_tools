@@ -51,12 +51,12 @@ namespace PT{
 
   // ------------------- STEP 5: transform the filtered child-nodes into biconnected components using a BCCmaker ----------------
   // NOTE: the filter owns (1) a seen-set, (2) the cached output components, and (3) the emplacer for the output component
-  template<StrictPhylogenyType _Network,
-           StrictPhylogenyType _Component = _Network,
-           StrictEdgeEmplacerType Emplacer = EdgeEmplacer<EdgeEmplacementHelper<_Component, false, NodeTranslation>, DataExtracter<_Network>>>
+  template<StrictPhylogenyType Network_,
+           StrictPhylogenyType Component_ = Network_,
+           StrictEdgeEmplacerType Emplacer = EdgeEmplacer<EdgeEmplacementHelper<Component_, false, NodeTranslation>, DataExtracter<Network_>>>
   struct BCCmaker {
-    using Network = _Network;
-    using Component = _Component;
+    using Network = Network_;
+    using Component = Component_;
     using EmplacementHelper = typename Emplacer::Helper;
     using Extracter = typename Emplacer::Extracter;
     
@@ -249,13 +249,13 @@ namespace PT{
 
   // deduce parameters from arguments
   // NOTE: if you don't want the biconnected component to have the same type as the Network, then pass a StrictPhylogenyType as first template parameter
-  template<OptionalStrictPhylogenyType _Component = void,
+  template<OptionalStrictPhylogenyType Component_ = void,
            bool allow_trivial = true,
            NodeTranslationType OldToNewTranslation = NodeTranslation,
            StrictPhylogenyType Network,
            class... ExtracterArgs>
   auto get_biconnected_components(const Network& N, OldToNewTranslation&& old_to_new = OldToNewTranslation(), ExtracterArgs&&... ex_args) {
-    using Component = mstd::FirstNonVoid<_Component, Network>;
+    using Component = mstd::FirstNonVoid<Component_, Network>;
     using Extracter = decltype(make_data_extracter<Network>(std::forward<ExtracterArgs>(ex_args)...));
     return BiconnectedComponents<Network, Component, allow_trivial, OldToNewTranslation, Extracter>(
         N,
@@ -263,14 +263,14 @@ namespace PT{
         std::forward<ExtracterArgs>(ex_args)...);
   }
 
-  template<OptionalStrictPhylogenyType _Component = void,
+  template<OptionalStrictPhylogenyType Component_ = void,
            bool allow_trivial = true,
            StrictPhylogenyType Network,
            class First,
            class... ExtracterArgs>
              requires (!NodeTranslationType<First>)
   auto get_biconnected_components(const Network& N, First&& first, ExtracterArgs&&... ex_args) {
-    using Component = mstd::FirstNonVoid<_Component, Network>;
+    using Component = mstd::FirstNonVoid<Component_, Network>;
     using Extracter = decltype(make_data_extracter<Network>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...));
     return BiconnectedComponents<Network, Component, allow_trivial, NodeTranslation, Extracter>(
         N,
@@ -278,9 +278,9 @@ namespace PT{
         std::forward<ExtracterArgs>(ex_args)...);
   }
 
-  template<OptionalStrictPhylogenyType _Component = void, class... Args>
+  template<OptionalStrictPhylogenyType Component_ = void, class... Args>
   auto get_nontrivial_biconnected_components(Args&&... args) {
-    return get_biconnected_components<_Component, false>(std::forward<Args>(args)...);
+    return get_biconnected_components<Component_, false>(std::forward<Args>(args)...);
   }
 
 }// namespace

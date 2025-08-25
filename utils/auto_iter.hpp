@@ -8,17 +8,17 @@ namespace mstd {
 
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
-  template<class Iterator, class _EndIterator = CorrespondingEndIter<Iterator>>
+  template<class Iterator, class EndIterator_ = CorrespondingEndIter<Iterator>>
   class _auto_iter: public InheritableIter<Iterator>
   {
     static_assert(!VerifyableIter<Iterator>);
-    static_assert(!std::is_void_v<_EndIterator>);
+    static_assert(!std::is_void_v<EndIterator_>);
 
-    _EndIterator end_it;
+    EndIterator_ end_it;
    public:
     using Parent = InheritableIter<Iterator>;
     using UnderlyingIterator = Iterator;
-    using EndIterator = _EndIterator;
+    using EndIterator = EndIterator_;
     using iterator = Iterator;
     using const_iterator = Iterator;
     using typename Parent::difference_type;
@@ -43,13 +43,13 @@ namespace mstd {
     {}
 
     // construct from two iterators (begin and end)
-    template<class _Iterator, class _EndIter, class... Args>
-      requires (mstd::is_constructible_v<Iterator, _Iterator&&, Args&&...> && mstd::is_convertible_v<_EndIter, EndIterator>)
-    constexpr _auto_iter(_Iterator&& _it, _EndIter&& _end, Args&&... args):
-      Parent{std::forward<_Iterator>(_it), std::forward<Args>(args)...},
-      end_it{std::forward<_EndIter>(_end)} 
+    template<class Iterator_, class EndIter_, class... Args>
+      requires (mstd::is_constructible_v<Iterator, Iterator_&&, Args&&...> && mstd::is_convertible_v<EndIter_, EndIterator>)
+    constexpr _auto_iter(Iterator_&& _it, EndIter_&& _end, Args&&... args):
+      Parent{std::forward<Iterator_>(_it), std::forward<Args>(args)...},
+      end_it{std::forward<EndIter_>(_end)} 
     {
-      //std::cout << "\t\tmade auto iter with\n Iterator: "<<type_name<Iterator>()<<"\nEnd-Iter: "<<type_name<_EndIterator>()<<"\n";
+      //std::cout << "\t\tmade auto iter with\n Iterator: "<<type_name<Iterator>()<<"\nEnd-Iter: "<<type_name<EndIterator_>()<<"\n";
     }
 
 
@@ -109,14 +109,14 @@ namespace mstd {
     EndIterator get_end() & { return end_it; }
     EndIterator get_end() && { return move(end_it); }
 
-    template<class _Container>
-    void append_to(_Container& C) const { mstd::append(C, *this); }
+    template<class Container_>
+    void append_to(Container_& C) const { mstd::append(C, *this); }
 
-    template<class _Container = std::vector<typename Parent::value_type>>
-    auto to_container() const { _Container result; append_to(result); return result; }
+    template<class Container_ = std::vector<typename Parent::value_type>>
+    auto to_container() const { Container_ result; append_to(result); return result; }
 
-    template<ContainerType _Container> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<_Container>>
-    explicit operator _Container() const { return to_container<_Container>(); }
+    template<ContainerType Container_> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<Container_>>
+    explicit operator Container_() const { return to_container<Container_>(); }
   };
 
 
@@ -153,14 +153,14 @@ namespace mstd {
     Iterator&& get_iter() && { return *this; }
     static EndIterator get_end() { return GenericEndIterator(); }
 
-    template<class _Container>
-    void append_to(_Container& C) const { mstd::append(C, *this); }
+    template<class Container_>
+    void append_to(Container_& C) const { mstd::append(C, *this); }
 
-    template<class _Container = std::vector<std::remove_cvref_t<value_type_of_t<Iterator>>>>
-    auto to_container() const { _Container result; append_to(result); return result; }
+    template<class Container_ = std::vector<std::remove_cvref_t<value_type_of_t<Iterator>>>>
+    auto to_container() const { Container_ result; append_to(result); return result; }
 
-    template<ContainerType _Container> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<_Container>>
-    explicit operator _Container() const { return to_container<_Container>(); }
+    template<ContainerType Container_> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<Container_>>
+    explicit operator Container_() const { return to_container<Container_>(); }
   };
 
 

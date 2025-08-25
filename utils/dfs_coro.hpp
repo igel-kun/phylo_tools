@@ -17,19 +17,19 @@ namespace PT {
   // see dfs_common.hpp
 
   // ------- DFS: main class ---------
-	// NOTE: _SeenSet may be a pointer (or even void)
-  // _Roots may be a pointer if we use someone else's roots (the network f.ex.)
+	// NOTE: SeenSet_ may be a pointer (or even void)
+  // Roots_ may be a pointer if we use someone else's roots (the network f.ex.)
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           NodeOrIterableType<mstd::TR_PtrOK> _Roots = typename _Network::RootContainer,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>> // _SeenSet may be void (unzip all retis)  or a pointer (shared SeenSet)
-    requires (std::is_pointer_v<_Roots> or mstd::is_poppable<DFSRootStorage<_Roots>>)
+           StrictPhylogenyType Network_,
+           NodeOrIterableType<mstd::TR_PtrOK> Roots_ = typename Network_::RootContainer,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>> // SeenSet_ may be void (unzip all retis)  or a pointer (shared SeenSet)
+    requires (std::is_pointer_v<Roots_> or mstd::is_poppable<DFSRootStorage<Roots_>>)
   struct DFSIterator:
-    public DFSInfo<_Roots, _Forbidden, _SeenSet>
+    public DFSInfo<Roots_, Forbidden_, SeenSet_>
   {
     // ------- static stuff --------
-    using Info = DFSInfo<_Roots, _Forbidden, _SeenSet>;
+    using Info = DFSInfo<Roots_, Forbidden_, SeenSet_>;
     using Info::get_current_root;
     using Info::pop_root;
     using Info::roots_spent;
@@ -37,13 +37,13 @@ namespace PT {
     using Info::get_forbidden;
     using Info::mark_seen;
 
-    using Roots = _Roots;
-    using Network = _Network;
-    using Forbidden = _Forbidden;
-    using SeenSet = _SeenSet;
+    using Roots = Roots_;
+    using Network = Network_;
+    using Forbidden = Forbidden_;
+    using SeenSet = SeenSet_;
 
     static constexpr bool reverse = is_reverse_traversal(tt);
-    using AdjContainer = std::conditional_t<reverse, typename _Network::PredContainer, typename _Network::SuccContainer>;
+    using AdjContainer = std::conditional_t<reverse, typename Network_::PredContainer, typename Network_::SuccContainer>;
     using AdjIter = mstd::auto_iter<AdjContainer>;
     using Edge = typename Network::Edge;
     // on the state-stack, we store nodes along with their 
@@ -376,26 +376,26 @@ resume_outer:
 
   // ------- DFS: factories ---------
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           NodeOrIterableType _Roots = typename _Network::RootContainer,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
+           StrictPhylogenyType Network_,
+           NodeOrIterableType Roots_ = typename Network_::RootContainer,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
   struct Traversal:
-    public mstd::IterFactory<DFSIterator<tt, _Network, _Roots, _Forbidden, _SeenSet>>
+    public mstd::IterFactory<DFSIterator<tt, Network_, Roots_, Forbidden_, SeenSet_>>
   {
-    using Iter = DFSIterator<tt, _Network, _Roots, _Forbidden, _SeenSet>;
+    using Iter = DFSIterator<tt, Network_, Roots_, Forbidden_, SeenSet_>;
     using Info = typename Iter::Info;
     using Parent = mstd::IterFactory<Iter>;
     using typename Info::Roots;
     using typename Info::Forbidden;
     using typename Info::SeenSet;
 
-    using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<_Roots, NodeDesc>, _Roots, std::add_pointer_t<const _Roots>>;
+    using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<Roots_, NodeDesc>, Roots_, std::add_pointer_t<const Roots_>>;
     using IndirectForbidden = std::conditional_t<Info::has_forbidden, std::add_pointer_t<std::remove_pointer_t<Forbidden>>, void>;
     using IndirectSeen = std::conditional_t<Info::has_seen, std::add_pointer_t<std::remove_pointer_t<SeenSet>>, void>;
     using NonOwningInfo = DFSInfo<IndirectRoots, IndirectForbidden, IndirectSeen>;
-    using NonOwningIter = DFSIterator<tt, _Network, IndirectRoots, IndirectForbidden, IndirectSeen>;
-    using CopiedOwningIter = DFSIterator<tt, _Network, IndirectRoots, IndirectForbidden, _SeenSet>;
+    using NonOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, IndirectSeen>;
+    using CopiedOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, SeenSet_>;
     using OwningIter = Iter;
 
     Traversal() = default;
@@ -410,32 +410,32 @@ resume_outer:
 #warning "TODO: make a 'robust traversal' with shared ownership of the seen- and forbidden set between the iterators and the traversal. Will need shared_ptr for that..."
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           NodeOrIterableType _Roots = typename _Network::RootContainer,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
-  using NodeTraversal = Traversal<tt, _Network, _Roots, _Forbidden, _SeenSet>;
+           StrictPhylogenyType Network_,
+           NodeOrIterableType Roots_ = typename Network_::RootContainer,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+  using NodeTraversal = Traversal<tt, Network_, Roots_, Forbidden_, SeenSet_>;
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           NodeOrIterableType _Roots = typename _Network::RootContainer,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
-  using EdgeTraversal = Traversal<tt | edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+           StrictPhylogenyType Network_,
+           NodeOrIterableType Roots_ = typename Network_::RootContainer,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+  using EdgeTraversal = Traversal<tt | edge_traversal, Network_, Roots_, Forbidden_, SeenSet_>;
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           NodeOrIterableType _Roots = typename _Network::RootContainer,
-           class _Forbidden = void,
-           DFSSeenType _SeenSet = DefaultSeenSet<_Network, tt>>
-  using AllEdgesTraversal = Traversal<tt | all_edge_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+           StrictPhylogenyType Network_,
+           NodeOrIterableType Roots_ = typename Network_::RootContainer,
+           class Forbidden_ = void,
+           DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+  using AllEdgesTraversal = Traversal<tt | all_edge_traversal, Network_, Roots_, Forbidden_, SeenSet_>;
 
   template<TraversalType tt,
-           StrictPhylogenyType _Network,
-           NodeOrIterableType _Roots = typename _Network::RootContainer,
-           class _Forbidden = void,
-           NodeMapType<mstd::TR_PtrVoidOK> _SeenSet = NodeMap<Degree>>
-  using AllEdgesDLSTraversal = Traversal<tt | depth_last_traversal, _Network, _Roots, _Forbidden, _SeenSet>;
+           StrictPhylogenyType Network_,
+           NodeOrIterableType Roots_ = typename Network_::RootContainer,
+           class Forbidden_ = void,
+           NodeMapType<mstd::TR_PtrVoidOK> SeenSet_ = NodeMap<Degree>>
+  using AllEdgesDLSTraversal = Traversal<tt | depth_last_traversal, Network_, Roots_, Forbidden_, SeenSet_>;
 
   // ------- DFS: concepts ---------
   // ------- DFS: deduction guides ---------

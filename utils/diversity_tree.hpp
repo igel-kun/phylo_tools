@@ -29,10 +29,10 @@ namespace PT {
   // LeafTable: this can store tables (x,y) so for the cost of x, we can get y additional score
   // Since the two classes have identical interface, they are drop-in replacable by each other.
 
-  template<class _Weight> requires std::is_arithmetic_v<_Weight>
+  template<class Weight_> requires std::is_arithmetic_v<Weight_>
   struct ProtoLeafTable {
     // ------- static stuff --------
-    using Weight = _Weight;
+    using Weight = Weight_;
     // the level-DP assigns a table to each bridge (represented as a leaf in the BiconnectedComponent)
     //    mapping each i<k to the diversity that can be gained by saving exactly i leaves below
     using SolutionAccu = mstd::SolutionAccumulator<NodeVec, Weight>;
@@ -56,12 +56,12 @@ namespace PT {
   };
 
 
-  template<class _Weight> requires std::is_arithmetic_v<_Weight>
+  template<class Weight_> requires std::is_arithmetic_v<Weight_>
   struct NoLeafTable:
-    public ProtoLeafTable<_Weight>
+    public ProtoLeafTable<Weight_>
   {
     // ------- static stuff --------
-    using Parent = ProtoLeafTable<_Weight>;
+    using Parent = ProtoLeafTable<Weight_>;
     using typename Parent::Weight;
     using typename Parent::SolutionAccu;
     using typename Parent::AccuTable;
@@ -110,13 +110,13 @@ namespace PT {
   };
 
 
-  template<class _Weight, class Translate = mstd::IdentityFunction<NodeDesc>> // Translate = how to translate given nodes into indices of the result_table?
-    requires std::is_arithmetic_v<_Weight>
+  template<class Weight_, class Translate = mstd::IdentityFunction<NodeDesc>> // Translate = how to translate given nodes into indices of the result_table?
+    requires std::is_arithmetic_v<Weight_>
   struct LeafTable:
-    public ProtoLeafTable<_Weight>
+    public ProtoLeafTable<Weight_>
   {
     // ------- static stuff --------
-    using Parent = ProtoLeafTable<_Weight>;
+    using Parent = ProtoLeafTable<Weight_>;
     using typename Parent::Weight;
     using typename Parent::SolutionAccu;
     using typename Parent::AccuTable;

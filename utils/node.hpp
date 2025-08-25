@@ -16,7 +16,7 @@ namespace PT{
   enum NodeTypeEnum { NODE_TYPE_LEAF, NODE_TYPE_INTERNAL_TREE, NODE_TYPE_INTERNAL_RETI};
 
 #ifdef DEBUGNODES
-  struct _ProtoNode {
+  struct ProtoNode_ {
     static uintptr_t num_names;
     const uintptr_t _name = num_names++;
 
@@ -24,12 +24,12 @@ namespace PT{
     std::string name() const { return std::to_string(_name); }
     NodeDesc get_desc() const noexcept { return this; }
   };
-  inline uintptr_t _ProtoNode::num_names = 0;
+  inline uintptr_t ProtoNode_::num_names = 0;
   std::ostream& operator<<(std::ostream& os, const NodeDesc nd) {
-    if(nd != NoNode) return os << (reinterpret_cast<_ProtoNode*>(static_cast<uintptr_t>(nd)))->name(); else return os << "NoNode";
+    if(nd != NoNode) return os << (reinterpret_cast<ProtoNode_*>(static_cast<uintptr_t>(nd)))->name(); else return os << "NoNode";
   }
 #else
-  struct _ProtoNode {
+  struct ProtoNode_ {
     static std::string name() { return ""; }
     NodeDesc get_desc() const noexcept { return NodeDesc(this); }
   };
@@ -37,15 +37,15 @@ namespace PT{
   // NOTE: we specifically refrain from polymorphic nodes (one node pointer that may point to a TreeNode or a NetworkNode) because
   //       the only gain would be to save one pointer on TreeNodes at the cost of a vtable for everyone, so not really worth it.
   //       Also, polymorphic access to the predecessors becomes a nightmare if its type is not known at compiletime
-  template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _EdgeData>
-  class ProtoNode: public _ProtoNode {
+  template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class EdgeData_>
+  class ProtoNode: public ProtoNode_ {
   public:
-    using Adjacency = PT::Adjacency<_EdgeData>;
-    using EdgeData = _EdgeData;
+    using Adjacency = PT::Adjacency<EdgeData_>;
+    using EdgeData = EdgeData_;
     using Edge = PT::Edge<EdgeData>;
     
-    static constexpr StorageEnum SuccStorage = _SuccStorage;
-    static constexpr StorageEnum PredStorage = _PredStorage;
+    static constexpr StorageEnum SuccStorage = SuccStorage_;
+    static constexpr StorageEnum PredStorage = PredStorage_;
     static constexpr bool is_defined_tree_node = (PredStorage == singleS);
     static constexpr bool has_edge_data = has_data<Adjacency>;
     static constexpr bool unique_edges = unique_elements<PredStorage> && unique_elements<SuccStorage>;
@@ -214,34 +214,34 @@ namespace PT{
     const Adjacency* find_child(const NodeDesc v) const { return find_successor(v); }
     Adjacency* find_child(const NodeDesc v) { return find_successor(v); }
 
-    template<StrictNodeType _Node> friend struct NodeAccess;
+    template<StrictNodeType Node_> friend struct NodeAccess;
   };
 
   // A Node is a ProtoNode with possible NodeData
-  template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
-  class _Node:
-    public ProtoNode<_PredStorage, _SuccStorage, _EdgeData>
+  template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class NodeData_, class EdgeData_>
+  class Node_:
+    public ProtoNode<PredStorage_, SuccStorage_, EdgeData_>
   {
-    using Parent = ProtoNode<_PredStorage, _SuccStorage, _EdgeData>;
-    _NodeData _data;
+    using Parent = ProtoNode<PredStorage_, SuccStorage_, EdgeData_>;
+    NodeData_ _data;
   public:
-    using NodeData = _NodeData;
+    using NodeData = NodeData_;
     using Data = NodeData;
     static constexpr bool has_data = true;
     
     // initialize only the data, leaving parents and children empty
     template<class First, class... Args> requires (!NodeType<First>)
-    _Node(First&& first, Args&&... args): _data(std::forward<First>(first), std::forward<Args>(args)...) {}
-    _Node() = default;
+    Node_(First&& first, Args&&... args): _data(std::forward<First>(first), std::forward<Args>(args)...) {}
+    Node_() = default;
 
     NodeData& data() & { return _data; }
     NodeData&& data() && { return std::move(_data); }
     const NodeData& data() const & { return _data; }
   };
 
-  template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _EdgeData>
-  class _Node<_PredStorage, _SuccStorage, void, _EdgeData>: public ProtoNode<_PredStorage, _SuccStorage, _EdgeData> {
-    using Parent = ProtoNode<_PredStorage, _SuccStorage, _EdgeData>;
+  template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class EdgeData_>
+  class Node_<PredStorage_, SuccStorage_, void, EdgeData_>: public ProtoNode<PredStorage_, SuccStorage_, EdgeData_> {
+    using Parent = ProtoNode<PredStorage_, SuccStorage_, EdgeData_>;
   public:
     using NodeData = void;
     using Data = void;
@@ -249,19 +249,19 @@ namespace PT{
 
     // default-initialization ignores all parameters
     template<class First, class... Args> requires (!NodeType<First>)
-    _Node(First&& first, Args&&... args) {}
-    _Node() = default;
+    Node_(First&& first, Args&&... args) {}
+    Node_() = default;
   };
 
   // a node may have a label (can be accessed via label())
   // NOTE: has_label only tells that a node MAY have a (possibly empty) label!
-  template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData, class _LabelType = void>
-  class Node: public _Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData> {
-    using Parent = _Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>;
-    _LabelType _label;
+  template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class NodeData_, class EdgeData_, class LabelType_ = void>
+  class Node: public Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_> {
+    using Parent = Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_>;
+    LabelType_ _label;
   public:
     using Parent::Parent;
-    using LabelType = _LabelType;
+    using LabelType = LabelType_;
     static constexpr bool has_label = true;
 
     template<class LabelInit, class... Args>
@@ -275,9 +275,9 @@ namespace PT{
     const LabelType& label() const & { return _label; }
   };
 
-  template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData>
-  class Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, void>: public _Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData> {
-    using Parent = _Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData>;
+  template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class NodeData_, class EdgeData_>
+  class Node<PredStorage_, SuccStorage_, NodeData_, EdgeData_, void>: public Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_> {
+    using Parent = Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_>;
   public:
     using Parent::Parent;
     using LabelType = void;
@@ -291,8 +291,8 @@ namespace PT{
   }
 
 
-  template<StorageEnum _PredStorage, StorageEnum _SuccStorage, class _NodeData, class _EdgeData, class _LabelType>
-  using DefaultNode = Node<_PredStorage, _SuccStorage, _NodeData, _EdgeData, _LabelType>;
+  template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class NodeData_, class EdgeData_, class LabelType_>
+  using DefaultNode = Node<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_>;
 
   template<NodeType Node>
   Node& node_of(const NodeDesc x) { return *(reinterpret_cast<std::remove_cvref_t<Node>*>(static_cast<uintptr_t>(x))); }
@@ -319,19 +319,19 @@ namespace PT{
   template<class Network> struct functor_any_parent_of { decltype(auto) operator()(const NodeDesc u) const { return Network::any_parent(u); } };
 
 
-  template<StrictNodeType _Node>
+  template<StrictNodeType Node_>
   struct NodeAccess {
-    static constexpr auto PredStorage = _Node::PredStorage;
-    static constexpr auto SuccStorage = _Node::SuccStorage;
-    using SuccContainer = typename _Node::SuccContainer;
+    static constexpr auto PredStorage = Node_::PredStorage;
+    static constexpr auto SuccStorage = Node_::SuccStorage;
+    using SuccContainer = typename Node_::SuccContainer;
     using ChildContainer = SuccContainer;
-    using PredContainer = typename _Node::PredContainer;
+    using PredContainer = typename Node_::PredContainer;
     using ParentContainer = PredContainer;
-    using NodeData = typename _Node::NodeData;
-    using EdgeData = typename _Node::EdgeData;
-    using LabelType = typename _Node::LabelType;
-    using Node = _Node;
-    using Adjacency = typename _Node::Adjacency;
+    using NodeData = typename Node_::NodeData;
+    using EdgeData = typename Node_::EdgeData;
+    using LabelType = typename Node_::LabelType;
+    using Node = Node_;
+    using Adjacency = typename Node_::Adjacency;
     using Edge = PT::Edge<EdgeData>;
     using EdgeVec = std::vector<Edge>;
     using EdgeSet = std::unordered_set<Edge>;
@@ -451,10 +451,10 @@ namespace PT{
     static constexpr size_t count_nodes_below(const NodeDesc u) { return node_of(u).count_nodes_below(); }
 
     // ================ Edges =======================
-    using OutEdgeContainer = typename _Node::OutEdgeContainer;
-    using ConstOutEdgeContainer = typename _Node::ConstOutEdgeContainer;
-    using InEdgeContainer = typename _Node::InEdgeContainer;
-    using ConstInEdgeContainer = typename _Node::ConstInEdgeContainer;
+    using OutEdgeContainer = typename Node_::OutEdgeContainer;
+    using ConstOutEdgeContainer = typename Node_::ConstOutEdgeContainer;
+    using InEdgeContainer = typename Node_::InEdgeContainer;
+    using ConstInEdgeContainer = typename Node_::ConstInEdgeContainer;
 
     static constexpr OutEdgeContainer out_edges(const NodeDesc u) { return node_of(u).out_edges(); }
     static constexpr Edge any_out_edge(const NodeDesc u) { return node_of(u).any_out_edge(); }
@@ -498,12 +498,12 @@ namespace PT{
     auto& operator()(const Edge& uv) const requires Net::has_edge_data { return uv.data(); }
   };
 
-  template<class _NodeData = void, class _EdgeData = void>
+  template<class NodeData_ = void, class EdgeData_ = void>
   struct ExternalDataAccess {
-    static constexpr bool has_node_data = not std::is_void_v<_NodeData>;
-    static constexpr bool has_edge_data = not std::is_void_v<_EdgeData>;
-    using NodeData = mstd::FirstNonVoid<_NodeData, mstd::monostate>;
-    using EdgeData = mstd::FirstNonVoid<_EdgeData, mstd::monostate>;
+    static constexpr bool has_node_data = not std::is_void_v<NodeData_>;
+    static constexpr bool has_edge_data = not std::is_void_v<EdgeData_>;
+    using NodeData = mstd::FirstNonVoid<NodeData_, mstd::monostate>;
+    using EdgeData = mstd::FirstNonVoid<EdgeData_, mstd::monostate>;
 
     [[ no_unique_address ]] std::conditional_t<has_node_data, HashMap<NodeDesc, NodeData>, mstd::monostate> node_data;
     [[ no_unique_address ]] std::conditional_t<has_edge_data, HashMap<NodePair, EdgeData>, mstd::monostate> edge_data;

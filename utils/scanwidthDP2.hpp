@@ -39,8 +39,8 @@ namespace PT {
   class ScanwidthDP2 {
   public:
     using DegreeExtracter = WeightedDegrees<Network, EdgeWeightExtracter>;
-    using LowMemEntry = _DPEntryLowMem<Network, DegreeExtracter>;
-    using NormalEntry = _DPEntry<Network, DegreeExtracter>;
+    using LowMemEntry = DPEntryLowMem_<Network, DegreeExtracter>;
+    using NormalEntry = DPEntry_<Network, DegreeExtracter>;
     using DPEntry = typename std::conditional_t<low_memory_version, LowMemEntry, NormalEntry>;
     // NOTE: we're storing pointers to DPEntries so that we can store the 'best' entry consistently over many hashtable inserts
     using DPTable = mstd::vector_hash<DPEntry>;
@@ -133,8 +133,8 @@ namespace PT {
       // --------------------------- moving nodes around -----------------------------------
 
       // move new_roots to the end of the given area and modify pointers
-      template<NodeIterableType _Nodes>
-      void move_to_area(const _Nodes& to_move, size_t& new_area, size_t old_area = 0) {
+      template<NodeIterableType Nodes_>
+      void move_to_area(const Nodes_& to_move, size_t& new_area, size_t old_area = 0) {
         if(not to_move.empty()) {
           while(old_area < new_area) {
             size_t j = old_area;
@@ -152,8 +152,8 @@ namespace PT {
         }
       }
 
-      template<NodeIterableType _Nodes>
-      void move_to_roots(const _Nodes& new_roots) { move_to_area(new_roots, non_roots); } // the root area starts at index 'non_roots'
+      template<NodeIterableType Nodes_>
+      void move_to_roots(const Nodes_& new_roots) { move_to_area(new_roots, non_roots); } // the root area starts at index 'non_roots'
       
       // --------------------------- init -----------------------------------
       void comps_init() {
@@ -390,7 +390,7 @@ namespace PT {
 
   public:
 
-    ScanwidthDP2(Network& _N): N{_N} {}
+    ScanwidthDP2(Network& N_): N{N_} {}
 
     auto lookup_by_hash(const size_t hash) { return dp_table.emplace(hash); }
 

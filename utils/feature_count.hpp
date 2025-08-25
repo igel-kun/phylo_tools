@@ -13,9 +13,9 @@ namespace PT {
   
   // ------- FeatureCount: main class ---------
   // in a feature accumulator, we can collect all features seen in a set of nodes
-  template<class T> struct _FeatureAccu { using type = HashSet<T>; };
-  template<> struct _FeatureAccu<bool> { using type = bool; /* did we see the features?*/ };
-  template<class T> using FeatureAccu = typename _FeatureAccu<std::remove_cvref_t<T>>::type;
+  template<class T> struct FeatureAccu_ { using type = HashSet<T>; };
+  template<> struct FeatureAccu_<bool> { using type = bool; /* did we see the features?*/ };
+  template<class T> using FeatureAccu = typename FeatureAccu_<std::remove_cvref_t<T>>::type;
 
   // a feature counter is a Features-class, but with feature-accumulators instead of features
   template<class... Feats>
@@ -64,8 +64,8 @@ namespace PT {
   // ------- FeatureCount: concepts ---------
   // ------- FeatureCount: deduction guides ---------
   // ------- FeatureCount: defaults ---------
-  template<class T> struct _FeatureCountFor {};
-  template<class... Feats> struct _FeatureCountFor<FeatureCollection<Feats...>> { using type = FeatureCount<Feats...>; };
-  template<class T> using FeatureCountFor = typename _FeatureCountFor<std::remove_cvref_t<T>>::type;
+  template<class T> struct FeatureCountFor_ {};
+  template<class... Feats> struct FeatureCountFor_<FeatureCollection<Feats...>> { using type = FeatureCount<Feats...>; };
+  template<class T> using FeatureCountFor = typename FeatureCountFor_<std::remove_cvref_t<T>>::type;
 
 }
