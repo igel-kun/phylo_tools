@@ -18,7 +18,7 @@ namespace PT{
 #ifdef DEBUGNODES
   struct ProtoNode_ {
     static uintptr_t num_names;
-    const uintptr_t _name = num_names++;
+    uintptr_t _name = num_names++;
 
     // for debugging purposes, we may want to change the name to something more readable, like a successive numbering
     std::string name() const { return std::to_string(_name); }

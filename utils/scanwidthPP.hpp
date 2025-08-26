@@ -24,13 +24,13 @@ namespace PT {
     static_assert(std::is_reference_v<DataRef>);
 
 
-    Network& N;
+    Network* N;
     EdgeWeightExtract edge_weight;
 
     ScanwidthPreprocessor(Network& N_, EdgeWeightExtract&& _edge_weight):
-      N(N_), edge_weight(_edge_weight)
+      N(&N_), edge_weight(_edge_weight)
     {}
-    ScanwidthPreprocessor(Network& N_): N(N_) {}
+    ScanwidthPreprocessor(Network& N_): N(&N_) {}
 
     DataRef get_edge_weight(const Edge& uv) {
       if constexpr (call_with_adj) {
@@ -45,11 +45,11 @@ namespace PT {
 
 
     template<bool reverse = false, EdgeContainerType Edges>
-    auto path_start_and_end(const Edges& path) {
+    NodePair path_start_and_end(const Edges& path) {
       if constexpr (reverse)
-        return std::pair<NodeDesc, NodeDesc>(mstd::back(path).tail(), mstd::front(path).head());
+        return {mstd::back(path).tail(), mstd::front(path).head()};
       else
-        return std::pair<NodeDesc, NodeDesc>(mstd::front(path).tail(), mstd::back(path).head());
+        return {mstd::front(path).tail(), mstd::back(path).head()};
     }
 
     // remove the shortcut over the given path and add its weight to all nodes of the path
@@ -57,10 +57,10 @@ namespace PT {
     void remove_shortcut(const Edges& path) {
       assert(path.size() > 1);
       const auto [u,v] = path_start_and_end<reverse>(path);
-      const auto uv = N.find_edge(u,v);
+      const auto uv = Network::find_edge(u,v);
       if(!uv.is_invalid()) {
         const auto uv_weight = get_edge_weight(uv);
-        N.remove_edge_no_cleanup(uv);
+        N->remove_edge_no_cleanup(uv);
         for(const auto& xy: path)
           get_edge_weight(xy) += uv_weight;
       }
@@ -68,7 +68,7 @@ namespace PT {
 
     template<class T>
     bool remove_shortcuts(T&& arg) {
-      DEBUG4(std::cout<<"removing shortcuts from:\n"<< ExtendedDisplay(N) <<"\n");
+      DEBUG4(std::cout<<"removing shortcuts from:\n"<< ExtendedDisplay(*N) <<"\n");
       
       // step 1: collect all shortcuts
       const auto shorts = detect_shortcuts<NodeMap<NodeDesc>, true, Network>(std::forward<T>(arg));
@@ -110,7 +110,7 @@ namespace PT {
             // NOTE: we will not contract the uppermost node of a path since
             //    otherwise, completing the partial extension into a whole extension might put some other nodes before the end of the path
             std::cout << "contracting edge between "<<x<<" and its parent "<<x_parent<<" (path start is "<<path_start<<")\n";
-            if(N.contract_up_abort(x, x_parent) != 0) weight += offset;
+            if(N->contract_up_abort(x, x_parent) != 0) weight += offset;
           } else weight += offset;
           result = true;
         } else {
@@ -126,7 +126,7 @@ namespace PT {
         apply_to_inedge(x, contracter);
         DEBUG4(std::cout << "next stop: "<<x<<"\n");
       }
-      DEBUG5(std::cout << "after contractions:\n"<<N<<"\n");
+      DEBUG5(std::cout << "after contractions:\n"<<*N<<"\n");
       return result;
     }
 

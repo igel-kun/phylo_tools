@@ -468,13 +468,13 @@ namespace mstd {
   template<class F>
   struct deferred_call_t {
     using T = std::invoke_result_t<F>;
-    const F f;
+    F f;
 
-    explicit deferred_call_t(F&& _f): f(std::forward<F>(_f)) {}
+    explicit deferred_call_t(F&& _f) noexcept: f(std::forward<F>(_f)) {}
     operator T() { return f(); }
   };
   template<typename F>
-  inline auto deferred_call(F&& f) { return deferred_call_t<F>(std::forward<F>(f)); }
+  auto deferred_call(F&& f) { return deferred_call_t<F>(std::forward<F>(f)); }
 
   // a functional that ignores everything (and hopefully gets optimized out)
   template<class ReturnType = void>
@@ -521,9 +521,8 @@ namespace mstd {
   // a deleter that will or will not delete, depeding on its argument upon construction (for shared_ptr's)
   template<class T>
   struct SelectiveDeleter {
-    const bool del;
-    SelectiveDeleter(const bool _del): del(_del) {}
-    inline void operator()(T* p) const { if(del) delete p; }
+    bool del = true;
+    void operator()(T* p) const noexcept { if(del) delete p; }
   };
   using NoDeleter = IgnoreFunction<>;
 
@@ -820,11 +819,11 @@ namespace mstd {
   // an operator that appends anything to a given container
   template<ContainerType C>
   struct appender {
-    C& target;
-    appender(C& _target): target(_target) {}
+    C* target;
+    appender(C& _target): target(&_target) {}
 
     template<class... Args>
-    void operator()(Args&&... args) { append(target, std::forward<Args>(args)...); }
+    void operator()(Args&&... args) const { append(*target, std::forward<Args>(args)...); }
   };
 
   // an operator that stores something and returns it every time it is called

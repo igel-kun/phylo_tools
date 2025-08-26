@@ -83,10 +83,10 @@ namespace PT {
 
     template<bool reverse = false>
     struct sort_by_order {
-      const NodeInfos& node_infos;
+      const NodeInfos* node_infos;
 
       decltype(auto) operator()(const NodeDesc a, const NodeDesc b) const
-      { return (node_infos.at(a).order_number < node_infos.at(b).order_number) != reverse; }
+      { return (node_infos->at(a).order_number < node_infos->at(b).order_number) != reverse; }
 
       template<mstd::is_dereferencable_to<NodeDesc> Iter>
       decltype(auto) operator()(const Iter it1, const Iter it2) const
@@ -125,7 +125,7 @@ namespace PT {
         // step 2: construct base cases
         for(auto&& [label, HG_pair]: host_guest_label_match) {
           using HGFirst = std::remove_cvref_t<decltype(HG_pair.first)>;
-          mstd::flexible_sort(HG_pair.first.begin(), HG_pair.first.end(), sort_by_order{node_infos});
+          mstd::flexible_sort(HG_pair.first.begin(), HG_pair.first.end(), sort_by_order{&node_infos});
           DEBUG3(std::cout << "base case: "<<HG_pair<<"\n");
           mstd::append(table, mstd::front(HG_pair.second), std::forward<HGFirst>(HG_pair.first));
         }
@@ -205,7 +205,7 @@ namespace PT {
               }
             }
             // make sure the nodes are in the correct order
-            mstd::flexible_sort(poss.begin(), poss.end(), sort_by_order{node_infos});
+            mstd::flexible_sort(poss.begin(), poss.end(), sort_by_order{&node_infos});
           } else poss.clear(); // if the induced tree is edgeless but there are at least 2 children of u in guest, then u is not displayed
         } else mstd::append(poss, child_poss); // if u has a single child, then u maps where this child maps
       } else poss.clear(); // if no child of u can be mapped, then u cannot be mapped either
@@ -224,7 +224,7 @@ namespace PT {
         // for degree up to x, merge the child possibilities by linear "inplace_merge", otherwise, merge via iterator-queue in O(n log deg)
         if(Guest::out_degree(u) > mstd::config::vector_queue_merge_threshold){
           // NOTE: priority_queue outputs the LARGEST element first, so we'll have to reverse sort_by_order by swapping its arguments
-          IterQueue iter_queue(sort_by_order<true>{node_infos});
+          IterQueue iter_queue(sort_by_order<true>{&node_infos});
           size_t total_size = 0;
           // for each child v of u, add an auto iter to its possibility list
           for(const NodeDesc v: Guest::children(u)){
@@ -253,7 +253,7 @@ namespace PT {
               DEBUG3(std::cout << "\t&\t";  for(const auto& x: v_poss) std::cout << x <<":"<<node_infos.at(x).order_number<<" "; std::cout << "\n");
               
               poss.insert(poss.end(), v_poss.begin(), v_poss.end());
-              std::inplace_merge(poss.begin(), poss.begin() + old_size, poss.end(), sort_by_order{node_infos});
+              std::inplace_merge(poss.begin(), poss.begin() + old_size, poss.end(), sort_by_order{&node_infos});
             } else {
               poss.clear();
               return poss;

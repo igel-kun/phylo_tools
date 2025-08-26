@@ -24,7 +24,7 @@ namespace PT{
     // a node in T can be displayed by many nodes of N
     DisplayMap display_map;
 
-    typedef typename LabelMap_::mapped_type::first_type LabelType;
+    using LabelType = typename LabelMap_::mapped_type::first_type;
   public:
 
     Mapper(const Network_& N_, const Tree& T_, const LabelMap_& _labelmap):

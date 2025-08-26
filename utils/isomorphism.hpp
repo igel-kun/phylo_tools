@@ -20,7 +20,7 @@
 namespace PT{
   struct NoPoss : public std::exception
   {
-    const std::string msg;
+    std::string msg;
 
     template<class Net>
     NoPoss(const Net& N, const NodeDesc u):
@@ -35,7 +35,7 @@ namespace PT{
   //    for example, for single-labeled trees, we recommend a singleton_set,
   //    for low-multiply labeled trees & low-level networks an unordered_set<NodeDesc> should be good
   template<class NetworkA, class NetworkB, class PossSet_ = mstd::unordered_bitset>
-  class IsomorphismMapper
+  struct IsomorphismMapper
   {
     using PossSet     = PossSet_;
     using MappingPossibility = NodeMap<PossSet>;
@@ -44,11 +44,11 @@ namespace PT{
     using LabelMatch  = LabelMatching<NetworkA, NetworkB>;
     using LabelType   = typename LabelMatch::LabelType;
 
-    const NetworkA& N1;
-    const NetworkB& N2;
-    const LabelMatch& lmatch; // a label-matching matching nodes of N1 with nodes of N2 if they all have the same label
+  protected:
+    const NetworkA* N1;
+    const NetworkB* N2;
 
-    const size_t sizeN_;  // nodes in each of the input networks
+    size_t sizeN_;  // nodes in each of the input networks
     size_t nr_fix = 0;    // number of fixed nodes
 
     MappingPossibility mapping; // indicates for each node of N1 to which nodes of N2 it may map in an isomorphism
@@ -56,7 +56,7 @@ namespace PT{
     UpdateSet update_set; // set containing all nodes of N1 for which updates are pending
     UpdateOrder update_order; // a priority-queue containing all pending updates sorted by number of possibilities
    
-    const unsigned char flags;
+    unsigned char flags;
 
     // use this to indicate a sanity check failure like:
     // vertices/edges mismatch
@@ -97,7 +97,7 @@ namespace PT{
         if(test(poss_in_N2, x2)){
           if(poss_in_N2.size() > 1) mark_update(x1, 1);
           poss_in_N2.clear();
-        } else throw NoPoss(N1, x1);
+        } else throw NoPoss(*N1, x1);
         poss_in_N2.insert(x2);
       } else mark_update(x1, 1);
     }
@@ -113,18 +113,18 @@ namespace PT{
 
       DEBUG5(std::cout << "comparing nodes\n"<<N2_nodes<<"\nto\n"<<N1_nodes<<"\n");
       for(const NodeDesc u: N2_nodes){
-        DEBUG5(std::cout << "registering "<<u<<": "<<f(N2,u)<<"\n");
-        PossAndHist& ph = poss_and_hist.try_emplace(f(N2,u), size_N, 0).first->second;
+        DEBUG5(std::cout << "registering "<<u<<": "<<f(*N2,u)<<"\n");
+        PossAndHist& ph = poss_and_hist.try_emplace(f(*N2,u), size_N, 0).first->second;
         ph.first.set(u);
         ph.second++;
       }
       for(const NodeDesc u: N1_nodes){
-        const auto it = poss_and_hist.find(f(N1, u));
+        const auto it = poss_and_hist.find(f(*N1, u));
         if(it != poss_and_hist.end()) {
-          DEBUG5(std::cout << "checking "<<u<<": "<<f(N1,u)<<"\n");
+          DEBUG5(std::cout << "checking "<<u<<": "<<f(*N1,u)<<"\n");
           update_poss(u, it->second.first);
           if((it->second.second)-- == 0) throw NoPoss("node histograms differ");
-        } else throw NoPoss(N1, u);
+        } else throw NoPoss(*N1, u);
       }
     }
 
@@ -135,14 +135,14 @@ namespace PT{
       constexpr auto get_degree = [](const auto& Net, const NodeDesc u){ return Net.degrees(u); };
 
       if(flags == FLAG_MAP_LEAF_LABELS)
-        restrict_by_something(N1.leaves(), N2.leaves(), get_label);
+        restrict_by_something(N1->leaves(), N2->leaves(), get_label);
       else
-        restrict_by_something(N1.nodes(), N2.nodes(), get_label);
+        restrict_by_something(N1->nodes(), N2->nodes(), get_label);
 
       // all updated nodes have been fixed
       if(nr_fix < size_N){
         treat_pending_updates();
-        restrict_by_something(N1.nodes(), N2.nodes(), get_degree);
+        restrict_by_something(N1->nodes(), N2->nodes(), get_degree);
       }
     }
 
@@ -151,12 +151,10 @@ namespace PT{
     IsomorphismMapper(const NetworkA& N1_,
                       const NetworkB& N2_,
                       const uint32_t _size_N,
-                      const LabelMatch& _lmatch,
                       const unsigned char _flags,
                       const MappingPossibility& _mapping = MappingPossibility()):
-      N1(N1_),
-      N2(N2_),
-      lmatch(_lmatch),
+      N1(&N1_),
+      N2(&N2_),
       size_N(_size_N),
       mapping(_mapping),
       update_set(size_N), // <--- be aware that update_set and update_order are cleared on construction, even copy-construct!!!
@@ -167,20 +165,19 @@ namespace PT{
 
     // note: copy construct clears certain sets, so needs to be explicit
     IsomorphismMapper(const IsomorphismMapper& _mapper):
-      IsomorphismMapper(_mapper.N1, _mapper.N2, _mapper.size_N, _mapper.lmatch, _mapper.flags, _mapper.mapping)
+      IsomorphismMapper(*(_mapper.N1), *(_mapper.N2), _mapper.size_N, _mapper.flags, _mapper.mapping)
     {}
 
-    IsomorphismMapper(IsomorphismMapper&& _mapper) = default;
+    IsomorphismMapper(IsomorphismMapper&& _mapper) noexcept = default;
 
   public:
     IsomorphismMapper(const NetworkA& N1_,
                       const NetworkB& N2_,
-                      const LabelMatch& _lmatch,
                       const unsigned char _flags):
-      IsomorphismMapper(N1_, N2_, N1_.num_nodes(), _lmatch, _flags)
+      IsomorphismMapper(N1_, N2_, N1_.num_nodes(), _flags)
     {
-      DEBUG3(std::cout << "#nodes: "<<N1.num_nodes()<<" & "<<N2.num_nodes()<<"\t\t#edges: "<<N1.num_edges()<<" & "<<N2.num_edges()<<std::endl;);
-      if((N1.num_nodes() == N2.num_nodes()) && (N1.num_edges() == N2.num_edges())){
+      DEBUG3(std::cout << "#nodes: "<<N1->num_nodes()<<" & "<<N2->num_nodes()<<"\t\t#edges: "<<N1->num_edges()<<" & "<<N2->num_edges()<<std::endl;);
+      if((N1->num_nodes() == N2->num_nodes()) and (N1->num_edges() == N2->num_edges())){
         try{
           degree_and_label_restrict();
           DEBUG3(std::cout << "done initializing mapper"<<std::endl);
@@ -203,13 +200,13 @@ namespace PT{
       try{
         treat_pending_updates();
 
-        DEBUG5(std::cout << "possibilities are:" << std::endl; for(NodeDesc u: N1.nodes()) std::cout << u << "\t"<< to_set(mapping.at(u)) << std::endl);
+        DEBUG5(std::cout << "possibilities are:" << std::endl; for(NodeDesc u: N1->nodes()) std::cout << u << "\t"<< to_set(mapping.at(u)) << std::endl);
         DEBUG3(std::cout << "no more pending updated"<<std::endl);
 
         // find a vertex to branch on (minimum # possibilities)
         NodeDesc min = NoNode;
         size_t min_poss = size_N;
-        for(NodeDesc u: N1.nodes()){
+        for(NodeDesc u: N1->nodes()){
           const size_t np = num_poss(u);
           if((np != 1) && (np < min_poss)){
             min_poss = np;
@@ -256,16 +253,16 @@ namespace PT{
       DEBUG5(std::cout << "updating "<<x1<<" whose mapping is ("<<num_poss(x1)<<" possibilities):\n " << to_set<NodeSet>(mapping.at(x1)) << std::endl);
       PossSet possible_nodes(size_N);
       // update children
-      if(!N1.is_leaf(x1)){
+      if(not NetworkA::is_leaf(x1)){
         for(const NodeDesc x2 : mapping.at(x1))
-          for(const NodeDesc i: N2.children(x2)) possible_nodes.set(i);
-        for(const NodeDesc i: N1.children(x1)) update_poss(i, possible_nodes);
+          for(const NodeDesc i: NetworkB::children(x2)) possible_nodes.set(i);
+        for(const NodeDesc i: NetworkA::children(x1)) update_poss(i, possible_nodes);
       }
       // update parents
       possible_nodes.clear();
       for(const NodeDesc x2: mapping.at(x1))
-        for(const NodeDesc i: N2.parents(x2)) possible_nodes.set(i);
-      for(const NodeDesc i: N1.parents(x1)) update_poss(i, possible_nodes);
+        for(const NodeDesc i: NetworkB::parents(x2)) possible_nodes.set(i);
+      for(const NodeDesc i: NetworkA::parents(x1)) update_poss(i, possible_nodes);
     }
 
     // update possibilities, return whether the number of possibilities changed
@@ -283,7 +280,7 @@ namespace PT{
           const size_t new_count = x_poss.size();
           // if something changed, update all parents and children
           if(new_count != old_count){
-            if(new_count == 0) throw NoPoss(N1, x);
+            if(new_count == 0) throw NoPoss(*N1, x);
             mark_update(x, new_count);
             return true;
           } else return false;
@@ -291,7 +288,7 @@ namespace PT{
           DEBUG5(std::cout << "not updating possibilities of "<<x<<" (already unique to "<< to_set<NodeSet>(x_poss)<<")\n");
           if(test(new_poss, front(x_poss)))
             return false;
-          else throw NoPoss(N1, x);
+          else throw NoPoss(*N1, x);
         }
       } else {
         // if x did not have a possibility set before, default to "size changed"
@@ -304,15 +301,5 @@ namespace PT{
 
 
   template<StrictPhylogenyType NetworkA, StrictPhylogenyType NetworkB>
-  IsomorphismMapper<NetworkA, NetworkB>
-  make_iso_mapper(const NetworkA& N1_,
-                  const NetworkB& N2_,
-                  const unsigned char _flags,
-                  const LabelMatching<NetworkA, NetworkB>* _lmatch = nullptr)
-  {
-    if(_lmatch){
-      return IsomorphismMapper<NetworkA, NetworkB>(N1_, N2_, *_lmatch, _flags);
-    } else return IsomorphismMapper<NetworkA, NetworkB>(N1_, N2_, get_label_matching(N1_, N2_), _flags);
-    //} else return IsomorphismMapper<NetworkA, NetworkB>(N1_, N2_, (_lmatch ? *_lmatch : get_label_matching(N1_, N2_)), _flags);
-  }
+  IsomorphismMapper(const NetworkA&, const NetworkB&, const unsigned char) -> IsomorphismMapper<NetworkA, NetworkB>;
 }

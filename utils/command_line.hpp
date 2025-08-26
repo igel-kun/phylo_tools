@@ -15,9 +15,9 @@
 namespace mstd {
 
   // for each option, tell me the min and max number of option parameters
-  typedef std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> OptionDesc;
+  using OptionDesc = std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>;
   // for each option, a vector of option parameters, the empty string collects all non-option parameters (arguments)
-  typedef std::unordered_map<std::string, std::vector<std::string>> OptionMap;
+  using OptionMap = std::unordered_map<std::string, std::vector<std::string>>;
 
   void parse_options(const int &argc, const char **argv, const OptionDesc& description, const std::string& help_message, OptionMap& options) {
     assert(test(description, ""));
@@ -69,7 +69,7 @@ namespace mstd {
     using ExtractArgFromString = ExtractArgFromString_;
     using ValidityChecker = ValidityChecker_;
 
-    const std::vector<std::string>& arguments;
+    const std::vector<std::string>* arguments;
     ExtractArgFromString extract;
     ValidityChecker check_valid;
     size_t arg_index = 0;
@@ -77,10 +77,10 @@ namespace mstd {
     using T = decltype(extract(std::string{}));
 
     T parse_next_argument() {
-      if(arguments.size() > arg_index) {
-        T result = extract(arguments.at(arg_index));
+      if(arguments->size() > arg_index) {
+        T result = extract(arguments->at(arg_index));
         if(!check_valid(result)) {
-          std::cerr << "unexpected argument '"<< arguments.at(arg_index) << "', please see the help screen (--help)\n";
+          std::cerr << "unexpected argument '"<< arguments->at(arg_index) << "', please see the help screen (--help)\n";
           exit(EXIT_FAILURE);
         } else return result;
       } else {
@@ -99,7 +99,7 @@ namespace mstd {
     using Parent = ProtoConstraintIntParser<mstd::linear_interval<int>>;
     using Parent::ExtractArgFromString;
     ConstraintIntParser(const std::vector<std::string>& _arguments, const int lo, const int hi):
-      Parent{_arguments, ExtractArgFromString{}, mstd::linear_interval<int>{lo, hi}, 0}
+      Parent{&_arguments, ExtractArgFromString{}, mstd::linear_interval<int>{lo, hi}, 0}
     {}
   };
 

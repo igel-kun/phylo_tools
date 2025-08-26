@@ -38,66 +38,82 @@ add_custom_target ( doc doxygen Doxyfile )
 
 include_directories ("${PROJECT_SOURCE_DIR}")
 
-# suppress clangs silly "unused parameter" warnings...
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+# Determine proper c++ standard flag based on compiler and version
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+    set(STD_FLAG "-std=c++2a")
+  else()
+    set(STD_FLAG "-std=c++20")
+  endif()
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  set(STD_FLAG "-std=c++20")
   set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wno-unknown-warning-option")
-endif()
-
-if(${FATAL})
-  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wfatal-errors")
-endif()
-
-if(${STATISTICS})
-  MESSAGE("adding support for collecting statistics...")
-  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
-endif()
-
-if(${DFSCORO})
-  MESSAGE("switching to coroutine-based DFS implementation...")
-  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DDFSCORO")
-endif()
-
-
-if(${GRAPHITE})
-  message("setting graphite flags...")
-  #set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -floop-flatten -floop-parallelize-all -floop-block -fweb" )
-  set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -funroll-loops -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
-endif()
-
-if(${ASAN})
-  MESSAGE("enabling address sanitizer...")
-  set(PROTOTYPE_SANITIZER "-fsanitize=address -fsanitize-address-use-after-scope")
-endif()
-
-set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread -std=c++20 -Wno-dangling-reference -Wno-range-loop-construct -ftemplate-depth=100 -fdiagnostics-all-candidates")
-set(PROTOTYPE_FLAGS "-fmax-errors=${MAXERR} -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200 -fno-omit-frame-pointer")
-set(PROTOTYPE_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast -Wno-unused-parameter -Wno-misleading-indentation -Werror -Wno-error=cpp -Wno-error=effc++ -Wshadow -Wnon-virtual-dtor -Wno-ignored-attributes -Wno-unused-function -Wshadow")
-
-# static linking
-if(${STATIC})
-  SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-  SET(BUILD_SHARED_LIBRARIES OFF)
-  SET(CMAKE_EXE_LINKER_FLAGS "-static")
-  SET(CMAKE_COMMON_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O2")
 else()
-  SET(CMAKE_COMMON_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -Ofast -march=native -m64 -fno-stack-protector ${GRAPHITE_CXX_FLAGS}")
+  set(STD_FLAG "-std=c++20") # fallback
 endif()
 
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS_RELEASE} -Wno-cpp -DNDEBUG -pipe")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} ${PROTOTYPE_WARNINGS} ${PROTOTYPE_SANITIZER} ${PROTOTYPE_FLAGS}")
+# Only use certain modern warning flags if GCC ≥ 10
+set(LEGACY_WARNINGS "-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Wformat=2 -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wuseless-cast")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10)
+  message(STATUS "Restricting warnings to legacy due to old GCC version...")
+  set(FLAG_WARNINGS "${LEGACY_WARNINGS}")
+else()
+  message(STATUS "Enabling warnings...")
+  set(FLAG_WARNINGS "-Wdouble-promotion -Wno-unused-parameter -Wno-misleading-indentation -Wno-ignored-attributes -Wno-unused-function -Werror -Wno-error=cpp -Wno-error=effc++")
+  # -Wnull-dereference
+  set(FLAG_DIAGNOSTICS "-ftemplate-depth=100 -fdiagnostics-all-candidates -ftemplate-backtrace-limit=0 -fconcepts-diagnostics-depth=200 -ftemplate-backtrace-limit=200")
+  if (GRAPHITE)
+    message(STATUS "Enabling Graphite optimization flags...")
+    set(GRAPHITE_CXX_FLAGS "-fgraphite-identity -funroll-loops -floop-flatten -floop-parallelize-all -floop-block -fweb -ftree-loop-if-convert -frename-registers -floop-interchange -floop-strip-mine -ftree-loop-distribution -ftree-loop-distribute-patterns -ftree-loop-ivcanon -fivopts -ftracer" )
+  endif()
+endif()
 
 
-if(${DEBUG})
-  MESSAGE("building DEBUG version...")
+if(DEBUG)
+  message(STATUS "building DEBUG version...")
+
+  if (ASAN)
+    message(STATUS "Enabling address sanitation flags...")
+    set(SANITIZER_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
+  endif()
+  if(FATAL)
+    set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -Wfatal-errors")
+  endif()
+  if(STATISTICS)
+    message(STATUS "adding support for collecting statistics...")
+    set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DSTATISTICS")
+  endif()
+
   set(CMAKE_BUILD_TYPE Debug)
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Ddebuglevel=${DEBUG}")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ddebuglevel=${DEBUG}")
   message("CXX flags are: ${CMAKE_CXX_FLAGS_DEBUG}")
 else()
-  MESSAGE("building RELEASE version...")
+  message(STATUS "building RELEASE version...")
   set(CMAKE_BUILD_TYPE RELEASE)
   message("CXX flags are: ${CMAKE_CXX_FLAGS_RELEASE}")
 endif()
 
+# 5. Compose common flags
+set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -pthread ${STD_FLAG} ${FLAG_WARNINGS} ${GRAPHITE_CXX_FLAGS}")
+
+if(DFSCORO)
+  message(STATUS "switching to coroutine-based DFS implementation...")
+  set(CMAKE_COMMON_FLAGS "${CMAKE_COMMON_FLAGS} -DDFSCORO")
+endif()
+
+# static linking
+if(STATIC)
+  SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  SET(BUILD_SHARED_LIBRARIES OFF)
+  SET(CMAKE_EXE_LINKER_FLAGS "-static")
+  set(CMAKE_COMMON_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -O3")
+else()
+  set(CMAKE_COMMON_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS} -Ofast -march=native -m64 -fno-stack-protector")
+endif()
+
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_COMMON_FLAGS_RELEASE} -Wno-cpp -DNDEBUG -pipe -fomit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_COMMON_FLAGS} ${SANITIZER_FLAGS} -fmax-errors=${MAXERR}")
 
 ADD_EXECUTABLE( tests examples/tests.cpp )
 ADD_EXECUTABLE( iso examples/iso.cpp )

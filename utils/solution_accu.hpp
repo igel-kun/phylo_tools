@@ -28,7 +28,7 @@ namespace mstd {
     using SolutionVec = mstd::sorted_vector<SolutionWithScore, CmpSeconds>;
     static constexpr bool has_extracter = std::is_invocable_v<ScoreExtracterOrScore, Solution>;
 
-    size_t num_solutions;
+    size_t num_solutions = 1;
     SolutionVec solutions;
     [[no_unique_address]] std::conditional_t<has_extracter, ScoreExtracterOrScore, mstd::monostate> extracter;
 
@@ -36,14 +36,14 @@ namespace mstd {
     SolutionAccumulator(size_t num_solutions_to_keep, ScoreCmpInit _cmp = ScoreCmpInit()):
       num_solutions(num_solutions_to_keep),
       solutions(CmpSeconds{GetSecond{}, ScoreCmp{std::forward<ScoreCmpInit>(_cmp)}})
-    {}
+    {assert(num_solutions > 0);}
 
     template<class ScoreCmpInit, class ScoreExtracterInit>
     SolutionAccumulator(size_t num_solutions_to_keep, ScoreCmpInit _cmp, ScoreExtracterInit _extracter):
       num_solutions(num_solutions_to_keep),
       solutions(CmpSeconds{GetSecond{}, ScoreCmp{std::forward<ScoreCmpInit>(_cmp)}}),
       extracter(std::forward<ScoreExtracterInit>(_extracter))
-    {}
+    {assert(num_solutions > 0);}
 
     SolutionAccumulator non_empty_cross_product_with(const SolutionAccumulator& other) const {
       SolutionAccumulator result{num_solutions};

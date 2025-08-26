@@ -7,7 +7,7 @@ namespace mstd {
 
   //! an exception for the case that a graph property is read that is not up to date
   struct NeedSorted : public std::exception  {
-    const std::string msg;
+    std::string msg;
 
     NeedSorted(const std::string& _func):
       msg(_func + " needs a sorted data structure") {}
@@ -19,7 +19,7 @@ namespace mstd {
 
   //! an exception for the case that a graph property is read that is not up to date
   struct Unimplemented : public std::exception  {
-    const std::string msg;
+    std::string msg;
 
     Unimplemented(const std::string& _func):
       msg(_func + " not yet implemented, sorry") {}

@@ -14,14 +14,9 @@ namespace PT {
   // an iterator producing pairs of (Node, Property), where the property is produced by the getter
   // Note: the getter should have a type called 'Property'
   template<std::ContainerType Container, class PropertyGetter>
-  class LabeledNodeIter
+  struct LabeledNodeIter
   {
     using Iter = std::iterator_of_t<Container>;
-    Iter it;
-    const PropertyGetter& getter;
-
-    LabeledNodeIter() = delete; // disallow default construction
-  public:
     using PropertyType = typename PropertyGetter::PropertyType;
     using value_type      = LabeledNode<PropertyType>;
     using reference       = value_type&;
@@ -30,15 +25,20 @@ namespace PT {
     using difference_type = ptrdiff_t;
     using iterator_category = std::random_access_iterator_tag;
 
-    LabeledNodeIter(const Iter& _it, const PropertyGetter& _getter):
-      it(_it), getter(_getter)
+  protected:
+    Iter it;
+    PropertyGetter* getter;
+ 
+  public:
+    LabeledNodeIter() = delete; // disallow default construction
+
+    LabeledNodeIter(const Iter& _it, PropertyGetter& _getter):
+      it(_it), getter(&_getter)
     {}
     
     // dereference
-    value_type operator*() const
-    {
-      const Node x = *it;
-      return value_type(x, getter(x));
+    value_type operator*() const {
+      return value_type(*it, getter(*it));
     }
 
     // increment
@@ -53,8 +53,8 @@ namespace PT {
 
   template<class NodeContainer, class PropertyGetter>
   using LabeledNodeIterFactory = std::IterFactory<NodeContainer,
-                                                  const PropertyGetter,
-                                                  std::BeginEndIters<NodeContainer, false,LabeledNodeIterFor<PropertyGetter>::template type>>;
+                                    const PropertyGetter,
+                                    std::BeginEndIters<NodeContainer, false,LabeledNodeIterFor<PropertyGetter>::template type>>;
 
 }// namespace
 

@@ -19,7 +19,7 @@ namespace PT{
     // TODO: deal with the case the Network has multiple roots! For now, we just disallow it
     static_assert(Network::has_unique_root);
 
-    Network& N;
+    Network* N;
     
     // we want to be able to merge tree components; thus, we will use a disjoint-set forest
     // NOTE: as payload, we store one visible leaf
@@ -41,15 +41,15 @@ namespace PT{
 
     // construction
     TreeComponentInfos(Network& N_):
-      N(N_)
+      N(&N_)
     {
-      if(not N.empty())
+      if(not N->empty())
         compute_comp_DAG();
     }
 
     // we want to be able to give a new Network-reference when copy-constructing
     TreeComponentInfos(TreeComponentInfos&& tc, Network& N_):
-      N(N_), N_to_comp_DAG(std::move(tc.N_to_comp_DAG)), comp_DAG(std::move(tc.comp_DAG))
+      N(&N_), N_to_comp_DAG(std::move(tc.N_to_comp_DAG)), comp_DAG(std::move(tc.comp_DAG))
     {}
 
     NodeDesc comp_root_of(const NodeDesc x) const {
@@ -125,7 +125,7 @@ namespace PT{
     NodeDesc component_root_consensus_among_parents(const NodeDesc v, Callback&& callback = Callback()) {
       DEBUG4(std::cout << "computing consensus for nodes above "<<v<<"\n");
       NodeDesc consensus = v;
-      for(const NodeDesc u: N.parents(v)) {
+      for(const NodeDesc u: Network::parents(v)) {
         // step 0: get the component root of u, if it has one
         NodeDesc rt = comp_root_of(u);
         // step 0.5: apply the callback
@@ -166,8 +166,8 @@ namespace PT{
       NodeVec non_trivial_roots;
       NodeVec trivial_roots;
 
-      emplacer.create_copy_of(N.root());
-      emplacer.mark_root(N.root());
+      emplacer.create_copy_of(N->root());
+      emplacer.mark_root(N->root());
       //std::cout << "setting comp data of "<<N.root()<<"\n";
       //set_comp_root(N.root());
       DEBUG4(std::cout << "computing component roots\n");
@@ -187,7 +187,7 @@ namespace PT{
     // compute component roots (trivial (that is, leaves) and non-trivial)
     // NOTE: this sets the comp_root of all (non-leaf) tree nodes
     void compute_component_roots(NodeVec& trivial_roots, NodeVec& non_trivial_roots) {
-      for(const NodeDesc u: N.nodes_preorder()) {
+      for(const NodeDesc u: N->nodes_preorder()) {
         auto& u_node = node_of<Network>(u);
         if(!u_node.is_reti()) {
           const auto& pu = u_node.parents();
@@ -232,8 +232,8 @@ namespace PT{
 
     // if x is a reticulation, get the root of the tree component below x, otherwise return x itself
     NodeDesc get_tree_comp_below(NodeDesc x) {
-      while(N.is_reti(x)) {
-        const auto& x_children = N.children(x);
+      while(Network::is_reti(x)) {
+        const auto& x_children = Network::children(x);
         assert(x_children.size() <= 1);
         if(x_children.size() == 1) {
           x = mstd::front(x_children);
@@ -296,22 +296,22 @@ namespace PT{
       NodeDesc rt_below_v = get_tree_comp_below(v);
       DEBUG4(std::cout << "\tREACT: comp-root of "<< u <<" is "<<u_rt<<" and the comp-root below "<<v<<" is "<<rt_below_v<<"\n");
       
-      assert(N.out_degree(v) <= 1);
+      assert(Network::out_degree(v) <= 1);
       if(rt_below_v == v) { // v is no longer a reticulation, which means that v is now suppressible or a leaf; in the latter case nothing has to be done
-        assert(N.in_degree(v) == 1);
-        const auto& v_children = N.children(v);
+        assert(Network::in_degree(v) == 1);
+        const auto& v_children = Network::children(v);
         if(!v_children.empty()) {
           assert(v_children.size() == 1);
           DEBUG4(std::cout << "\tREACT: "<< v <<" is now suppressible\n");
           // if v is suppressible, we still might have to remove the edge between rt_u and the component root below v in the component DAG
           const NodeDesc v_child = mstd::front(v_children);
           DEBUG4(std::cout << "\tREACT: "<< v_child <<"'s comp root is "<< comp_root_of(v_child) << "\n");
-          const NodeDesc v_parent = N.parent(v);
-          if(!N.is_reti(v_child)) {
+          const NodeDesc v_parent = Network::parent(v);
+          if(not Network::is_reti(v_child)) {
             // if v's child is not a reticulation, it must be a (possibly trivial) component root (remember that v was a reticulation before removing uv)
             assert(comp_root_of(v_child) == v_child); 
             // IMPORTANT NOTE: if v's parent is not a reticulation, then we just merged 2 tree compoents together, so there's plenty of work to do
-            if(!N.is_reti(v_parent)) {
+            if(not Network::is_reti(v_parent)) {
               // since v_parent is not a reticulation, it must have a component root
               const NodeDesc v_parent_rt = comp_root_of(v_parent);
               DEBUG4(std::cout << "\tREACT: merging tree-components of "<<v_parent_rt<<" and "<<v_child<<"\n");
@@ -323,18 +323,18 @@ namespace PT{
               NodeVec retis_below;
               while(!todo.empty()) {
                 const NodeDesc x = mstd::value_pop(todo);
-                assert(N.in_degree(x) <= 1);
-                for(const NodeDesc y: N.children(x))
-                  if(N.out_degree(y) != 0){
-                    if(N.in_degree(y) == 1)
+                assert(Network::in_degree(x) <= 1);
+                for(const NodeDesc y: Network::children(x))
+                  if(Network::out_degree(y) != 0){
+                    if(Network::in_degree(y) == 1)
                       mstd::append(todo, y);
                     else mstd::append(retis_below, y);
                   }
               }
               DEBUG4(std::cout << "retis below: "<<retis_below<<"\n");
               for(NodeDesc x: retis_below) {
-                while((N.out_degree(x) == 1) && (comp_root_of(x) == NoNode) && (component_root_consensus_among_parents<false>(x) != NoNode))
-                  x = N.child(x);
+                while((Network::out_degree(x) == 1) and (comp_root_of(x) == NoNode) and (component_root_consensus_among_parents<false>(x) != NoNode))
+                  x = Network::child(x);
               }
 
               DEBUG4(std::cout << "cDAG after component update:\n";comp_DAG.print_subtree_with_data();)
@@ -361,7 +361,7 @@ namespace PT{
         DEBUG4(std::cout << "\tREACT: "<< v <<" is a reticulation above the comp-root "<<rt_below_v<<"\n");
         assert(rt_below_v != NoNode);
 
-        if(!N.is_leaf(rt_below_v)) {
+        if(not Network::is_leaf(rt_below_v)) {
           // step 0: check if u_rt is still above v_rt or not
           // NOTE: this updates the component root of v and all reticulation children of u on the way
           bool u_rt_is_above_rt_below_v = false;
@@ -381,11 +381,11 @@ namespace PT{
 
     // update comp-root and visibility above a leaf l after it has been regrafted
     void react_to_leaf_regraft(const NodeDesc l) {
-      assert(!N.label(l).empty());
-      if(!N.is_root(l)){
-        assert(N.in_degree(l) == 1);
-        const NodeDesc pl = N.parent(l);
-        if(N.in_degree(pl) > 1) {
+      assert(not Network::label(l).empty());
+      if(not Network::is_root(l)){
+        assert(Network::in_degree(l) == 1);
+        const NodeDesc pl = Network::parent(l);
+        if(Network::in_degree(pl) > 1) {
           set_comp_root(l, l, l);
         } else {
           set_comp_root(l, comp_root_of(pl), l);
