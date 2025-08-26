@@ -33,7 +33,7 @@ namespace mstd {
 
     optional_item() = default;
     optional_item(optional_item&& other) noexcept = default; 
-    optional_item(const optional_item& other) = default;
+    optional_item(const optional_item& other): value{other.value ? std::make_unique(other.value) : nullptr} {}
 
     optional_item(std::unique_ptr<T>&& t) noexcept: value{std::move(t)} {}
     optional_item(T* t) { if(t != nullptr) value = std::make_unique<T>(*t); }
@@ -44,7 +44,7 @@ namespace mstd {
     optional_item(T&& ref) noexcept: value{std::make_unique<T>(std::move(ref))} {}
 
     optional_item& operator=(optional_item&& other) noexcept = default;
-    optional_item& operator=(const optional_item& other) { if(other.value) value = std::make_unique<T>(other.value); else value.reset(); }
+    optional_item& operator=(const optional_item& other) { value = other.value ? std::make_unique<T>(other.value) : nullptr; }
   };
 
   static_assert(std::copy_constructible<optional_item<0, std::unique_ptr<int>>>);
