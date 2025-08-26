@@ -66,8 +66,8 @@ namespace mstd {
     const_reference front() const { assert(!empty()); return *storage; }
     reference       back() { assert(!empty()); return *storage; }
     const_reference back() const { assert(!empty()); return *storage; }
-    iterator       find(const const_reference x) { return (non_empty() && (x == *storage)) ? begin() : end(); }
-    const_iterator find(const const_reference x) const { return (non_empty() && (x == *storage)) ? begin() : end(); }
+    iterator       find(const const_reference x) { return (non_empty() and (x == *storage)) ? begin() : end(); }
+    const_iterator find(const const_reference x) const { return (non_empty() and (x == *storage)) ? begin() : end(); }
     size_type count(const const_reference x) const { return non_empty() ? (x == front()) : 0; }
     bool contains(const const_reference x) const { return count(x); }
 

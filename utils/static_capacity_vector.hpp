@@ -6,12 +6,13 @@
 namespace mstd {
 
   // thanks to David Stone: https://www.youtube.com/watch?v=I8QJLGI0GOE
-  template<class T, size_t capacity>
+  template<class T, size_t _capacity>
   struct uninitialized_array {
-    using size_type = mstd::uint_tight<capacity>;
+    using size_type = mstd::uint_tight<_capacity>;
     using iterator = T*;
     using const_iterator = const T*;
- 
+
+    static constexpr size_t capacity = _capacity;
     static constexpr bool is_sufficiently_trivial =
       std::is_trivially_default_constructible_v<T> and std::is_trivially_destructible_v<T>;
   
@@ -179,7 +180,7 @@ namespace mstd {
     constexpr _static_capacity_vector() = default;
     constexpr _static_capacity_vector(const _static_capacity_vector& other): _data(other._data) {}
     constexpr _static_capacity_vector(_static_capacity_vector&&) requires std::is_trivially_move_constructible_v<T> = default;
-    constexpr _static_capacity_vector(_static_capacity_vector&& other) requires (!std::is_trivially_move_constructible_v<T>) {
+    constexpr _static_capacity_vector(_static_capacity_vector&& other) requires (not std::is_trivially_move_constructible_v<T>) noexcept {
       std::uninitialized_move(other.begin(), other.end(), begin());
       _size.increaese_by(other.size());
     }

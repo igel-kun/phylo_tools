@@ -19,7 +19,7 @@ namespace mstd {
     static constexpr int reserved_bytes = _size - small_bytes;
     static constexpr int reserved_bits = CHAR_BIT * small_bytes;
 
-    char* _data = 0;
+    char* _data = nullptr;
     char internal[_size];
 
     bool valid_ptr() const {
@@ -61,7 +61,7 @@ namespace mstd {
       charp(std::string_view{s})
     {}
 
-    charp(charp&& other): _data{other._data} { other._data = 0; }
+    charp(charp&& other) noexcept: _data{other._data} { other._data = nullptr; }
 
     charp(const charp& other) {
       if(other.valid_ptr()) {
@@ -83,12 +83,12 @@ namespace mstd {
       else return internal;
     }
 
-    bool empty() const { return _data == 0; }
+    bool empty() const { return _data == nullptr; }
 
     void swap(charp& other) { std::swap(_data, other._data); }
 
     charp& operator=(const charp& other) { charp tmp(other); swap(tmp); return *this; }
-    charp& operator=(charp&&) = default;
+    charp& operator=(charp&&) noexcept = default;
 
     size_t size() const { return length(); }
     size_t length() const { return std::string_view(*this).size(); }

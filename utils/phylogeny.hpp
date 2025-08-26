@@ -64,16 +64,18 @@ namespace PT {
     ProtoPhylogeny(const ProtoPhylogeny&) = delete;
     ProtoPhylogeny& operator=(const ProtoPhylogeny&) = delete;
 
-    ProtoPhylogeny(ProtoPhylogeny&& other):
-      _roots(other._roots), _num_nodes(other._num_nodes), _num_edges(other._num_edges)
+    ProtoPhylogeny(ProtoPhylogeny&& other) noexcept:
+      _roots(std::move(other._roots)),
+      _num_nodes(other._num_nodes),
+      _num_edges(other._num_edges)
     {
       other._roots.clear();
     }
 
-    ProtoPhylogeny& operator=(ProtoPhylogeny&& other) {
+    ProtoPhylogeny& operator=(ProtoPhylogeny&& other) noexcept {
       _roots = std::move(other._roots);
-      _num_nodes = std::move(other._num_nodes);
-      _num_edges = std::move(other._num_edges);
+      _num_nodes = other._num_nodes;
+      _num_edges = other._num_edges;
       other._roots.clear();
       return *this;
     }
@@ -140,14 +142,15 @@ namespace PT {
     ProtoPhylogeny(const ProtoPhylogeny&) = delete;
     ProtoPhylogeny& operator=(const ProtoPhylogeny&) = delete;
 
-    ProtoPhylogeny(ProtoPhylogeny&& other):
-      _roots(other._roots), _num_nodes(other._num_nodes)
+    ProtoPhylogeny(ProtoPhylogeny&& other) noexcept:
+      _roots(std::move(other._roots)),
+      _num_nodes(other._num_nodes)
     {
       other._roots.clear();
     }
-    ProtoPhylogeny& operator=(ProtoPhylogeny&& other) {
+    ProtoPhylogeny& operator=(ProtoPhylogeny&& other) noexcept {
       _roots = std::move(other._roots);
-      _num_nodes = std::move(other._num_nodes);
+      _num_nodes = other._num_nodes;
       other._roots.clear();
     }
 
@@ -229,7 +232,7 @@ namespace PT {
     // create a node in the void
     // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
     template<class... Args>
-      requires ((sizeof...(Args) != 1) || (!NodeFunctionType<mstd::FirstTypeOf<Args...>> && !DataExtracterType<mstd::FirstTypeOf<Args...>>))
+      requires ((sizeof...(Args) != 1) or (not NodeFunctionType<mstd::FirstTypeOf<Args...>> and not DataExtracterType<mstd::FirstTypeOf<Args...>>))
     static constexpr NodeDesc create_node(Args&&... args) {
       //DEBUG5(std::cout << "creating node of type "<<mstd::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
       Node* result = new Node(std::forward<Args>(args)...);
@@ -298,7 +301,7 @@ namespace PT {
       const auto result = Parent::add_child(u, std::forward<Adj>(v), std::forward<Args>(args)...);
       if(result.second) {
         const bool res = Parent::add_parent(v, u, *(result.first)).second;
-        assert(res && "u is a predecessor of v, but v is not a successor of u. This should never happen!");
+        assert(res and "u is a predecessor of v, but v is not a successor of u. This should never happen!");
 				count_edge();
       }
       return result;
@@ -448,7 +451,7 @@ namespace PT {
       const auto [iter, success] = Parent::add_child(x, r, std::forward<Args>(args)...);
       assert(success);
       const bool res = Parent::add_parent(r, x, *iter).second;
-      assert(res && "u is a predecessor of v, but v is not a successor of u. This should never happen!");
+      assert(res and "u is a predecessor of v, but v is not a successor of u. This should never happen!");
       count_edge();
       mstd::erase(_roots, r);
       mstd::append(_roots, x);
@@ -1419,23 +1422,23 @@ namespace PT {
     // NOTE: This will go horribly wrong if the sub-network below in_root has incoming arcs from outside the subnetwork!
     //       It is the user's responsibility to make sure this is not the case.
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_tag, Phylo&& in_tree, const RContainer& in_roots) {
+    Phylogeny(const policy_move_tag, Phylo&& in_tree, const RContainer& in_roots) noexcept {
       place_below_by_move<true, true>(std::move(in_tree), in_roots, NoNode);
     }
     // "move" construction with single root
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_tag, Phylo&& in_tree, const NodeDesc in_root) {
+    Phylogeny(const policy_move_tag, Phylo&& in_tree, const NodeDesc in_root) noexcept {
       place_below_by_move(std::move(in_tree), in_root, NoNode);
       // remember to manually remove the in_root from in_tree's root storage
       mstd::erase(in_tree._roots, in_root);
     }
     // "move" construction making a copy of in_root instead of moving it
     template<StrictPhylogenyType Phylo> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const NodeDesc in_root) {
+    Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const NodeDesc in_root) noexcept {
       place_below_by_move_children(std::move(in_tree), in_root, NoNode);
     }
     template<StrictPhylogenyType Phylo, NodeIterableType RContainer> requires std::is_same_v<Node, typename Phylo::Node>
-    Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const RContainer& in_roots) {
+    Phylogeny(const policy_move_children_tag, Phylo&& in_tree, const RContainer& in_roots) noexcept {
       if(in_roots.size() == 1) {
         place_below_by_move_children(std::move(in_tree), mstd::front(in_roots), NoNode);
       } else throw mstd::Unimplemented("move-construction of phylogenies with different root containers");
@@ -1457,7 +1460,7 @@ namespace PT {
 
     template<StrictPhylogenyType Phylo, class... Args>
       requires (not std::is_same_v<Phylo, Phylogeny> and std::is_same_v<typename Phylo::Node, Node>)
-    explicit Phylogeny(Phylo&& N, Args&&... args):
+    explicit Phylogeny(Phylo&& N, Args&&... args) noexcept:
       Phylogeny(policy_move_tag(), std::move(N), std::move(N).roots(), std::forward<Args>(args)...)
     {}
 
@@ -1468,7 +1471,7 @@ namespace PT {
     // =================== assignment ======================
 
     // assigning from a Phylogeny-rval-ref is just stealing their stuff - the ProtoPhylogeny knows how to do this
-    void assign_from(Phylogeny&& other) {
+    void assign_from(Phylogeny&& other) noexcept {
       if(!std::empty(_roots)) clear();
       Parent::operator=(std::move(other));
       assert(std::empty(other.roots())); // make sure other has no more roots now cause they would be free'd
@@ -1477,7 +1480,7 @@ namespace PT {
     // an assignment operator to which you can pass more arguments
     // NOTE: passing stuff is useful for providing your own DataExtractor or NodeTranslation
     template<PhylogenyType Phylo, class... Args>
-    void assign_from(Phylo&& target, Args&&... args) const {
+    void assign_from(Phylo&& target, Args&&... args) const noexcept {
       Phylogeny tmp(std::forward<Phylo>(*this), std::forward<Args>(args)...);
       assign_from(std::move(tmp));
     }
@@ -1485,10 +1488,10 @@ namespace PT {
     // to swap with another (possibly different) phylogeny, we let tmp steal their stuff, then let them steal our stuff and finally steal tmp's stuff
     // NOTE: you can pass data extractor related stuff as arguments - they will be forwarded to the constructor of tmp from other
     template<PhylogenyType Phylo, class... Args>
-    void swap(Phylo&& other, Args&&... args) {
+    void swap(Phylo&& other, Args&&... args) noexcept {
       Phylogeny tmp(std::move(other), std::forward<Args>(args)...);
       // NOTE: if other is an rvalue reference, there is really no need to restore anything useful to it
-      if constexpr (!std::is_rvalue_reference_v<Phylo&&>) {
+      if constexpr (not std::is_rvalue_reference_v<Phylo&&>) {
         other = std::move(*this);
         assert(_roots.empty()); // be sure all roots have been stolen!
       }
@@ -1497,7 +1500,7 @@ namespace PT {
 
     // assignment by copy-and-swap
     template<PhylogenyType Phylo>
-    Phylogeny& operator=(Phylo&& other) {
+    Phylogeny& operator=(Phylo&& other) noexcept {
       Phylogeny tmp(std::forward<Phylo>(other));
       assign_from(std::move(tmp));
       return *this;

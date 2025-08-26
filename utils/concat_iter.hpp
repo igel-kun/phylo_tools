@@ -46,10 +46,10 @@ namespace mstd {
     using Parent::is_valid;
 
     _concatenating_iterator() = default;
-    _concatenating_iterator(_concatenating_iterator&& other) = default;
+    _concatenating_iterator(_concatenating_iterator&& other) noexcept = default;
     _concatenating_iterator(const _concatenating_iterator& other) = default;
 
-    _concatenating_iterator& operator=(_concatenating_iterator&& other) = default;
+    _concatenating_iterator& operator=(_concatenating_iterator&& other) noexcept = default;
     _concatenating_iterator& operator=(const _concatenating_iterator& other) =default;
 
     // construct the container auto_iter from anything (could be a container of containers or a compatible auto_iter or 2 ContainerIter, etc)

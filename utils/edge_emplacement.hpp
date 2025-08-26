@@ -27,14 +27,14 @@ namespace PT {
     // check if an edge-addition is OK
     template<StrictPhylogenyType Phylo>
     void sanity_check(const Phylo& N, const NodeDesc u, const NodeDesc v) const {
-      if(forbid_parallel_edges && test(Phylo::children(u), v))
+      if(forbid_parallel_edges and test(Phylo::children(u), v))
         throw mstd::MalformedInput("trying to make double edge, which was explicitly forbidden");
-      if(forbid_non_binary && ((Phylo::out_degree(u) > 1) || (Phylo::in_degree(v) > 1)))
+      if(forbid_non_binary and ((Phylo::out_degree(u) > 1) || (Phylo::in_degree(v) > 1)))
         throw mstd::MalformedInput("found non-binary node, which was explicitly forbidden");
       if(forbid_junctions) {
-        if((Phylo::in_degree(v) > 0) && (Phylo::out_degree(v) > 1))
+        if((Phylo::in_degree(v) > 0) and (Phylo::out_degree(v) > 1))
           throw mstd::MalformedInput("found reticulation with multiple children ('junction') which was explicitly forbidden");
-        if((Phylo::in_degree(u) > 1) && (Phylo::out_degree(u) > 0))
+        if((Phylo::in_degree(u) > 1) and (Phylo::out_degree(u) > 0))
           throw mstd::MalformedInput("found reticulation with multiple children ('junction') which was explicitly forbidden");
       }
     }
@@ -104,10 +104,10 @@ namespace PT {
 
     EdgeEmplacementHelper() = default;
     EdgeEmplacementHelper(const EdgeEmplacementHelper&) = default;
-    EdgeEmplacementHelper(EdgeEmplacementHelper&&) = default;
+    EdgeEmplacementHelper(EdgeEmplacementHelper&&) noexcept = default;
 
     EdgeEmplacementHelper& operator=(const EdgeEmplacementHelper&) = default;
-    EdgeEmplacementHelper& operator=(EdgeEmplacementHelper&&) = default;
+    EdgeEmplacementHelper& operator=(EdgeEmplacementHelper&&) noexcept = default;
 
     auto register_node(const auto& x) { return old_to_new().emplace(std::piecewise_construct, std::tuple{x}, std::tuple{}); }
 
@@ -226,7 +226,7 @@ namespace PT {
 
     // copy and move construction
     EdgeEmplacer(const EdgeEmplacer& other) = default;
-    EdgeEmplacer(EdgeEmplacer&& other) = default;
+    EdgeEmplacer(EdgeEmplacer&& other) noexcept = default;
 
     // passing both Helper and Extracter
     template<EmplacementHelperType EH, class... Args>
@@ -353,7 +353,7 @@ namespace PT {
     auto emplace_edge_raw(const NodeDesc u, const NodeDesc v, MoreArgs&&... args) {
       DEBUG6(std::cout << "only adding edge "<< u <<" ----> "<< v <<"\n");
       // if the data-extracter can be called with MoreArgs, then use it to make data, otherwise, just pass MoreArgs to the edge creation
-      if constexpr (extract_edge_data && (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
+      if constexpr (extract_edge_data and (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
         return helper.add_an_edge(u, v, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
       } else return helper.add_an_edge(u, v, std::forward<MoreArgs>(args)...);
     }
@@ -380,7 +380,7 @@ namespace PT {
     // subdivide uv with w
     template<EdgeType Edge, class... MoreArgs>
     void subdivide_edge(Edge&& uv, const NodeDesc w, MoreArgs&&... args) {
-      if constexpr (extract_edge_data && (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
+      if constexpr (extract_edge_data and (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
         helper.subdivide_edge(std::forward<Edge>(uv), w, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
       } else helper.subdivide_edge(std::forward<Edge>(uv), w, std::forward<MoreArgs>(args)...);
     }

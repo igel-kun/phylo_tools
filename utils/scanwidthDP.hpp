@@ -27,7 +27,7 @@ namespace PT {
     size_t hash() const { return hash_cache; }
 
     bool operator==(const ProtoDPEntry other) const { return hash_cache == other.hash_cache; }
-    ProtoDPEntry& operator=(const ProtoDPEntry& other) = default;
+    ProtoDPEntry& operator=(const ProtoDPEntry& other) noexcept = default;
   };
 
 
@@ -59,7 +59,7 @@ namespace PT {
 
     DPEntryLowMem_() = default;
     DPEntryLowMem_(const DPEntryLowMem_&) = default;
-    DPEntryLowMem_(DPEntryLowMem_&&) = default;
+    DPEntryLowMem_(DPEntryLowMem_&&) noexcept = default;
 
     // we allow making a DPEntry with a wrong hash, in order to allow hash-based table-lookup without constructing the extension
     // NOTE: please be careful with this!
@@ -67,13 +67,13 @@ namespace PT {
     explicit constexpr DPEntryLowMem_(const size_t _hash): Parent{_hash} {}
    
     template<NodeIterableType Nodes>
-    explicit DPEntryLowMem_(Nodes&& nodes):
+    explicit DPEntryLowMem_(Nodes&& nodes) noexcept:
       Parent{hash(ex)},
       ex(std::forward<Nodes>(nodes))
     {}
 
     DPEntryLowMem_& operator=(const DPEntryLowMem_& other) = default;
-    DPEntryLowMem_& operator=(DPEntryLowMem_&& other) = default;
+    DPEntryLowMem_& operator=(DPEntryLowMem_&& other) noexcept = default;
     DPEntryLowMem_& operator=(ProtoDPEntry other) { Parent::operator=(other); ex.clear(); return *this; }
 
 

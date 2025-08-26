@@ -12,19 +12,16 @@ namespace mstd { // extensions are basically vectors...
 namespace PT {
   struct partial_extension_tag {};
 
-  class Extension: public NodeVec {
+  struct Extension:
+    public NodeVec
+  {
     using Parent = NodeVec;
-  public:
-    using Parent::Parent;
 
-    Extension(const Parent& v): Parent(v) {}
-    Extension(Parent&& v): Parent(std::move(v)) {}
+    INHERIT_ALL_CONSTRUCTORS(Extension, Parent);
+    INHERIT_ASSIGNMENT(Extension, Parent);
 
-    Extension& operator=(const Parent& v) { Parent::operator=(v); return *this; }
-    Extension& operator=(Parent&& v) { Parent::operator=(std::move(v)); return *this; }
-
-    template<mstd::IterableType C> requires (!std::is_convertible_v<C, Parent> && std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>)
-    Extension& operator=(C&& v) { Parent tmp(v.begin(), v.end()); Parent::operator=(std::move(tmp)); return *this; }
+    template<mstd::IterableType C> requires (not std::is_convertible_v<C, Parent> and std::is_convertible_v<mstd::value_type_of_t<C>, NodeDesc>)
+    Extension& operator=(C&& v) noexcept { Parent tmp(v.begin(), v.end()); Parent::operator=(std::move(tmp)); return *this; }
 
 
     void compute_inverse(std::unordered_map<NodeDesc, sw_t>& inverse) const {

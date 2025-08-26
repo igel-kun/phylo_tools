@@ -25,9 +25,9 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<class T> concept SettableType = StrictSettableType<std::remove_cvref_t<T>>;
 
   // if we're not interested in the return value, we can set values more efficiently
-  template<class S> requires (ContainerType<S> && !SettableType<S>)
+  template<class S> requires (ContainerType<S> and not SettableType<S>)
   bool set_val(S& s, const auto& val) { return append(s, val).second; }
-  template<class S> requires (ContainerType<S> && SettableType<S>)
+  template<class S> requires (ContainerType<S> and SettableType<S>)
   bool set_val(S& s, const auto& val) { return s.set(val); }
 
 #warning "TODO: add set_val for everything that we can do append on, but discard the iterator; BEFORE: test if this isn't done automatically by the optimizer"
@@ -269,7 +269,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     static constexpr size_t hash_one(const size_t _hash, const value_type& element) { return _hash ^ Hasher(element); }
 
     template<IterableType Container> requires std::is_convertible_v<value_type_of_t<Container>, Val>
-    size_t operator()(const Container& container, const size_t _hash = 0) const {
+    size_t operator()(const Container& container, const size_t _hash = 0) const noexcept {
       return std::ranges::fold_left(container, _hash, hash_one);
     }
 
@@ -285,7 +285,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<IterableType C>
   struct list_hash {
     static constexpr std::hash<value_type_of_t<C>> Hasher{};
-    size_t operator()(const C& container) const {
+    size_t operator()(const C& container) const noexcept {
       return std::accumulate(std::begin(container), std::end(container), size_t(0), [](const size_t x, const auto& y) { return std::rotl(x,1) ^ Hasher(y); });
     }
   };
@@ -450,12 +450,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
     auto_clearing() = default;
     auto_clearing(const auto_clearing&) = default;
-    auto_clearing(auto_clearing&& other):
+    auto_clearing(auto_clearing&& other) noexcept:
       S(std::move(other))
     { other.clear(); }
 
     auto_clearing& operator=(const auto_clearing& other) = default;
-    auto_clearing& operator=(auto_clearing&& other) {
+    auto_clearing& operator=(auto_clearing&& other) noexcept {
       S::operator=(std::move(other));
       other.clear();
     }
@@ -469,25 +469,11 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     return result;
   }
 
-  struct SetSize { size_t operator()(const auto& x) const { return x.size(); } };
+  struct SetSize { size_t operator()(const auto& x) const noexcept { return x.size(); } };
 }
 
 
 namespace std {
-/*  
-  template<mstd::ContainerType Container, class T> requires (!is_convertible_v<std::remove_cvref_t<Container>, std::string_view>)
-  Container& operator-=(Container& container, T&& item) {
-    mstd::erase(container, std::forward<T>(item));
-    return container;
-  }
-
-  template<mstd::ContainerType Container, class T> requires (!is_convertible_v<std::remove_cvref_t<Container>, std::string_view>)
-  Container& operator+=(Container& container, T&& item) {
-    mstd::append(container, std::forward<T>(item));
-    return container;
-  }
-*/
-
   template<class... Args> bool test(Args&&... args) { return mstd::test(std::forward<Args>(args)...); }
   template<class... Args> decltype(auto) append(Args&&... args) { return mstd::append(std::forward<Args>(args)...); }
   template<class... Args> decltype(auto) erase(Args&&... args) { return mstd::erase(std::forward<Args>(args)...); }

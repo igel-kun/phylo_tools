@@ -57,13 +57,13 @@ namespace mstd {
       else return &(operator*().get());
     }
 
-    generator(generator &&other): coro(move(other.coro)) {
-      std::cout << "move constructing generator\n";
+    generator(generator &&other) noexcept:
+      coro(move(other.coro))
+    {
       other.coro = nullptr;
     }
-    generator& operator=(generator&& other) {
+    generator& operator=(generator&& other) noexcept {
       coro = move(other.coro);
-      std::cout << "move assigning generator\n";
       other.coro = nullptr;
       return *this;
     }

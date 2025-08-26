@@ -30,12 +30,12 @@ namespace mstd {
     generator_iter(P _x, const IndexType _max = 1u):
       x(_x), index(0, _max) {}
 
-    template<class P> requires (is_pair<P> && ArithmeticType<typename P::second_type>)
+    template<class P> requires (is_pair<P> and ArithmeticType<typename P::second_type>)
     generator_iter(P&& p):
       x(&(p.first())), index(0, p.second()) {}
 
     // take inverted pairs only if the second type is not arithmetic!
-    template<class P> requires (is_pair<P> && !ArithmeticType<typename P::second_type> && ArithmeticType<typename P::first_type>)
+    template<class P> requires (is_pair<P> and not ArithmeticType<typename P::second_type> and ArithmeticType<typename P::first_type>)
     generator_iter(P&& p):
       x(&(p.second())), index(0, p.first()) {}
 
@@ -58,13 +58,13 @@ namespace mstd {
     generator_iter operator+(const IndexType i) { generator_iter result(*this); result += i; return result; }
     generator_iter operator-(const IndexType i) { generator_iter result(*this); result -= i; return result; }
 
-    bool operator==(const generator_iter& other) const { return (x == other.x) && (index == other.index); }
-    bool operator!=(const generator_iter& other) const { return !operator==(other); }
+    bool operator==(const generator_iter& other) const { return (x == other.x) and (index == other.index); }
+    bool operator!=(const generator_iter& other) const { return not operator==(other); }
     bool operator==(const GenericEndIterator) const { return is_invalid(); }
     bool operator!=(const GenericEndIterator) const { return is_valid(); }
 
     generator_iter& operator=(const generator_iter& other) = default;
-    generator_iter& operator=(generator_iter&& other) = default;
+    generator_iter& operator=(generator_iter&& other) noexcept = default;
   };
 
 }

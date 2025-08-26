@@ -62,9 +62,9 @@ namespace mstd {
 
     // copy and move-construction & assignment are default
     _auto_iter(const _auto_iter&) = default;
-    _auto_iter(_auto_iter&&) = default;
+    _auto_iter(_auto_iter&&) noexcept = default;
     _auto_iter& operator=(const _auto_iter&) = default;
-    _auto_iter& operator=(_auto_iter&&) = default;
+    _auto_iter& operator=(_auto_iter&&) noexcept = default;
 
     // --------------------- Comparison & Increment --------------------------
     template<class T> 

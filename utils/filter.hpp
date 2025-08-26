@@ -102,18 +102,19 @@ namespace mstd {
       Parent{iter}, pred{std::forward<PredInit>(pred_init)} {}
     
     // move construct
-    _filtered_iterator(_filtered_iterator&& iter) = default;
+    _filtered_iterator(_filtered_iterator&& iter) noexcept = default;
+
     template<class PredInit = Predicate>
-    _filtered_iterator(_filtered_iterator&& iter, PredInit&& pred_init):
+    _filtered_iterator(_filtered_iterator&& iter, PredInit&& pred_init) noexcept:
       Parent{std::move(iter)}, pred{std::forward<PredInit>(pred_init)} {}
 
 
     _filtered_iterator& operator=(const _filtered_iterator& iter) = default;
-    _filtered_iterator& operator=(_filtered_iterator&& iter) = default;
+    _filtered_iterator& operator=(_filtered_iterator&& iter) noexcept = default;
 
     // enable operator= to work with the Parent, leaving the predicate as it is
     auto& operator=(const Parent& iter) { static_cast<Parent&>(*this) = iter; return *this; }
-    auto& operator=(Parent&& iter) { static_cast<Parent&>(*this) = std::move(iter); return *this; }
+    auto& operator=(Parent&& iter) noexcept { static_cast<Parent&>(*this) = std::move(iter); return *this; }
 
     auto& operator++()    { if(is_valid()) {Parent::operator++(); fix_index();} return *this; }
     auto& operator--()    { if(is_valid()) {Parent::operator--(); fix_index<true>();} return *this; }

@@ -137,8 +137,8 @@ namespace mstd {
       const bool we_at_end = !is_valid();
       const bool they_at_end = !it.is_valid();
       if(we_at_end != they_at_end) return false;
-      if(we_at_end && they_at_end) return true;
-      return (index == it.index) && (buffer == it.buffer);
+      if(we_at_end and they_at_end) return true;
+      return (index == it.index) and (buffer == it.buffer);
     }
 
     // ------- methods: initialization --------
@@ -549,7 +549,7 @@ namespace mstd {
         for(auto it = storage.begin(); it != storage.end();) {
           auto [index, bucket] = *it;
           auto [target_i, target_pos] = bucket_and_pos_of(new_capacity);
-          if((target_i < index) || ((target_i == index) && (target_pos == 0))) {
+          if((target_i < index) || ((target_i == index) and (target_pos == 0))) {
             _count -= NUM_ONES_INL(bucket);
             it = storage.erase(it);
           } else if(target_i == index) {
@@ -792,7 +792,7 @@ namespace mstd {
     //! return number of flipped bits
     size_t flip_upwards_until_kth_zero(const value_type x, size_t k = 1) {
       DEBUG6(std::cout << "flipping from index "<< static_cast<int>(x)<<" ("<<k<<" more zeros)\n");
-      if((x < _capacity) && (k > 0)) {
+      if((x < _capacity) and (k > 0)) {
         const auto [first_bucket, first_offset] = bucket_and_pos_of(x);
         auto& bucket = storage.at(first_bucket);
         const auto first_bucket_shifted = (bucket >> first_offset);

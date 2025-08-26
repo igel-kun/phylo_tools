@@ -144,7 +144,7 @@ namespace PT{
       ChildIter& current = child_history.back();
       // skip over all seen children
       DEBUG6(std::cout << "skipping seen...\n");
-      while(current.is_valid() && is_seen(*current)) { ++current; ++result;}
+      while(current.is_valid() and is_seen(*current)) { ++current; ++result;}
       return result;
     }
 
@@ -193,9 +193,9 @@ namespace PT{
     {}
     
     DFSIterator(const DFSIterator& other) = default;
-    DFSIterator(DFSIterator&& other) = default; //: Traits{static_cast<Traits&&>(other)}, root{other.root}, child_history{std::move(other.child_history)} {}
+    DFSIterator(DFSIterator&& other) noexcept = default;
     DFSIterator& operator=(const DFSIterator& other) = default;
-    DFSIterator& operator=(DFSIterator&& other) = default;
+    DFSIterator& operator=(DFSIterator&& other) noexcept = default;
     
     DFSIterator& operator++() {
       if(is_valid()) advance();
@@ -207,7 +207,10 @@ namespace PT{
     template<TraversalType OtherO, class OtherRoots, TraversalTraitsType OtherTraits>
     bool operator==(const DFSIterator<OtherO, OtherRoots, OtherTraits>& other) const {
       if(other.is_valid()){
-        return is_valid() && (current_root() == other.current_root()) && (child_history.size() == other.child_history.size()) && (node_on_top() == other.node_on_top());
+        return is_valid() and 
+          (current_root() == other.current_root()) and
+          (child_history.size() == other.child_history.size()) and
+          (node_on_top() == other.node_on_top());
       } else return not is_valid();
     }
 
@@ -373,11 +376,7 @@ namespace PT{
       advance_dfs_nodes();
     }
 
-    //DFSAllEdgesTailPOIterator(const DFSAllEdgesTailPOIterator&) = default;
-    //DFSAllEdgesTailPOIterator(DFSAllEdgesTailPOIterator&&) = default;
-    //DFSAllEdgesTailPOIterator& operator=(const DFSAllEdgesTailPOIterator&) = default;
-    //DFSAllEdgesTailPOIterator& operator=(DFSAllEdgesTailPOIterator&&) = default;
-   
+  
     bool is_valid() const { return current_children.is_valid(); }
 
     auto& operator++() {
@@ -481,10 +480,6 @@ namespace PT{
     }
     // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
     auto begin() && { return OwningIter(std::move(roots), static_cast<Helper&&>(*this)); }
-
-    // if called with one or more arguments, begin() constructs a new iterator using these arguments
-//    template<class... Args> requires (sizeof...(Args) != 0)
-//    auto begin(Args&&... args) { return Iter(std::piecewise_construct, std::forward_as_tuple(roots), std::forward_as_tuple(std::forward<Args>(args)...)); }
 
     static constexpr auto end() { return mstd::GenericEndIterator(); }
 

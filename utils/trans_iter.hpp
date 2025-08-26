@@ -112,7 +112,7 @@ namespace mstd {
 
     // std::piecewise construction of the iter and the transformation
     template<class IterTuple, class TransTuple = std::tuple<>>
-    constexpr transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init = TransTuple()):
+    constexpr transforming_iterator(const std::piecewise_construct_t, IterTuple&& iter_init, TransTuple&& trans_init = TransTuple()) noexcept:
       Parent{make_from_tuple<Parent>(std::forward<IterTuple>(iter_init))},
       trans{make_from_tuple<Transformation>(std::forward<TransTuple>(trans_init))}
     {}
@@ -202,7 +202,7 @@ namespace mstd {
 
   
   // ----------- special case: converting element ---------------
-  template<class T> struct converter { T operator()(auto&& x) const { return static_cast<T>(x); } };
+  template<class T> struct converter { T operator()(auto&& x) const noexcept { return static_cast<T>(x); } };
   template<class T, class Target>
   using converting_iterator = transforming_iterator<T, converter<Target>>;
 

@@ -42,7 +42,7 @@ namespace mstd {
         return tombstone;
       } else if constexpr (std::is_invocable_v<decltype(tombstone)>)
         return tombstone();
-      else assert(false && "received invalid choice for tombstone");
+      else assert(false and "received invalid choice for tombstone");
     }
     
     using Tombstone = decltype(get_tombstone());

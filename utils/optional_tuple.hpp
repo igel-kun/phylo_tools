@@ -32,18 +32,18 @@ namespace mstd {
     std::unique_ptr<T> value = nullptr;
 
     optional_item() = default;
-    optional_item(optional_item&& other): optional_item(std::move(other.value)) {}
-    optional_item(const optional_item& other): optional_item(other.value) {}
+    optional_item(optional_item&& other) noexcept = default; 
+    optional_item(const optional_item& other) = default;
 
-    optional_item(std::unique_ptr<T>&& t): value{std::move(t)} {}
+    optional_item(std::unique_ptr<T>&& t) noexcept: value{std::move(t)} {}
     optional_item(T* t) { if(t != nullptr) value = std::make_unique<T>(*t); }
     optional_item(const std::unique_ptr<T>& t): optional_item(t.get()) {}
     optional_item(const std::shared_ptr<T>& t): optional_item(t.get()) {}
 
     optional_item(const T& ref): value{std::make_unique<T>(ref)} {}
-    optional_item(T&& ref): value{std::make_unique<T>(std::move(ref))} {}
+    optional_item(T&& ref) noexcept: value{std::make_unique<T>(std::move(ref))} {}
 
-    optional_item& operator=(optional_item&& other) = default;
+    optional_item& operator=(optional_item&& other) noexcept = default;
     optional_item& operator=(const optional_item& other) { if(other.value) value = std::make_unique<T>(other.value); else value.reset(); }
   };
 
@@ -55,11 +55,11 @@ namespace mstd {
     std::shared_ptr<T> value = nullptr;
 
     optional_item() = default;
-    optional_item(optional_item&& other): optional_item(std::move(other.value)) {}
-    optional_item(const optional_item& other): optional_item(other.value) {}
+    optional_item(optional_item&& other) noexcept = default;
+    optional_item(const optional_item& other) = default;
 
-    optional_item(std::unique_ptr<T>&& t): value{std::move(t)} {}
-    optional_item(std::shared_ptr<T>&& t): value{std::move(t)} {}
+    optional_item(std::unique_ptr<T>&& t) noexcept: value{std::move(t)} {}
+    optional_item(std::shared_ptr<T>&& t) noexcept: value{std::move(t)} {}
     optional_item(T* t) { if(t != nullptr) value = std::make_shared<T>(*t); }
     optional_item(const std::unique_ptr<T>& t): optional_item(t.get()) {} // make a copy :/
     optional_item(const std::shared_ptr<T>& t): value(t) {}
@@ -67,7 +67,7 @@ namespace mstd {
     optional_item(const T& ref): value{std::make_shared<T>(ref)} {}
     optional_item(T&& ref): value{std::make_unique<T>(std::move(ref))} {}
 
-    optional_item& operator=(optional_item&& other) = default;
+    optional_item& operator=(optional_item&& other) noexcept = default;
     optional_item& operator=(const optional_item& other) = default;
   };
 

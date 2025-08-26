@@ -113,7 +113,7 @@ namespace std::ranges {
 // but it doesn't make sense if the class has NO data members... in those cases, we can inherit _all_ constructors as follows:
 #define INHERIT_ALL_CONSTRUCTORS(myclass,base) \
   template<class __First, class... __Args> requires (not std::is_same_v<std::remove_cvref_t<__First>, myclass>)\
-  myclass(__First&& __first, __Args&&... __args): base(std::forward<__First>(__first), std::forward<__Args>(__args)...) {}
+  myclass(__First&& __first, __Args&&... __args) noexcept: base(std::forward<__First>(__first), std::forward<__Args>(__args)...) {}
 
 // iterators are supposed to have an assignment that returns a ref to the iterator itself (this is required for std::iterator_traits)
 // now, it we inherit from an iterator and don't write our own operator=() then the inherited assignment will have the wrong return type :(

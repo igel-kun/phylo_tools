@@ -112,7 +112,7 @@ struct config_t {
       extraction = std::stoi(tree_config[2]);
     }
   }
-  config_t& operator=(config_t&&) = default;
+  config_t& operator=(config_t&&) noexcept = default;
   config_t& operator=(const mstd::OptionMap& o) { config_t tmp(o); *this = std::move(tmp); return *this; }
 } conf;
 

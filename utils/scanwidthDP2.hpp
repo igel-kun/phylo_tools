@@ -111,7 +111,7 @@ namespace PT {
 
       // --------------------------- construction -----------------------------------
       Query(const Query&) = delete; // don't copy queries since the weak-components are too large :/
-      Query(Query&&) = default;
+      Query(Query&&) noexcept = default;
 
       template<class DEInit = DegreeExtracter>
       Query(NodeSpan _nodes, const size_t _non_roots, const size_t _hash = 0, DEInit&& de_init = DegreeExtracter{}):
