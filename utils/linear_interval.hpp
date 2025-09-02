@@ -17,7 +17,7 @@ namespace mstd {
     const T& low() const { return (*this)[0]; }
     const T& high() const { return (*this)[1]; }
 
-    linear_interval(const T& init_lo, const T& init_hi): Parent{init_lo, init_hi} {}
+    linear_interval(const T& init_lo, const T& init_hi): Parent{init_lo, init_hi} { assert(init_lo <= init_hi); }
     explicit linear_interval(const T& init): linear_interval(init, init) {}
     
     void merge(const linear_interval& other) {
@@ -32,8 +32,8 @@ namespace mstd {
     void update_hi(const T& hi) { high() = std::max(high(), hi); }
     void update(const T& x) { update_lo(x); update_hi(x); }
 
-    bool contains(const linear_interval& other) const { return (low() <= other.low()) && (high() >= other.high()); }
-    bool contains(const T& val) const { return (low() <= val) && (val <= high()); }
+    bool contains(const linear_interval& other) const { return (low() <= other.low()) and (high() >= other.high()); }
+    bool contains(const T& val) const { return (low() <= val) and (val <= high()); }
     bool overlaps(const linear_interval& other) const { return (low() >= other.low()) ? (low() <= other.high()) : (high() >= other.low()); }
     bool contained_in(const linear_interval& other) const { return other.contains(*this); }
     bool left_of(const T& val) { return high() <= val; }

@@ -118,8 +118,8 @@ namespace PT {
         return _iprob(uv).iprob();
       }
     }
-    decltype(auto) operator()(const auto& uv) const { return iprob(uv); }
-    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { return iprob(uv); }
+    decltype(auto) operator()(const auto& uv) const { assert(mstd::linear_interval<Probability>(0,1).contains(iprob(uv))); return iprob(uv); }
+    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { assert(mstd::linear_interval<Probability>(0,1).contains(iprob(uv))); return iprob(uv); }
 
     using Probability = std::remove_cvref_t<decltype(std::declval<pd_score_util_p>().iprob(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Probability>);

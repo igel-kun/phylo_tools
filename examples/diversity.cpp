@@ -373,13 +373,15 @@ auto LSA_based_diversity(const MyNetwork& N, First&& first, Args&&... args) {
   const bool expected_weights = conf.summary == 1;
   NodeTranslation net_to_lsa;
   const LSATree lsa_tree = get_lsa_tree(N, expected_weights, net_to_lsa);
-  DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n');
+  DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n'; lsa_tree.print_summary(std::cout); std::cout << '\n';);
   if(conf.score == 1) { // tree diversity
     if(conf.verbose) std::cout << "SCORE: tree-diversity of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_tree_diversity<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
   } else if(conf.score == 2) { // Fair-Proportion index
     if(conf.verbose) std::cout << "SCORE: Fair-Proportion Index of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
+    return translate_leaves<LSATree>(pd_tree_fair_proportion<LSATree>()(
+        lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
     return translate_leaves<LSATree>(pd_fair_proportion<LSATree>()(
         lsa_tree, translate_leaves(std::forward<First>(first), net_to_lsa), std::forward<Args>(args)...));
   } else if(conf.score == 3) { // Shapley index
