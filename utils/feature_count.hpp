@@ -13,8 +13,8 @@ namespace PT {
   
   // ------- FeatureCount: main class ---------
   // in a feature accumulator, we can collect all features seen in a set of nodes
-  template<class T> struct FeatureAccu_ { using type = HashSet<T>; };
-  template<> struct FeatureAccu_<bool> { using type = bool; /* did we see the features?*/ };
+  template<class T> struct FeatureAccu_ { using type = HashSet<T>; /* list all feature we've seen for this position */ };
+  template<> struct FeatureAccu_<bool> { using type = bool; /* did we see the feature?*/ };
   template<class T> using FeatureAccu = typename FeatureAccu_<std::remove_cvref_t<T>>::type;
 
   // a feature counter is a Features-class, but with feature-accumulators instead of features
@@ -44,16 +44,24 @@ namespace PT {
     template<class T> requires (mstd::is_any_of<T, Feats...>)
     void merge(const FeatureList<T>& feat) {
       static constexpr size_t merge_index = mstd::var_type_index<T, Feats...>();
-      if constexpr (std::is_same_v<T, bool>) {
-        this->template get<merge_index>() |= feat;
-      } else {
-        for(size_t i = 0; i < feat.size(); ++i)
-          mstd::append(this->template get<merge_index>()[i], feat[i]);
+      if(not feat.empty()) {
+        auto& feat_counts = Parent::template get<merge_index>();
+        DEBUG5(std::cout << "merging " << feat << " into "<<feat_counts<<'\n');
+        if constexpr (not std::is_same_v<T, bool>) {
+          // get the counts of all features of the current type (this is a vector of HashMaps)
+          assert(mstd::VectorType<decltype(feat_counts)>);
+          if(feat_counts.size() < feat.size())
+            feat_counts.resize(feat.size());
+          for(size_t i = 0; i < feat.size(); ++i)
+            mstd::append(Parent::template get<merge_index>()[i], feat[i]).first;
+        } else feat_counts |= feat;
       }
     }
 
     template<class First, class... Others>
     void _merge(const auto& feats) {
+      DEBUG5(std::cout << "merging "<< feats.template get_by_type<First>().size() << " features of type "<<mstd::type_name<First>()<<" to feature-counter\n");
+
       merge<First>(feats.template get_by_type<First>());
       if constexpr (sizeof...(Others) > 0)
         _merge<Others...>(feats);

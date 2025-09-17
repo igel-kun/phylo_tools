@@ -12,6 +12,9 @@ namespace mstd {
     using Parent = std::array<T,2>;
     using Parent::at;
 
+    //INHERIT_ALL_CONSTRUCTORS(linear_interval, Parent)
+    //INHERIT_ASSIGNMENT(linear_interval, Parent)
+
     T& low() { return (*this)[0]; }
     T& high() { return (*this)[1]; }
     const T& low() const { return (*this)[0]; }

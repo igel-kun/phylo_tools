@@ -19,9 +19,11 @@ namespace PT {
     template<mstd::IterableType Container>
       requires FeatureCollectionType<mstd::value_type_of_t<Container>>
     size_t operator()(Container&& container) {
-      FeatureCountFor<mstd::value_type_of_t<Container>> accu;
+      using ContainerCounter = FeatureCountFor<mstd::value_type_of_t<Container>>;
+      ContainerCounter accu;
       // TODO: use std::accumulate here
       for(const auto& feat: container) {
+        DEBUG5(std::cout << "got container of "<<mstd::type_name<mstd::value_type_of_t<Container>>() << '\n');
         DEBUG5(std::cout << "adding "<<feat<<" to accu " << accu <<'\n');
         accu += feat;
       }

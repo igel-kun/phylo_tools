@@ -46,7 +46,7 @@ namespace PT {
   // ------- FeatureCollection: factories ---------
   
   // ------- FeatureCollection: concepts ---------
-   template<class T> static constexpr bool is_features_collection = false;
+  template<class T> static constexpr bool is_features_collection = false;
   template<class... Feats> static constexpr bool is_features_collection<FeatureCollection<Feats...>> = true;
   template<class T> concept StrictFeatureCollectionType = is_features_collection<T>;
   template<class T> concept FeatureCollectionType = StrictFeatureCollectionType<std::remove_cvref_t<T>>;

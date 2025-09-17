@@ -9,15 +9,68 @@
 
 namespace PT {
 
+  // Ancestor oracles can be called with (x,y) returning true iff x is an ancestor of y, that is, there is an x->y path
+
 	// LCA & ancestor oracles are classes that answer LCA/ancestor queries in trees/networks
 	// NOTE: when the tree/network changes, some of the oracles become invalid, so don't query them!
 
   // --------------------- Tree ANCESTOR ORACLE 1: no preprocessing, O(n) query  -----------------------
   // this uses naïve tree-climbing
+	template<class Tree>
+	struct NaiveTreeAncestorOracle {
+    NaiveTreeAncestorOracle() = default;
+    NaiveTreeAncestorOracle(const Tree&) {}
+
+    static bool is_root(const NodeDesc x) { return Tree::is_root(x); }
+  
+    //! the naive Ancestor just walks up from y and until we find x or the root
+    //NOTE: x may be a set of nodes or a node-predicate
+    bool operator()(const auto& x, NodeDesc y) const {
+      while(not test(x, y)) {
+        if(is_root(y)) return false;
+        y = Tree::parent(y);
+      }
+      return true;
+    }
+	};
+
 
   // --------------------- Tree ANCESTOR ORACLE 2: O(n) preprocessing, O(1) query -----------------------
   // this compares preorder-intervals
   // this works since u is ancestor of v <=> v's preorder interval is entirely contained in v's preorder interval
+	template<class Tree>
+	struct IntervalTreeAncestorOracle {
+    using NodeToInterval = NodeMap<mstd::linear_interval<uint32_t>>;
+
+    // the preorder interval stores all preorder numbers below each node
+    // NOTE: the second item (that is, high()) is always equal to the preorder number of the node itself
+    NodeToInterval preorder_interval;
+
+    static bool is_root(const NodeDesc x) { return Tree::is_root(x); }
+
+    static NodeToInterval create_preorder_interval(const Tree& T) {
+      NodeToInterval tmp;
+      for(const NodeDesc v: T.nodes_preorder()) {
+        const auto preorder_num = tmp.size();
+        const auto [v_interval, v_success] = tmp.try_emplace(v, preorder_num, preorder_num);
+        if(not v_success)
+          v_interval->second.high() = preorder_num;
+        if(not is_root(v))
+          tmp.try_emplace(Tree::parent(v), v_interval->second);
+      }
+      return tmp;
+    }
+    
+    auto preorder_num(const NodeDesc x) const { return preorder_interval.at(x).high(); }
+
+    IntervalTreeAncestorOracle(const Tree& T):
+      preorder_interval(create_preorder_interval(T))
+    {}
+  
+    //! x is an ancestor of y if y's preorder number (second item) is between the smallest preorder number below x and x's preorder number
+    bool operator()(const NodeDesc x, NodeDesc y) const { return preorder_interval.at(x).contains(preorder_num(y)); }
+	};
+
 
   // --------------------- Tree LCA ORACLE 1: Naïve oracle ----------------------------
   // the naive LCA just walks up from x and y one step at a time until we find a node that has been seen by both walks
@@ -167,7 +220,31 @@ namespace PT {
   
   // --------------------- Network ANCESTOR ORACLE 1: no preprocessing, O(m) query -----------------------
   // this just does naïve multipath climbing
-  
+  template<class Net, NodeContainerType SeenSet = NodeSet>
+	struct NaiveNetworkAncestorOracle {
+    // return if any x has a path to y avoiding forbidden
+    static bool has_path(const auto& x, const NodeDesc y, auto& forbidden) {
+      if(test(x, y)) return true;
+      if(test(forbidden, y)) return false;
+
+      for(const NodeDesc p: Net::parents(y))
+        if(has_path(x, p, forbidden)) return true;
+      // if no parent of y can be reached from x, then y can't either
+      mstd::append(forbidden, y);
+      return false;
+    }
+
+    // return true iff x has a path to y
+    // NOTE: x may be a set of nodes or a node-predicate
+    template<class... Args>
+    bool operator()(const auto& x, const NodeDesc y, Args&&... args) const { return has_path(x, y, SeenSet(std::forward<Args>(args)...)); }
+
+    static void add_leaf(const NodeDesc l, const NodeDesc parent) {}
+    static void add_edge(const auto uv) {}
+    static void subdivide_edge(const auto uv) {}
+    static void remove_edge(const auto uv) {}
+	};
+
   // --------------------- Network ANCESTOR ORACLE 2: O(n) preprocessing, O(1) query -----------------------
   // this uses multidimensional dominance drawings
   // https://link.springer.com/article/10.1007/s42979-021-00713-6
@@ -196,35 +273,47 @@ namespace PT {
       } else append(result, x);
 			return result;
 		}
+
+    static void add_leaf(const NodeDesc l, const NodeDesc parent) {}
+    static void add_edge(const auto uv) {}
+    static void subdivide_edge(const auto uv) {}
+    static void remove_edge(const auto uv) {}
 	};
 
 
   // ------------------ convenience classes and functions --------------------------
-/*
-  // for now, the default static ancestor oracle is the naive one, we'll change that once a better one is implemented
-  template<class Net, class Seen = NodeSet>
-  using DefaultStaticTreeAncestorOracle = NaiveTreeAncestorOracle<Net, Seen>;
-  template<class Net, class Seen = NodeSet>
-  using DefaultStaticNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net, Seen>;
+
+  // for now, most of the default oracles are the naive ones, we'll change that once better ones are implemented
+  template<class Tree> using DefaultStaticTreeAncestorOracle = IntervalTreeAncestorOracle<Tree>;
+  template<class Tree> using DefaultDynamicTreeAncestorOracle = NaiveTreeAncestorOracle<Tree>;
+  template<class Net, class Seen = NodeSet> using DefaultStaticNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net, Seen>;
+  template<class Net, class Seen = NodeSet> using DefaultDynamicNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net, Seen>;
+
+  template<class Tree, class Seen = NodeSet> using DefaultStaticTreeLCAOracle = NaiveTreeLCAOracle<Tree, Seen>;
+  template<class Tree, class Seen = NodeSet> using DefaultDynamicTreeLCAOracle = NaiveTreeLCAOracle<Tree, Seen>;
+  template<class Net, class Seen = NodeSet> using DefaultStaticNetworkLCAOracle = NaiveNetworkLCAOracle<Net, Seen>;
+  template<class Net, class Seen = NodeSet> using DefaultDynamicNetworkLCAOracle = NaiveNetworkLCAOracle<Net, Seen>;
+
+
+  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  using DefaultStaticAncestorOracle =
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultStaticTreeAncestorOracle<Net>, DefaultStaticNetworkAncestorOracle<Net, Seen>>;
 
   // for dynamic trees and networks, we don't know better than the naïve oracle for now
-  template<class Net, class Seen = NodeSet>
-  using DefaultDynamicTreeAncestorOracle = NaiveTreeAncestorOracle<Net, Seen>;
-  template<class Net, class Seen = NodeSet>
-  using DefaultDynamicNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net, Seen>;
-*/
+  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  using DefaultDynamicAncestorOracle = 
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultDynamicTreeAncestorOracle<Net>, DefaultDynamicNetworkAncestorOracle<Net, Seen>>;
+
 
   // for now, the default static LCA oracle is the naive one, we'll change that once a better one is implemented
-  template<class Net, NodeContainerType Seen = NodeSet>
-  using DefaultStaticTreeLCAOracle = NaiveTreeLCAOracle<Net, Seen>;
-  template<class Net, NodeContainerType Output, NodeContainerType Seen = NodeSet>
-  using DefaultStaticNetworkLCAOracle = NaiveNetworkLCAOracle<Net, Output, Seen>;
+  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  using DefaultStaticLCAOracle =
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultStaticTreeLCAOracle<Net, Seen>, DefaultStaticNetworkLCAOracle<Net, Seen>>;
 
   // for dynamic trees and networks, we don't know better than the naïve oracle for now
-  template<class Net, NodeContainerType Seen = NodeSet>
-  using DefaultDynamicTreeLCAOracle = NaiveTreeLCAOracle<Net, Seen>;
-  template<class Net, NodeContainerType Output, NodeContainerType Seen = NodeSet>
-  using DefaultDynamicNetworkLCAOracle = NaiveNetworkLCAOracle<Net, Output, Seen>;
+  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  using DefaultDynamicLCAOracle = 
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultDynamicTreeLCAOracle<Net, Seen>, DefaultDynamicNetworkLCAOracle<Net, Seen>>;
 
 
 }
