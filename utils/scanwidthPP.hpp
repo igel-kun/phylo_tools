@@ -66,7 +66,7 @@ namespace PT {
       }
     }
 
-    template<class T>
+    template<class T> requires (mstd::is_same_v<T, Network> or NodeContainerType<T>)
     bool remove_shortcuts(T&& arg) {
       DEBUG4(std::cout<<"removing shortcuts from:\n"<< ExtendedDisplay(*N) <<"\n");
       
@@ -81,7 +81,7 @@ namespace PT {
         DEBUG4(std::cout << "using path "<<uv_path<<"\n");
         remove_shortcut(uv_path);
       }
-      return !shortcuts.empty();
+      return not shortcuts.empty();
     }
 
     void apply_to_inedge(const NodeDesc x, auto& do_something) {
@@ -169,7 +169,7 @@ namespace PT {
           
         if(has_offset){
           get_edge_weight(last_on_path, path_end) += weight_offset;
-          N.remove_edge_no_cleanup(xv);
+          N->remove_edge_no_cleanup(xv);
         }
 
         // step 3: go through the path and the reduced vector, contracting all edges whose weight has been removed
@@ -177,8 +177,8 @@ namespace PT {
           // if the slope reduction reduced everything, then all weights are equal, so we'll get a single edge as result, no need to call contract_bla_..
           DEBUG4(std::cout<<"now hanging "<< path_end<<" from "<<old_last<<" to "<<path_start<<"\n");
 
-          N.transfer_child_abort(path_end, old_last, path_start);
-          N.remove_upwards_no_suppression(old_last);
+          N->transfer_child_abort(path_end, old_last, path_start);
+          N->remove_upwards_no_suppression(old_last);
           return true;
         } else return contract_edges_according_to_weights(x, old_last, path_end, std::next(weights.begin()), weight_offset) ? true : has_offset;
       } else return false;
@@ -211,7 +211,7 @@ namespace PT {
         DEBUG5(std::cout << "next leaf: "<<v<<" - degrees: "<<Network::degrees(v)<<"\n");
         assert(Network::in_degree(v) == 1);
         p = Network::parent(v);
-        N.remove_node(v);
+        N->remove_node(v);
         switch(Network::out_degree(p)){
           case 0:
             if(Network::in_degree(p) == 1) append(leaves, p);
@@ -236,7 +236,7 @@ namespace PT {
         DEBUG5(std::cout << "next leaf: "<<v<<" - degrees: "<<Network::degrees(v)<<"\n");
         if(Network::in_degree(v) == 1) {
           const NodeDesc p = Network::parent(v);
-          N.remove_node(v);
+          N->remove_node(v);
           if(Network::out_degree(p) == 0) append(leaves, p);
         } else append(new_leaves, v);
       }
@@ -246,7 +246,7 @@ namespace PT {
 
 
     void get_leaves_and_path_ends(auto& leaves, auto& path_ends){
-      for(const NodeDesc u: N.nodes()){
+      for(const NodeDesc u: N->nodes()){
         const auto [ind,outd] = Network::degrees(u);
         if(ind == 1) {
           switch(outd){
@@ -280,13 +280,13 @@ namespace PT {
     }
 
     bool apply_preprocessing() {
-      const size_t pre_edges = N.num_edges();
-      remove_shortcuts(remove_leaves(N.leaves().template to_container<NodeVec>()));
-      while(remove_trivial_nodes() && remove_shortcuts(N)) {
+      const size_t pre_edges = N->num_edges();
+      remove_shortcuts(remove_leaves(N->leaves().template to_container<NodeVec>()));
+      while(remove_trivial_nodes() && remove_shortcuts(*N)) {
         DEBUG3(std::cout << "network is now:\n"<<N<<"\n");
       }
-      DEBUG4(std::cout << "edge weights:\n"; for(const auto& uv: N.edges()) std::cout << uv << "\n");
-      return N.num_edges() != pre_edges;
+      DEBUG4(std::cout << "edge weights:\n"; for(const auto& uv: N->edges()) std::cout << uv << "\n");
+      return N->num_edges() != pre_edges;
     }
   };
   

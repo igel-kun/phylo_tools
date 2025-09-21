@@ -178,8 +178,7 @@ namespace PT {
       Parent(static_cast<typename DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>::Parent&&>(other)),
       roots(std::move(other.roots))
     {}
-
-
+    
     // ------- operators --------
     bool operator!=(const DFSInfo& other) const {
       if constexpr (has_seen)
@@ -239,6 +238,11 @@ namespace PT {
       else mstd::pop_back(get_roots()); // if our roots are direct, then pop the last root
     }
   };
+
+  static_assert(std::is_copy_constructible_v<DFSInfo<NodeDesc, void, NodeSet*>>);
+  static_assert(std::is_copy_assignable_v<DFSInfo<NodeDesc, void, NodeSet*>>);
+  static_assert(std::is_move_constructible_v<DFSInfo<NodeDesc, void, NodeSet*>>);
+  static_assert(std::is_move_assignable_v<DFSInfo<NodeDesc, void, NodeSet*>>);
 
 
   // helper structure for resuming the iteration; it has to be the same for all template-instanciations, so it needs to be outside the class

@@ -6,6 +6,7 @@
 #include "types.hpp"
 #include "node.hpp"
 #include "heavy_path_decomp.hpp"
+#include "linear_interval.hpp"
 
 namespace PT {
 
@@ -147,7 +148,7 @@ namespace PT {
       if(x != y) {
         ClimbInfo x_info{x};
         ClimbInfo y_info{y};
-        while(1)
+        while(true)
           switch(x_info.process(y_info)) {
             case 2: return x_info.node; // both are the same node
             case 1: return x_info.get_higher(y_info); // both are non-apexes on the same heavy path

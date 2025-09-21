@@ -32,7 +32,7 @@ namespace mstd {
 
     void make_new_data(const size_t new_size) {
       size_t tries_left = config::charp_allocation_timeout;
-      while(1) {
+      while(true) {
         _data = reinterpret_cast<char*>(std::malloc(new_size));
         if(!valid_ptr()) {
           std::free(_data);

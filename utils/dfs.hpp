@@ -346,7 +346,7 @@ namespace PT{
 
     void advance_dfs_nodes() {
       if(Parent::is_valid()) {
-        while(1) {
+        while(true) {
           Parent::operator++();
           if(Parent::is_valid()) {
             auto& u_node = node_of<Network_>(Parent::operator*());

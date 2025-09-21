@@ -11,52 +11,52 @@
 namespace PT {
 
   struct ProtoDPEntry {
+    // ------- static stuff --------
     // NOTE: some parts of the code rely on XOR-hashing here, so don't change that willy-nilly!
     static constexpr mstd::XOR_hash<Extension> Hasher{};
 
     template<NodeIterableType Nodes>
     static constexpr size_t hash(const Nodes& nodes) { return Hasher(nodes); }
 
+    // ------- members --------
     size_t hash_cache = 0;
+    
+    // ------- construction & desctruction ---------
+    // ------- operators --------
+    bool operator==(const ProtoDPEntry other) const { return hash_cache == other.hash_cache; }
+    //ProtoDPEntry& operator=(const ProtoDPEntry& other) noexcept = default;
 
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+    size_t hash() const { return hash_cache; }
+    
+    // ------- methods: modification --------
     void hash_one(const NodeDesc u) { hash_cache = Hasher.hash_one(hash_cache, u); }
     void recompute_hash(const auto& ex) { hash_cache = hash(ex); }
-
     void clear() { hash_cache = 0; }
-
-    size_t hash() const { return hash_cache; }
-
-    bool operator==(const ProtoDPEntry other) const { return hash_cache == other.hash_cache; }
-    ProtoDPEntry& operator=(const ProtoDPEntry& other) noexcept = default;
   };
 
 
   // this DP table entry recomputes the scanwidth each time, but only stores the essentials (the extension)
   template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
-  struct DPEntryLowMem_: public ProtoDPEntry {
+  struct DPEntryLowMem_:
+    public ProtoDPEntry
+  {
+    // ------- static stuff --------
     using Parent = ProtoDPEntry;
-
-    using Parent::hash;
-
-    static constexpr void recompute_sw() {}
-    static constexpr void update_sw(const NodeDesc u) {}
-    
-  protected:
-    mutable Extension ex;
-
-    // copy the other entry's Extension, replacing our own prefix
-    // NOTE: it's important that the prefix contains the same nodes!
-    // NOTE: only friends can do this since they know what they are doing
-    void replace_prefix(const DPEntryLowMem_& other) {
-      assert(ex.size() >= other.ex.size());
-      assert(std::ranges::is_permutation(other.ex, NodeSpan{ex}.subspan(0, other.ex.size())));
-      std::ranges::copy(other.ex, ex.begin());
-    }
-
-  public:
+ 
     using DynamicSW = DynamicScanwidth<Network, NodeMap<sw_t>, NetworkDegrees>;
     using SWInfo = std::pair<sw_t, DynamicSW>;
 
+    static constexpr void recompute_sw() {}
+    static constexpr void update_sw(const NodeDesc u) {}
+   
+    // ------- members --------
+  protected:
+    mutable Extension ex;
+
+    // ------- construction & desctruction ---------
+  public:
     DPEntryLowMem_() = default;
     DPEntryLowMem_(const DPEntryLowMem_&) = default;
     DPEntryLowMem_(DPEntryLowMem_&&) noexcept = default;
@@ -68,30 +68,48 @@ namespace PT {
    
     template<NodeIterableType Nodes>
     explicit DPEntryLowMem_(Nodes&& nodes) noexcept:
-      Parent{hash(ex)},
+      Parent{Parent::hash(ex)},
       ex(std::forward<Nodes>(nodes))
     {}
 
+    // ------- operators --------
+  public:
     DPEntryLowMem_& operator=(const DPEntryLowMem_& other) = default;
     DPEntryLowMem_& operator=(DPEntryLowMem_&& other) noexcept = default;
     DPEntryLowMem_& operator=(ProtoDPEntry other) { Parent::operator=(other); ex.clear(); return *this; }
 
-
-
     bool operator==(const DPEntryLowMem_&) const = default;
 
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
     SWInfo get_dynamic_scanwidth() const {
       SWInfo result;
       result.first = result.second.update_all(ex);
       return result;
     }
-
     
     const Extension& get_ex() const { return ex; }
-
-    void swap_nodes(const size_t i, const size_t j) const { std::swap(ex.at(i), ex.at(j)); }
-
+   
     sw_t get_scanwidth() const { return ex.template scanwidth<Network, NetworkDegrees>(); }
+
+    // this is for debugging purposes only
+    bool hash_correct() const { return Parent::hash() == Parent::hash(ex); }
+
+    // ------- methods: modification --------
+  protected:    
+    // copy the other entry's Extension, replacing our own prefix
+    // NOTE: it's important that the prefix contains the same nodes!
+    // NOTE: only friends can do this since they know what they are doing
+    void replace_prefix(const DPEntryLowMem_& other) {
+      assert(ex.size() >= other.ex.size());
+      assert(std::ranges::is_permutation(other.ex, NodeSpan{ex}.subspan(0, other.ex.size())));
+      std::ranges::copy(other.ex, ex.begin());
+    }
+
+  public:
+    void swap_nodes(const size_t i, const size_t j) const { std::swap(ex.at(i), ex.at(j)); }
 
     // update entry with the next node u
     void update(const NodeDesc u) {
@@ -100,36 +118,57 @@ namespace PT {
     }
     void clear() { ex.clear(); Parent::clear(); }
 
-    // this is for debugging purposes only
-    bool hash_correct() const { return hash() == hash(ex); }
-
     // ------------ friends -------------------
     template<bool, PhylogenyType, class> friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };
 
   // this DP table entry stores alot of stuff in order to avoid re-computing the scanwidth each time (good if you have plenty of mem, but not much time)
   template<PhylogenyType Network, class NetworkDegrees = DefaultDegrees<Network>>
-  struct DPEntry_: public DPEntryLowMem_<Network> {
+  struct DPEntry_:
+    public DPEntryLowMem_<Network>
+  {
+    // ------- static stuff --------
     using Parent = DPEntryLowMem_<Network>;
     using Edge = typename Network::Edge;
     using Parent::ex;
     using typename Parent::DynamicSW;
     using typename Parent::SWInfo;
 
+    // ------- members --------
+  protected:
+    DynamicSW ds;
+    sw_t scanwidth = 0;
+ 
+    // ------- construction & desctruction ---------
+  public:
     using Parent::Parent;
-    
-    bool operator==(const DPEntry_& other) const { return Parent::operator==(other); }
-    DPEntry_& operator=(ProtoDPEntry other) { Parent::operator=(other); ds.clear(); scanwidth = 0; return *this; }
 
-   
     explicit constexpr DPEntry_(const ProtoDPEntry p):
       Parent(p)
     {}
 
-  protected:
-    DynamicSW ds;
-    sw_t scanwidth = 0;
-    
+    // ------- operators --------
+  public:
+    bool operator==(const DPEntry_& other) const { return Parent::operator==(other); }
+    DPEntry_& operator=(ProtoDPEntry other) { Parent::operator=(other); ds.clear(); scanwidth = 0; return *this; }
+
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
+    SWInfo get_dynamic_scanwidth() const { return SWInfo{scanwidth, ds}; }
+
+    sw_t get_scanwidth() const { return scanwidth; }
+    // update entry with the next node u
+    void update(const NodeDesc u) {
+      Parent::update(u);
+      update_sw(u);
+    }
+
+    // ------- methods: modification --------
+  public:
+    void clear() { Parent::clear(); ds.clear(); scanwidth = 0; }
+
+  protected:    
     void replace_prefix(const DPEntry_& other) {
       Parent::replace_prefix(other);
       ds = other.ds;
@@ -147,17 +186,7 @@ namespace PT {
       scanwidth = std::max(scanwidth, ds.update_sw(u));
     }
 
-  public:
-    SWInfo get_dynamic_scanwidth() const { return SWInfo{scanwidth, ds}; }
-
-    sw_t get_scanwidth() const { return scanwidth; }
-    // update entry with the next node u
-    void update(const NodeDesc u) {
-      Parent::update(u);
-      update_sw(u);
-    }
-    void clear() { Parent::clear(); ds.clear(); scanwidth = 0; }
-
+    // ------- friends --------
     template<bool, PhylogenyType, class>
     friend class ScanwidthDP2; // we need this to make a fake-Entry to avoid copying/moving around the Extension
   };

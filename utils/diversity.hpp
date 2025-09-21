@@ -3,6 +3,7 @@
 
 #include <algorithm> // for max_element
 
+#include "platform.hpp"
 #include "solution_accu.hpp"
 #include "brute_force.hpp"
 
@@ -308,9 +309,9 @@ namespace PT {
     template<NodeIterableType Nodes>
       requires (std::is_constructible_v<Score, const Network&, const Nodes&> or std::is_default_constructible_v<Score>)
     auto score_for_leaf_set(const Network& N, const Nodes& leaves_to_save) {
-      using Traversal = PT::Traversal<preorder | all_edge_traversal | reverse_traversal, Network, const Nodes*>;
+      using RevTraversal = PT::Traversal<preorder | all_edge_traversal | reverse_traversal, Network, const Nodes*>;
       Score::init(N, leaves_to_save);
-      return std::ranges::fold_left(Traversal{leaves_to_save}, Weight{0},
+      return std::ranges::fold_left(RevTraversal{leaves_to_save}, Weight{0},
           [&](const Weight w, const auto& uv){ return w + Score::operator()(pd_weight_tag{}, uv);});
     }
 
@@ -488,16 +489,20 @@ namespace PT {
   {
     using EdgeData = EdgeDataOf<Network>;
     using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
-    using Util::iprob;
 
     // extract the most probable switching as a list of edges
     // NOTE: we always remove dangling leaves
     template<NodeIterableType Nodes>
     auto get_ML_switching(const Nodes& leaves) const {
-      const auto prob_of = [&](const auto& adj){ return iprob(adj); };
+#if !__clang__ && (GCC_VERSION < 140000)
+#error "sorry, this part only compiles with gcc version at least 14"
+#else
+      // NOTE: the following line will crash g++-13
+      const auto prob_of = [&](const auto& adj){ return Util::iprob(adj); };
       // we'll use the 'parent_select'-functor of the switching to select the most probable parent for each reticulation
       const auto most_probable_parent = [&](const NodeDesc r){ return std::ranges::max_element(Network::parents(r), std::ranges::less{}, prob_of); };
       return Switching<Network>{}.get_active_edges(leaves, most_probable_parent);
+#endif
     }
     auto get_ML_switching(const Network& N) const { return get_ML_switching(N.leaves()); }
   };

@@ -112,14 +112,15 @@ namespace std::ranges {
 // C++ forbids inheriting copy constructors, which makes sense if the class has data members (they would be left uninitialized),
 // but it doesn't make sense if the class has NO data members... in those cases, we can inherit _all_ constructors as follows:
 #define INHERIT_ALL_CONSTRUCTORS(myclass,base) \
-  template<class __First, class... __Args> requires (not std::is_same_v<std::remove_cvref_t<__First>, myclass>)\
-  myclass(__First&& __first, __Args&&... __args) noexcept: base(std::forward<__First>(__first), std::forward<__Args>(__args)...) {}
+  template<class __First, class... __Args> requires (not mstd::is_same_v<__First, myclass>)\
+  myclass(__First&& __first, __Args&&... __args) noexcept: base(std::forward<__First>(__first), std::forward<__Args>(__args)...) {}\
+  myclass() noexcept = default;
 
 // iterators are supposed to have an assignment that returns a ref to the iterator itself (this is required for std::iterator_traits)
 // now, it we inherit from an iterator and don't write our own operator=() then the inherited assignment will have the wrong return type :(
 #define INHERIT_ASSIGNMENT(myclass,base)\
-  template<class Other> requires (not std::is_same_v<std::remove_cvref_t<Other>, myclass>)\
-  myclass& operator=(Other&& other) noexcept { base::operator=(std::forward<Other>(other)); }
+  template<class Other> requires (not mstd::is_same_v<Other, myclass>)\
+  myclass& operator=(Other&& other) noexcept { base::operator=(std::forward<Other>(other)); return *this; }
 
 // zero-fill
   void clear_memory(void* const start, const size_t num_bytes) {

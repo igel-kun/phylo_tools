@@ -237,7 +237,7 @@ namespace PT {
     using Parent = DataExtracter_nl_<Network, ExtractNodeLabel>;
     using ExtractEdgeData = void;
  
-    DataExtracter_ed_nl_() = default;
+    //DataExtracter_ed_nl_() = default;
     INHERIT_ALL_CONSTRUCTORS(DataExtracter_ed_nl_, Parent)
     DataExtracter_ed_nl_(std::piecewise_construct_t) {}
 
@@ -319,7 +319,7 @@ namespace PT {
     using Parent = DataExtracter_ed_nl_<Network, ExtractEdgeData, ExtractNodeLabel>;
     using ExtractNodeData = void;
     
-    DataExtracter_() = default;
+    //DataExtracter_() = default;
     INHERIT_ALL_CONSTRUCTORS(DataExtracter_, Parent)
 
     DataExtracter_(std::piecewise_construct_t) {}
@@ -341,15 +341,7 @@ namespace PT {
   // -------- DataExtracter: deduction guides --------------
   
   // -------- DataExtracter: concepts --------------
-  template<class T>
-  concept StrictDataExtracterType = requires {
-    { T::ignoring_node_labels } -> std::convertible_to<const bool>;
-    { T::ignoring_edge_data } -> std::convertible_to<const bool>;
-    { T::ignoring_node_data } -> std::convertible_to<const bool>;
-  };
-  template<class T> concept DataExtracterType = StrictDataExtracterType<std::remove_reference_t<T>>;
-
-
+  // see types
 
   // -------- DataExtracter: defaults --------------
   // To make a data extracter, you can use make_data_extracter<SourcePhylo>(),

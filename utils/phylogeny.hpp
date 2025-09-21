@@ -25,16 +25,11 @@
 
 namespace PT {
 
-	// for phylogeniess that do not support multiple edges:
-  // when inserting an edge that is already in the phylogeny, we can either ignore the incident, abort the insertion or count the # of such events
-  enum class UniquenessBy { ignore, abort, count };
-
-
 	// ================ ProtoPhylogeny ======================
 	// in the proto phylogeny, differences between trees (singleS predecessor storage)
 	// and networks manifest (for example, for networks, we have to count the number of edges)
 
-	// general proto phylogeny implementing node and edge interaction
+  // ------- ProtoPhylogeny: main class ---------
   template<StorageEnum PredStorage_,
            StorageEnum SuccStorage_,
            class NodeData_ = void,
@@ -42,24 +37,26 @@ namespace PT {
            class LabelType_ = void,
            StorageEnum RootStorage_ = singleS,
            template<StorageEnum, StorageEnum, class, class, class> class Node_ = PT::DefaultNode>
-  class ProtoPhylogeny: public NodeAccess<Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_>> {
-  public:
+  struct ProtoPhylogeny:
+    public NodeAccess<Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_>> 
+  {
+    // ------- static stuff --------
     static constexpr StorageEnum RootStorage = RootStorage_;
     static constexpr bool has_unique_root = (RootStorage == singleS);
+    static constexpr bool is_declared_tree = false;
+    
     using RootContainer = StorageClass<RootStorage_, NodeDesc>;
     using DefaultSeen = NodeSet;
+
+    // ------- members --------
   protected:
 #warning "TODO: make counting nodes and edges optional by template!"
     RootContainer _roots;
 		size_t _num_nodes = 0u;
 		size_t _num_edges = 0u;
 
-    void count_node(const int nr = 1) { _num_nodes += nr; } 
-		void count_edge(const int nr = 1) { _num_edges += nr; }
-
+    // ------- construction & desctruction ---------
 	public:
-    static constexpr bool is_declared_tree = false;
-
     ProtoPhylogeny() = default;
     ProtoPhylogeny(const ProtoPhylogeny&) = delete;
     ProtoPhylogeny& operator=(const ProtoPhylogeny&) = delete;
@@ -72,7 +69,8 @@ namespace PT {
       other._roots.clear();
     }
 
-    ProtoPhylogeny& operator=(ProtoPhylogeny&& other) noexcept {
+    // ------- operators --------    
+    auto& operator=(ProtoPhylogeny&& other) noexcept {
       _roots = std::move(other._roots);
       _num_nodes = other._num_nodes;
       _num_edges = other._num_edges;
@@ -80,39 +78,29 @@ namespace PT {
       return *this;
     }
 
-    void clear() {
-      _num_nodes = 0;
-      _num_edges = 0;
-      _roots.clear();
-    }
-
-		size_t num_nodes() const { return _num_nodes; }
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+  public:
+    size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return _num_edges; }
 		size_t num_roots() const { return _roots.size(); }
     bool is_forest() const { return _num_nodes == _num_edges + num_roots(); }
     bool is_tree() const { return is_forest() and (num_roots() <= 1); }
     NodeDesc root() const { return mstd::front(_roots); }
-    const RootContainer& roots() const { return _roots; }
+    const RootContainer& roots() const & { return _roots; }
+    RootContainer&& roots() && { return std::move(_roots); }
+   
+    // ------- methods: modification --------
+  protected:
+    void count_node(const int nr = 1) { _num_nodes += nr; } 
+		void count_edge(const int nr = 1) { _num_edges += nr; }
 
-    // return whether the network contains a path from x to y
-#warning "TODO: change this once we have a better LCA oracle"
-    bool has_path(const NodeDesc x, NodeDesc y) const {
-      std::unordered_set<NodeDesc> seen;
-      NodeVec top_ends{y};
-      while(1) {
-        do {
-          if(LIKELY(!top_ends.empty())) {
-            y = mstd::value_pop(top_ends);
-          } else return false;
-        } while(mstd::test(seen, y));
-        if(LIKELY(y != x)) {
-          mstd::append(top_ends, this->parents(y));
-          mstd::append(seen, y);
-        } else return true;
-      }
-      return false;
+  public:
+    void clear() {
+      _num_nodes = 0;
+      _num_edges = 0;
+      _roots.clear();
     }
-
 	};
 
 	// proto phylogeny with maximum in-degree 1 (for use as trees/forests)
@@ -122,22 +110,27 @@ namespace PT {
            class LabelType_,
            StorageEnum RootStorage_,
            template<StorageEnum, StorageEnum, class, class, class> class Node_>
-  class ProtoPhylogeny<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>:
-    public NodeAccess<Node_<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_>> {
-  public:
+  struct ProtoPhylogeny<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>:
+    public NodeAccess<Node_<singleS, SuccStorage_, NodeData_, EdgeData_, LabelType_>>
+  {
+    // ------- static stuff --------
     static constexpr StorageEnum RootStorage = RootStorage_;
     static constexpr bool has_unique_root = (RootStorage == singleS);
+    static constexpr bool is_declared_tree = true;
+    
     using RootContainer = StorageClass<RootStorage_, NodeDesc>;
     using DefaultSeen = void;
+
+		static constexpr void count_edge(const int nr = 1) {}
+    static constexpr bool is_forest() { return true; }
+    
+    // ------- members --------
   protected:
     RootContainer _roots;
 		size_t _num_nodes = 0;
 
-		void count_node(const int nr = 1) { _num_nodes += nr; }
-		static constexpr void count_edge(const int nr = 1) {}
+    // ------- construction & desctruction ---------
   public:
-    static constexpr bool is_declared_tree = true;
-
     ProtoPhylogeny() = default;
     ProtoPhylogeny(const ProtoPhylogeny&) = delete;
     ProtoPhylogeny& operator=(const ProtoPhylogeny&) = delete;
@@ -148,18 +141,17 @@ namespace PT {
     {
       other._roots.clear();
     }
-    ProtoPhylogeny& operator=(ProtoPhylogeny&& other) noexcept {
+
+    // ------- operators --------
+    auto& operator=(ProtoPhylogeny&& other) noexcept {
       _roots = std::move(other._roots);
       _num_nodes = other._num_nodes;
       other._roots.clear();
+      return *this;
     }
 
-    void clear() {
-      _num_nodes = 0;
-      _roots.clear();
-    }
-
-    static constexpr bool is_forest() { return true; }
+    // ------- methods: initialization --------
+    // ------- methods: query --------
     bool is_tree() const { return num_roots() <= 1; }
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_roots() const { return _roots.size(); }
@@ -168,18 +160,29 @@ namespace PT {
     const RootContainer& roots() const & { return _roots; }
     RootContainer&& roots() && { return std::move(_roots); }
 
-    //! return whether there is a directed path from x to y in the tree
-    bool has_path(const NodeDesc x, NodeDesc y) const {
-      while(1){
-        if(y == x) return true;
-        const auto& p = this->parents(y);
-        if(UNLIKELY(p.empty())) return false;
-        y = p.front();
-      } 
+    // ------- methods: modification --------
+
+  protected:
+		void count_node(const int nr = 1) { _num_nodes += nr; }
+
+    void clear() {
+      _num_nodes = 0;
+      _roots.clear();
     }
 	};
 
 
+
+  // ========== Phylogeny ==========
+  // This is the main network/tree class. It's basically just a NodeAccess
+  // with node/edge counting and some added functionality
+ 
+  // ------- Phylogeny: helpers --------- 
+  // for phylogeniess that do not support multiple edges:
+  // when inserting an edge that is already in the phylogeny, we can either ignore the incident, abort the insertion or count the # of such events
+  enum class UniquenessBy { ignore, abort, count };
+  
+  // ------- Phylogeny: main class ---------
   template<StorageEnum PredStorage_,
            StorageEnum SuccStorage_,
            class NodeData_ = void,
@@ -187,9 +190,12 @@ namespace PT {
            class LabelType_ = void,
            StorageEnum RootStorage_ = singleS,
            template<StorageEnum, StorageEnum, class, class, class> class Node_ = PT::DefaultNode>
-  class Phylogeny: public ProtoPhylogeny<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_> {
+  struct Phylogeny:
+    public ProtoPhylogeny<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>
+  {
+    // ------- static stuff --------
     using Parent = ProtoPhylogeny<PredStorage_, SuccStorage_, NodeData_, EdgeData_, LabelType_, RootStorage_, Node_>;
-  public:
+ 
     using typename Parent::Node;
     using typename Parent::RootContainer;
     using LabelType = typename Node::LabelType;
@@ -227,62 +233,14 @@ namespace PT {
 		using Parent::count_node;
 		using Parent::count_edge;
     using Parent::has_edge_data;
+    using Parent::create_node;
 
-    // ================ modification ======================
-    // create a node in the void
-    // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
-    template<class... Args>
-      requires ((sizeof...(Args) != 1) or (not NodeFunctionType<mstd::FirstTypeOf<Args...>> and not DataExtracterType<mstd::FirstTypeOf<Args...>>))
-    static constexpr NodeDesc create_node(Args&&... args) {
-      //DEBUG5(std::cout << "creating node of type "<<mstd::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
-      Node* result = new Node(std::forward<Args>(args)...);
-      //DEBUG5(std::cout << "created node at " << result << " (" << reinterpret_cast<uintptr_t>(result) << ")\n");
-      return reinterpret_cast<uintptr_t>(result);
-    }
-    // in order to pass the Node's description to the node-data creator, we first reserve space for the node, then construct the Node in place (placement new)
-    template<NodeFunctionType DataMaker> requires (!DataExtracterType<DataMaker>)
-    static constexpr NodeDesc create_node(DataMaker&& data_maker) {
-      DEBUG5(std::cout << "creating node with data-maker\n");
-      if constexpr (!std::is_same_v<std::remove_cvref_t<DataMaker>, DefaultExtractData<Ex_node_data, Phylogeny>>) {
-        Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
-        const NodeDesc result = reinterpret_cast<uintptr_t>(space);
-        new(space) Node(data_maker(result));
-        return result;
-      } else return create_node();
-    }
-
-    template<NodeFunctionType LabelMaker> requires (!DataExtracterType<LabelMaker>)
-    static constexpr NodeDesc create_node(Ex_node_label, LabelMaker&& label_maker) {
-      if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
-        Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
-        const NodeDesc result = reinterpret_cast<uintptr_t>(space);
-        new(space) Node(label_maker(result));
-        return result;
-      } else return create_node();
-    }
-
-    template<NodeFunctionType DataMaker, NodeFunctionType LabelMaker>
-    static constexpr NodeDesc create_node(LabelMaker&& label_maker, DataMaker&& data_maker) {
-      if constexpr (!std::is_same_v<std::remove_cvref_t<LabelMaker>, DefaultExtractData<Ex_node_label, Phylogeny>>) {
-        Node* space = reinterpret_cast<Node*>(operator new(sizeof(Node)));
-        const NodeDesc result = reinterpret_cast<uintptr_t>(space);
-        new(space) Node(std::piecewise_construct, label_maker(result), data_maker(result));
-        return result;
-      } else return create_node(std::forward<DataMaker>(data_maker));
-    }
-    template<DataExtracterType DataMaker> requires (!NodeFunctionType<DataMaker>)
-    static constexpr NodeDesc create_node(DataMaker&& data_maker) {
-      using StrictDataMaker = std::remove_reference_t<DataMaker>;
-      if constexpr (!StrictDataMaker::ignoring_node_data) {
-        if constexpr (!StrictDataMaker::ignoring_node_labels) {
-          return create_node(data_maker.get_node_label, data_maker.get_node_data);
-        } else return create_node(data_maker.get_node_data);
-      } else {
-        if constexpr (!StrictDataMaker::ignoring_node_labels) {
-          return create_node(data_maker.get_node_label);
-        } else return create_node();
-      }
-    } 
+    // ------- members --------
+    // ------- construction & desctruction ---------
+    // ------- operators --------
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+    // ------- methods: modification --------
 
   protected:
     void delete_node(const NodeDesc x) {
@@ -927,7 +885,7 @@ namespace PT {
     void reroot_no_cleanup(const NodeDesc r, const bool suppress_deg2 = false) {
       if(Parent::num_roots() == 1){
         NodeDesc x = r;
-        while(1) {
+        while(true) {
           const auto& x_pars = parents(x);
           if(x_pars.size() == 1) {
             const auto& x_adj = x_pars.front();
@@ -1110,6 +1068,7 @@ namespace PT {
 
     // --------------- relative edge traversals (below) ------------------
     template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden>
+      requires (std::is_void_v<Forbidden> or std::movable<Forbidden>)
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
@@ -1611,6 +1570,14 @@ namespace PT {
              template<StorageEnum, StorageEnum, class, class, class> class>
     friend class Phylogeny;
   };
+
+  // ------- Phylogeny: factories ---------
+  
+  // ------- Phylogeny: concepts ---------
+  
+  // ------- Phylogeny: deduction guides ---------
+  
+  // ------- Phylogeny: defaults ---------
 
 
 

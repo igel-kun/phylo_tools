@@ -131,7 +131,7 @@ namespace mstd {
     using typename Iterator::difference_type;
 
     // --------------------- Construction & Assignment ---------------------------
-    _auto_iter() = default;
+    //_auto_iter() = default;
     INHERIT_ALL_CONSTRUCTORS(_auto_iter, Iterator)
     INHERIT_ASSIGNMENT(_auto_iter, Iterator)
 

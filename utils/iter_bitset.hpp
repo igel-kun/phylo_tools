@@ -508,7 +508,7 @@ namespace mstd {
         bits -= num_bits_in_bucket;
         ++i;
       }
-      if(bits){
+      if(bits != 0){
         storage[i] ^= full_bucket >> (num_bits_in_bucket - bits);
         if(!storage[i]) storage.erase(i);
       }
@@ -642,7 +642,7 @@ namespace mstd {
     value_type index_of_kth_zero(value_type k) const {
       size_t i = 0;
       size_t z;
-      while(1) {
+      while(true) {
         if(i != num_buckets()) {
           z = NUM_ZEROS_INL(storage.at(i));
           if(k >= z){
@@ -669,7 +669,7 @@ namespace mstd {
     value_type index_of_kth_one(value_type k) const {
       size_t i = 0;
       size_t z;
-      while(1){
+      while(true){
         if(i != num_buckets()) {
           z = NUM_ONES_INL(storage.at(i));
           if(k >= z){

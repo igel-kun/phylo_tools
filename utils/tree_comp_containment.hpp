@@ -91,7 +91,7 @@ namespace PT {
       // step 1: unzip the lowest reticulations
       NodeDesc pv = guest.parent(v);
       DEBUG2(std::cout << "testing parent "<<pv<<" of "<<v<<"\n");
-      while(1) {
+      while(true) {
         const auto& pv_disp = subtree_display.who_displays(pv);
         if(pv_disp.empty()) return v;
         v = pv;

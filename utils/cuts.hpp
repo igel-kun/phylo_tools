@@ -156,7 +156,6 @@ namespace PT {
       DEBUG3(std::cout << "analysis complete, chain info is:\n"<<chain_info<<"\n");
     }
 
-    //ChainDecomposition() = default;
     ChainDecomposition() = delete;
     ChainDecomposition(const Network& N):
       ChainDecomposition(N.root(), N.num_nodes()) {}

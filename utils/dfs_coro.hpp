@@ -18,13 +18,17 @@ namespace PT {
 
   // ------- DFS: main class ---------
 	// NOTE: SeenSet_ may be a pointer (or even void)
+  // NOTE: Both SeenSet_ and Forbidden_ must be copy- and move- constructible and assignable, in order for DFSIterator to pass iterator tests of std::ranges
+  //        (they are applied when we try to call std::fold_left on a range, for example)
   // Roots_ may be a pointer if we use someone else's roots (the network f.ex.)
   template<TraversalType tt,
            StrictPhylogenyType Network_,
            NodeOrIterableType<mstd::TR_PtrOK> Roots_ = typename Network_::RootContainer,
            class Forbidden_ = void,
            DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>> // SeenSet_ may be void (unzip all retis)  or a pointer (shared SeenSet)
-    requires (std::is_pointer_v<Roots_> or mstd::is_poppable<DFSRootStorage<Roots_>>)
+    requires ((std::is_pointer_v<Roots_> or mstd::is_poppable<DFSRootStorage<Roots_>>) and
+        (std::is_void_v<SeenSet_> or std::movable<SeenSet_>) and
+        (std::is_void_v<Forbidden_> or std::movable<Forbidden_>))
   struct DFSIterator:
     public DFSInfo<Roots_, Forbidden_, SeenSet_>
   {
@@ -132,7 +136,6 @@ namespace PT {
     DFSIterator(RootsInit&& _roots, Args&&... args): 
       Info(std::forward<RootsInit>(_roots), std::forward<Args>(args)...)
     { advance(); }
-
 
     // ------- operators --------
   public:
@@ -261,7 +264,7 @@ namespace PT {
         &&resume_ascending_inorder, &&resume_descending_inorder, &&resume_outer}; // 5, 6, 7
       DEBUG6(std::cout << "resuming at index "<<static_cast<int>(start_jump)<<'\n');
       goto* jump_table[start_jump];
-outer_loop: // while(1) {
+outer_loop: // while(true) {
         assert(children.empty());
         
         // step 1: get the next root and put its adjacency on the stack
@@ -280,7 +283,7 @@ resume_roots:
           visit_next();
         }
         // step 2: go as deep as possible, yielding nodes/edges if in postorder
-descending_loop: // while(1) {
+descending_loop: // while(true) {
           DEBUG6(status(std::cout) << '\n');
           // if the node_on_top has no more children, then take its adjacency iterator off the stack and go up to the parent
           if(top_is_invalid()) {
@@ -380,6 +383,8 @@ resume_outer:
            NodeOrIterableType Roots_ = typename Network_::RootContainer,
            class Forbidden_ = void,
            DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+    requires ((std::is_void_v<SeenSet_> or std::movable<SeenSet_>) and
+              (std::is_void_v<Forbidden_> or std::movable<Forbidden_>))
   struct Traversal:
     public mstd::IterFactory<DFSIterator<tt, Network_, Roots_, Forbidden_, SeenSet_>>
   {
@@ -398,13 +403,14 @@ resume_outer:
     using CopiedOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, SeenSet_>;
     using OwningIter = Iter;
 
-    Traversal() = default;
+    //Traversal() = default;
     INHERIT_ALL_CONSTRUCTORS(Traversal, Parent)
     INHERIT_ASSIGNMENT(Traversal, Parent)
 
     auto begin() const&  { return CopiedOwningIter(static_cast<const Iter&>(*this)); }
     auto begin() & { return NonOwningIter(static_cast<Iter&>(*this)); }
     auto begin() && { return OwningIter(static_cast<Iter&&>(*this)); }
+
   };
 
 #warning "TODO: make a 'robust traversal' with shared ownership of the seen- and forbidden set between the iterators and the traversal. Will need shared_ptr for that..."
@@ -414,6 +420,8 @@ resume_outer:
            NodeOrIterableType Roots_ = typename Network_::RootContainer,
            class Forbidden_ = void,
            DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+    requires ((std::is_void_v<SeenSet_> or std::movable<SeenSet_>) and
+             (std::is_void_v<Forbidden_> or std::movable<Forbidden_>))
   using NodeTraversal = Traversal<tt, Network_, Roots_, Forbidden_, SeenSet_>;
 
   template<TraversalType tt,
@@ -421,6 +429,8 @@ resume_outer:
            NodeOrIterableType Roots_ = typename Network_::RootContainer,
            class Forbidden_ = void,
            DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+    requires ((std::is_void_v<SeenSet_> or std::movable<SeenSet_>) and
+             (std::is_void_v<Forbidden_> or std::movable<Forbidden_>))
   using EdgeTraversal = Traversal<tt | edge_traversal, Network_, Roots_, Forbidden_, SeenSet_>;
 
   template<TraversalType tt,
@@ -428,6 +438,8 @@ resume_outer:
            NodeOrIterableType Roots_ = typename Network_::RootContainer,
            class Forbidden_ = void,
            DFSSeenType SeenSet_ = DefaultSeenSet<Network_, tt>>
+    requires ((std::is_void_v<SeenSet_> or std::movable<SeenSet_>) and
+             (std::is_void_v<Forbidden_> or std::movable<Forbidden_>))
   using AllEdgesTraversal = Traversal<tt | all_edge_traversal, Network_, Roots_, Forbidden_, SeenSet_>;
 
   template<TraversalType tt,
@@ -435,6 +447,8 @@ resume_outer:
            NodeOrIterableType Roots_ = typename Network_::RootContainer,
            class Forbidden_ = void,
            NodeMapType<mstd::TR_PtrVoidOK> SeenSet_ = NodeMap<Degree>>
+    requires ((std::is_void_v<SeenSet_> or std::movable<SeenSet_>) and
+             (std::is_void_v<Forbidden_> or std::movable<Forbidden_>))
   using AllEdgesDLSTraversal = Traversal<tt | depth_last_traversal, Network_, Roots_, Forbidden_, SeenSet_>;
 
   // ------- DFS: concepts ---------

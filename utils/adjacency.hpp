@@ -9,8 +9,7 @@ namespace PT {
     NodeDesc nd = NoNode;
 
     const NodeDesc& get_desc() const { return nd; }
-    operator const NodeDesc&() { return nd; }  // one should never change the node of an adjacency
-    operator NodeDesc() const { return nd; }
+    operator const NodeDesc&() const { return nd; }  // one should never change the node of an adjacency
     bool operator==(const ProtoAdjacency& other) const { return nd == other.nd; }
     bool operator==(const NodeDesc other) const { return nd == other; }
   };

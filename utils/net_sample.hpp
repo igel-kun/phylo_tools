@@ -78,11 +78,11 @@ namespace PT {
     }
 
     void sanity_check() const {
-      if(multilabel_density < 0 || multilabel_density > 1) throw std::logic_error("multilabel density must be between 0 and 1");
-      if(num_leaves <= 0) throw std::logic_error("cannot construct network without leaves");
-      if(num_tree_nodes <= 0) throw std::logic_error("cannot construct network without tree nodes");
+      if(not mstd::linear_interval{0,1}.contains(multilabel_density)) throw std::logic_error("multilabel density must be between 0 and 1");
+      if(num_leaves < 1) throw std::logic_error("cannot construct network without leaves");
+      if(num_tree_nodes < 1) throw std::logic_error("cannot construct network without tree nodes");
 
-      if((num_nodes() < 0) || (num_internal() < 0) || (num_retis < 0) || (num_leaves < 0) || (num_tree_nodes < 0))
+      if((num_nodes() < 0) or (num_internal() < 0) or (num_retis < 0) or (num_leaves < 0) or (num_tree_nodes < 0))
         throw std::logic_error("network geometry implied by given parameters is invalid: "+
             std::to_string(num_tree_nodes)+" tree nodes, "+
             std::to_string(num_retis)+" reticulations, "+
@@ -229,7 +229,7 @@ namespace PT {
           const NodeDesc t = *(get_random_iterator(retis));
           if(new_tree_nodes){
             NodeDesc s;
-            while(1){
+            while(true){
               const auto xy_iter = get_random_iterator(N.edges(), N.num_edges());
               const NodeDesc x = xy_iter->tail();
               auto& y = xy_iter->head();

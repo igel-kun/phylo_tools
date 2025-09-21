@@ -56,7 +56,7 @@ namespace mstd {
       Iter c_it = std::begin(c);
       if(not bits.empty()) {
         size_t i = 0;
-        while(1) {
+        while(true) {
           if(c_it != std::end(c)) {
             if(i + 1 < bits.size()) {
               // if we're not at the end of bits, then we increase bits[i]

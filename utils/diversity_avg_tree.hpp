@@ -77,7 +77,7 @@ namespace PT {
       // add the "non-side leaves" below v_in_N (leaves that are below v_in_N but not on any side of v)
       // NOTE: we're using a custom node traversal that has no seenset and uses the constructed map as a forbidden set
       //NodeTraversal<postorder, Net, NodeDesc, const NodeSet, void> traversal{v_in_N, forbidden};
-      Traversal<postorder, Network, NodeDesc, const NodeSet, void> traversal{v, forbidden};
+      Traversal<postorder, Network, NodeDesc, NodeSet, void> traversal{v, forbidden};
       for(const NodeDesc x: std::move(traversal)) {
         DEBUG4(std::cout << "next node in traversal: "<<x<<'\n');
         setup_scorable_at(x, forbidden);
@@ -215,7 +215,7 @@ namespace PT {
         const auto guv_prob = gv.data().prob;
 
         if(guv_prob > 0) {
-          while(1) {
+          while(true) {
             DEBUG4(std::cout << "getting free score from "<<gv<<" upwards via "<<*end_adj<<" with probability factor "<<guv_prob<<'\n');
             weight += guv_prob * score_map.util.weight(*end_adj);
             if(*end_adj != get_original_node(gu)) {
@@ -379,8 +379,13 @@ namespace PT {
     // if we don't have a table entry for the root, it means that the root is in a trivial BCC,
     // so we'll have to treat the tree-component of the root seperately
     if(not leaf_table.has_table(N.root(), false)) {
+      struct HasTable { // what the actual hell, C++20 lambdas with captures have deleted move-assignment operators? This is crazy!
+        const Table* lt_ptr;
+        auto operator()(const NodeDesc x) const { return (Net::in_degree(x) != 0) and lt_ptr->has_table(Net::parent(x), false); }
+      };
+      //auto has_table = [&](const NodeDesc x){ return (Net::in_degree(x) != 0) and lt_ptr->has_table(Net::parent(x), false); };
       // to get the tree component of the root, we run a DFS in which it is forbidden to enter nodes whose parents have an accu_table
-      auto root_edges = N.edges([&](const NodeDesc x){ return (Net::in_degree(x) != 0) and leaf_table.has_table(Net::parent(x), false); }).to_container();
+      auto root_edges = N.edges(HasTable{&leaf_table}).to_container();
       DEBUG4(std::cout << "building root component with edges "<<root_edges<<'\n');
       BCComponent root_comp(root_edges, Ex_node_data{}, mstd::IdentityFunction<NodeDesc>());
       DEBUG4(std::cout << "\nROOT component ("<<root_comp.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(root_comp) <<"\n");

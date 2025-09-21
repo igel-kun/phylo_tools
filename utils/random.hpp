@@ -80,7 +80,7 @@ namespace PT{
   }
 
 
-  template<mstd::IndexibleType Vec, mstd::IterableType Container> requires (!std::is_pointer_v<Vec>)
+  template<mstd::IndexibleType Vec, mstd::IterableType Container> requires (not std::is_pointer_v<Vec>)
   void sample(Container&& c, const size_t k, Vec& result) {
     std::ranges::sample(c, std::back_inserter(result), k, std::mt19937{std::random_device{}()});
   }

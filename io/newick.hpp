@@ -165,7 +165,7 @@ namespace PT{
 
   private:
 
-    void skip_whitespaces() { while((back >= 0) && std::isspace(newick_string.at(back))) --back; }
+    void skip_whitespaces() { while((back >= 0) and std::isspace(newick_string.at(back))) --back; }
 
     // check if this is a hybrid and return name and hybrid number
     uint32_t get_hybrid_num(std::string_view s) {

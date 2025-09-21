@@ -89,10 +89,10 @@ namespace PT{
         }
         comp_root.merge_sets_keep_order(rt_set, x_set);
       } else {
-        if(!success) {
+        if(not success) {
           DEBUG4(std::cout << "splitting off "<<x_set<<"\n");
           comp_root.split_element(x);
-          if(vis_leaf) x_set.payload = vis_leaf;
+          if(vis_leaf != NoNode) x_set.payload = vis_leaf;
         }
       }
       DEBUG4(std::cout << "comp root entries now "<<x<<": "<<x_set<<", "<<x_set.get_representative()<<": "<< comp_root.set_of(x) <<"\n");

@@ -40,7 +40,7 @@ namespace PT {
     const Output& get_sw_map() const { return out; }
 
     // add a new node u to the scanwidth calculation and return its scanwidth
-    template<class CallBack = mstd::ConstFunction>
+    template<class CallBack = mstd::IgnoreFunction<>>
     auto update_sw(const NodeDesc u, CallBack&& save_highest_child_of = CallBack()) {
       STAT(size_t child_sw_max = 0;);
       DEBUG5(std::cout << "adding "<<u<<" to "<<weak_components<< std::endl);
@@ -54,8 +54,7 @@ namespace PT {
         for(const auto& v: u_node.children()) {
           STAT(if constexpr (sw_accumulatable) {child_sw_max = std::max(child_sw_max, out.at(v));} );
 
-
-          if(weak_components.in_different_sets(u, v)) {
+          if(weak_components.in_different_sets(u, NodeDesc{v})) {
             // if v is in a different weak component than u, then merge the components and increase sw(u) by sw(v)
             const auto& v_set = weak_components.set_of(v);
             const NodeDesc most_recent_in_component = v_set.payload;
@@ -81,7 +80,7 @@ namespace PT {
 
 
     
-    template<class CallBack = mstd::ConstFunction, NodeContainerType Nodes>
+    template<class CallBack = mstd::IgnoreFunction<>, NodeContainerType Nodes>
     sw_t update_all(const Nodes& nodes, CallBack&& save_highest_child_of = CallBack()) {
       sw_t result = 0;
       for(const NodeDesc u: nodes) {

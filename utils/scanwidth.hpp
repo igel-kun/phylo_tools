@@ -27,7 +27,7 @@ namespace PT{
   }
 
   template<bool low_mem, bool no_prep, bool bottom_up>
-  constexpr SWconfig make_sw_config = low_mem * sw_low_mem_footprint + sw_no_preprocess * no_prep + sw_bottom_up * bottom_up;
+  constexpr SWconfig make_sw_config = low_mem * int{sw_low_mem_footprint} + sw_no_preprocess * int{no_prep} + sw_bottom_up * int{bottom_up};
 
   template<class Adjacency>
   struct EdgeWeightExtracter {

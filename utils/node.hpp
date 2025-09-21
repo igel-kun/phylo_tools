@@ -31,15 +31,16 @@ namespace PT{
 #else
   struct ProtoNode_ {
     static std::string name() { return ""; }
-    NodeDesc get_desc() const noexcept { return NodeDesc(this); }
+    NodeDesc get_desc() const noexcept { return NodeDesc{this}; }
   };
 #endif
   // NOTE: we specifically refrain from polymorphic nodes (one node pointer that may point to a TreeNode or a NetworkNode) because
   //       the only gain would be to save one pointer on TreeNodes at the cost of a vtable for everyone, so not really worth it.
   //       Also, polymorphic access to the predecessors becomes a nightmare if its type is not known at compiletime
   template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class EdgeData_>
-  class ProtoNode: public ProtoNode_ {
-  public:
+  struct ProtoNode:
+    public ProtoNode_
+  {
     using Adjacency = PT::Adjacency<EdgeData_>;
     using EdgeData = EdgeData_;
     using Edge = PT::Edge<EdgeData>;
@@ -197,11 +198,11 @@ namespace PT{
 
     OutEdgeContainer out_edges() { return make_outedge_factory<SuccContainer>(get_desc(), _successors); }
     ConstOutEdgeContainer out_edges() const { return make_outedge_factory<const SuccContainer>(get_desc(), _successors); }
-    Edge any_out_edge() const { assert(!_successors.empty()); return Edge{ get_desc(), any_successor() }; }
+    Edge any_outedge() const { assert(!_successors.empty()); return Edge{ get_desc(), any_successor() }; }
 
     InEdgeContainer in_edges() { return make_inedge_factory<PredContainer>(get_desc(), _predecessors); }
     ConstInEdgeContainer in_edges() const {return make_inedge_factory<const PredContainer>(get_desc(), _predecessors); }
-    Edge any_in_edge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_tag(), get_desc(), any_predecessor() }; }
+    Edge any_inedge() const { assert(!_predecessors.empty()); return Edge{reverse_edge_tag(), get_desc(), any_predecessor() }; }
     
     // lookup a parent/child
     const Adjacency* find_predecessor(const NodeDesc v) const { return_pointer_lookup(_predecessors, v); }
@@ -219,20 +220,33 @@ namespace PT{
 
   // A Node is a ProtoNode with possible NodeData
   template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class NodeData_, class EdgeData_>
-  class Node_:
+  struct Node_:
     public ProtoNode<PredStorage_, SuccStorage_, EdgeData_>
   {
     using Parent = ProtoNode<PredStorage_, SuccStorage_, EdgeData_>;
+
+  protected:
     NodeData_ _data;
+
   public:
     using NodeData = NodeData_;
     using Data = NodeData;
     static constexpr bool has_data = true;
     
-    // initialize only the data, leaving parents and children empty
-    template<class First, class... Args> requires (!NodeType<First>)
-    Node_(First&& first, Args&&... args): _data(std::forward<First>(first), std::forward<Args>(args)...) {}
     Node_() = default;
+
+    // initialize only the data, leaving parents and children empty
+    template<class First, class... Args> requires (not NodeType<First> and not mstd::is_any_of<First, Ex_node_data, Ex_node_label>)
+    Node_(First&& first, Args&&... args):
+      _data(std::forward<First>(first), std::forward<Args>(args)...) {}
+
+    template<NodeFunctionType DataMaker> requires (not DataExtracterType<DataMaker>)
+    Node_(DataMaker&& data_maker):
+      _data(std::forward<DataMaker>(data_maker)(reinterpret_cast<uintptr_t>(this))) {}
+
+    template<class... Args>
+    Node_(const Ex_node_data, Args&&... args):
+      Node_(std::forward<Args>(args)...) {}
 
     NodeData& data() & { return _data; }
     NodeData&& data() && { return std::move(_data); }
@@ -240,34 +254,41 @@ namespace PT{
   };
 
   template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class EdgeData_>
-  class Node_<PredStorage_, SuccStorage_, void, EdgeData_>: public ProtoNode<PredStorage_, SuccStorage_, EdgeData_> {
+  struct Node_<PredStorage_, SuccStorage_, void, EdgeData_>:
+    public ProtoNode<PredStorage_, SuccStorage_, EdgeData_>
+  {
     using Parent = ProtoNode<PredStorage_, SuccStorage_, EdgeData_>;
-  public:
     using NodeData = void;
     using Data = void;
     static constexpr bool has_data = false;
 
-    // default-initialization ignores all parameters
-    template<class First, class... Args> requires (!NodeType<First>)
-    Node_(First&& first, Args&&... args) {}
     Node_() = default;
+
+    // default-initialization ignores all parameters
+    template<class First, class... Args> requires (not NodeType<First>)
+    Node_(First&& first, Args&&... args) {}
   };
 
   // a node may have a label (can be accessed via label())
   // NOTE: has_label only tells that a node MAY have a (possibly empty) label!
   template<StorageEnum PredStorage_, StorageEnum SuccStorage_, class NodeData_, class EdgeData_, class LabelType_ = void>
-  class Node: public Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_> {
+  struct Node:
+    public Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_>
+  {
     using Parent = Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_>;
+
+  protected:
     LabelType_ _label;
+
   public:
     using Parent::Parent;
     using LabelType = LabelType_;
     static constexpr bool has_label = true;
 
     template<class LabelInit, class... Args>
-    Node(const std::piecewise_construct_t, LabelInit&& label_init, Args&&... args):
-      Parent{std::forward<Args>(args)...},
-      _label{std::make_from_tuple<LabelType>(label_init)}
+    Node(const Ex_node_label, LabelInit&& label_init, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      _label(std::forward<LabelInit>(label_init))
     {}
 
     LabelType& label() & { return _label; }
@@ -283,6 +304,9 @@ namespace PT{
     using LabelType = void;
     static constexpr bool has_label = false;
   };
+
+  static_assert(StrictNodeType<Node<vecS, vecS, void, void, std::string>>);
+
   template<StorageEnum A, StorageEnum B, class C, class D, class E>
   std::ostream& operator<<(std::ostream& os, const Node<A,B,C,D,E>& n){
     os << "Pre: "<<n.parents()<<"\tSuc:"<<n.children();
@@ -320,7 +344,9 @@ namespace PT{
 
 
   template<StrictNodeType Node_>
-  struct NodeAccess {
+  struct NodeAccess
+  {
+    // ------- static stuff --------
     static constexpr auto PredStorage = Node_::PredStorage;
     static constexpr auto SuccStorage = Node_::SuccStorage;
     using SuccContainer = typename Node_::SuccContainer;
@@ -344,12 +370,32 @@ namespace PT{
     static constexpr bool unique_edges = Node::unique_edges;
 
     static constexpr Node& node_of(const NodeDesc u) { return PT::node_of<Node>(u); }
+    static void delete_node(const NodeDesc u) { delete reinterpret_cast<Node*>(static_cast<uintptr_t>(u)); }
 
-    void delete_node(const NodeDesc u) { delete reinterpret_cast<Node*>(static_cast<uintptr_t>(u)); }
+    // create a node in the void
+    // NOTE: this only creates a node structure in memory which can then be used with add_root() or add_child() or add_parent() in the tree/network
+    template<class... Args> requires ((sizeof...(Args) == 0) or (not DataExtracterType<mstd::FirstTypeOf<Args...>>))
+    static constexpr NodeDesc create_node(Args&&... args) {
+      DEBUG6(std::cout << "creating node of type "<<mstd::type_name<Node>() << " with " << sizeof...(Args) << " arguments\n");
+      Node* result = new Node(std::forward<Args>(args)...);
+      DEBUG6(std::cout << "created node at " << result << " (" << reinterpret_cast<uintptr_t>(result) << ")\n");
+      return reinterpret_cast<uintptr_t>(result);
+    }
+    template<DataExtracterType DataMaker> requires (not NodeFunctionType<DataMaker>)
+    static constexpr NodeDesc create_node(DataMaker&& data_maker) {
+      using StrictDataMaker = std::remove_reference_t<DataMaker>;
+      if constexpr (not StrictDataMaker::ignoring_node_data) {
+        if constexpr (not StrictDataMaker::ignoring_node_labels) {
+          return create_node(Ex_node_label{}, data_maker.get_node_label, data_maker.get_node_data);
+        } else return create_node(data_maker.get_node_data);
+      } else {
+        if constexpr (not StrictDataMaker::ignoring_node_labels) {
+          return create_node(Ex_node_label{}, data_maker.get_node_label);
+        } else return create_node();
+      }
+    } 
 
-    Node& operator[](const NodeDesc u) const & { return node_of(u); }
-    Node&& operator[](const NodeDesc u) && { return node_of(u); }
-    
+
     static constexpr auto  name(const NodeDesc u) { return node_of(u).name(); }
     static constexpr auto& label(const NodeDesc u) { return node_of(u).label(); }
     static constexpr auto& data(const NodeDesc u) requires (has_node_data) { return node_of(u).data(); }
@@ -368,6 +414,74 @@ namespace PT{
     static constexpr Adjacency& any_child(const NodeDesc u) { return node_of(u).any_successor(); }
     static constexpr Adjacency& child(const NodeDesc u) { return node_of(u).any_successor(); }
 
+    static constexpr Adjacency& any_predecessor(const NodeDesc u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& any_parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
+    static constexpr Adjacency& parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
+
+    static constexpr size_t in_degree(const NodeDesc u) { return node_of(u).in_degree(); }
+    static constexpr size_t out_degree(const NodeDesc u) { return node_of(u).out_degree(); }
+    static constexpr size_t degree(const NodeDesc u) { return node_of(u).degree(); }
+    static constexpr std::pair<size_t,size_t> degrees(const NodeDesc u) { return node_of(u).degrees(); }
+    static constexpr bool is_root(const NodeDesc u) { return node_of(u).is_root(); }
+    static constexpr bool is_tree_node(const NodeDesc u) { return node_of(u).is_tree_node(); }
+    static constexpr bool is_reti(const NodeDesc u) { return node_of(u).is_reti(); }
+    static constexpr bool is_leaf(const NodeDesc u) { return node_of(u).is_leaf(); }
+    static constexpr bool is_suppressible(const NodeDesc u) { return node_of(u).is_suppressible(); }
+    static constexpr bool is_inner_node(const NodeDesc u) { return node_of(u).is_inner_node(); }
+    static constexpr bool is_isolated(const NodeDesc u) { return node_of(u).is_isolated(); }
+    static constexpr NodeTypeEnum type_of(const NodeDesc u) { return node_of(u).type_of(); }
+/*
+    template<AdjacencyType Adj>
+    static constexpr void replace_parent(const NodeDesc u, const NodeDesc old_parent, Adj&& new_parent)
+    { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
+    template<AdjacencyType Adj>
+    static constexpr void replace_child(const NodeDesc u, const NodeDesc old_child, Adj&& new_child)
+    { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
+*/
+    // convenient way of applying some function to all nodes of a subtree
+    template<class Func>
+    static constexpr void apply_to_subtree(const NodeDesc u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
+    static constexpr size_t count_nodes_below(const NodeDesc u) { return node_of(u).count_nodes_below(); }
+
+
+    // ================ Edges =======================
+    using OutEdgeContainer = typename Node_::OutEdgeContainer;
+    using ConstOutEdgeContainer = typename Node_::ConstOutEdgeContainer;
+    using InEdgeContainer = typename Node_::InEdgeContainer;
+    using ConstInEdgeContainer = typename Node_::ConstInEdgeContainer;
+
+    static constexpr OutEdgeContainer out_edges(const NodeDesc u) { return node_of(u).out_edges(); }
+    static constexpr InEdgeContainer in_edges(const NodeDesc u) { return node_of(u).in_edges(); }
+
+    static constexpr Edge any_outedge(const NodeDesc u) { return node_of(u).any_outedge(); }
+    static constexpr Edge any_inedge(const NodeDesc u)  { return node_of(u).any_inedge(); }
+
+
+    // NOTE: we expect lookups in the parents set to be faster than in the children set
+    static bool is_edge(const NodeDesc u, const NodeDesc v)  { return mstd::test(parents(v), u); }
+    static bool adjacent(const NodeDesc u, const NodeDesc v) { return mstd::test(parents(u), v) || mstd::test(parents(v), u); }
+
+    static Adjacency* find_predecessor(const NodeDesc u, const NodeDesc v) { return node_of(u).find_predecessor(v); }
+    static Adjacency* find_parent(const NodeDesc u, const NodeDesc v) { node_of(u).find_predecessor(v); }
+
+    static Adjacency* find_successor(const NodeDesc u, const NodeDesc v) { return node_of(u).find_successor(v); }
+    static Adjacency* find_child(const NodeDesc u, const NodeDesc v) { return node_of(u).find_successor(v); }
+
+    static Edge find_edge(const NodeDesc u, const NodeDesc v) {
+      const auto& v_parents = parents(v);
+      const auto uv_iter = mstd::find(v_parents, u);
+      if(uv_iter != v_parents.end()){
+        return Edge(reverse_edge_tag(), v, *uv_iter);
+      } else return Edge(NoNode, Adjacency());
+    }
+    static Edge find_edge_fwd(const NodeDesc u, const NodeDesc v) {
+      const auto& u_children = children(u);
+      const auto uv_iter = mstd::find(u_children, v);
+      if(uv_iter != u_children.end()){
+        return Edge(u, *uv_iter);
+      } else return Edge(NoNode, Adjacency());
+    }
+
   protected:
     template<class... Args>
     static constexpr auto add_successor(const NodeDesc u, Args&&... args) { return node_of(u).add_successor(std::forward<Args>(args)...); }
@@ -380,16 +494,6 @@ namespace PT{
     static constexpr void remove_any_successor(const NodeDesc u) { return node_of(u).remove_any_successors(); }
     static constexpr void remove_any_child(const NodeDesc u) { return node_of(u).remove_any_successors(); }
 
-  public:
-    static constexpr Adjacency& any_predecessor(const NodeDesc u) { return node_of(u).any_predecessor(); }
-    static constexpr Adjacency& any_parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
-    static constexpr Adjacency& parent(const NodeDesc u) { return node_of(u).any_predecessor(); }
-
-    static constexpr Edge any_outedge(const NodeDesc u) { return node_of(u).any_outedge(); }
-    static constexpr Edge any_inedge(const NodeDesc u)  { return node_of(u).any_inedge(); }
-
-
-  protected:
     template<class... Args>
     static constexpr auto add_predecessor(const NodeDesc u, Args&&... args) { return node_of(u).add_predecessor(std::forward<Args>(args)...); }
     template<class... Args>
@@ -424,69 +528,19 @@ namespace PT{
     }
 
 
+
+    // ------- members --------
+    // ------- construction & desctruction ---------
   public:
-    static constexpr size_t in_degree(const NodeDesc u) { return node_of(u).in_degree(); }
-    static constexpr size_t out_degree(const NodeDesc u) { return node_of(u).out_degree(); }
-    static constexpr size_t degree(const NodeDesc u) { return node_of(u).degree(); }
-    static constexpr std::pair<size_t,size_t> degrees(const NodeDesc u) { return node_of(u).degrees(); }
-    static constexpr bool is_root(const NodeDesc u) { return node_of(u).is_root(); }
-    static constexpr bool is_tree_node(const NodeDesc u) { return node_of(u).is_tree_node(); }
-    static constexpr bool is_reti(const NodeDesc u) { return node_of(u).is_reti(); }
-    static constexpr bool is_leaf(const NodeDesc u) { return node_of(u).is_leaf(); }
-    static constexpr bool is_suppressible(const NodeDesc u) { return node_of(u).is_suppressible(); }
-    static constexpr bool is_inner_node(const NodeDesc u) { return node_of(u).is_inner_node(); }
-    static constexpr bool is_isolated(const NodeDesc u) { return node_of(u).is_isolated(); }
-    static constexpr NodeTypeEnum type_of(const NodeDesc u) { return node_of(u).type_of(); }
-/*
-    template<AdjacencyType Adj>
-    static constexpr void replace_parent(const NodeDesc u, const NodeDesc old_parent, Adj&& new_parent)
-    { node_of(u).replace_parent(old_parent, std::forward<Adj>(new_parent)); }
-    template<AdjacencyType Adj>
-    static constexpr void replace_child(const NodeDesc u, const NodeDesc old_child, Adj&& new_child)
-    { node_of(u).replace_child(old_child, std::forward<Adj>(new_child)); }
-*/
-    // convenient way of applying some function to all nodes of a subtree
-    template<class Func>
-    static constexpr void apply_to_subtree(const NodeDesc u, Func&& function) { node_of(u).apply_to_subtree(std::forward<Func>(function)); }
-    static constexpr size_t count_nodes_below(const NodeDesc u) { return node_of(u).count_nodes_below(); }
+    Node& operator[](const NodeDesc u) const & { return node_of(u); }
+    Node&& operator[](const NodeDesc u) && { return node_of(u); }
 
-    // ================ Edges =======================
-    using OutEdgeContainer = typename Node_::OutEdgeContainer;
-    using ConstOutEdgeContainer = typename Node_::ConstOutEdgeContainer;
-    using InEdgeContainer = typename Node_::InEdgeContainer;
-    using ConstInEdgeContainer = typename Node_::ConstInEdgeContainer;
-
-    static constexpr OutEdgeContainer out_edges(const NodeDesc u) { return node_of(u).out_edges(); }
-    static constexpr Edge any_out_edge(const NodeDesc u) { return node_of(u).any_out_edge(); }
-    static constexpr InEdgeContainer in_edges(const NodeDesc u) { return node_of(u).in_edges(); }
-    static constexpr Edge any_in_edge(const NodeDesc u) { return node_of(u).any_in_edge(); }
-
-    // NOTE: we expect lookups in the parents set to be faster than in the children set
-    static bool is_edge(const NodeDesc u, const NodeDesc v)  { return mstd::test(parents(v), u); }
-    static bool adjacent(const NodeDesc u, const NodeDesc v) { return mstd::test(parents(u), v) || mstd::test(parents(v), u); }
-
-    static Adjacency* find_predecessor(const NodeDesc u, const NodeDesc v) { return node_of(u).find_predecessor(v); }
-    static Adjacency* find_parent(const NodeDesc u, const NodeDesc v) { node_of(u).find_predecessor(v); }
-
-    static Adjacency* find_successor(const NodeDesc u, const NodeDesc v) { return node_of(u).find_successor(v); }
-    static Adjacency* find_child(const NodeDesc u, const NodeDesc v) { return node_of(u).find_successor(v); }
-
-    static Edge find_edge(const NodeDesc u, const NodeDesc v) {
-      const auto& v_parents = parents(v);
-      const auto uv_iter = mstd::find(v_parents, u);
-      if(uv_iter != v_parents.end()){
-        return Edge(reverse_edge_tag(), v, *uv_iter);
-      } else return Edge(NoNode, Adjacency());
-    }
-    static Edge find_edge_fwd(const NodeDesc u, const NodeDesc v) {
-      const auto& u_children = children(u);
-      const auto uv_iter = mstd::find(u_children, v);
-      if(uv_iter != u_children.end()){
-        return Edge(u, *uv_iter);
-      } else return Edge(NoNode, Adjacency());
-    }
-
+    // ------- operators --------
+    // ------- methods: initialization --------
+    // ------- methods: query --------
+    // ------- methods: modification --------
   };
+
 
   template<PhylogenyType Net>
   struct InternalDataAccess {

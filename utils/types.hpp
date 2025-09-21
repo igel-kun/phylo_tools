@@ -74,25 +74,18 @@ namespace PT{
 #ifdef DEBUGNODES
   struct NodeDesc {
     uintptr_t data = reinterpret_cast<uintptr_t>(nullptr);
-    constexpr NodeDesc() noexcept {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
-    constexpr NodeDesc(const NodeDesc& other) noexcept: data(other.data) {} // std::cout << "creating new ND pointing to "<<data<<"\n"; }
-    constexpr NodeDesc(NodeDesc&& other) noexcept: data(std::move(other.data)) {} //std::cout << "creating new ND pointing to "<<data<<"\n"; }
+
+    constexpr NodeDesc() noexcept {}
+    constexpr NodeDesc(const NodeDesc& other) noexcept = default;
+    constexpr NodeDesc(NodeDesc&& other) noexcept = default;
 
     template<class T>
     constexpr NodeDesc(const T* t) noexcept: data(reinterpret_cast<uintptr_t>(t)) {} // std::cout << "created ND from pointer to "<<data<<"\n"; }
     constexpr NodeDesc(const nullptr_t n) noexcept: data(reinterpret_cast<uintptr_t>(static_cast<void*>(n))) {}
     constexpr NodeDesc(const uintptr_t t) noexcept: data(t) {}
 
-
-    NodeDesc& operator=(const NodeDesc& other) noexcept {
-      data = other.data;
-      //std::cout << "assigned new ND pointing to "<<data<<"\n";
-      return *this;
-    }
-    NodeDesc& operator=(NodeDesc&& other) noexcept {
-      data = std::move(other.data);
-      return *this;
-    }
+    NodeDesc& operator=(const NodeDesc& other) noexcept = default; 
+    NodeDesc& operator=(NodeDesc&& other) noexcept = default;
 
     constexpr operator uintptr_t() const noexcept { return data; }
     
@@ -133,7 +126,7 @@ namespace PT {
 
   // an adjacency is something that can be converted to a NodeDesc
   template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
-  concept AdjacencyType = mstd::is_convertible_v<A, NodeDesc, rune> and (not mstd::is_arithmetic_v<A>);
+  concept AdjacencyType = std::is_convertible_v<A, NodeDesc> and (not mstd::is_arithmetic_v<A>);
   template<class A> concept StrictAdjacencyType = AdjacencyType<A, mstd::TR_Strict>;
 
   template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
@@ -189,6 +182,18 @@ namespace PT {
 
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept NodeMapType = (mstd::MapType<C, rune> && HasNodeKey<C, rune>);
+
+  // Data Extracter
+  template<class T>
+  concept StrictDataExtracterType = requires {
+    { T::ignoring_node_labels } -> std::convertible_to<const bool>;
+    { T::ignoring_edge_data } -> std::convertible_to<const bool>;
+    { T::ignoring_node_data } -> std::convertible_to<const bool>;
+  };
+  template<class T> concept DataExtracterType = StrictDataExtracterType<std::remove_reference_t<T>>;
+
+
+
 
   // degrees
   using Degree = uint_fast32_t;

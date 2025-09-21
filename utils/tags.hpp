@@ -43,4 +43,7 @@ namespace PT {
   template<class T> constexpr bool is_edge_data_tag = std::is_same_v<T, Ex_edge_data>;
   template<class T> concept DataTag = (is_node_label_tag<T> || is_node_data_tag<T> || is_edge_data_tag<T>);
 
+
+  // extensions may be partial
+  struct partial_extension_tag {};
 }

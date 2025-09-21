@@ -763,7 +763,7 @@ namespace PT {
     size_t remove_branches_between(Top&& top, NodeDesc bottom, NextParent&& next_parent = NextParent()) {
       std::cout << "\texCHERRY: removing branches between "<<top<<" and "<<bottom<<"\n";
       std::vector<NodePair> removals;
-      while(1) {
+      while(true) {
         NodeDesc parent = NoNode;
         // step 1: mark incoming edges of bottom for removal (except from the next parent)
         for(const NodeDesc z: Host::parents(bottom))
@@ -821,7 +821,7 @@ namespace PT {
       // we'll use a reverse DFS from x
       // step 1: find the first reti above x
       NodeVec current_nodes;
-      while(1) {
+      while(true) {
         // if x is in_P or below_P, then mark all current_nodes as below_P
         // if x is not_below_P, then mark all current nodes as not_below_P
         const auto x_rel = mark_relative_to_P<construct_P>(x, current_nodes);

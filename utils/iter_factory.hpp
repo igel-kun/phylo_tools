@@ -12,7 +12,7 @@ namespace mstd {
     using Parent::get_iter;
     using Parent::get_end;
 
-    ProtoIterFactory() = default;
+    //ProtoIterFactory() = default;
     INHERIT_ALL_CONSTRUCTORS(ProtoIterFactory, Parent);
 
     bool empty() const { return begin() == end(); }

@@ -34,7 +34,7 @@ namespace mstd{
       representative(std::forward<First>(first), std::forward<Args>(args)...), _size(1)
     {}
  
-    template<class KeyInit, class... Args> requires (mstd::is_same_v<KeyInit, Key>)
+    template<class KeyInit, class... Args> requires (has_payload and mstd::is_constructible_v<Key, KeyInit&&>)
     DSet(KeyInit&& _key, Args&&... args):
       representative(std::forward<KeyInit>(_key)), _size(1), payload(std::forward<Args>(args)...)
     {}

@@ -35,14 +35,15 @@ void parse_options(const int argc, const char** argv) {
       generate or modify a network and write it to out-file in extended newick format (unless -el specified)\n\
       FLAGS:\n\
       \t[random binary network generation]\n\
+      \tprovide any number of the following constraints:\n\
       \t-r <#reti>\tnumber of reticulations in the network\n\
       \t-l <#leaf>\tnumber of leaves in the network\n\
-      \t-n <#node>\tnumber of vertices in the network (this is ignored if -r and -l are present)\n\
-      NOTE: if, of -n, -r, and -l, less than 2 are present, the network is assumed to have ~10% reticulations\n\
-      NOTE: -n, -r, and -l are ignored if -TBR or -ad is present\n\
-      NOTE: n = 99 is assumed if none are present\n\n\
+      \t-n <#node>\tnumber of vertices in the network\n\
+      \tNOTE: if no more than one of -n, -r, and -l is provided, the network is assumed to have ~10% reticulations\n\
+      \tNOTE: n = 99 is assumed if none are present\n\n\
       \t[network modification]\n\
-      \t-TBR <file> <TBR-dist>\tgenerate a network by applying 'TBR-dist' TBR-moves to the network in 'file'\n\n\
+      \t-TBR <file> <TBR-dist>\tgenerate a network by applying 'TBR-dist' many TBR-moves to the network in 'file'\n\n\
+      \t-SPR <file> <SPR-dist>\tgenerate a network by applying 'SPR-dist' many SPR-moves to the network in 'file'\n\n\
       \t[add random data to a network]\n\
       \t-ad <file>\tgenerate node and/or edge-data for the nodes & edges of the network in <file>\n\
       \t-nd [node-data]\tgenerate node data described in 'node-data' with the format below\n\
@@ -60,17 +61,19 @@ void parse_options(const int argc, const char** argv) {
       \t\t     (3) a length-3 string of uniformly random lower-case letters\n\
       \n\t[general]\n\
       \t-v\tverbose output, prints networks\n\
-      \t-a\tappend to file1 instead of replacing its contents\n\
+      \t-a\tappend to out-file instead of replacing its contents\n\
       \t-s <seed>\tset random seed to 'seed'\n\
       \t-el\toutput in edgelist format instead of eNewick\n\
       \t-L\tput labels on the leaves (small-letter strings in lexicographic order)\n");
 
   mstd::parse_options(argc, argv, description, help_message, options);
 
-  // sanity check
-  if((test(options, "-nd") || test(options, "-ed")) && !test(options, "-ad")) {
-    throw std::logic_error("request to modify data requires an input file (via -ad)");
-  }
+  // sanity checks
+  if(test(options, "-TBR") + test(options, "-SPR") + test(options, "-ad") + (test(options, "-n") or test(options, "-r") or test(options, "-l")) != 1)
+    cfail("choose exactly one of\n (1) network generation (via -n, -r, -l) and\n (2) network modification (via -ad, -TBR, -SPR)");
+
+  if((test(options, "-nd") or test(options, "-ed")) and not test(options, "-ad"))
+    cfail("request to modify data requires an input file (via -ad)");
 }
 
 PT::NodeNums get_node_numbers() {
@@ -83,24 +86,24 @@ PT::NodeNums get_node_numbers() {
     } else if(total_input == 1){
       // if we only have one input, we assume that 10r = n and, thus, 9r = t + l and l + r - 1 = t (togeher 8r = 2l - 1)
       if(mstd::test(options, "-n")){
-        const int n = arg_from_string(options["-n"][0]);
+        const int n = std::stoi(options["-n"][0]);
         nums.from_nr(n, n / 10); // n = number of nodes
       } else if(mstd::test(options, "-r")){
-        const int r = arg_from_string(options["-r"][0]);
+        const int r = std::stoi(options["-r"][0]);
         nums.from_nr(10*r + 1, r); // r = number of reticulations
       } else {
-        const int l = arg_from_string(options["-l"][0]);
+        const int l = std::stoi(options["-l"][0]);
         nums.from_rl((2 * l - 1) / 8, l); // l = number of leaves
       }
     } else if(total_input == 2){
       if(!mstd::test(options, "-l")) {
-        nums.from_nr(arg_from_string(options["-n"][0]), arg_from_string(options["-r"][0]));
+        nums.from_nr(std::stoi(options["-n"][0]), std::stoi(options["-r"][0]));
       } else if(!mstd::test(options, "-n")) {
-        nums.from_rl(arg_from_string(options["-r"][0]), arg_from_string(options["-l"][0]));
+        nums.from_rl(std::stoi(options["-r"][0]), std::stoi(options["-l"][0]));
       } else {
-        nums.from_nl(arg_from_string(options["-n"][0]), arg_from_string(options["-l"][0]));
+        nums.from_nl(std::stoi(options["-n"][0]), std::stoi(options["-l"][0]));
       }
-    } else nums.from_nrl(arg_from_string(options["-n"][0]), arg_from_string(options["-r"][0]), arg_from_string(options["-l"][0]));
+    } else nums.from_nrl(std::stoi(options["-n"][0]), std::stoi(options["-r"][0]), std::stoi(options["-l"][0]));
     nums.sanity_check();
     return nums;
   } catch(const std::logic_error& err) {
@@ -230,48 +233,49 @@ int main(const int argc, const char** argv) {
   parse_options(argc, argv);
 
   if(test(options, "-s"))
-    std::srand(arg_from_string(options["-s"][0]));
+    std::srand(std::stoi(options["-s"][0]));
   
   MyNetwork N;
 
   if(test(options, "-TBR")) {
-    size_t TBR_dist = arg_from_string(options["-TBR"][1]);
+    size_t TBR_dist = std::stoi(options["-TBR"][1]);
     
     N = read_network(options["-TBR"][0]);
-    while(TBR_dist--) {
-      if(N.num_edges() < 3) 
-        throw std::logic_error("cannot make TBR-moves on a network with less than 3 edges");
 
-      // step 1: we'll need 3 DISTINCT random edges: st, uv, and xy such that
+    if(N.num_edges() < 3) 
+      cfail("cannot make TBR-moves on a network with less than 3 edges");
+
+    DefaultDynamicAncestorOracle<MyNetwork> has_path;
+    while(TBR_dist--) {
+      // step 1: we'll need 3 DISTINCT random edges: st, uv, and xy (we'll remove st and add an edge from xy to uv) such that
       //  1. x is not below v (if so, swap uv and xy) since, otherwise, inserting the new edge will create a cycle
       //  2. both s and t must be weakly connected to at least one of u, v, x, y in N-st since, otherwise, the result is disconnected
 
       // step 1.1: get st, note that neither s nor t shall have degree one as, otherwise, we won't be able to reconnect it
-      auto edges_traversal = N.edges();
       MyEdge st, uv, xy;
       do {
-        st = *(get_random_iterator(edges_traversal, N.num_edges()));
-      } while((N.degree(st.head()) == 1) || (N.degree(st.tail()) == 1));
+        st = *(get_random_iterator(N.edges(), N.num_edges()));
+      } while((N.degree(st.head()) == 1) or (N.degree(st.tail()) == 1));
       const NodeDesc t = st.head();
 
       // step 1.2: remove st from N
       N.remove_edge_no_cleanup(st);
-      
-      
-      // step 1.3: choose uv among the edges reachable from the root of N-st
+      has_path.remove_edge(st);
+           
+      // step 1.3: choose uv among the edges reachable from t or the root of N-st
       const NodeDesc t_root = N.is_root(t) ? t : N.root();
+      const AllEdgesTraversal<preorder, MyNetwork, NodeDesc, MyEdge> traversal(t_root, st);
       do {
-        sample(N.edges(), 1, &uv);
-        // NOTE: we'll be in trouble if there is only 1 edge below t and we choose that one for uv, since then, we can't choose anything for xy
-      } while((N.out_degree(t_root) == 1) || (uv.tail() == t_root));
+        sample(traversal, 1, &uv);
+      } while((uv.head() == t_root) or (uv.tail() == t_root));
+#warning "TODO: continue here"
 
       // step 1.4: choose xy among the edges reachalbe from the root above t in N-st
-      while(1) {
-        sample(N.edges_below(t_root), 1, &xy);
-        if(xy != uv) {
-#warning "TODO: continue here"
-        }
-      }
+      do {
+        // mark st as forbidden edge so we wont cross it
+        sample(N.edges(st), 1, &xy);
+      } while(has_path(v, x));
+
       throw(mstd::Unimplemented{"sampling method not yet implemented"});
 /*
       // step 1.5: check whether x is below v and swap if necessary
