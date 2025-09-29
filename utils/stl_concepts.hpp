@@ -58,8 +58,8 @@ namespace mstd {
 	template<> constexpr bool is_stringlike_v<const char[]> = true;
 	template<int i> constexpr bool is_stringlike_v<const char[i]> = true;
 	
-	template<class T, TypeRune rune = TR_ConstRefOK> concept Stringlike = apply_rune_v<T, rune> || is_stringlike_v<apply_rune_t<T, rune>>;
-	template<class T, TypeRune rune = TR_ConstRefOK> concept StringlikeOrChar = Stringlike<T, rune> || mstd::is_same_v<T, char, rune>;
+	template<class T, TypeRune rune = TR_ConstRefOK> concept Stringlike = apply_rune_v<T, rune> or is_stringlike_v<apply_rune_t<T, rune>>;
+	template<class T, TypeRune rune = TR_ConstRefOK> concept StringlikeOrChar = Stringlike<T, rune> or mstd::is_same_v<T, char, rune>;
 
   template<class T> concept has_iterator = requires { typename T::iterator;};
   // for reasons, C++20's std::span has no const_iterator yet (added in C++23)
@@ -313,7 +313,7 @@ namespace mstd {
 
   // a concept for iterable types in which begin() and end() have the same type (this is apparently needed for some STL stuff like std::vector::insert)
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept IterableTypeWithSameIterators = IterableType<T, rune> && std::is_same_v<BeginType<T>, EndType<T>>;
+  concept IterableTypeWithSameIterators = IterableType<T, rune> and std::is_same_v<BeginType<T>, EndType<T>>;
 
   template<class Iter, class T>
   concept is_dereferencable_to = requires(Iter it) { { *it } -> std::convertible_to<T>; };
@@ -355,7 +355,7 @@ namespace mstd {
   template<class C> concept OptionalUnorderedContainerType = UnorderedContainerType<C, TR_ConstRefVoidOK>;
 
   template<class C, class Val, TypeRune rune = TR_ConstRefOK>
-  concept ContainerOfType = ContainerType<C, rune> && std::is_same_v<std::remove_cvref_t<Val>, value_type_of_t<C>>;
+  concept ContainerOfType = ContainerType<C, rune> and std::is_same_v<std::remove_cvref_t<Val>, value_type_of_t<C>>;
 
 	// a set is a container that supports count()
 	template<class T>

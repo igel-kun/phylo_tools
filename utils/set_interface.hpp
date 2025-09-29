@@ -65,15 +65,15 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<class T, SetType S>
   auto_iter<typename singleton_set<T>::const_iterator> common_element(const singleton_set<T>& x, const S& y) {
-    if(!x.empty() && test(y,front(x)))
+    if(not x.empty() and test(y,front(x)))
       return {begin(x), end(x)};
     else
       return {end(x), end(x)};
   }
 
-  template<class T, SetType S> requires (!std::is_convertible_v<S,singleton_set<value_type_of_t<S>>>)
+  template<class T, SetType S> requires (not std::is_convertible_v<S,singleton_set<value_type_of_t<S>>>)
   auto_iter<typename S::const_iterator> common_element(const S& y, const singleton_set<T>& x) {
-    if(!x.empty())
+    if(not x.empty())
       return {find(y, front(x)), end(y)};
     else
       return {end(y), end(y)};
@@ -97,7 +97,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool test(const T& x, const T& y) { return x == y; }
 
   template<class T, std::invocable<T> F>
-    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> || mstd::IterableType<std::invoke_result_t<F,T>>)
+    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> or mstd::IterableType<std::invoke_result_t<F,T>>)
   bool test(const F& f, const T& x) {
     if constexpr (mstd::IterableType<decltype(f(x))>)
       return not f(x).empty();
@@ -118,37 +118,23 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   void flip(iterable_bitset<T>& _set, const uintptr_t index) { return _set.flip(index); }
 
   // intersect two containers
-  template<ContainerType A, ContainerType B> requires ((not SetType<A>) or (not SetType<B>))
+  template<ContainerType A, ContainerType B> requires ConvertibleValueTypes<A,B>
   A get_intersection(const A& a, const B& b) {
-    A result;
-    if constexpr (not SetType<B>) {
-      for(const auto& x: b)
-        if(mstd::test(a, x))
-          append(result, x);
+    if constexpr (IterBitsetType<A> and IterBitsetType<B>) {
+      return a & b;
     } else {
-      for(const auto& x: a)
-        if(mstd::test(b, x))
-          append(result, x);
-    }
-    return result;
-  }
-
-  template<IterBitsetType A>
-  A get_intersection(const A& a, const A& b) { return a & b; }
-
-  template<SetType A, SetType B> requires ((not IterBitsetType<A>) or (not IterBitsetType<B>))
-  A get_intersection(const A& a, const B& b) {
-    A result;
-    if(a.size() > b.size()) {
-      for(const auto& x: b)
-        if(mstd::test(a, x))
+      A result;
+      if(not SetType<B> or (SetType<A> and (a.size() > b.size()))) {
+        for(const auto& x: b)
+          if(mstd::test(a, x))
             append(result, x);
-    } else {
-      for(const auto& x: a)
-        if(mstd::test(b, x))
+      } else {
+        for(const auto& x: a)
+          if(mstd::test(b, x))
             append(result, x);
+      }
+      return result;
     }
-    return result;
   }
 
 
@@ -172,10 +158,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<IterableType I, ContainerType C>
   bool are_disjoint(const I& x, const C& y) {
-    if constexpr (!SetType<C>) {
-        for(const auto& item: y) if(test(x, item)) return false;
-    } else if constexpr (!SetType<I>) {
-        for(const auto& item: x) if(test(y, item)) return false;
+    if constexpr (IterBitsetType<I> and IterBitsetType<C>) {
+      return (x & y).empty();
+    } else if constexpr (not SetType<C>) {
+      for(const auto& item: y) if(test(x, item)) return false;
+    } else if constexpr (not SetType<I>) {
+      for(const auto& item: x) if(test(y, item)) return false;
     } else {
       if(x.size() < y.size()){
         for(const auto& item: x) if(test(y, item)) return false;
@@ -185,12 +173,12 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
     }
     return true;
   }
-  template<ContainerType C, IterableType I> requires (!ContainerType<I>)
+  template<ContainerType C, IterableType I> requires (not ContainerType<I>)
   bool are_disjoint(const C& x, const I& y) { return are_disjoint(y,x); }
 
   template<class T, SetType S>
   bool are_disjoint(const singleton_set<T>& x, const S& y) { return x.empty() ? true : test(y, front(x)); }
-  template<class T, SetType S> requires (!std::is_convertible_v<S, singleton_set<value_type_of_t<S>>>)
+  template<class T, SetType S> requires (not std::is_convertible_v<S, singleton_set<value_type_of_t<S>>>)
   bool are_disjoint(const S& y, const singleton_set<T>& x) { return are_disjoint(x, y); }
 
 
@@ -211,22 +199,22 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<IterableType T>
   constexpr decltype(auto) front(T&& c) {
-    assert(!c.empty());
+    assert(not c.empty());
     if constexpr (HasFront<T>)
       return c.front();
     else return *(std::begin(c));
   }
   template<IterableType T>
-  constexpr decltype(auto) next_to_front(T&& c) { assert(!c.empty()); return *(std::next(std::begin(c))); }
+  constexpr decltype(auto) next_to_front(T&& c) { assert(not c.empty()); return *(std::next(std::begin(c))); }
   template<IterableType T>
   constexpr decltype(auto) back(T&& c) {
-    assert(!c.empty());
+    assert(not c.empty());
     if constexpr (HasBack<T>)
       return c.back();
     else return *(mstd::rbegin(c));
   }
   template<IterableType T>
-  constexpr decltype(auto) next_to_back(T&& c) { assert(!c.empty()); return *(std::next(mstd::rbegin(c))); }
+  constexpr decltype(auto) next_to_back(T&& c) { assert(not c.empty()); return *(std::next(mstd::rbegin(c))); }
 
   template<class T, T _invalid, IterableType Container> requires std::is_same_v<value_type_of_t<Container>, std::remove_cvref_t<T>>
   constexpr T any_element(Container&& c) {
@@ -294,7 +282,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<StrictContainerType C>
   void pop_back(C& c) {
-    assert(!c.empty());
+    assert(not c.empty());
     if constexpr (HasPopBack<C>) {
       c.pop_back();
     } else if constexpr (QueueType<C>) {
@@ -337,7 +325,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
 
   template<ContainerType Q> requires requires(Q q) { { front(q) } -> std::convertible_to<value_type_of_t<Q>>; }
   auto value_pop_front(Q& q) {
-    assert(!q.empty());
+    assert(not q.empty());
     const auto it = std::begin(q);
     auto v = std::move(*it);
     mstd::erase(q, it);
@@ -345,7 +333,7 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   }
   template<IterableType Q> requires requires(Q q) { { back(q) } -> std::convertible_to<value_type_of_t<Q>>; }
   auto value_pop_back(Q& q) {
-    assert(!q.empty());
+    assert(not q.empty());
     const auto it = std::prev(std::end(q));
     auto v = std::move(*it);
     mstd::erase(q, it);

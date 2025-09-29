@@ -251,35 +251,87 @@ namespace PT {
   // https://link.springer.com/article/10.1007/s42979-021-00713-6
 
 
-  // --------------------- Network LCA ORACLE 1: no preprocessing, O(m) query ----------------------------
-  // this uses naïve multi-path climbing
-  // NOTE: we're inheriting from the TreeOracle in order to be castable to a tree oracle in case we know for sure that the network doesn't hybridize
-  // requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
-	template<class Net, NodeContainerType Output = NodeVec, NodeContainerType SeenSet = NodeSet>
-	struct NaiveNetworkLCAOracle:
-    public NaiveTreeLCAOracle<Net, SeenSet>
-  {
-    static SeenSet get_common_ancestors(const NodeDesc x, const NodeDesc y) {
-      const SeenSet x_ancestors = Traversal<preorder | reverse_traversal, Net>{x}.template to_container<SeenSet>();
-      const SeenSet y_ancestors = Traversal<preorder | reverse_traversal, Net>{y}.template to_container<SeenSet>();
-      return mstd::get_intersection(x_ancestors, y_ancestors);
+
+  // ------------ Network LCA ORACLE 0: Meta oracle reducing to ancestor and descendant calls -------------
+  // the LCA of a set X is the intersection of the ancestor sets of all x in X,
+  // filtered by the predicate that returns whether the strict descendants in the same set are empty
+  template<class Net, class Ancestors, NodeContainerType Output = NodeVec>
+    requires (std::is_invocable_v<Ancestors, const NodeDesc&>)
+  struct MetaNetworkLCAOracle {
+    using AncestorContainer = std::remove_cvref_t<std::invoke_result_t<Ancestors, const NodeDesc&>>;
+    static_assert(NodeContainerType<AncestorContainer>);
+ 
+    [[ no_unique_address ]] Ancestors get_ancestors;
+
+    MetaNetworkLCAOracle() = default;
+  
+    template<class AncInit>
+    MetaNetworkLCAOracle(AncInit&& anc_init):
+      get_ancestors(std::forward<AncInit>(anc_init))
+    {}
+
+   void filter_uncommon(AncestorContainer& x_ancestors, const NodeDesc y) { mstd::intersect(x_ancestors, get_ancestors(y)); }
+  
+    template<StrictNodeContainerType Nodes>
+    AncestorContainer get_common_ancestors(const NodeDesc x, const NodeDesc y) {
+      AncestorContainer result = get_ancestors(x);
+      filter_uncommon(result, y);
+      return result;
     }
 
-		Output operator()(const NodeDesc x, const NodeDesc y) const {
+    template<NodeContainerType Nodes>
+		auto get_common_ancestors(const Nodes& nodes) {
+      assert(not nodes.empty());
+      auto it = nodes.begin();
+      NodeDesc first = *it;
+      NodeSet seen{first};
+      AncestorContainer common{first}; // defer computation of ancestors 'till we have seen a second node
+      while(true) {
+        if(++it != nodes.end()) {
+          // filter only if we haven't seen the same node before
+          if(append(seen, *it).second) {
+            if(first != NoNode) { 
+              common = get_ancestors(first);
+              first = NoNode;
+            }
+            filter_uncommon(common, *it);
+          }
+        } else break;
+      }
+      return common;
+    }
+
+    Output filter_maxima(const AncestorContainer& nodes) const {
       Output result;
-      if(x != y) {
-        // filter from the common ancestors those who don't have a child that is also a common ancestor
-        const SeenSet common = get_common_ancestors(x, y);
-        append(result, common | std::ranges::filter_view([&](const NodeDesc u){ return get_intersection(common, Net::children(u)).empty(); }));
-      } else append(result, x);
-			return result;
+      for(const NodeDesc x: nodes)
+        if(mstd::are_disjoint(Net::children(x), nodes))
+          append(result, x);
+      return result;
+    }
+
+    Output operator()(const NodeDesc x, const NodeDesc y) const {
+      return (x == y) ? Output{x} : filter_maxima(get_common_ancestors(x, y));
 		}
+    template<NodeContainerType Nodes>
+		Output operator()(const Nodes& nodes) const {
+      return filter_maxima(get_common_ancestors(nodes));
+    }
 
     static void add_leaf(const NodeDesc l, const NodeDesc parent) {}
     static void add_edge(const auto uv) {}
     static void subdivide_edge(const auto uv) {}
-    static void remove_edge(const auto uv) {}
-	};
+    static void remove_edge(const auto uv) {}    
+  };
+
+  //
+  // --------------------- Network LCA ORACLE 1: no preprocessing, O(m) query ----------------------------
+  // this uses naïve multi-path climbing
+  // NOTE: we're inheriting from the TreeOracle in order to be castable to a tree oracle in case we know for sure that the network doesn't hybridize
+  // requires PhylogenyType<Net> // NOTE: this will cause 'concept depends on itself'
+	template<class Net, NodeContainerType Output = NodeVec>
+	using NaiveNetworkLCAOracle = MetaNetworkLCAOracle<Net,
+        decltype([](const NodeDesc x){ return Traversal<preorder | reverse_traversal, Net>{x}.template to_container<NodeSet>();}),
+        Output>;
 
 
   // ------------------ convenience classes and functions --------------------------
@@ -287,34 +339,33 @@ namespace PT {
   // for now, most of the default oracles are the naive ones, we'll change that once better ones are implemented
   template<class Tree> using DefaultStaticTreeAncestorOracle = IntervalTreeAncestorOracle<Tree>;
   template<class Tree> using DefaultDynamicTreeAncestorOracle = NaiveTreeAncestorOracle<Tree>;
-  template<class Net, class Seen = NodeSet> using DefaultStaticNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net, Seen>;
-  template<class Net, class Seen = NodeSet> using DefaultDynamicNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net, Seen>;
+  template<class Net> using DefaultStaticNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net>;
+  template<class Net> using DefaultDynamicNetworkAncestorOracle = NaiveNetworkAncestorOracle<Net>;
 
-  template<class Tree, class Seen = NodeSet> using DefaultStaticTreeLCAOracle = NaiveTreeLCAOracle<Tree, Seen>;
-  template<class Tree, class Seen = NodeSet> using DefaultDynamicTreeLCAOracle = NaiveTreeLCAOracle<Tree, Seen>;
-  template<class Net, class Seen = NodeSet> using DefaultStaticNetworkLCAOracle = NaiveNetworkLCAOracle<Net, Seen>;
-  template<class Net, class Seen = NodeSet> using DefaultDynamicNetworkLCAOracle = NaiveNetworkLCAOracle<Net, Seen>;
+  template<class Tree> using DefaultStaticTreeLCAOracle = NaiveTreeLCAOracle<Tree>;
+  template<class Tree> using DefaultDynamicTreeLCAOracle = NaiveTreeLCAOracle<Tree>;
+  template<class Net> using DefaultStaticNetworkLCAOracle = NaiveNetworkLCAOracle<Net>;
+  template<class Net> using DefaultDynamicNetworkLCAOracle = NaiveNetworkLCAOracle<Net>;
 
 
-  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  template<class Net, bool is_tree = false>
   using DefaultStaticAncestorOracle =
-    std::conditional_t<is_tree or Net::is_declared_tree, DefaultStaticTreeAncestorOracle<Net>, DefaultStaticNetworkAncestorOracle<Net, Seen>>;
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultStaticTreeAncestorOracle<Net>, DefaultStaticNetworkAncestorOracle<Net>>;
 
   // for dynamic trees and networks, we don't know better than the naïve oracle for now
-  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  template<class Net, bool is_tree = false>
   using DefaultDynamicAncestorOracle = 
-    std::conditional_t<is_tree or Net::is_declared_tree, DefaultDynamicTreeAncestorOracle<Net>, DefaultDynamicNetworkAncestorOracle<Net, Seen>>;
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultDynamicTreeAncestorOracle<Net>, DefaultDynamicNetworkAncestorOracle<Net>>;
 
 
   // for now, the default static LCA oracle is the naive one, we'll change that once a better one is implemented
-  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  template<class Net, bool is_tree = false>
   using DefaultStaticLCAOracle =
-    std::conditional_t<is_tree or Net::is_declared_tree, DefaultStaticTreeLCAOracle<Net, Seen>, DefaultStaticNetworkLCAOracle<Net, Seen>>;
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultStaticTreeLCAOracle<Net>, DefaultStaticNetworkLCAOracle<Net>>;
 
   // for dynamic trees and networks, we don't know better than the naïve oracle for now
-  template<class Net, class Seen = NodeSet, bool is_tree = false>
+  template<class Net, bool is_tree = false>
   using DefaultDynamicLCAOracle = 
-    std::conditional_t<is_tree or Net::is_declared_tree, DefaultDynamicTreeLCAOracle<Net, Seen>, DefaultDynamicNetworkLCAOracle<Net, Seen>>;
-
+    std::conditional_t<is_tree or Net::is_declared_tree, DefaultDynamicTreeLCAOracle<Net>, DefaultDynamicNetworkLCAOracle<Net>>;
 
 }

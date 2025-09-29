@@ -102,7 +102,6 @@ namespace mstd{
     {}
 
     const Compare& key_comp() const { return cmp; }
-    
 
     iterator find(const Key& key) {
       auto x = _find_this_or_next(key);
@@ -132,7 +131,7 @@ namespace mstd{
     }
     template<class First, class... Args> requires (not mstd::is_same_v<First, Key>)
     auto emplace(First&& first, Args&&... args) { return emplace(Key(std::forward<First>(first), std::forward<Args>(args)...)); }
-
+  
     template<class K> requires mstd::is_same_v<K, Key>
     auto insert(K&& key) { return emplace(std::forward<K>(key)); }
 
@@ -143,8 +142,25 @@ namespace mstd{
       // then, sort the new range
       sort(x, this->end(), cmp);
       // finally, inplace_merge the ranges
-      inplace_merge(this->begin(), x, this->end());
+      std::inplace_merge(this->begin(), x, this->end());
     }
+  
+    template<class InputIt>
+    void insert_sorted(const InputIt& _begin, const InputIt& _end) {
+      // first, insert the range at the end of the vector
+      const iterator x = Parent::insert(this->end(), _begin, _end);
+      assert(std::is_sorted(x, this->end(), cmp));
+      // finally, inplace_merge the ranges
+      std::inplace_merge(this->begin(), x, this->end());
+    }
+    
+    void insert(const sorted_vector& other) {
+      // first, insert the range at the end of the vector
+      const iterator x = Parent::insert(this->end(), other.begin(), other.end());
+      // then, inplace_merge the ranges
+      std::inplace_merge(this->begin(), x, this->end());
+    }
+
 
     bool erase(const Key& key) {
       const insert_result i = find_this_or_next(key);

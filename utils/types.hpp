@@ -167,6 +167,9 @@ namespace PT {
 
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept NodeContainerType = (mstd::ContainerType<C, rune> && HasNodeValue<C, rune>);  
+  template<class C> concept StrictNodeContainerType = NodeContainerType<C, mstd::TR_Strict>;
+  template<class C> concept OptionalNodeContainerType = NodeContainerType<C, mstd::TR_ConstRefVoidOK>;
+
   template<class C, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept NodeOrContainerType = (NodeContainerType<C, rune> or AdjacencyType<C, rune>);
 
