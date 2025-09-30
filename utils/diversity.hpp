@@ -26,10 +26,10 @@ namespace PT {
   // inherit from the following
   // alternatively, you can provide 2 functors returning inheritence probs and weights, or
   // a functor returning a pair (iprob, weight)
-  template<class Arithmetic = double>
+  template<class Weight = double, class Probability = double>
   struct pd_edge_data {
-    Arithmetic iprob = 1; // inheritance probabilities
-    Arithmetic weight = 0;
+    Probability iprob = 1; // inheritance probabilities
+    Weight weight = 0;
 
     pd_edge_data() = default;
 
@@ -40,8 +40,7 @@ namespace PT {
       if(iter) weight = std::stod(*iter);
       while(++iter && (*iter == ""));
       if(iter)
-        if(not mstd::try_reading_number<Arithmetic>(*iter, iprob))
-          iprob = 1;
+        iprob = mstd::generic_reader<Probability>::parse(*iter).value_or(1);
     }
 
     friend std::ostream& operator<<(std::ostream& os, const pd_edge_data& ed) {

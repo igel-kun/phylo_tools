@@ -18,13 +18,14 @@ namespace PT {
     // compute the feature diversity of a given set of nodes
     template<mstd::IterableType Container>
       requires FeatureCollectionType<mstd::value_type_of_t<Container>>
-    size_t operator()(Container&& container) {
+    auto operator()(Container&& container) {
       using ContainerCounter = FeatureCountFor<mstd::value_type_of_t<Container>>;
       ContainerCounter accu;
       // TODO: use std::accumulate here
+
+      DEBUG5(std::cout << "containers are "<<mstd::type_name<mstd::value_type_of_t<Container>>() << ", accu is "<<mstd::type_name<ContainerCounter>()<<'\n');
       for(const auto& feat: container) {
-        DEBUG5(std::cout << "got container of "<<mstd::type_name<mstd::value_type_of_t<Container>>() << '\n');
-        DEBUG5(std::cout << "adding "<<feat<<" to accu " << accu <<'\n');
+        DEBUG4(std::cout << "adding "<<feat<<" to accu " << accu <<'\n');
         accu += feat;
       }
       return accu.count_features();
@@ -32,7 +33,7 @@ namespace PT {
 
     template<mstd::IterableType Map>
       requires FeatureCollectionType<typename mstd::value_type_of_t<Map>::second_type>
-    size_t operator()(Map&& feat_map) {
+    auto operator()(Map&& feat_map) {
       DEBUG4(std::cout << "computing score for "<<feat_map<<'\n');
       //return operator()(feat_map | std::ranges::views::transform([](const auto& p){return p.second; }));
       //return operator()(feat_map | std::ranges::views::transform(mstd::selector<1>{}));

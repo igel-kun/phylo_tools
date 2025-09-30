@@ -10,7 +10,7 @@
 #include "utils/benchmark.hpp"
 #include "utils/command_line.hpp"
 #include "utils/token.hpp"
-#include "utils/generic_data.hpp" // for try_reading_number
+#include "utils/generic_data.hpp" // for try_reading
 
 #include "io/newick.hpp" // to read newick
 #include "io/features.hpp" // to read feature matrices
@@ -33,30 +33,12 @@ using Weight = float;
 using Probability = float;
 
 // no node data, but edges are annotated with p, w, and gamma
-struct EdgeData {
-  Probability iprob = 1;
-  Weight weight = 0;
-
-  EdgeData() = default;
-
-  // construct from a given string that's been read from the input file
-  EdgeData(const std::string_view in) {
-    auto iter = mstd::tokenize(in, ",;:"sv).begin();
-    while(iter && (*iter == "")) ++iter;
-    if(iter) weight = std::stof(*iter);
-    while(++iter && (*iter == ""));
-    if(iter)
-      if(not mstd::try_reading_number<Probability>(*iter, iprob))
-        iprob = 1;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const EdgeData& ed) {
-    return os << "p: "<<ed.iprob<<", w: "<<ed.weight;
-  }
-};
+using EdgeData = pd_edge_data<Weight, Probability>;
 
 // FeatureMap maps each leaf label to a feature-collection containing all features of that leaf
-using FeatureMap = HashMap<std::string, PT::DefaultFeatureCollection>;
+// NOTE: we'll support only rational features here, since we may have binary, integer, or rational features and they are all subsumed by the latter
+//using FeatureMap = HashMap<std::string, PT::DefaultFeatureCollection>;
+using FeatureMap = HashMap<std::string, PT::FeatureCollection<double>>;
 
 using MyNetwork = DefaultLabeledNetwork<void, EdgeData>;
 using MyNode = typename MyNetwork::Node;

@@ -31,39 +31,52 @@
 
 namespace mstd {
 
-  template<class T, class Out>
-    requires std::is_arithmetic_v<T>
-  bool try_reading_number(const std::string_view s, Out& target) {
-    if(!s.empty()) {
-      size_t first_unconverted;
-      target = stoX<T>(s, first_unconverted);
-      return first_unconverted == s.size();
-    } else return false;
-  }
+  template<class T>
+  struct generic_reader {
+    static_assert(not Variant<T>); // for Variant<T>, the class should be specialized later on
 
-  template<class Var = std::variant<double, int64_t, std::string_view>>
-  Var parse_variant(const std::string_view s) {
-    Var result;
-    if constexpr (std::is_constructible_v<Var, uint64_t>) {
-      if(try_reading_number<uint64_t>(s, result))
+    using Result = std::optional<T>;
+
+    static Result parse(const std::string_view s) {
+      if constexpr (std::is_arithmetic_v<T>) {
+        Result result;
+        if(!s.empty()) {
+          size_t first_unconverted;
+          result = stoX<T>(s, first_unconverted);
+          if(first_unconverted != s.size()) result.reset();
+        }
         return result;
-    } else if constexpr (std::is_constructible_v<Var, uint32_t>)
-      if(try_reading_number<uint32_t>(s, result))
-        return result;
-    
-    if constexpr (std::is_constructible_v<Var, double>) {
-      if(try_reading_number<double>(s, result))
-        return result;
-    } else if constexpr (std::is_constructible_v<Var, float>) {
-      if(try_reading_number<float>(s, result))
-        return result;
+      } else { // if it's any other type, construct it from string_view
+        static_assert(std::is_constructible_v<T, const std::string_view&>);
+        return Result{s};
+      }
     }
     
-    if constexpr (std::is_constructible_v<Var, std::string_view>)
-      return result;
+    Result operator()(const std::string_view s) const { return parse(s); }
+  };
 
-    throw std::bad_variant_access{};
-  }
+  template<class... Ts> requires (sizeof...(Ts) > 0)
+  struct generic_reader<std::variant<Ts...>> {
+    using Result = std::optional<std::variant<Ts...>>;
+    
+  protected:
+    template<class First, class... Rest>
+    static Result parse_(const std::string_view s) {
+      auto opt = generic_reader<First>::parse(s);
+      if(not opt.has_value()) {
+        if constexpr (sizeof...(Rest) > 0) {
+          return parse_<Rest...>(s);
+        } else return Result{};
+      } else return Result{std::move(*opt)};
+    }
+
+  public:
+    static Result parse(const std::string_view s) { return parse_<Ts...>(s); }
+    
+    Result operator()(const std::string_view s) const { return parse(s); }
+  };
+
+
 
   template<class... Items>
   struct DataVec: public std::vector<std::variant<Items...>> {
@@ -71,7 +84,6 @@ namespace mstd {
     
   protected:
     using Parent = std::vector<Data>;
-
 
   public:
     template<class T>

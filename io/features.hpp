@@ -22,32 +22,20 @@ namespace PT {
       std::stringstream line_in{line};
       size_t col = 0;
       std::string tmp;
+
       line_in >> tmp; // read the taxon label
       auto& features = label_to_features(tmp); // make a new collection for that taxon
+      using FeatList = std::remove_cvref_t<decltype(features)>;
+      using Var = typename FeatList::CorrespondingVariant;
+      
       // now, read all features described in the row
       while(line_in.good()) {
         line_in >> tmp;
         if(not test(forbidden, ++col)) {
-          const auto v = mstd::parse_variant(tmp);
-          // if we read 0/1 then assume it's a binary character
-          if(std::holds_alternative<int64_t>(v)) {
-            const int64_t value = std::get<int64_t>(v);
-            if constexpr (features.template occurs<bool>) {
-              if(value < 2) {
-                features.template get_by_type<bool>().emplace_back(value);
-                continue;
-              }
-            } 
-            if constexpr (features.template occurs<int32_t>) {
-              features.template get_by_type<int32_t>().emplace_back(value);
-            } else throw mstd::MalformedInput{"parsed integer/boolean feature, but no corresponding feature-list is present (bool or int32_t)"};
-          } else if(std::holds_alternative<double>(v)) {
-            if constexpr (features.template occurs<double>) {
-              features.template get_by_type<double>().emplace_back(std::get<double>(v));
-            } else throw mstd::MalformedInput{"parsed floating point feature, but no corresponding feature-list is present (double)"};
-          } else if constexpr (features.template occurs<std::string>) {
-            features.template get_by_type<std::string>().emplace_back(std::get<std::string_view>(v));
-          }
+          auto opt = mstd::generic_reader<Var>::parse(tmp);
+          if(opt) {
+            features.add_feature(*opt);
+          } else throw mstd::MalformedInput{"Could not parse '" + tmp +"' into " + mstd::type_name<Var>()};
         }
       }
       DEBUG5(std::cout << "parsed features: "<<features<<'\n');

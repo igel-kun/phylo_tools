@@ -3,6 +3,7 @@
 
 #include <concepts>
 #include <vector>
+#include <variant>
 
 #include "runes.hpp"
 #include "utils.hpp"
@@ -45,6 +46,17 @@ namespace mstd {
   template<class T> concept really_post_incrementable = requires(T t){t++;};
   template<class T> concept really_post_decrementable = requires(T t){t--;};
   template<class T> concept really_int_incrementable = requires(T t, int x){t += x;};
+
+
+  // --------------- Variants -------------------
+  template<class T> struct is_variant: std::false_type {};
+  template<class ...Args> struct is_variant<std::variant<Args...>>: std::true_type {};
+
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  constexpr bool is_variant_v = apply_rune_v<T, rune> or is_variant<apply_rune_t<T, rune>>::value;
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  concept Variant = is_variant_v<T, rune>;
+
 
   // --------------- Stringlike -------------------
   // containers can be output to std::cout in the form [a b c ], unless they are strings or char* or string_view or....
