@@ -32,7 +32,7 @@ message("static build (STATIC)            " ${STATIC} )
 message("fatal errors (FATAL)             " ${FATAL} )
 message("Build type: " ${CMAKE_BUILD_TYPE} )
 
-set (source_files examples CMakeLists.txt doc io solv utils AUTHORS.md BUGS.md COPYING.md INSTALL.md README.md THANKS.md)
+set (source_files examples CMakeLists.txt doc io utils AUTHORS.md BUGS.md COPYING.md INSTALL.md README.md THANKS.md)
 
 add_custom_target ( archive tar -cjf phylo_tools.tar.bz2 ${source_files} )
 add_custom_target ( doc doxygen Doxyfile )

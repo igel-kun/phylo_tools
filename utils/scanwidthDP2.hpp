@@ -47,7 +47,7 @@ namespace PT {
     //using WeakComps = mstd::DisjointSetForest<NodeDesc>;
     
   protected:
-    Network& N;
+    Network* N;
     DPTable dp_table;
     [[ no_unique_address ]] DegreeExtracter degrees;
 
@@ -390,7 +390,7 @@ namespace PT {
 
   public:
 
-    ScanwidthDP2(Network& N_): N{N_} {}
+    ScanwidthDP2(Network& N_): N{&N_} {}
 
     auto lookup_by_hash(const size_t hash) { return dp_table.emplace(hash); }
 
@@ -469,22 +469,22 @@ namespace PT {
     //       if you pass any iterable, then we will append each node's NodeData to it in order
     template<bool include_root = false, class RegisterNode>
     void compute_min_sw_extension_no_bridges(RegisterNode&& _register_node) {
-      DEBUG4(std::cout << "computing scanwidth of block:\n"<<ExtendedDisplay(N)<<" (low mem: "<< low_memory_version <<")\n");
-      if(N.num_nodes() > 1){
-        if(N.num_roots() != 1) throw mstd::Unimplemented{"cannot deal with multiple roots yet"};
+      DEBUG4(std::cout << "computing scanwidth of block:\n"<<ExtendedDisplay(*N)<<" (low mem: "<< low_memory_version <<")\n");
+      if(N->num_nodes() > 1){
+        if(N->num_roots() != 1) throw mstd::Unimplemented{"cannot deal with multiple roots yet"};
         //const NodeVec N_nodes = N.nodes_postorder().template to_container<NodeVec>();
-        NodeVec N_nodes(N.nodes_postorder().template to_container<NodeVec>());
+        NodeVec N_nodes(N->nodes_postorder().template to_container<NodeVec>());
         const DPEntry& opt_sol = query(Query{NodeSpan{N_nodes}, N_nodes.size() - 1});
         const auto& ex = opt_sol.get_ex();
-        DEBUG2(std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(N)<<"\n");
-        assert(ex.size() == N.num_nodes());
+        DEBUG2(std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(*N)<<"\n");
+        assert(ex.size() == N->num_nodes());
         size_t num_nodes = ex.size();
         if constexpr (!include_root) --num_nodes;
         for(size_t i = 0; i != num_nodes; ++i)
           mstd::append(_register_node, ex[i]);
       } else {
         if constexpr (include_root)
-          mstd::append(_register_node, N.root());
+          mstd::append(_register_node, N->root());
       }
     }
   };

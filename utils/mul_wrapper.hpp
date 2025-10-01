@@ -10,12 +10,12 @@ namespace PT{
     using Network = Network_;
     using Node = typename Network::Node;
 
-    const Network& N;
-    const Node root;
-    const size_t num_vertices;
+    Network* N;
+    Node root;
+    size_t num_vertices;
     
   public:
-    FakeMULTree(const Network& N_, const Node _root): N(N_), root(_root) {}
+    FakeMULTree(const Network& N_, const Node _root): N(&N_), root(_root) {}
 
   };
 }

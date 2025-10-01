@@ -231,7 +231,7 @@ namespace PT {
     using DPTable = std::unordered_map<NodeSet, DPEntry, mstd::set_hash<NodeSet>>;
  
   protected:
-    Network& N;
+    Network* N;
     DPTable dp_table;
 
     // return whether u is a root in N[c], that is, if u has parents in c
@@ -246,26 +246,26 @@ namespace PT {
   
   public:
 
-    ScanwidthDP(Network& N_): N(N_) {}
+    ScanwidthDP(Network& N_): N(&N_) {}
 
     // NOTE: you can pass either an extension or a callable to register nodes in order
     //       if you pass any iterable, then we will append each node's NodeData to it in order
     template<bool include_root = false, class RegisterNode>
     void compute_min_sw_extension_no_bridges(RegisterNode&& _register_node) {
-      DEBUG4(std::cout << "computing scanwidth of block:\n"<<ExtendedDisplay(N)<<" (low mem: "<< low_memory_version <<")\n");
+      DEBUG4(std::cout << "computing scanwidth of block:\n"<<ExtendedDisplay(*N)<<" (low mem: "<< low_memory_version <<")\n");
 
       // this is the main dynamic programming table - it could grow exponentially large...
       // the table maps a set X of nodes to any extension with smallest sw for the graph where all nodes but X are contracted onto the root
       // start off with the empty set of scanwidth 0
 
-      if(N.num_nodes() > 1){
+      if(N->num_nodes() > 1){
         // rememeber the best entry for the last node-set (which contains the root since the NetworkConstraintSubsetFactory goes bottom-up
         typename DPTable::iterator last_iter;
        
         DEBUG5(std::cout << "======= checking constraint node subsets ========\n");
         // check all node-subsets constraint by the arcs in N
         STAT(uint64_t num_subsets = 0;)
-        for(auto& nodes: NetworkConstraintSubsetFactory<Network, NodeSet, ignore_deg2>(N)){
+        for(auto& nodes: NetworkConstraintSubsetFactory<Network, NodeSet, ignore_deg2>(*N)){
           DEBUG2(std::cout << "\tcurrent subset: "<<nodes<<"\n");
           sw_t best_sw = std::numeric_limits<sw_t>::max();
           last_iter = mstd::append(dp_table, std::move(nodes)).first; // if the node-container is non-const, move the nodes into the map
@@ -293,10 +293,10 @@ namespace PT {
               entry.update(u);
               // also append all suppressible ancestors of u
               if constexpr (ignore_deg2) {
-                for(NodeDesc v: N.parents(u))
-                  while(N.is_suppressible(v)){
+                for(NodeDesc v: Network::parents(u))
+                  while(Network::is_suppressible(v)){
                     entry.update(v);
-                    v = N.parent(v);
+                    v = Network::parent(v);
                   }
               }
               // compute the new scanwidth
@@ -309,19 +309,19 @@ namespace PT {
             }
           }
         }
-        STAT(uint64_t count_unsupp = 0; for(const NodeDesc u: N.nodes()) { if(!N.is_suppressible(u)) ++count_unsupp;})
-        STAT(std::cout << "STAT: " <<N.num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
+        STAT(uint64_t count_unsupp = 0; for(const NodeDesc u: N->nodes()) { if(not Network::is_suppressible(u)) ++count_unsupp;})
+        STAT(std::cout << "STAT: " <<N->num_nodes() << " nodes, "<<count_unsupp<<" non-suppressible & "<<num_subsets << " subsets\n";)
         // the last extension should be the one we are looking for
         const auto& ex = last_iter->second.get_ex();
-        DEBUG2(std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(N)<<"\n");
-        assert(ex.size() == N.num_nodes());
+        DEBUG2(std::cout << "\n\nfound extension "<<ex<<" for\n"<<ExtendedDisplay(*N)<<"\n");
+        assert(ex.size() == N->num_nodes());
         size_t num_nodes = ex.size();
         if constexpr (!include_root) --num_nodes;
         for(size_t i = 0; i != num_nodes; ++i)
           mstd::append(_register_node, ex[i]);
       } else {
         if constexpr (include_root)
-          mstd::append(_register_node, N.root());
+          mstd::append(_register_node, N->root());
       }
     }
   };
