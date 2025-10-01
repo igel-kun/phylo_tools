@@ -47,6 +47,9 @@ namespace mstd {
   template<class T> concept really_post_decrementable = requires(T t){t--;};
   template<class T> concept really_int_incrementable = requires(T t, int x){t += x;};
 
+  // ------- applying runes to existing STL concepts ------------
+  template<class T, TypeRune rune = TR_ConstRefOK>
+  concept movable = apply_rune_v<T, rune> or std::movable<apply_rune_t<T, rune>>;
 
   // --------------- Variants -------------------
   template<class T> struct is_variant: std::false_type {};
@@ -454,17 +457,17 @@ namespace mstd {
   // however it is indispensible for debugging to know why std::iterator_traits will not work for a self-defined iterator...
   // for example, you make a new iterator, but std::iterator_traits<Iter> is empty... now try to find out why, I dare you, without using the following concepts
   template<class T>
-  concept __Referenceable = requires { typename std::type_identity_t<T&>; };
+  concept STLReferenceable = requires { typename std::type_identity_t<T&>; };
 
   template<class I>
-  concept __LegacyIterator = requires(I i) {
-      {   *i } -> __Referenceable;
+  concept STLLegacyIterator = requires(I i) {
+      {   *i } -> STLReferenceable;
       {  ++i } -> std::same_as<I&>;
-      { *i++ } -> __Referenceable;
+      { *i++ } -> STLReferenceable;
   } && std::copyable<I>;
 
   template<class I>
-  concept __LegacyInputIterator = __LegacyIterator<I> && std::equality_comparable<I> && requires(I i) {
+  concept STLLegacyInputIterator = STLLegacyIterator<I> && std::equality_comparable<I> && requires(I i) {
     typename std::incrementable_traits<I>::difference_type;
     typename std::indirectly_readable_traits<I>::value_type;
     typename std::common_reference_t<std::iter_reference_t<I>&&, typename std::indirectly_readable_traits<I>::value_type&>;

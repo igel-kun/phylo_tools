@@ -1067,20 +1067,15 @@ namespace PT {
 
 
     // --------------- relative edge traversals (below) ------------------
-    template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden>
-      requires (std::is_void_v<Forbidden> or std::movable<Forbidden>)
+    template<TraversalType o = postorder, NodeOrIterableType Roots, mstd::movable Forbidden>
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
-      if constexpr (std::is_void_v<DefaultSeen>)
-        return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
-      else return AllEdgesTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
+      return AllEdgesTraversal<o, Phylogeny, RootSet, std::remove_cvref_t<Forbidden>>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
     template<TraversalType o = postorder, NodeOrIterableType Roots>
     static auto edges_below(Roots&& R) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
-      if constexpr (std::is_void_v<DefaultSeen>)
-        return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
-      else return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
+      return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
     }
 
     template<class... Args> static auto edges_below_preorder(Args&&... args)  { return edges_below<preorder>(std::forward<Args>(args)...); }
@@ -1102,8 +1097,8 @@ namespace PT {
       else return edges_above<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
-    template<TraversalType o = postorder, class First, class... Args> requires (not DirectionTag<First>)
-    auto edges(First&& first, Args&&... args) const { return edges_below<o>(_roots, std::forward<First>(first), std::forward<Args>(args)...); }
+    template<TraversalType o = postorder, mstd::movable Forbidden>
+    auto edges(Forbidden&& forbidden) const { return edges_below<o>(_roots, std::forward<Forbidden>(forbidden)); }
     
     template<TraversalType o = postorder>
     auto edges() const { return edges_below<o>(_roots); }

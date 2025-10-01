@@ -24,6 +24,8 @@
  * Of course, you can customize the generic data by passing your own types to DataVec :)
  */
 
+#include <optional>
+
 #include "charp.hpp"
 #include "token.hpp"
 

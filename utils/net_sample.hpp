@@ -117,8 +117,8 @@ namespace PT {
       const auto leaves_to_go = nums.num_leaves - current_leaves.size() + 1;
       const auto max_degree = leaves_to_go - internals_to_go;
       const auto min_degree = (internals_to_go == 0) ? leaves_to_go : 2;
-      const auto degree = min_degree + throw_die(max_degree - min_degree + 1);
-      const auto it = get_random_iterator(current_leaves);
+      const auto degree = min_degree + mstd::throw_die(max_degree - min_degree + 1);
+      const auto it = mstd::get_random_iterator(current_leaves);
       const NodeDesc u = *it;
       std::cout << "adding ["<<min_degree<<":"<<max_degree<<"] --> "<<degree<<" leaves to "<<u<<'\n';
       current_leaves.erase(it);
@@ -187,14 +187,14 @@ namespace PT {
         std::cout << "adding "<<num_edges<<" new edges to\n"<<N<<"\n";
         if(new_reticulations){
           const auto edges = N.edges();
-          const auto uv_iter = get_random_iterator(edges, N.num_edges());
+          const auto uv_iter = mstd::get_random_iterator(edges, N.num_edges());
           const auto uv = *uv_iter;
           const NodeDesc u = uv.tail();
           const auto& v = uv.head();
           //const NodeDesc u = uv_iter->first;
           //const NodeDesc v = uv_iter->second;
           if(new_tree_nodes){
-            const auto xy_iter = get_random_iterator_except(edges, uv_iter, N.num_edges());
+            const auto xy_iter = mstd::get_random_iterator_except(edges, uv_iter, N.num_edges());
             assert(xy_iter != uv_iter);
             const auto xy = *xy_iter;
             const NodeDesc x = xy.tail();
@@ -219,18 +219,18 @@ namespace PT {
               NodeDesc s;
               const NodeDesc t = emplacer.create_node();
               emplacer.subdivide_edge(*uv_iter, t);
-              do s = *(get_random_iterator(tree_nodes)); while((s != u) && !N.has_path(v, s));
+              do s = *(mstd::get_random_iterator(tree_nodes)); while((s != u) && !N.has_path(v, s));
               DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
               emplacer.emplace_edge_raw(s, t);    --num_edges;
               mstd::append(retis, t);       --new_reticulations;
             }
           }
         } else {
-          const NodeDesc t = *(get_random_iterator(retis));
+          const NodeDesc t = *(mstd::get_random_iterator(retis));
           if(new_tree_nodes){
             NodeDesc s;
             while(true){
-              const auto xy_iter = get_random_iterator(N.edges(), N.num_edges());
+              const auto xy_iter = mstd::get_random_iterator(N.edges(), N.num_edges());
               const NodeDesc x = xy_iter->tail();
               auto& y = xy_iter->head();
               if((t != y) && !N.has_path(t, x)) {
@@ -243,7 +243,7 @@ namespace PT {
             emplacer.emplace_edge_raw(s, t); --num_edges;
             mstd::append(tree_nodes, s);  --new_tree_nodes;
           } else {
-            const NodeDesc s = *(get_random_iterator(tree_nodes));
+            const NodeDesc s = *(mstd::get_random_iterator(tree_nodes));
             if(!N.has_path(t,s)){
               DEBUG5(std::cout << "adding edge "<<s<<"-->"<<t<<"\n");
               emplacer.emplace_edge_raw(s, t);  --num_edges;
@@ -284,7 +284,7 @@ namespace PT {
     for(uint32_t i = 1; i < num_internal; ++i){
       std::cout << "remaining dangling: "<<dangling.size() << '\n';
       const uint32_t num_unsatisfied = dangling.size();
-      const auto parent_it = get_random_iterator(dangling);
+      const auto parent_it = mstd::get_random_iterator(dangling);
       const NodeDesc u = parent_it->first;
       const NodeDesc v = emplacer.create_node();
       emplacer.emplace_edge_raw(u, v);
@@ -295,11 +295,11 @@ namespace PT {
       // the new node v might be a reticulation if there are at least 2 unsatisfied nodes
       if((reti_count < nums.num_retis) &&
              (num_unsatisfied > 1) &&
-             throw_bw_die(nums.num_retis - reti_count, num_internal - i)){
+             mstd::throw_bw_die(nums.num_retis - reti_count, num_internal - i)){
         // node v is a reticulation
         // the second incoming edge is from a random unsatisfied node (except last_node)
         std::cout << "reti"<<std::endl;
-        const auto dang_it = removed ? get_random_iterator(dangling) : get_random_iterator_except(dangling, parent_it);
+        const auto dang_it = removed ? mstd::get_random_iterator(dangling) : mstd::get_random_iterator_except(dangling, parent_it);
         std::cout << "got "<<*dang_it<<std::endl;
         const NodeDesc w = dang_it->first;
 

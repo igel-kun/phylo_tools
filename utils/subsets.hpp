@@ -198,7 +198,7 @@ namespace mstd {
     pointer operator->() const { return operator*(); }
   };
 
-  static_assert(__LegacyInputIterator<SubsetIterator<std::vector<int>>>);
+  static_assert(STLLegacyInputIterator<SubsetIterator<std::vector<int>>>);
   static_assert(HasIterTraits<SubsetIterator<std::vector<int>>>);
 
   // ------- Subset Iteration: factories ---------

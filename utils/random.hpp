@@ -7,15 +7,18 @@
 #include "utils.hpp"
 #include "iter_bitset.hpp"
 
-namespace PT{
+namespace mstd {
+  std::uniform_real_distribution<double> zero_one_uniform(0.0, 1.0);
+  std::mt19937 rand_engine(std::random_device{}());
+
   //! return the result of a coin flip whose 1-side has probability 'probability' of coming up
   inline bool toss_coin(const double& probability = 0.5) {
-    return static_cast<double>(rand()) <= probability * RAND_MAX;
+    return zero_one_uniform(rand_engine) <= probability;
   }
 
   //! return the result of throwing a die with 'sides' sides [0,sides-1]
   inline uint32_t throw_die(const uint32_t sides = 6) {
-    return rand() % sides; // yadda yadda, it's not 100% uniform for tiny values of RAND_MAX...
+    return zero_one_uniform(rand_engine) * sides; // truncate after multiplying by 'sides'
   }
   
   //! return the result of a 0/1-die with 'good_sides' good sides among its 'sides' sides
@@ -82,11 +85,11 @@ namespace PT{
 
   template<mstd::IndexibleType Vec, mstd::IterableType Container> requires (not std::is_pointer_v<Vec>)
   void sample(Container&& c, const size_t k, Vec& result) {
-    std::ranges::sample(c, std::back_inserter(result), k, std::mt19937{std::random_device{}()});
+    std::ranges::sample(c, std::back_inserter(result), k, rand_engine);
   }
   template<class T, mstd::IterableType Container>
   void sample(Container&& c, const size_t k, T* const result) {
-    std::ranges::sample(c, mstd::PointerIterWrapper<T*>(result), k, std::mt19937{std::random_device{}()});
+    std::ranges::sample(c, mstd::PointerIterWrapper<T*>(result), k, rand_engine);
   }
   template<mstd::IndexibleType Vec, mstd::IterableType Container>
   Vec sample(Container&& c, const size_t k) {
