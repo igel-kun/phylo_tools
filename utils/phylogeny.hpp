@@ -345,6 +345,7 @@ namespace PT {
 
 
     // new nodes can only be added as 1. new roots, 2. children or 3. parents of existing nodes
+    // NOTE: recall that you must create a node first, before adding it as a child/parent to an existing node
     // NOTE: the edge data can either be passed using the Adjacency v or constructed from the parameter args
     template<AdjacencyType Adj, class... Args>
     auto add_child(const NodeDesc u, Adj&& v, Args&&... args) {
@@ -677,30 +678,28 @@ namespace PT {
     // NOTE: first, the edge wv gets its data from adapting the EdgeData passed with w and the EdgeData of u->v
     //        (if no adapter is passed, then wv gets the EdgeData of u->v)
     //       then, the edge uw gets its data from the Adjacency w
-    template<AdjacencyType Adj, class DataMaker = bool>
-    void subdivide_edge(const NodeDesc u, const auto& v, Adj&& w, DataMaker&& make_data = DataMaker()) {
+    template<AdjacencyType Adj, class... DataArgs>
+    void subdivide_edge(const NodeDesc u, const auto& v, Adj&& w, DataArgs&&... data) {
       assert(is_edge(u,v));
       assert(node_of(w).is_isolated());
       // step 1: transfer v from u to w
-      transfer_child(v, u, w, make_data);
+      transfer_child(v, u, w, data...);
       // step 2: add edge u->w
-      if constexpr (DataExtracterType<DataMaker>)
-        add_edge(u, std::forward<Adj>(w), make_data);
-      else add_edge(u, std::forward<Adj>(w));
+      add_edge(u, std::forward<Adj>(w), std::forward<DataArgs>(data)...);
 			count_node();
     }
 
-    template<AdjacencyType Adj, EdgeType Edge_, class DataMaker = bool>
-    void subdivide_edge(Edge_&& uv, Adj&& w, DataMaker&& make_data = DataMaker()) {
-      subdivide_edge(uv.tail(), std::forward<Edge_>(uv).head(), std::forward<Adj>(w), make_data);
+    template<EdgeType Edge_, class... Args>
+    void subdivide_edge(Edge_&& uv, Args&&... args) {
+      subdivide_edge(uv.tail(), std::forward<Edge_>(uv).head(), std::forward<Args>(args)...);
     }
 
     // subdivide an edge, creating a new node
     // NOTE: if a NodeFunctionType or a DataExtracterType is passed, then we try to initialize the node data with it
     //       if DataMaker is invocable with 2 Adjacencies, then we use it to set the edge data
-    template<EdgeType Edge_, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
+    template<EdgeType Edge_, class DataMaker = bool> requires (not AdjacencyType<DataMaker>)
     void subdivide_edge(Edge_&& uv, DataMaker&& data_maker = DataMaker()) {
-      if constexpr (DataExtracterType<DataMaker> || NodeFunctionType<DataMaker>)
+      if constexpr (DataExtracterType<DataMaker> or NodeFunctionType<DataMaker>)
         subdivide_edge(std::forward<Edge_>(uv), create_node(data_maker), data_maker);
       else
         subdivide_edge(std::forward<Edge_>(uv), create_node(), data_maker);
@@ -711,27 +710,27 @@ namespace PT {
     // NOTE: return the number of children of v that were already children of the parent of v
     // NOTE: v will be deleted!
     // NOTE: set uniqueness to something other than UniquenessBy::ignore in order to prevent double-edges
-    template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class DataMaker = bool>
-    size_t contract_up(const NodeDesc v, const Adj& u_adj, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class... DataArgs>
+    size_t contract_up(const NodeDesc v, const Adj& u_adj, DataArgs&&... data) {
       assert(in_degree(v) == 1);
       assert(u_adj == mstd::front(parents(v)));
       const NodeDesc u = u_adj;
-      const size_t result = transfer_children<uniqueness>(v, u_adj, make_data);
+      const size_t result = transfer_children<uniqueness>(v, u_adj, std::forward<DataArgs>(data)...);
       // finally, remove the edge uv and free v's storage
       remove_edge_and_child(u, v);
       return result;
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    size_t contract_up(const NodeDesc v, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, class... DataArgs>
+    size_t contract_up(const NodeDesc v, DataArgs&&... data) {
       assert(in_degree(v) == 1);
-      return contract_up<uniqueness>(v, mstd::front(parents(v)), make_data);
+      return contract_up<uniqueness>(v, Parent::any_parent(v), std::forward<DataArgs>(data)...);
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    size_t contract_up(const Edge_& uv, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class... DataArgs>
+    size_t contract_up(const Edge_& uv, DataArgs&&... data) {
       assert(in_degree(uv.head()) == 1);
-      return contract_up<uniqueness>(uv.head(), uv.tail(), make_data);
+      return contract_up<uniqueness>(uv.head(), uv.tail(), std::forward<DataArgs>(data)...);
     }
     template<class... Args>
     size_t contract_up_abort(Args&&... args) { return contract_up<UniquenessBy::abort>(std::forward<Args>(args)...); }
@@ -766,16 +765,16 @@ namespace PT {
       return result;
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    size_t contract_down(const NodeDesc u, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, class... DataArgs>
+    size_t contract_down(const NodeDesc u, DataArgs&&... data) {
       assert(out_degree(u) == 1);
-      return contract_down<uniqueness>(u, mstd::front(children(u)), make_data);
+      return contract_down<uniqueness>(u, Parent::any_child(u), std::forward<DataArgs>(data)...);
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class DataMaker = bool> requires (!AdjacencyType<DataMaker>)
-    size_t contract_down(const Edge_& uv, DataMaker&& make_data = DataMaker()) {
+    template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class... DataArgs>
+    size_t contract_down(const Edge_& uv, DataArgs&&... data) {
       assert(out_degree(uv.tail()) == 1);
-      return contract_down<uniqueness>(uv.tail(), uv.head(), make_data);
+      return contract_down<uniqueness>(uv.tail(), uv.head(), std::forward<DataArgs>(data)...);
     }
     template<class... Args>
     size_t contract_down_abort(Args&&... args) { return contract_down<UniquenessBy::abort>(std::forward<Args>(args)...); }
@@ -1003,6 +1002,8 @@ namespace PT {
     static auto nodes_preorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes<preorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
+    template<class... Args>
+    auto nodes_with_preorder(Args&&... args) const  { return nodes_with<preorder>(std::forward<Args>(args)...); }
 
     /*
     // -------------- inorder -----------------
@@ -1031,6 +1032,8 @@ namespace PT {
     static auto nodes_postorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes<postorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
+    template<class... Args>
+    auto nodes_with_postorder(Args&&... args) const  { return nodes_with<preorder>(std::forward<Args>(args)...); }
 
     // -------------- leaves -----------------
     template<class... Args>
@@ -1111,7 +1114,7 @@ namespace PT {
     // --------------- edge traversals (with pred) ------------------
     // NOTE: this cannot be static since we may need to grab the _roots of the current network
     template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate>
-    auto edges_with(Predicate&& pred) { return mstd::make_filtered_factory(edges<o>().begin(), std::forward<Predicate>(pred)); }
+    auto edges_with(Predicate&& pred) const { return mstd::make_filtered_factory(edges<o>().begin(), std::forward<Predicate>(pred)); }
 
     template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, class First, class... Args> requires (not DirectionTag<First>)
     auto edges_with(Predicate&& pred, First&& first, Args&&... args) const {
@@ -1133,6 +1136,10 @@ namespace PT {
     static auto edges_with_above(Predicate&& pred, Roots&& rt, Args&&... args) {
       return edges_with<o>(std::forward<Predicate>(pred), above_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
+
+    template<class... Args> auto edges_with_preorder(Args&&... args) const  { return edges_with<preorder>(std::forward<Args>(args)...); }
+    //template<class... Args> auto edges_with_inorder(Args&&... args) const   { return edges_with<inorder>(std::forward<Args>(args)...); }
+    template<class... Args> auto edges_with_postorder(Args&&... args) const { return edges_with<postorder>(std::forward<Args>(args)...); }
 
 
   protected:
@@ -1298,7 +1305,7 @@ namespace PT {
     void build_from_edges(Edges&& edges, Emplacer&& emplacer) {
       DEBUG3(std::cout << "init Network with edges "<<edges<<"\n");
       for(auto&& e: std::forward<Edges>(edges))
-        emplacer.emplace_edge(static_cast<mstd::copy_cvref_t<Edges&&, decltype(e)>>(e));
+        emplacer.emplace_edge_translated(static_cast<mstd::copy_cvref_t<Edges&&, decltype(e)>>(e));
     }
 
   public:

@@ -90,8 +90,8 @@ namespace PT{
   template<StrictEdgeEmplacerType Emplacer>
   class EdgeListParser 
   {
-    Emplacer emplacer;
     std::istream* edgestream;
+    [[ no_unique_address ]] Emplacer emplacer;
   public:
 
     template<class... Args>
@@ -147,7 +147,7 @@ namespace PT{
 
             if(not s2.empty()) {
               // if s2 is not empty, then the line is an edge declaration, possibly with edge-data
-              emplacer.emplace_edge(s1, s2, data);
+              emplacer.emplace_edge_translated(s1, s2, data);
             } else get_id(s1, data); // if s2 is empty, then the line is a node-data declaration for node 's1'
           
             DEBUG5(std::cout << "translate-map now: "<<emplacer.helper.old_to_new() << '\n');

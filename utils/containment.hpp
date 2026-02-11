@@ -156,7 +156,7 @@ namespace PT {
     {}
 
     // copy constructor needs to register *this as new hook in the reduction manager
-    TreeInNetContainment(TreeInNetContainment&& tc):
+    TreeInNetContainment(TreeInNetContainment&& tc) noexcept:
       host{std::move(tc.host)},
       guest{std::move(tc.guest)},
       HG_label_match{std::move(tc.HG_label_match)},

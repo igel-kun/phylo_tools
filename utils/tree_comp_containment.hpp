@@ -42,7 +42,7 @@ namespace PT {
       EdgeTraversal<preorder, Host, typename Host::RootContainer, void, void> my_dfs(u);
      
       const NodeDesc MULroot = emplacer.create_copy_of(u);
-      emplacer.mark_root_directly(MULroot);
+      emplacer.mark_root_raw(MULroot);
 
       for(const auto xy: my_dfs){
         auto [x, y] = xy.as_pair();
@@ -53,7 +53,7 @@ namespace PT {
           // add the edge to the subtree
           // NOTE: we'll make the emplacer forget whether y already has a copy in the MUL-tree, so that a new copy is added
           host_to_subtree.erase(y);
-          const auto [y_iter, y_success] = emplacer.emplace_edge(x, y);
+          const auto [y_iter, y_success] = emplacer.emplace_edge_translated(x, y);
           assert(y_success);
           const NodeDesc y_copy = y_iter->get_desc();
           // register the label if y has one

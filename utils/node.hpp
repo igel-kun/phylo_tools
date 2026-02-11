@@ -236,13 +236,23 @@ namespace PT{
     Node_() = default;
 
     // initialize only the data, leaving parents and children empty
-    template<class First, class... Args> requires (not NodeType<First> and not mstd::is_any_of<First, Ex_node_data, Ex_node_label>)
-    Node_(First&& first, Args&&... args):
-      _data(std::forward<First>(first), std::forward<Args>(args)...) {}
-
-    template<NodeFunctionType DataMaker> requires (not DataExtracterType<DataMaker>)
+    // 1. pass a NodeFunction: create the node-data by calling the function with our own NodeDesc
+    template<NodeFunctionType DataMaker>
+      requires (not mstd::is_same_v<DataMaker, Data> and not DataExtracterType<DataMaker>)
     Node_(DataMaker&& data_maker):
       _data(std::forward<DataMaker>(data_maker)(reinterpret_cast<uintptr_t>(this))) {}
+
+    // 2. pass a tuple: create the node-data from the elements of the tuple (unless the node-data is itself a tuple)
+    template<mstd::TupleType T>
+      requires (not mstd::is_same_v<T, Data> and not NodeFunctionType<T>)
+    Node_(T&& arg):
+      _data(std::make_from_tuple<Data>(std::forward<T>(arg))) {}
+
+    // 3. construct data from anything else, including copy/move-construct
+    template<class First, class... Args>
+      requires (not mstd::is_any_of<First, Node_, Ex_node_data, Ex_node_label> and not NodeFunctionType<First> and not mstd::TupleType<First>)
+    Node_(First&& first, Args&&... args):
+      _data(std::forward<First>(first), std::forward<Args>(args)...) {}
 
     template<class... Args>
     Node_(const Ex_node_data, Args&&... args):
@@ -276,20 +286,30 @@ namespace PT{
     public Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_>
   {
     using Parent = Node_<PredStorage_, SuccStorage_, NodeData_, EdgeData_>;
-
-  protected:
-    LabelType_ _label;
-
-  public:
-    using Parent::Parent;
     using LabelType = LabelType_;
     static constexpr bool has_label = true;
 
+  protected:
+    LabelType_ _label;
+    
+  public:
+    using Parent::Parent;
+
+    // make the label directly from the passed argument
     template<class LabelInit, class... Args>
+      requires (not mstd::TupleType<LabelInit> or mstd::is_same_v<LabelInit, LabelType>)
     Node(const Ex_node_label, LabelInit&& label_init, Args&&... args):
       Parent(std::forward<Args>(args)...),
       _label(std::forward<LabelInit>(label_init))
     {}
+    // if the label init is a tuple but the label isn't, then make the label from the *ELEMENTS* of the passed tuple
+    template<class LabelInit, class... Args>
+      requires (mstd::TupleType<LabelInit> and not mstd::is_same_v<LabelInit, LabelType>)
+    Node(const Ex_node_label, LabelInit&& label_init, Args&&... args):
+      Parent(std::forward<Args>(args)...),
+      _label(std::make_from_tuple<LabelType>(std::forward<LabelInit>(label_init)))
+    {}
+
 
     LabelType& label() & { return _label; }
     LabelType&& label() && { return _label; }

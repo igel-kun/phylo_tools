@@ -102,7 +102,10 @@ namespace mstd {
 
     decltype(auto) emplace_item(const std::string_view s) {
       DEBUG5(std::cout << "adding to data of length "<<Parent::size()<<'\n');
-      return Parent::emplace_back(parse_variant<Data>(s));
+      auto opt = generic_reader<Data>::parse(s);
+      if(opt)
+        return Parent::emplace_back(*opt);
+      else throw std::logic_error{std::string{"Could not read "} + mstd::type_name<Data>() + " from " + s};
     }
 
     void emplace_items(const std::string_view s) {

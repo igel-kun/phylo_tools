@@ -224,9 +224,9 @@ namespace PT {
   template<class Net, NodeContainerType SeenSet = NodeSet>
 	struct NaiveNetworkAncestorOracle {
     // return if any x has a path to y avoiding forbidden
-    static bool has_path(const auto& x, const NodeDesc y, auto& forbidden) {
-      if(test(x, y)) return true;
-      if(test(forbidden, y)) return false;
+    static bool has_path(const auto& x, const NodeDesc y, auto&& forbidden) {
+      if(mstd::test(x, y)) return true;
+      if(mstd::test(forbidden, y)) return false;
 
       for(const NodeDesc p: Net::parents(y))
         if(has_path(x, p, forbidden)) return true;
@@ -263,14 +263,9 @@ namespace PT {
  
     [[ no_unique_address ]] Ancestors get_ancestors;
 
-    MetaNetworkLCAOracle() = default;
-  
-    template<class AncInit>
-    MetaNetworkLCAOracle(AncInit&& anc_init):
-      get_ancestors(std::forward<AncInit>(anc_init))
-    {}
+    INHERIT_ALL_CONSTRUCTORS(MetaNetworkLCAOracle, get_ancestors);
 
-   void filter_uncommon(AncestorContainer& x_ancestors, const NodeDesc y) { mstd::intersect(x_ancestors, get_ancestors(y)); }
+    void filter_uncommon(AncestorContainer& x_ancestors, const NodeDesc y) { mstd::intersect(x_ancestors, get_ancestors(y)); }
   
     template<StrictNodeContainerType Nodes>
     AncestorContainer get_common_ancestors(const NodeDesc x, const NodeDesc y) {

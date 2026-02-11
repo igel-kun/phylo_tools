@@ -86,10 +86,8 @@ namespace PT {
   
   // ============== Part 1: extract node labels =================
 
-/*
- * this is a container class storing functions to extract node-data, edge-data, and node-labels
- * depending on the number and type of constructor parameters and depending on a Network type, the 3 functions are initialized smartly.
- */
+  // this is a container class storing functions to extract node-data, edge-data, and node-labels
+  // depending on the number and type of constructor parameters and depending on a Network type, the 3 functions are initialized smartly.
   template<OptionalPhylogenyType Network,
            class ExtractNodeLabel_  = void>
   struct DataExtracter_nl_ {
@@ -97,7 +95,8 @@ namespace PT {
 
     static constexpr bool custom_node_label_maker = not std::is_same_v<ExtractNodeLabel, DefaultExtractData<Ex_node_label, Network>>;
     static constexpr bool ignoring_node_labels = false;
-    ExtractNodeLabel get_node_label;
+
+    [[ no_unique_address ]] ExtractNodeLabel get_node_label;
 
     template<class... Args>
     decltype(auto) operator()(const Ex_node_label, Args&&... args) { return get_node_label(std::forward<Args>(args)...); }
@@ -148,7 +147,8 @@ namespace PT {
 
     static constexpr bool custom_edge_data_maker  = not std::is_same_v<ExtractEdgeData,  DefaultExtractData<Ex_edge_data, Network>>;
     static constexpr bool ignoring_edge_data = false;
-    ExtractEdgeData get_edge_data;
+
+    [[ no_unique_address ]] ExtractEdgeData get_edge_data;
     
     DataExtracter_ed_nl_() = default;
 
@@ -261,7 +261,8 @@ namespace PT {
     static constexpr bool custom_edge_data_or_label_maker = custom_edge_data_maker or custom_node_label_maker;
     static constexpr bool custom_node_data_maker = not std::is_same_v<ExtractNodeData, DefaultExtractData<Ex_node_data, Network>>;
     static constexpr bool ignoring_node_data = false;
-    ExtractNodeData get_node_data;
+    
+    [[ no_unique_address ]] ExtractNodeData get_node_data;
 
     template<class... Args>
     decltype(auto) operator()(const Ex_node_data, Args&&... args) { return get_node_data(std::forward<Args>(args)...); }

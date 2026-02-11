@@ -83,13 +83,13 @@ namespace PT {
             u_copy = emplacer.create_copy_of(u);
             static_cast<GeneratorNodeInfo&>(get_data(u_copy)) = GeneratorNodeInfo{u, u_has_leaves};
             // store the 2 adjacencies in the generator
-            const auto uv_adj_iter = emplacer.emplace_edge(u, u_it->second.first->head()).first;
+            const auto uv_adj_iter = emplacer.emplace_edge_translated(u, u_it->second.first->head()).first;
             static_cast<EdgeInfo&>(get_data(u_copy, *uv_adj_iter)) = std::move(*first_info);
             first_info.reset();
             u_it->second.first.reset(); // mark u as being a generator node in the DP-table
           }
           // store in the data: the adjacency (in N) leading to v, the adjacency coming from v, and whether the side has leaves
-          const auto uw_adj_iter = emplacer.emplace_edge(u, side_below_v->head()).first;
+          const auto uw_adj_iter = emplacer.emplace_edge_translated(u, side_below_v->head()).first;
           static_cast<EdgeInfo&>(get_data(u_copy, *uw_adj_iter)) = std::move(tmp);
         }
       } else { 

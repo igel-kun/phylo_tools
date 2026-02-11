@@ -252,7 +252,7 @@ namespace mstd{
     using Parent::find;
 
     // return the set containing x, use path compression
-    Set& _set_of(const Key& x, Set& x_set, const unsigned decrease_size = 0) {
+    Set& _set_of(const Key& x, Set& x_set, const uint32_t decrease_size = 0) {
       const Key& x_set_rep = x_set.get_representative();
       if(x_set_rep != x){
         x_set.grow(-decrease_size);
@@ -300,7 +300,7 @@ namespace mstd{
     }
 
     // return true iff the given items are in different sets
-    bool in_different_sets(const Key& x, const Key& y) { return !in_same_set(x, y); }
+    bool in_different_sets(const Key& x, const Key& y) { return not in_same_set(x, y); }
 
     template<IterableType Keys> requires std::is_convertible_v<value_type_of_t<Keys>, Key>
     bool in_different_sets(const Keys& keys) { return !in_same_set(keys); }

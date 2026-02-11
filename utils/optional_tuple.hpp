@@ -78,7 +78,7 @@ namespace mstd {
   };
 
   // recursive case: tuple with item of type LastT
-  template<size_t i, class LastT, class... Rest> requires (!std::is_reference_v<LastT>)
+  template<size_t i, class LastT, class... Rest> requires (not std::is_reference_v<LastT>)
   struct _optional_tuple<i, LastT, Rest...>:
     public optional_item<i, LastT>,
     public _optional_tuple<i + 1, Rest...>
@@ -194,26 +194,19 @@ namespace mstd {
     return static_cast<const Item&>(otuple).value;
   }
 
-  template<size_t i, class T>
-  struct has_value { static constexpr bool value = !std::is_void_v<T>; };
-  template<size_t i, class LastT, class... Rest>
-  struct has_value<i, _optional_tuple<i, LastT, Rest...>> { static constexpr bool value = !std::is_void_v<LastT>; };
-
   template<class... Ts> requires (not std::disjunction_v<std::is_reference<Ts>...>) // is_reference istead of is_reference_v is correct here! Why, STL???
   struct optional_tuple:
     public _optional_tuple<0, Ts...>
   {
     using Parent = _optional_tuple<0, Ts...>;
+    template<size_t i> static constexpr bool has_value = (i < sizeof...(Ts)) and not std::is_void_v<mstd::NthType<i, Ts...>>;
 
-    //optional_tuple() = default;
     INHERIT_ALL_CONSTRUCTORS(optional_tuple, Parent);
 
-    template<size_t i> static constexpr bool has_value = mstd::has_value<i, optional_tuple>::value;
-
-    template<size_t i> requires (has_value<i>)
+    template<size_t i> requires has_value<i>
     auto& get() { return mstd::get<i>(static_cast<Parent&>(*this)); }
 
-    template<size_t i> requires (has_value<i>)
+    template<size_t i> requires has_value<i>
     const auto& get() const { return mstd::get<i>(static_cast<const Parent&>(*this)); }
 
     template<size_t i>

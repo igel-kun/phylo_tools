@@ -65,6 +65,7 @@ namespace mstd {
       result[i] += i;
   }
 
+  //! draw k DISTINCT integers from [0,n-1]
   template<class Set = std::vector<uint32_t>>
   void draw(const uint32_t k, const uint32_t n, Set& result) {
     if constexpr (mstd::VectorType<Set>) {
@@ -75,6 +76,7 @@ namespace mstd {
     } else fisher_yates_choose(k, n, result);
   }
 
+  //! draw k DISTINCT integers from [0,n-1]
   template<class Set = std::vector<uint32_t>>
   Set draw(const uint32_t k, const uint32_t n) {
     Set result;
@@ -83,6 +85,7 @@ namespace mstd {
   }
 
 
+  // draw k (not necessarily distinct) items from the container c
   template<mstd::IndexibleType Vec, mstd::IterableType Container> requires (not std::is_pointer_v<Vec>)
   void sample(Container&& c, const size_t k, Vec& result) {
     std::ranges::sample(c, std::back_inserter(result), k, rand_engine);
@@ -101,6 +104,7 @@ namespace mstd {
 
   // reservoir sampling for getting k random **iterators** from an unknown number of samples
   template<mstd::IndexibleType Vec, mstd::IterableType Container>
+    requires std::is_constructible_v<mstd::value_type_of_t<Vec>, mstd::iterator_of_t<Container>>
   Vec reservoir_sampling(Container&& c, const size_t k) {
     Vec result;
     const auto _end = std::end(c);
@@ -157,5 +161,65 @@ namespace mstd {
     return get_random_iterator_except(std::forward<Container>(c), _except, c.size());
   }
 
+
+
+  // The following classes make decisions, as in, they return a number from a range:
+  // (1) a random-decider, that just draws randomly and
+  // (2) a enumeration-decider, that remembers all decisions and can be advanced using operator++ to make the "next" decision in a lexicographic order
+
+  // a random decider, returning a random decision each time
+  // operator++ is noop
+  template<class ZeroOneDistribution = std::uniform_real_distribution<double>>
+  struct random_decider {
+    using T = std::remove_reference_t<decltype(std::declval<ZeroOneDistribution>()(rand_engine))>;
+    ZeroOneDistribution dist;
+
+    auto operator()(const auto& from, const auto& to) const {
+      const auto rnd = dist(rand_engine);
+      return from + std::round(rnd * to - rnd * from);
+    }
+    void operator++() const {}
+  };
+
+  // a deterministic decider, used to enumerate all possible decisions
+  // use operator++ to signal the next iteration
+  template<class... Ts> requires (sizeof...(Ts) != 0)
+  struct enumerating_decider {
+    // if we need only make a single type of decisions, use that type, otherwise use a std::variant
+    using T = std::conditional_t<sizeof...(Ts) == 1, mstd::FirstTypeOf<Ts...>, std::variant<Ts...>>;
+    // a past decision is a pair (x,y) with x = last decision, y = maximum decidable number
+    using Decision = std::pair<T, T>;
+    using DecisionVec = std::vector<Decision>;
+
+    DecisionVec past_decisions;
+    size_t current_index = 0;
+
+    void operator++() {
+      if(not past_decisions.empty()) {
+        // forget all decisions after the current one
+        past_decisions.resize(current_index + 1);
+        // advance the last decision (possibly advancing all others)
+        while(1) {
+          auto& last_decision = past_decisions.back();
+          ++last_decision.first;
+          if(last_decision.first == last_decision.second) {
+            past_decisions.pop_back();
+            if(past_decisions.empty()) break;
+          } else break;
+        }
+        // reset the current position index
+        current_index = 0;
+      }
+    }
+
+    auto operator()(const auto& from, const auto& to) {
+      if(current_index >= past_decisions.size()) {
+        // we need to make a new decision
+        append(past_decisions, from, to);
+        ++current_index;
+        return from;
+      } else return past_decisions[current_index++]; // we need to return the (advanced) decision stored in the DecisionVec
+    }
+  };
 
 }

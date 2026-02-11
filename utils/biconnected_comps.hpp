@@ -99,7 +99,7 @@ namespace PT{
         DEBUG4(std::cout << "BCC: making component along " << v << " (root "<<rt<<")\n");
         auto& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
         for(auto uv: v_node.in_edges())
-          output_emplacer.emplace_edge(uv);
+          output_emplacer.emplace_edge_translated(uv);
         for(const NodeDesc u: v_node.parents()) 
           if(u != rt)
             make_component_along(rt, u);

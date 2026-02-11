@@ -185,9 +185,9 @@ namespace PT{
 
     // a subtree is a leaf or an internal vertex
     // return the created node as well as the data-strings for it
-    auto  read_subtree() {
-      std::pair<NodeDesc, DataArrays> result;
-      auto& [root, data] = result;
+    auto read_subtree() {
+      std::pair<NodeDesc, DataArrays> node_and_data;
+      auto& [root, data] = node_and_data;
       std::string_view root_data = read_annotation();
 
       DEBUG5(std::cout << "splitting root_data '"<<root_data<<"'\n");
@@ -200,8 +200,8 @@ namespace PT{
       } else data[i] = root_data;
 
       DEBUG4(std::cout << "split data into label:'"<<data[0].value_or("")<<"' hybrid_num:'"<<data[1].value_or("")<<"' edge_data:'"<<data[2].value_or("")<<"' node_data:'"<<data[3].value_or("")<<"'\n");
-      if(data[1].has_value()) {
-        assert(!data[1]->empty());
+      if(data[1].has_value()) { // hybrid_num was set
+        assert(not data[1]->empty());
         // if root is a hybrid, register it
         const auto [iter, success] = hybrids.try_emplace(get_hybrid_num(data[1].value()), NoNode); // ,0
         auto& stored = iter->second;
@@ -221,7 +221,7 @@ namespace PT{
           emplacer.set_label(root, data[0].value());
        
         // if the subtree dangling from root is non-empty, then recurse
-        if((back > 0) && newick_string.at(back) == ')') read_internal<true>(root);
+        if((back > 0) and newick_string.at(back) == ')') read_internal<true>(root);
       } else {
         // if root is not a hybrid, then just register it
         DEBUG5(std::cout << " it's not a hybrid, so create it with data '"<<data[3].value_or("")<<"'\n");
@@ -229,9 +229,9 @@ namespace PT{
           root = emplacer.create_node(data[3].value());
         } else root = emplacer.create_node();
         if(data[0].has_value()) emplacer.set_label(root, data[0].value());
-        if((back > 0) && newick_string.at(back) == ')') read_internal<false>(root);
+        if((back > 0) and (newick_string.at(back) == ')')) read_internal<false>(root);
       }
-      return result;
+      return node_and_data;
     }
 
     // an internal vertex is ( + branchlist + )
@@ -267,7 +267,7 @@ namespace PT{
         if(back < 0) throw mstd::MalformedInput(newick_string, back, "unmatched ')'");
         
 //        children_seen.insert(new_child);
-//        if((not options.allow_parallel_edges) && (children_seen.count(new_child) > 1))
+//        if((not options.allow_parallel_edges) and (children_seen.count(new_child) > 1))
 //          throw mstd::MalformedInput(newick_string, back, "read double edge "+ std::to_string(root) + " --> " + std::to_string(new_child) +
 //                  " (hybrid number: " + std::string(nc_data[DA_hyb_num].value()) + ")");
       }
@@ -279,14 +279,12 @@ namespace PT{
     // a branch is a subtree + a length
     // return the head of the read branch
     void read_branch(const NodeDesc root) {
-      const auto result = read_subtree();
-      const auto& [child, data_arrs] = result;
+      const auto [child, data_arrs] = read_subtree();
 
       if(data_arrs[2].has_value()) {
+        // if read_subtree returned an edge-data initializer stringview, then use it to construct the edge-data
         emplacer.emplace_edge_raw(root, child, data_arrs[2].value());
-      } else emplacer.emplace_edge_raw(root, child);
-      
-      //return result;
+      } else emplacer.emplace_edge_raw(root, child); // if we didn't get an edge-data initializer, then default-construct it
     }
 
     // read all annotations (label, hybrid, edge-data, node-data) as string_view

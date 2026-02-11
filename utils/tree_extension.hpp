@@ -54,7 +54,7 @@ namespace PT{
         for(const NodeDesc v: new_children){
           // NOTE: make sure the merge is not done by size but v is always plugged below u!
           highest.merge_sets_keep_order(u, v);
-          emplacer.emplace_edge(u, v);
+          emplacer.emplace_edge_translated(u, v);
         }
       }
       emplacer.mark_root(ex.back());

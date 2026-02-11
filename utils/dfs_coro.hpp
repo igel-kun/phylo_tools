@@ -396,7 +396,7 @@ resume_outer:
     using typename Info::SeenSet;
 
     using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<Roots_, NodeDesc>, Roots_, std::add_pointer_t<const Roots_>>;
-    using IndirectForbidden = std::conditional_t<Info::has_forbidden, std::add_pointer_t<std::remove_pointer_t<Forbidden>>, void>;
+    using IndirectForbidden = std::conditional_t<Info::has_forbidden, std::add_pointer_t<const std::remove_pointer_t<Forbidden>>, void>;
     using IndirectSeen = std::conditional_t<Info::has_seen, std::add_pointer_t<std::remove_pointer_t<SeenSet>>, void>;
     using NonOwningInfo = DFSInfo<IndirectRoots, IndirectForbidden, IndirectSeen>;
     using NonOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, IndirectSeen>;

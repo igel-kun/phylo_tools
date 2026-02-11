@@ -249,32 +249,41 @@ int main(const int argc, const char** argv) {
     while(TBR_dist--) {
       // step 1: we'll need 3 DISTINCT random edges: st, uv, and xy (we'll remove st and add an edge from xy to uv) such that
       //  1. x is not below v (if so, swap uv and xy) since, otherwise, inserting the new edge will create a cycle
-      //  2. both s and t must be weakly connected to at least one of u, v, x, y in N-st since, otherwise, the result is disconnected
+      //  2. each of s and t must be weakly connected to at least one of u, v, x, y in N-st since, otherwise, the result is disconnected
 
       // step 1.1: get st, note that neither s nor t shall have degree one as, otherwise, we won't be able to reconnect it
       MyEdge st, uv, xy;
       do {
         st = *(get_random_iterator(N.edges(), N.num_edges()));
       } while((N.degree(st.head()) == 1) or (N.degree(st.tail()) == 1));
-      const NodeDesc t = st.head();
+      const auto [s,t] = st.as_pair();
+      const NodeDesc root = N.root();
 
       // step 1.2: remove st from N
       N.remove_edge_no_cleanup(st);
       has_path.remove_edge(st);
            
-      // step 1.3: choose uv among the edges reachable from t or the root of N-st
-      const NodeDesc t_root = N.is_root(t) ? t : N.root();
-      const AllEdgesTraversal<preorder, MyNetwork, NodeDesc, MyEdge> traversal(t_root, st);
-      do {
+      // step 1.3: choose uv among the edges reachable from t (or the root of N-st if t was a reticulation)
+      const NodeDesc t_root = MyNetwork::is_root(t) ? t : root;
+      const auto traversal = MyNetwork::edges_below(t_root, st);
+      while(1) {
         sample(traversal, 1, &uv);
-      } while((uv.head() == t_root) or (uv.tail() == t_root));
+        const auto [u,v] = uv.as_pair();
+
+        // step 1.4: choose xy among the edges reachable from the root above t in N-st
+        while(1) {
+          // mark st as forbidden edge so we wont cross it
+          sample(N.edges(st), 1, &xy);
+          const auto [x, y] = xy.as_pair();
+          // NOTE: we reject xy if it's uv or below uv
+          if(((x != u) or (y != v)) and not has_path(v, x)) break;
+        }
+        // NOTE: we reject uv, xy if adding the new arc will just result in the original network again, that is,
+        //        s in {x,y} and t in {u,v}
+        if(((v != s) and (v != s)) or ((xy.head() == t) or xy.tail() == t)) break;
+      }
 #warning "TODO: continue here"
 
-      // step 1.4: choose xy among the edges reachalbe from the root above t in N-st
-      do {
-        // mark st as forbidden edge so we wont cross it
-        sample(N.edges(st), 1, &xy);
-      } while(has_path(v, x));
 
       throw(mstd::Unimplemented{"sampling method not yet implemented"});
 /*
@@ -298,8 +307,10 @@ int main(const int argc, const char** argv) {
         add_random_data<DataTarget::Edge>(N, s); 
 
   } else {
-    const PT::NodeNums nums = get_node_numbers();
-    generate_random_binary_network(N, nums);
+    using NetBuilder = PT::ReducedNetworkBuilder<LeafAttachingTreeBuilder<Network>, PT::random_decider<>>;
+    const PT::ReducedNodeNums nums = get_node_numbers();
+    Builder builder{N, nums, PT:random_decider(0.0, 1.0)};
+    builder.build_phylogeny();
   }
 
   if(mstd::test(options,"-L"))

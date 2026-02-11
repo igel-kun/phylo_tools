@@ -500,6 +500,15 @@ namespace mstd {
     constexpr decltype(auto) operator()(Arg&& x, Args&&... args) const { return std::forward<Arg>(x); };
   };
 
+  // Get the std::invoke_result_t of a function, or void if the argument is not a function.
+  // This allows using std::conditional_t, which NEEDS all its arguments to be valid, even if they are not used
+  //  (but std::invoke_result of something that cannot be invoked is not valid, so that won't compile even tho it makes sense)
+  template<class Default, class T, class... Args> struct invoke_result_or_ { using type = Default; };
+  template<class Default, class T, class... Args> requires std::is_invocable_v<T, Args...>
+  struct invoke_result_or_<Default, T, Args...> { using type = std::invoke_result_t<T, Args...>; };
+  template<class Default, class T, class... Args> using invoke_result_or = invoke_result_or_<Default, T, Args...>;
+
+
 
 
   // --------------------- MODIFIED DATA STRUCTURES ------------------------
@@ -707,6 +716,12 @@ namespace mstd {
     T operator()(std::string_view sv) const { return from_string<T>(sv); }
   };
 
+  // we will automatically print iterables by iterating over their items and printing those
+  // however, some classes may not be iterated like this (such as strings, or linear_intervals)
+  template<class T> struct blacklist_iterable_printing: public std::false_type {};
+  template<Stringlike T> struct blacklist_iterable_printing<T>: public std::true_type {};
+
+  template<class T> constexpr bool blacklist_iterable_printing_v = blacklist_iterable_printing<T>::value;
 }
 namespace std {
   template <typename A, typename B>
@@ -720,7 +735,7 @@ namespace std {
     return os;
   }
 
-  template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
+  template<mstd::IterableType C> requires (not mstd::blacklist_iterable_printing_v<C>)
   std::ostream& _print_iterable(std::ostream& os, C&& objs, const char delim = ' ') {
     auto _end = std::end(objs);
     auto _beg = std::begin(objs);
@@ -743,7 +758,7 @@ namespace std {
     } else return os;
   }
 
-  template<mstd::IterableType C> requires (not mstd::Stringlike<C>)
+  template<mstd::IterableType C> requires (not mstd::blacklist_iterable_printing_v<C>)
   inline std::ostream& operator<<(std::ostream& os, C&& objs) {
     return _print_iterable(os, std::forward<C>(objs), ' ');
   }

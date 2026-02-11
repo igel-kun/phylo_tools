@@ -179,7 +179,7 @@ namespace mstd {
     
     constexpr _static_capacity_vector() = default;
     constexpr _static_capacity_vector(const _static_capacity_vector& other): _data(other._data) {}
-    constexpr _static_capacity_vector(_static_capacity_vector&&) requires std::is_trivially_move_constructible_v<T> = default;
+    constexpr _static_capacity_vector(_static_capacity_vector&&) requires std::is_trivially_move_constructible_v<T> noexcept = default;
     constexpr _static_capacity_vector(_static_capacity_vector&& other) requires (not std::is_trivially_move_constructible_v<T>) noexcept {
       std::uninitialized_move(other.begin(), other.end(), begin());
       _size.increaese_by(other.size());

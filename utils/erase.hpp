@@ -104,13 +104,12 @@ namespace mstd {
 
   // a quick erase for a vector, swapping the item with the last item and pop_back() that last item
   template<StrictVectorType V>
-    requires (not std::is_const_v<V>)
   void quick_erase(V& vec, const iterator_of_t<V>& iter) {
     assert(vec.size() != 0);
-    std::swap(*iter, *std::prev(vec.end()));
+    std::swap(*iter, vec.back()); //*std::prev(vec.end()));
     vec.pop_back();
   }
-  template<StrictVectorType V> requires (not std::is_const_v<V>)
+  template<StrictVectorType V>
   void quick_erase(V& vec, const size_t i) { quick_erase(std::forward<V>(vec), std::advance(vec.begin(), i)); }
 
 

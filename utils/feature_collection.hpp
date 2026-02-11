@@ -29,16 +29,16 @@ namespace PT {
     using Tuple::Tuple;
     using CorrespondingVariant = std::variant<Feats...>;
 
-    template<class T> static constexpr auto index = mstd::var_type_index<T, Feats...>();
+    template<class T> static constexpr size_t index = mstd::var_type_index<T, Feats...>();
     template<class T> static constexpr bool occurs = mstd::is_any_of<T, Feats...>;
-    template<class T> auto& get_by_type() { return this->template get<index<T>>(); };
-    template<class T> const auto& get_by_type() const { return this->template get<index<T>>(); };
+    template<class T> auto& get_by_type() { return this->template get<index<std::remove_reference_t<T>>>(); };
+    template<class T> const auto& get_by_type() const { return this->template get<index<std::remove_reference_t<T>>>(); };
 
     template<class T>
     void add_feature(T&& feat) { 
       static_assert(mstd::is_same_v<T, CorrespondingVariant> or mstd::is_any_of<T, Feats...>);
       if constexpr (mstd::is_same_v<T, CorrespondingVariant>) {
-        std::visit([&](auto&& x){ add_feature(std::forward<std::remove_reference_t<decltype(x)>>(x));}, feat);
+        std::visit([&](auto&& x){ add_feature(std::forward<decltype(x)>(x));}, feat);
       } else mstd::append(get_by_type<T>(), std::forward<T>(feat));
     }
 

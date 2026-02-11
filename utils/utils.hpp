@@ -12,6 +12,7 @@
 #include <cassert>
 #include <bitset>
 #include <list>
+#include <array>
 #include <vector>
 #include <stack>
 #include <map>
@@ -118,9 +119,12 @@ namespace std::ranges {
 
 // C++ forbids inheriting copy constructors, which makes sense if the class has data members (they would be left uninitialized),
 // but it doesn't make sense if the class has NO data members... in those cases, we can inherit _all_ constructors as follows:
+// NOTE: If your class encapsulates a single object, you usually want to construct that item when constructing the wrapper, passing all arguments.
+// However, you need to be careful not to shadow the copy- and move-constructors for your wrapper!
+// The macro can also used for that
 #define INHERIT_ALL_CONSTRUCTORS(myclass,base) \
-  template<class __First, class... __Args> requires (not mstd::is_same_v<__First, myclass>)\
-  myclass(__First&& __first, __Args&&... __args) noexcept: base(std::forward<__First>(__first), std::forward<__Args>(__args)...) {}\
+  template<class First__, class... Args__> requires (not mstd::is_same_v<First__, myclass>)\
+  myclass(First__&& first__, Args__&&... args__) noexcept: base(std::forward<First__>(first__), std::forward<Args__>(args__)...) {}\
   myclass() noexcept = default;
 
 // iterators are supposed to have an assignment that returns a ref to the iterator itself (this is required for std::iterator_traits)
@@ -159,7 +163,7 @@ uint32_t rotr32(uint32_t x, uint32_t n){
 }
 
 // reverse bits
-static constexpr unsigned char rev_map[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe, 0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
+static constexpr std::array<unsigned char, 16> rev_map = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe, 0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
 
 // Reverse the top and bottom nibble then swap them.
 inline uint8_t reverse8(const uint8_t n) { 
@@ -180,7 +184,7 @@ inline uint64_t reverse64(const uint64_t n) {
 // thx @ https://stackoverflow.com
 uint32_t integer_log(uint32_t v)
 {
-  static const int MultiplyDeBruijnBitPosition[32] =
+  static constexpr std::array<unsigned char, 32> MultiplyDeBruijnBitPosition =
   {
       0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30,
       8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31

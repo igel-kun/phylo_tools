@@ -219,7 +219,7 @@ namespace PT{
       component_root_consensus_among_parents(u, [&components_above](const NodeDesc x) { if(x != NoNode) components_above.emplace(x); });
       // insert edges into the component DAG
       for(const NodeDesc v: components_above)
-        edge_emplacer.emplace_edge(v, u);
+        edge_emplacer.emplace_edge_translated(v, u);
     }
 
     void install_trivial_root(const NodeDesc u) {

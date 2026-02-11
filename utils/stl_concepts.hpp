@@ -270,7 +270,7 @@ namespace mstd {
   concept StrictIndexibleType = IndexibleType<T, I, TR_Strict>;
 
   template<class T> 
-  concept is_iterable = not std::is_void_v<iterator_of_t<T>> &&  requires(T a) {
+  concept is_iterable = not std::is_void_v<iterator_of_t<T>> and requires(T a) {
     std::begin(a);
     std::end(a);
 	};

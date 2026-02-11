@@ -208,8 +208,8 @@ namespace PT {
   using NodeSingleton = StorageClass<singleS, NodeDesc>;
 
   using ConsecutiveNodeSet = mstd::ordered_bitset;
-  template<class T>
-  using NodeWith = std::pair<NodeDesc, T>;
+  template<class... Args> requires (sizeof...(Args) != 0)
+  using NodeWith = std::conditional_t<sizeof...(Args) == 1, std::pair<NodeDesc, mstd::FirstTypeOf<Args...>>, std::tuple<NodeDesc, Args...>>;
   using NodeWithDegree = NodeWith<Degree>;
   using NodePair = NodeWith<NodeDesc>;
 
@@ -221,6 +221,7 @@ namespace PT {
   template<class T>
   using NodeMap = HashMap<NodeDesc, T>;
   using NameVec = std::vector<std::string>;
+  using NodePairVec = std::vector<NodePair>;
   using NodePairSet = HashSet<NodePair>;
 
   // a node is something providing a bunch of types and whose predecessors and successors can be queried
