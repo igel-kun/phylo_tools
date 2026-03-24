@@ -110,7 +110,9 @@ namespace mstd {
     vec.pop_back();
   }
   template<StrictVectorType V>
-  void quick_erase(V& vec, const size_t i) { quick_erase(std::forward<V>(vec), std::advance(vec.begin(), i)); }
+  void quick_erase(V& vec, const size_t i) {
+    quick_erase(vec, vec.begin() + i);
+  }
 
 
 }

@@ -425,7 +425,7 @@ auto switching_based_diversity(const MyNetwork& N, First&& first, Args&&... args
 
 
 template<class... Args>
-auto dp_engine(const MyNetwork& N, Args&&... args) {
+auto pd_engine(const MyNetwork& N, Args&&... args) {
   // select DP Engine
   if(conf.score_network_diversity) return pd_network_diversity<MyNetwork>()(N, std::forward<Args>(args)...);
   else if(conf.score_network_fair_proportion) return pd_fair_proportion<MyNetwork>()(N, std::forward<Args>(args)...);
@@ -455,7 +455,7 @@ void phylo_diversity_subsystem() {
     // output diversity score of all singletons
     std::cout << "computing diversity score of each leaf ("<<N.leaves()<<"):\n";
     for(const NodeDesc x: N.leaves())
-      std::cout << MyNetwork::label(x) << ":\t" << dp_engine(N, NodeSingleton{x}) << '\n';
+      std::cout << MyNetwork::label(x) << ":\t" << pd_engine(N, NodeSingleton{x}) << '\n';
   } else if(conf.compute_for_leafset) {
     // output diversity score of the given leaf-set
     const NameVec leaf_names = parse_leaves(options["-l"][0]);
@@ -463,7 +463,7 @@ void phylo_diversity_subsystem() {
     const NodeSet leaves{selected_leaves.begin(), selected_leaves.end()};
     std::cout << "computing diversity score of leaves " << leaf_names << '\n';
     const auto before = mstd::get_time();
-    const auto score = dp_engine(N, leaves);
+    const auto score = pd_engine(N, leaves);
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
     std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
     std::cout << "score = "<<score<<'\n';
@@ -471,7 +471,7 @@ void phylo_diversity_subsystem() {
     const size_t k = parse_k(N.num_leaves(), options[""][1]);
     std::cout << "computing optimal diversity score obtainable with " << k << " leaves\n";
     const auto before = mstd::get_time();
-    const auto solutions = dp_engine(N, k, conf.num_solutions).solutions;
+    const auto solutions = pd_engine(N, k, conf.num_solutions).solutions;
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
     std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
     // 

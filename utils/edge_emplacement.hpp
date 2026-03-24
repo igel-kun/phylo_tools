@@ -140,12 +140,12 @@ namespace PT {
     }
  
     // subdivide uv with w
-    template<EdgeType Edge, class Data>
+    template<class Edge, class Data>
     void subdivide_edge(Edge&& uv, const NodeDesc w, Data&& data) {
       assert(N != nullptr);
       N->subdivide_edge(uv, w, [&](auto&&, auto& wv){ wv._data = std::forward<Data>(data); });
     }
-    template<EdgeType Edge>
+    template<class Edge>
     void subdivide_edge(Edge&& uv, const NodeDesc w) {
       assert(N != nullptr);
       N->subdivide_edge(uv, w);
@@ -444,7 +444,7 @@ namespace PT {
     }
 
     // subdivide uv with w
-    template<EdgeType Edge, class... MoreArgs>
+    template<class Edge, class... MoreArgs>
     void subdivide_edge(Edge&& uv, const NodeDesc w, MoreArgs&&... args) {
       if constexpr (extract_edge_data and (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
         helper.subdivide_edge(std::forward<Edge>(uv), w, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));

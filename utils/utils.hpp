@@ -204,7 +204,7 @@ size_t utf8_len(const std::string& s) {
 }
 
 
-void cfail(const auto& t) {
+[[noreturn]] void cfail(const auto& t) {
   std::cerr << t;
   exit(EXIT_FAILURE);
 };

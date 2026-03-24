@@ -192,7 +192,14 @@ namespace mstd {
       if(low() > high()) throw std::logic_error("no int in linear interval ["+std::to_string(low())+","+std::to_string(high())+"]");
       return *this;
     }
-    constexpr int64_t unique_int() {
+    template<class Q> requires std::is_integral_v<Q>
+    constexpr auto shrink_to() const {
+      const Q _low = std::ceil(low());
+      const Q _high = std::floor(high());
+      if(_low > _high) throw std::logic_error("no int in linear interval ["+std::to_string(low())+","+std::to_string(high())+"]");
+      return linear_interval<Q>{_low, _high};
+    }
+    constexpr int64_t unique_int() const {
       const auto l = std::ceil(low());
       if(l == std::floor(high())) {
         return l;

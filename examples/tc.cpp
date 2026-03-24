@@ -10,6 +10,7 @@
 #include "utils/containment.hpp"
 
 using namespace PT;
+using namespace std::literals;
 
 mstd::OptionMap options;
 void parse_options(const int argc, const char** argv)
@@ -18,34 +19,30 @@ void parse_options(const int argc, const char** argv)
   description["-v"] = {0,0};
   description["-r"] = {3,3};
   description[""] = {0,2};
-  const std::string help_message(std::string(argv[0]) + " <file1> [file2]\n\
-      \tfile1 and file2 describe two networks (either file1 contains 2 lines of extended newick or both file1 and file2 describe a network in extended newick or edgelist format)\n\
-      \tUnless the first network is a tree and the second is not, we try to embed the second network in the first.\n\
-      \n" + std::string(argv[0]) + " -r <x> <y> <z>\n\
-      \trandomize a tree with x internal nodes + y leaves and add z additional edges, then check containment of the tree in the network\n");
+  const std::string help_message(std::string(argv[0]) + " [args] <file1> [files...]\n\
+      \t where either\n\
+      \t (a) file1 describes a network N and files... describe trees Ti or\n\
+      \t (b) file1 contains a network N in the first line and trees Ti in each following line\n\n\
+      other arguments:\n\
+      \t -r <x> <y> <z>\t\trandomize a tree with x internal nodes and y leaves and add z additional edges, then check containment of the tree in the network in file1\n\
+      \t -t\t\tlist all trees contained in N\n\
+      \t -s\t\tlist all switchings of N (may contain unlabelled leaves)\n\
+      ");
 
   mstd::parse_options(argc, argv, description, help_message, options);
 
+  if(mstd::test(options, "-r") + mstd::test(options, "-t") + mstd::test(options, "-s") > 1)
+    cfail("only one of -r, -t, -s may be specified\n");
+
+
   if(mstd::test(options, "-r")){
     const auto r_vec = options.at("-r");
-    if(stoi(r_vec[0]) == 0) {
-      std::cerr << "cannot construct tree with "<<r_vec[0]<<" nodes\n";
-      exit(EXIT_FAILURE);
-    }
-    if(stoi(r_vec[1]) <= stoi(r_vec[0])) {
-      std::cerr << "cannot construct tree with "<<r_vec[0]<<" internal nodes & "<<r_vec[1]<<" leaves\n";
-      exit(EXIT_FAILURE);
-    }
+    if(stoi(r_vec[0]) == 0) cfail("cannot construct tree without nodes\n");
+    if(stoi(r_vec[1]) <= stoi(r_vec[0])) cfail("cannot construct tree with "sv + std::to_string(r_vec[0]) + " internal nodes & "sv + std::to_string(r_vec[1]) + " leaves\n"sv);
   } else {
-    if(options[""].empty()) {
-      std::cerr << help_message << std::endl;
-      exit(EXIT_FAILURE);
-    }
+    if(options[""].empty()) cfail(help_message);
     for(const std::string& filename: options[""])
-      if(!file_exists(filename)) {
-        std::cerr << filename << " cannot be opened for reading" << std::endl;
-        exit(EXIT_FAILURE);
-      }
+      if(!file_exists(filename)) cfail(filename + " cannot be opened for reading\n"sv);
   }
 }
 
@@ -73,8 +70,16 @@ bool check_display(MyNet& N, MyTree& T)
 }
 */
 
+struct RandomDecider {
+
+  template<class T>
+  T operator()(const T& lower, const T& upper) const { return lower + mstd::throw_die(upper - lower + 1); }
+};
 
 auto create_net_and_tree() {
+  using TreeBuilder = LeafReplacementTreeBuilder<MyTree, RandomDecider>;
+  using NetBuilder = TreeBasedNetworkBuilder<MyNet, RandomDecider>;
+
   NetAndTree result;
 
   const int num_internals = std::stoi(options["-r"][0]);
@@ -82,8 +87,7 @@ auto create_net_and_tree() {
   const int num_new_edges = std::stoi(options["-r"][2]);
 
   std::cout << "generating network with "<<num_leaves<<" leaves, "<<num_internals<<" internal nodes and "<< (num_leaves + num_internals - 1) + num_new_edges<<" edges\n";
-  generate_random_tree(result.second, NodeNums{num_internals, 0, num_leaves, 0.0f});
-  generate_leaf_labels(result.second);
+  TreeBuilder{result.second, ReducedNodeNums{num_internals, 0, num_leaves, 0.0f}}.build_phylogeny();
 
   std::cout << "rolled tree:\n"<<result.second<<"\n";
 
@@ -96,7 +100,7 @@ auto create_net_and_tree() {
   result.first = result.second;
   
   std::cout << "adding "<<num_new_edges<<" new edges...\n";
-  add_random_edges(result.first, num_new_edges, num_new_edges, num_new_edges);
+  NetBuilder{result.first, ReducedNodeNums{num_internals, 0, num_leaves, 0.0f}}.add_random_edges(num_new_edges);
 
   return result;
 }
@@ -105,8 +109,7 @@ MyNet read_network(auto&& in){
   try{
     return parse_newick<MyNet>(in);
   } catch(const std::exception& err){
-    std::cerr << "could not read network: "<<err.what()<<std::endl;
-    exit(EXIT_FAILURE);
+    cfail("could not read network: "sv + err.what() + "\n"sv);
   }
 }
 

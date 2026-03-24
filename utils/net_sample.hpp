@@ -30,7 +30,7 @@ namespace PT {
     }
   };
 
-  // NodeNums can sanitize node-characteristics of a REDUCED network (result of contracting-down out-deg-1 nodes)
+  // ReducedNodeNums can sanitize node-characteristics of a REDUCED network (result of contracting-down out-deg-1 nodes)
   // For example, it can compute the number of reticulations in a binary network with t tree-nodes and l leaves,
   // or check whether a network with a given number of reticulations, leaves, and tree-nodes exists.
   struct ReducedNodeNums {   
@@ -58,13 +58,13 @@ namespace PT {
     // and, thus: #l == (#n * (t_out_deg - 1) - reti-number + 1) / t_out_deg
     static constexpr auto l_from_nr(const uint32_t n, const uint32_t reti_num, const DegreeBounds t_out_deg = {2,2}) {
       const auto tmp = (static_cast<double>(n) * (t_out_deg - 1.0) - (reti_num + 1.0));
-      return DegreeBounds{(tmp / t_out_deg).shrink_to_int()};
+      return DegreeBounds{(tmp / t_out_deg).template shrink_to<uint32_t>()};
     }
 
     // From (6), we get: #n == (#l * t_out_deg + reti-number - 1) / (t_out_deg - 1)
     static constexpr auto n_from_rl(const uint32_t reti_num, const uint32_t l, const DegreeBounds t_out_deg = {2,2}) {
       const auto tmp = (static_cast<double>(l) * t_out_deg + (reti_num - 1.0));
-      return DegreeBounds{(tmp / (t_out_deg - 1u)).shrink_to_int()};
+      return DegreeBounds{(tmp / (t_out_deg - 1u)).template shrink_to<uint32_t>()};
     }
 
     // NOTE: this returns the reticulation number, not the number of reticulations! (they are the same for binary networks)
@@ -119,7 +119,7 @@ namespace PT {
     auto num_tree_nodes() const { return (static_cast<double>(num_leaves + reti_number) / (tree_out_deg - 1)).shrink_to_int(); }
 
     void sanity_check() const {
-      if(not mstd::linear_interval{0,1}.contains(multilabel_density)) throw std::logic_error("multilabel density must be between 0 and 1");
+      if(not mstd::linear_interval<char>{0,1}.contains(multilabel_density)) throw std::logic_error("multilabel density must be between 0 and 1");
       if(num_internal() < 0 or reti_number < 0 or num_leaves < 0 or num_nodes < 0) {
         throw std::logic_error{
             "network topology implied by given parameters is invalid: " +
@@ -170,11 +170,11 @@ namespace PT {
     // ------- construction & desctruction ---------
   public:
   
-    template<class... EmplacerArgs> 
+    template<class... EmplacerArgs> requires std::is_constructible_v<Emplacer, Network&, EmplacerArgs&&...>
     TreeBuilder(Network& N_, ReducedNodeNums nums, Decider _decider, EmplacerArgs&&... args):
       target_nums{std::move(nums)},
       N{&N_},
-      emplacer(N, std::forward<EmplacerArgs>(args)...),
+      emplacer(*N, std::forward<EmplacerArgs>(args)...),
       decider(std::move(_decider))
     {
       // NOTE: currently, we only support an upper-bound on the max-degree, no lower bound
@@ -187,7 +187,13 @@ namespace PT {
     TreeBuilder(Network& N_, ReducedNodeNums nums, First&& first, EmplacerArgs&&... args):
       TreeBuilder(N_, nums, Decider{}, std::forward<First>(first), std::forward<EmplacerArgs>(args)...)
     {}
-  
+
+    TreeBuilder(Network& N_, ReducedNodeNums nums)
+      requires (std::is_default_constructible_v<Decider> and std::is_constructible_v<Emplacer, Network&>)
+      :
+      TreeBuilder(N_, nums, Decider{})
+    {}
+ 
 #warning "TODO: implement multi-labels"
     //! generate labels
     //NOTE: we'll give all nodes in 'labelled_leaves' a label and return the label maker in case the user wants to label additional nodes
@@ -200,64 +206,70 @@ namespace PT {
       return get_label;
     }
 
-
-    // decrease num_leaves and add a new leaf to N, either dangling from an existing node, or from a newly created node (by subdivision)
-    template<NodeContainerType Leaves, NodeContainerType Nodes, mstd::ContainerType Edges>
-    void add_leaf(Index& num_leaves, const Index total_num_leaves, IndexPair& last_idx,
-        Leaves& leaf_container, Nodes& may_receive_more_children, Edges& edges) {
-      if(num_leaves > 0) {
-        --num_leaves;
-        add_leaf(total_num_leaves, leaf_container, may_receive_more_children, edges, last_idx);
-      }
-    }
-    // add a new leaf to N, either dangling from an existing node, or from a newly created node (by subdivision)
-    template<NodeContainerType Leaves, NodeContainerType Nodes, mstd::ContainerType Edges>
-    void add_leaf(Index& num_leaves, const Index total_num_leaves, Leaves& leaf_container, Nodes& may_receive_more_children, Edges& edges) {
-      add_leaf(num_leaves, total_num_leaves, IndexPair{0u,0u}, leaf_container, may_receive_more_children, edges);
+    // decide if a new leaf will hang from a node or from an edge (via subdivision), given that leaves_to_add new leaves will be added in total
+    bool decide_node_hanging(const Index leaves_to_add) const {
+      // hanging a leaf from an edge needs creating a new node; if we cannot create more nodes than predicted, we cannot hang from an edge
+      const int64_t num_auxiliary_nodes = int64_t{target_nums.num_nodes} - N->num_nodes() - leaves_to_add;
+      if(num_auxiliary_nodes < 0) throw std::logic_error{"trying to add more nodes than initially negotiated to a random phylogeny"};
+      if(num_auxiliary_nodes == 0) return true;
+      // now, we may hang from an edge
+      return decider(0,1);
     }
 
     // add a new leaf to N, either dangling from an existing node, or from a newly created node (by subdivision)
-    template<NodeContainerType Leaves, NodeContainerType Nodes, mstd::ContainerType Edges>
-    void add_leaf(const Index total_num_leaves, IndexPair& last_idx,
-        Leaves& leaf_container, Nodes& may_receive_more_children, Edges& edges) {
-      assert(N->num_nodes() + total_num_leaves <= target_nums.num_nodes);
-      // choose to either hang from an existing node or edge
-      bool hang_from_node;
-      if(N->num_nodes() + total_num_leaves < target_nums.num_nodes) {
-        if(may_receive_more_children.empty()) {
-          // we cannot hang from a node if none will accept more out-degree
-          hang_from_node = false;
-        } else hang_from_node = decider(0,1);
-      } else hang_from_node = true; //  we cannot subdivide edges if we're low on nodes
-      
-      if(hang_from_node) {
+    // ARGUMENTS: total_num_leaves = number of leaves that we are planning to add in the future
+    //            last_idx = track the indices (node, edge) of where the last leaf has been hung, in order to advance from there
+    //            may_receive_more_children = container with nodes from which we may hang a new leaf
+    //            edges = container of edges that we may subdivide in order to hang a new leaf
+    // NOTE: if the total_num_leaves that we want to add in the future together with the present nodes exceed the target num_nodes
+    template<NodeContainerType Nodes, mstd::ContainerType Edges>
+    NodeDesc add_leaf(const Index total_num_leaves,
+                  Nodes& may_receive_more_children,
+                  Edges& edges,
+                  IndexPair& last_idx = IndexPair{0u,0u})
+    {
+      // choose to either hang from an existing node or edge; if no node may receive more children, then we cannot hang from a node
+      const bool hang_from_node = may_receive_more_children.empty() ? false : decide_node_hanging(total_num_leaves);
+
+      const NodeDesc z = emplacer.create_node();
+      NodeDesc z_parent;
+
+      if(hang_from_node) { // we'll hang from a node, so get one of the nodes that may still receive more children and hang onto that one
         assert(may_receive_more_children.size() > last_idx.first);
         const Index idx = decider(last_idx.first, may_receive_more_children.size() - 1);
+        const NodeDesc z_parent = may_receive_more_children[idx];
+        assert(Network::out_degree(z_parent) < target_nums.tree_out_deg.high());
+
+        // make the new edge in N
+        emplacer.emplace_edge_raw(z_parent, z);
+        append(edges, z_parent, z);
+
+        // remember to prepare the next call
         last_idx.first = idx;
-        const NodeDesc u = may_receive_more_children[idx];
-        const NodeDesc v = emplacer.create_node();
-        emplacer.emplace_edge_raw(u, v);
-        append(edges, u, v);
-        append(leaf_container, v);
         // if we hit the out-degree limit, then remove u from the list of possible parents
-        if(Network::out_degree(u) == target_nums.tree_out_deg.high())
+        if(Network::out_degree(z_parent) == target_nums.tree_out_deg.high())
           mstd::quick_erase(may_receive_more_children, idx);
-      } else {
+      } else { // here, we'll hang from an edge by subdividing the edge first
         assert(edges.size() > last_idx.second);
         const Index idx = decider(last_idx.second, edges.size() - 1);
-        last_idx.second = idx;
         const auto [u, v] = edges[idx];
-        // subdivide the edge
-        const NodeDesc w = emplacer.create_node();
-        const NodeDesc z = emplacer.create_node();
-        emplacer.subdivide_edge(edges[idx], w);
-        emplacer.emplace_edge_raw(w, z);
-        edges[idx].second = w;
-        append(edges, w, v);
-        append(edges, w, z);
-        append(leaf_container, z);
-        if(target_nums.tree_out_deg.high() > 2) append(may_receive_more_children, w);
+
+        // subdivide the edge with a new node w and hang z from w
+        const NodeDesc z_parent = emplacer.create_node();
+        emplacer.subdivide_edge(edges[idx], z_parent);
+        edges[idx].second = z_parent;
+        append(edges, z_parent, v);
+        
+        // make the new edge in N
+        emplacer.emplace_edge_raw(z_parent, z);
+        append(edges, z_parent, z);
+
+        //remember to prepare the next call
+        last_idx.second = idx;
+        // if the newly created node may receive more than 2 children, then add it to the list of nodes that may receive more children
+        if(target_nums.tree_out_deg.high() > 2) append(may_receive_more_children, z_parent);
       }
+      return z;
     }
 
   };
@@ -271,9 +283,9 @@ namespace PT {
     using Parent = TreeBuilder<Tree_, Decider_, DataExtracter_>; 
     using Parent::target_nums;
     using Parent::N;
+    using Parent::decider;
     using Parent::emplacer;
     using Parent::labelled_leaves;
-    using Parent::nums;
 
     INHERIT_ALL_CONSTRUCTORS(LeafReplacementTreeBuilder, Parent);
 
@@ -281,19 +293,20 @@ namespace PT {
       const NodeDesc rt = emplacer.create_root();
       
       mstd::append(labelled_leaves, rt);
-      for(int32_t internals_to_go = nums.num_internal(); internals_to_go > 0; --internals_to_go) {
+      for(int32_t internals_to_go = target_nums.num_internal(); internals_to_go > 0; --internals_to_go) {
+        const uint32_t num_labelled_leaves = labelled_leaves.size();
         // after declaring one of the current leaves an inner node, how many leaves do we still need to add?
-        const auto leaves_to_go = nums.num_leaves - labelled_leaves.size() + 1;
+        const auto leaves_to_go = target_nums.num_leaves - num_labelled_leaves + 1;
         assert(leaves_to_go > internals_to_go);
         const auto max_degree = std::min(leaves_to_go - internals_to_go + 1, target_nums.tree_out_deg.high()); // every internal node adds at least 1 leaf
-        const auto min_degree = std::max(leaves_to_go / internals_to_go, 2);
+        const auto min_degree = std::max(leaves_to_go / internals_to_go, 2u);
         assert(min_degree <= max_degree);
         const auto degree = decider(min_degree, max_degree);
-        const auto idx = decider(0, labelled_leaves.size() - 1);
+        const auto idx = decider(0u, num_labelled_leaves - 1);
         const NodeDesc u = labelled_leaves[idx];
         std::cout << "adding ["<<min_degree<<":"<<max_degree<<"] --> "<<degree<<" leaves to "<<u<<'\n';
         mstd::quick_erase(labelled_leaves, idx);
-        for(size_t j = 0; j != degree; ++j) {
+        for(Degree j = 0u; j != degree; ++j) {
           const NodeDesc v = emplacer.create_node();
           emplacer.emplace_edge_raw(u, v);
           mstd::append(labelled_leaves, v);
@@ -398,7 +411,7 @@ namespace PT {
     }
   };
 
-  // the leaf-attaching tree builder repeatedly selects either an edge of a node to hang the next leaf from
+  // the leaf-attaching tree builder repeatedly selects either an edge or a node to hang the next leaf from
   template<StrictPhylogenyType Tree_, class Decider_, class DataExtracter_ = DataExtracter<void>>
   struct LeafAttachingTreeBuilder:
     public TreeBuilder<Tree_, Decider_, DataExtracter_>
@@ -417,25 +430,37 @@ namespace PT {
 
     INHERIT_ALL_CONSTRUCTORS(LeafAttachingTreeBuilder,Parent);
 
+    // helper function that adds a leaf, to be called with unlabelled and labelled leaves
+    template<class... Args>
+    void add_leaf_to(Index& num_leaves_to_go, Index& total_num_leaves, auto& leaves, Args&&... args) {
+      if(num_leaves_to_go > 0) {
+        append(leaves, add_leaf(total_num_leaves, std::forward<Args>(args)...));
+        --num_leaves_to_go;
+        --total_num_leaves;
+      }
+    }
+
+
     // Another method to build trees is to repeatedly subdivide edges and hanging a number of leaves from the new node
     void build_phylogeny(Index num_unlabelled_leaves) {
       assert(num_unlabelled_leaves < target_nums.num_leaves);
-      Index num_labelled_leaves = target_nums.num_leaves - num_unlabelled_leaves;
+      Index num_leaves_missing = target_nums.num_leaves;
+      Index num_labelled_leaves = num_leaves_missing - num_unlabelled_leaves;
       NodePairVec edges;
       NodeVec may_receive_more_children;
-      const NodeDesc root = emplacer.create_root();
-      const NodeDesc x = emplacer.create_node();
-      emplacer.emplace_edge_raw(root, x);
-      append(edges, root, x);
-      append(may_receive_more_children, root);
-      append(labelled_leaves, x);
 
+      // create the root
+      const NodeDesc root = emplacer.create_root();
+      append(may_receive_more_children, root);
+
+      // repeatedly hang leaves from nodes and edges
       IndexPair last_idx{0,0};
-      while(num_unlabelled_leaves + num_labelled_leaves > 0) {
-        // for fairness in the distribution, we should switch between labelled and unlabelled leaves
-        add_leaf(num_labelled_leaves, labelled_leaves, may_receive_more_children, edges);
+      while(num_leaves_missing > 0) {
+        // for fairness in the distribution, we switch between labelled and unlabelled leaves
+        // NOTE: we're not storing the last idx for labelled leaves, since there is no symmetry with the labels
+        add_leaf_to(num_labelled_leaves, num_leaves_missing, labelled_leaves, may_receive_more_children, edges);
         // track the last idx of selected edges for unlabelled leaves to break symmetry
-        add_leaf(num_unlabelled_leaves, unlabelled_leaves, may_receive_more_children, edges, last_idx);
+        add_leaf_to(num_unlabelled_leaves, num_leaves_missing, unlabelled_leaves, may_receive_more_children, edges, last_idx);
       }
     }
   };
@@ -447,18 +472,21 @@ namespace PT {
   //        in short, a network is reduced if its "funnels" (out-deg = 1) are contracted down
   // NOTE: in particular, the networks may have nodes with high in-degree ("hubs"), representing a chain of reticulations with a tree-node below
   // NOTE: all networks with the same reduction display the same sets of trees, so they are 'equivalent' in that regard
-  template<class TreeBuilder_>
+  template<StrictPhylogenyType Network_, class Decider_, class DataExtracter_ = DataExtracter<void>>
   struct ReducedNetworkBuilder:
-    public TreeBuilder_
+    public TreeBuilder<Network_, Decider_, DataExtracter_>
   {
     // ------- static stuff --------
-    using Parent = TreeBuilder<Tree_, Decider_, DataExtracter_>; 
-    using typename Parent::LeafSet;
+    using Parent = TreeBuilder<Network_, Decider_, DataExtracter_>;
+    using typename Parent::Index;
+    using typename Parent::Network;
+    using Parent::emplacer;
+    using Parent::decider;
     using Parent::target_nums;
     using Parent::N;
 
     // ------- construction --------
-    INHERIT_ALL_CONSTRUCTORS(TopDownTreeBuilder,Parent);
+    INHERIT_ALL_CONSTRUCTORS(ReducedNetworkBuilder, Parent);
    
     // ------- operators --------
     // ------- methods: initialization --------
@@ -475,7 +503,7 @@ namespace PT {
         for(const NodeDesc u: unlabelled_leaves) {
           const NodeSet u_ancestors(N->nodes_above(u));
           assert(receivers.size() > u_ancestors.size());
-          Index index = decider(0, receivers.size() - u_ancestors.size() - 1);
+          Index index = decider(size_t{0u}, receivers.size() - u_ancestors.size() - 1);
           // skip ancestors
           NodeDesc target = NoNode;
           for(Index i = 0;; ++i) {
@@ -486,14 +514,14 @@ namespace PT {
           }
           assert(Network::in_degree(u) == 1);
           emplacer.emplace_edge_raw(Network::parent(u), target);
-          N->delete_node(u);
+          N->remove_node(u);
         }
       }
     }
 
     auto build_phylogeny() {
       // step 1: create a tree with sufficient unlabelled leaves
-      Parent::build_tree(num.reticulation_number);
+      Parent::build_tree(target_nums.reti_number);
       fuse_unlabelled_leaves(Parent::unlabelled_leaves);
       return *N;
     }
@@ -506,15 +534,18 @@ namespace PT {
   //        in short, a network is reduced if its "funnels" (out-deg = 1) are contracted down
   // NOTE: in particular, the networks may have nodes with high in-degree ("hubs"), representing a chain of reticulations with a tree-node below
   // NOTE: all networks with the same reduction display the same sets of trees, so they are 'equivalent' in that regard
-  template<class TreeBuilder_>
+  template<StrictPhylogenyType Network_, class Decider_, class DataExtracter_ = DataExtracter<void>>
   struct TreeBasedNetworkBuilder:
-    public ReducedNetworkBuilder
+    public ReducedNetworkBuilder<Network_, Decider_, DataExtracter_>
   {
     // ------- static stuff --------
-    using Parent = ReducedNetworkBuilder<TreeBuilder>;
-    using typename Parent::LeafSet;
+    using Parent = ReducedNetworkBuilder<Network_, Decider_, DataExtracter_>;
+    using typename Parent::Index;
+    using typename Parent::IndexPair;
+    using typename Parent::Network;
     using Parent::target_nums;
     using Parent::N;
+    using Parent::add_leaf;
 
     // ------- construction --------
     INHERIT_ALL_CONSTRUCTORS(TreeBasedNetworkBuilder,Parent);
@@ -524,12 +555,11 @@ namespace PT {
     // ------- methods: query --------
     // ------- methods: modification --------
 
-    //! add a number of random edges to a given network, introducing new_tree_nodes new tree nodes and new_reticulations new reticulations
+    //! add a number of random edges to a given network, introducing new_tree_nodes new tree nodes (and num_edges new reticulations)
     //NOTE: this may result in a non-binary network
     //NOTE: if N is a tree, new_reticulations may not be zero, but new_tree_nodes may be zero (in this case, we're re-using existing tree nodes)
     //NOTE: if new_tree_nodes == new_reticulations == num_edges, then no old node will be incident with a new edge (old nodes maintain their degrees)
     //NOTE: we'll just add some unlabelled leaves to edges/nodes and then fuse them using the parent's fuser
-    template<StrictPhylogenyType Net, EdgeEmplacerType Emplacer>
     void add_random_edges(Index num_edges, Index new_tree_nodes) {
       if(num_edges > 0){
         if(N->num_edges() < 2)
@@ -555,11 +585,14 @@ namespace PT {
 
         IndexPair last_idx{0,0};
         while(num_edges > 0) {
-          add_leaf(num_edges, unlabelled_leaves, may_receive_more_children, edges, last_idx);
+          append(unlabelled_leaves, add_leaf(num_edges, may_receive_more_children, edges, last_idx));
         }
         Parent::fuse_unlabelled_leaves(unlabelled_leaves);
       }
     }
+
+    // NOTE: if we don't specify the number of new tree-nodes, then each new edge will also add a new tree-node
+    void add_random_edges(Index num_edges) { return add_random_edges(num_edges, num_edges); }
   };
 
 

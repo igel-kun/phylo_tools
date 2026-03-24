@@ -694,10 +694,15 @@ namespace PT {
       subdivide_edge(uv.tail(), std::forward<Edge_>(uv).head(), std::forward<Args>(args)...);
     }
 
+    template<AdjPairType Edge_, class... Args>
+    void subdivide_edge(Edge_&& uv, Args&&... args) {
+      subdivide_edge(uv.first, std::forward<Edge_>(uv).second, std::forward<Args>(args)...);
+    }
+
     // subdivide an edge, creating a new node
     // NOTE: if a NodeFunctionType or a DataExtracterType is passed, then we try to initialize the node data with it
     //       if DataMaker is invocable with 2 Adjacencies, then we use it to set the edge data
-    template<EdgeType Edge_, class DataMaker = bool> requires (not AdjacencyType<DataMaker>)
+    template<class Edge_, class DataMaker = bool> requires ((EdgeType<Edge> or AdjPairType<Edge>) and not AdjacencyType<DataMaker>)
     void subdivide_edge(Edge_&& uv, DataMaker&& data_maker = DataMaker()) {
       if constexpr (DataExtracterType<DataMaker> or NodeFunctionType<DataMaker>)
         subdivide_edge(std::forward<Edge_>(uv), create_node(data_maker), data_maker);
@@ -709,7 +714,7 @@ namespace PT {
     // contract a node v onto its unique parent u
     // NOTE: return the number of children of v that were already children of the parent of v
     // NOTE: v will be deleted!
-    // NOTE: set uniqueness to something other than UniquenessBy::ignore in order to prevent double-edges
+    // NOTE: set uniqueness to UniquenessBy::ignore in order to allow double-edges
     template<UniquenessBy uniqueness = UniquenessBy::abort, AdjacencyType Adj, class... DataArgs>
     size_t contract_up(const NodeDesc v, const Adj& u_adj, DataArgs&&... data) {
       assert(in_degree(v) == 1);
@@ -721,15 +726,17 @@ namespace PT {
       return result;
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, class... DataArgs>
-    size_t contract_up(const NodeDesc v, DataArgs&&... data) {
-      assert(in_degree(v) == 1);
-      return contract_up<uniqueness>(v, Parent::any_parent(v), std::forward<DataArgs>(data)...);
+    template<UniquenessBy uniqueness = UniquenessBy::abort, class First, class... DataArgs> requires (not AdjacencyType<First>)
+    size_t contract_up(const NodeDesc v, First&& first, DataArgs&&... data) {
+      return contract_up<uniqueness>(v, Parent::any_parent(v), std::forward<First>(first), std::forward<DataArgs>(data)...);
     }
+
+    template<UniquenessBy uniqueness = UniquenessBy::abort>
+    size_t contract_up(const NodeDesc v) { return contract_up<uniqueness>(v, Parent::any_parent(v)); }
+
 
     template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class... DataArgs>
     size_t contract_up(const Edge_& uv, DataArgs&&... data) {
-      assert(in_degree(uv.head()) == 1);
       return contract_up<uniqueness>(uv.head(), uv.tail(), std::forward<DataArgs>(data)...);
     }
     template<class... Args>
@@ -765,15 +772,15 @@ namespace PT {
       return result;
     }
 
-    template<UniquenessBy uniqueness = UniquenessBy::abort, class... DataArgs>
-    size_t contract_down(const NodeDesc u, DataArgs&&... data) {
-      assert(out_degree(u) == 1);
-      return contract_down<uniqueness>(u, Parent::any_child(u), std::forward<DataArgs>(data)...);
+    template<UniquenessBy uniqueness = UniquenessBy::abort, class First, class... DataArgs> requires (not AdjacencyType<First>)
+    size_t contract_down(const NodeDesc u, First&& first, DataArgs&&... data) {
+      return contract_down<uniqueness>(u, Parent::any_child(u), std::forward<First>(first), std::forward<DataArgs>(data)...);
     }
+    template<UniquenessBy uniqueness = UniquenessBy::abort>
+    size_t contract_down(const NodeDesc u) { return contract_down<uniqueness>(u, Parent::any_child(u)); }
 
     template<UniquenessBy uniqueness = UniquenessBy::abort, EdgeType Edge_, class... DataArgs>
     size_t contract_down(const Edge_& uv, DataArgs&&... data) {
-      assert(out_degree(uv.tail()) == 1);
       return contract_down<uniqueness>(uv.tail(), uv.head(), std::forward<DataArgs>(data)...);
     }
     template<class... Args>
@@ -812,9 +819,10 @@ namespace PT {
         remove_edge_no_cleanup(v, mstd::front(v_children));
       // step 2: remove incoming arcs of v
       const auto& v_parents = v_node.parents();
-      if(!v_parents.empty()){
-        while(!v_parents.empty())
+      if(not v_parents.empty()){
+        do {
           remove_edge_no_cleanup(mstd::front(v_parents), v);
+        } while(not v_parents.empty());
       } else _roots.erase(v);
       // step 3: free storage
       delete_node(v);
