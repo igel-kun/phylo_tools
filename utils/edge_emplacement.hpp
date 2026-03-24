@@ -370,8 +370,8 @@ namespace PT {
     template<class... Args>
     NodeDesc create_node(Args&&... args) {
       if constexpr (extract_node_label) {
-        static_assert(TargetPhylo::has_node_label);
-        if(std::is_invocable_v<Extracter, Ex_node_label, Args&...>) {
+        static_assert(TargetPhylo::has_node_labels);
+        if constexpr (std::is_invocable_v<Extracter, Ex_node_label, Args&&...>) {
           DEBUG6(std::cout << "creating node-label with argument-extracted label\n");
           return create_node_with_label(data_extracter(Ex_node_label{}, args...), std::forward<Args>(args)...);
         } else {
@@ -401,14 +401,8 @@ namespace PT {
       const auto [u_iter, u_success] = helper.register_node(other_u);
       NodeDesc& u_copy = u_iter->second;
       if(u_success) {
-        if constexpr (extract_node_data) {
-          u_copy = create_node(other_u, std::forward<Args>(args)...);
-        } else u_copy = create_node(std::forward<Args>(args)...);
+        u_copy = create_node(other_u, std::forward<Args>(args)...);
         DEBUG4(std::cout << "created copy " << u_copy << " of "<< other_u<<"\n");
-        // copy label from the source 
-        if constexpr (extract_node_label) {
-          set_label(u_copy, data_extracter(Ex_node_label{}, other_u));
-        }
       }
       return u_copy;
     }
@@ -436,7 +430,7 @@ namespace PT {
     }
 
     template<EdgeType Edge, class... MoreArgs>
-    auto emplace_edge_traslated(Edge&& uv, MoreArgs&&... args) {
+    auto emplace_edge_translated(Edge&& uv, MoreArgs&&... args) {
       if constexpr (extract_edge_data)
         return emplace_edge_translated(uv.as_pair(), std::forward<Edge>(uv), std::forward<MoreArgs>(args)...);
       else

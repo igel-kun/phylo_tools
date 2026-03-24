@@ -98,9 +98,9 @@ namespace PT {
 
     [[ no_unique_address ]] ExtractNodeLabel get_node_label;
 
-    template<class... Args>
+    template<class... Args> requires std::is_invocable_v<ExtractNodeLabel, Args&&...>
     decltype(auto) operator()(const Ex_node_label, Args&&... args) { return get_node_label(std::forward<Args>(args)...); }
-    template<class... Args>
+    template<class... Args> requires std::is_invocable_v<ExtractNodeLabel, Args&&...>
     decltype(auto) operator()(const Ex_node_label, Args&&... args) const { return get_node_label(std::forward<Args>(args)...); }
 
     DataExtracter_nl_() = default;
@@ -264,9 +264,9 @@ namespace PT {
     
     [[ no_unique_address ]] ExtractNodeData get_node_data;
 
-    template<class... Args>
+    template<class... Args> requires std::is_invocable_v<ExtractNodeData, Args&&...>
     decltype(auto) operator()(const Ex_node_data, Args&&... args) { return get_node_data(std::forward<Args>(args)...); }
-    template<class... Args>
+    template<class... Args> requires std::is_invocable_v<ExtractNodeData, Args&&...>
     decltype(auto) operator()(const Ex_node_data, Args&&... args) const { return get_node_data(std::forward<Args>(args)...); }
 
     DataExtracter_() = default;

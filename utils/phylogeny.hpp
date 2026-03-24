@@ -1478,12 +1478,17 @@ namespace PT {
 
 
     // =================== i/o ======================
+    std::string get_summary() const {
+      std::ostringstream out;
+      out << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots --> reticulation number: " << 1u + num_edges() - _num_nodes << '\n';
+      out << "leaves: "<<leaves()<<"\n";
+      out << Parent::num_nodes() << " nodes: "<<nodes()<<'\n';
+      out << Parent::num_edges() << " edges: "<<edges()<<'\n';
+      return std::move(out).str();
+    }
 
     std::ostream& print_summary(std::ostream& os) const {
-      DEBUG3(os << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots\n");
-      DEBUG3(os << "leaves: "<<leaves()<<"\n");
-      DEBUG3(os << Parent::num_nodes() << " nodes: "<<nodes()<<'\n');
-      DEBUG3(os << Parent::num_edges() << " edges: "<<edges()<<'\n');
+      DEBUG3(os << get_summary() << '\n');
       for(const NodeDesc u: nodes())
         os << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
       return os << "End Summary\n";

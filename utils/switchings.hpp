@@ -25,11 +25,35 @@ namespace PT {
     bool is_switched_on(const NodeDesc x, const NodeDesc y) const { return not is_switched_off(x, y); }
     bool is_switched_on(const auto& uv) const { return not is_switched_off(uv.first, uv.second); }
 
+    // a parent selector that just selects the first parent; this is the default
+    struct AnyParent {
+      auto operator()(const NodeDesc r) const { return Net::parents(r).begin(); }
+    };
+    // in order to construct a tree from the switching, we use an Out-class that feeds the edges directly into an emplacer
+    // NOTE: we benefit from append() calling operator() when the first argument is a functor
+    template<EdgeEmplacerType Emplacer>
+    struct TreeConstructor:
+      public Emplacer 
+    {
+      using Edge = typename Net::Edge;
+
+      INHERIT_ALL_CONSTRUCTORS(TreeConstructor, Emplacer);
+      INHERIT_ASSIGNMENT(TreeConstructor, Emplacer);
+
+      template<AdjacencyType Adj>
+      void operator()(reverse_edge_tag, const NodeDesc u, Adj&& u_parent) {
+        Emplacer::emplace_edge_translated(Edge{reverse_edge_tag{}, u, std::forward<Adj>(u_parent)});
+      }
+
+    };
+    template<StrictPhylogenyType Tree>
+    using DefaultTreeConstructor = TreeConstructor<DefaultEdgeEmplacer<Tree, true, Net>>;
+
+
     // NOTE: the active_edges are guaranteed in post-order of the switching (the tree containing all switched-on edges)
-    template<class Out = NetEdgeVec<Net>, class SWMaybeConst, NodeIterableType Nodes, class ParentSelector>
+    template<class Out, class SWMaybeConst, NodeIterableType Nodes, class ParentSelector>
       requires mstd::is_same_v<SWMaybeConst, Switching>
-    static Out _get_active_edges(SWMaybeConst& sw, Nodes&& leaves, ParentSelector&& parent_select) {
-      Out out;
+    static void _fill_active_edges(Out& out, SWMaybeConst& sw, Nodes&& leaves, ParentSelector&& parent_select) {
       NodeSet seen;
       if constexpr (mstd::is_iterable_with_size<Nodes>)
         seen.reserve(2*leaves.size());
@@ -39,6 +63,7 @@ namespace PT {
         while(append(seen, v).second and LIKELY(Net::in_degree(v) > 0)) {          
           ParentIter vp;
           if(Net::in_degree(v) > 1) {
+            // if the switching is not const, then we register *vp as active parent of v in the switching sw
             if constexpr (not std::is_const_v<SWMaybeConst>) {
               const auto [iter, success] = sw.active_parent.try_emplace(v);
               if(success) {
@@ -48,28 +73,38 @@ namespace PT {
             } else vp = sw.active_parent.at(v);
           } else vp = Net::parents(v).begin();
           // move along the current ParentIter, filling out
-          if constexpr (mstd::AppendableR<Out, mstd::TR_RefOK, NodeDesc, decltype(*vp)>) {
+          if constexpr (mstd::AppendableR<Out, mstd::TR_RefOK, reverse_edge_tag, NodeDesc, decltype(*vp)>) {
             append(out, reverse_edge_tag{}, v, *vp);
           } else append(out, *vp);
           v = *vp;
         }
       }
+    }
+    template<class Out = NetEdgeVec<Net>, class SWMaybeConst, NodeIterableType Nodes, class ParentSelector = AnyParent>
+      requires mstd::is_same_v<SWMaybeConst, Switching>
+    static Out _get_active_edges(SWMaybeConst& sw, Nodes&& leaves, ParentSelector&& parent_select) {
+      Out out;
+      _fill_active_edges<Out>(out, sw, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
       return out;
     }
-    template<class Out = NetEdgeVec<Net>, NodeIterableType Nodes, class ParentSelector>
-    Out get_active_edges(Nodes&& leaves, ParentSelector&& parent_select) const {
-      return _get_active_edges(*this, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
+
+    template<class Out, NodeIterableType Nodes, class ParentSelector = AnyParent>
+    void fill_active_edges(Out&& out, Nodes&& leaves, ParentSelector&& parent_select = ParentSelector()) const {
+      _fill_active_edges(out, *this, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
     }
-    template<class Out = NetEdgeVec<Net>, NodeIterableType Nodes, class ParentSelector>
-    Out get_active_edges(Nodes&& leaves, ParentSelector&& parent_select) {
-      return _get_active_edges(*this, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
+    template<class Out, NodeIterableType Nodes, class ParentSelector = AnyParent>
+    void fill_active_edges(Out&& out, Nodes&& leaves, ParentSelector&& parent_select = ParentSelector()) {
+      _fill_active_edges(out, *this, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
     }
 
-    // by default, just select the first parent for each reticulation
-    template<class Out = NetEdgeVec<Net>, NodeIterableType Nodes>
-    Out get_active_edges(Nodes&& leaves) { return get_active_edges(std::forward<Nodes>(leaves), [](const NodeDesc r){ return Net::parents(r).begin(); }); }
-    template<class Out = NetEdgeVec<Net>, NodeIterableType Nodes>
-    Out get_active_edges(Nodes&& leaves) const { return get_active_edges(std::forward<Nodes>(leaves), [](const NodeDesc r){ return Net::parents(r).begin(); }); }
+    template<class Out = NetEdgeVec<Net>, NodeIterableType Nodes, class ParentSelector = AnyParent>
+    Out get_active_edges(Nodes&& leaves, ParentSelector&& parent_select = ParentSelector()) const {
+      return _get_active_edges(*this, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
+    }
+    template<class Out = NetEdgeVec<Net>, NodeIterableType Nodes, class ParentSelector = AnyParent>
+    Out get_active_edges(Nodes&& leaves, ParentSelector&& parent_select = ParentSelector()) {
+      return _get_active_edges(*this, std::forward<Nodes>(leaves), std::forward<ParentSelector>(parent_select));
+    }
 
     bool operator==(const Switching& other) { return active_parent == other.active_parent; }
   };
@@ -91,6 +126,7 @@ namespace PT {
   struct NetworkOf_<S> { using type = S::Net; };
 
   // --------------- iterators ---------------------
+#warning "TODO: I'm not happy with the switching iterator yet, in particular that we need to get the edges in order to advance the iterator (because we may have to refresh the reticulations)."
   template<StrictPhylogenyType Net, NodeContainerType<mstd::TR_PtrVoidOK> Leaves_ = void, mstd::VectorType OutputVec = NetEdgeVec<Net>>
   struct SwitchingIter:
     public mstd::iter_traits_from_reference<OutputVec>
