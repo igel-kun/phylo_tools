@@ -84,6 +84,7 @@ namespace PT {
     size_t num_nodes() const { return _num_nodes; }
 		size_t num_edges() const { return _num_edges; }
 		size_t num_roots() const { return _roots.size(); }
+    size_t reticulation_number() const { return num_roots() + num_edges() - num_nodes(); }
     bool is_forest() const { return _num_nodes == _num_edges + num_roots(); }
     bool is_tree() const { return is_forest() and (num_roots() <= 1); }
     NodeDesc root() const { return mstd::front(_roots); }
@@ -156,6 +157,7 @@ namespace PT {
 		size_t num_nodes() const { return _num_nodes; }
 		size_t num_roots() const { return _roots.size(); }
 		size_t num_edges() const { return (_num_nodes == 0) ? 0 : _num_nodes - num_roots(); }
+    size_t reticulation_number() const { return 0; }
     NodeDesc root() const { return mstd::front(_roots); }
     const RootContainer& roots() const & { return _roots; }
     RootContainer&& roots() && { return std::move(_roots); }
@@ -221,6 +223,7 @@ namespace PT {
     using Parent::out_edges;
 		using Parent::num_edges;
     using Parent::num_roots;
+    using Parent::reticulation_number;;
 		using Parent::_num_nodes;
     using Parent::name;
     using Parent::label;
@@ -975,7 +978,7 @@ namespace PT {
     // --------------- node traversals (with pred) ------------------
     // NOTE: this cannot be static since we may need to grab the _roots of the current network
     template<TraversalType o = preorder, NodePredicateType Predicate>
-    auto nodes_with(Predicate&& pred) { return mstd::make_filtered_factory(nodes<o>().begin(), std::forward<Predicate>(pred)); }
+    auto nodes_with(Predicate&& pred) const { return mstd::make_filtered_factory(nodes<o>().begin(), std::forward<Predicate>(pred)); }
 
     template<TraversalType o = preorder, NodePredicateType Predicate, class First, class... Args> requires (not DirectionTag<First>)
     auto nodes_with(Predicate&& pred, First&& first, Args&&... args) const {
@@ -1157,19 +1160,24 @@ namespace PT {
           for(const NodeDesc u: children(start))
             if(cyclic_below(u, current_path, seen)) return true;
         erase(current_path, start);
-      } else return true; // if we've reached someone on our current path, then we have found a cycle :(
+      } else return true; // if we've reached someone on our current path, then we have found a cycle :/
       return false;
     }
   public:
     //! for sanity checks: test if there is a directed cycle in the data structure (more useful for networks, but definable for trees too)
-    bool has_cycle() const {
-      if(!empty()) {
-        NodeSet current_path, seen;
-        for(const NodeDesc r: _roots)
-          if(cyclic_below(r, current_path, seen)) return true;
+    //NOTE: we will return the SET of nodes on the cycle
+    NodeSet get_cycle() const {
+      NodeSet current_path;
+      if(not empty()) {
+        NodeSet seen;
+        for(const NodeDesc r: _roots) {
+          current_path.clear();
+          if(cyclic_below(r, current_path, seen)) break;
+        }
       }
-      return false;
+      return current_path;
     }
+    bool has_cycle() const { return not get_cycle().empty(); }
 
     // return whether y and z are have a common parent, or are the same node
     static bool are_siblings(const NodeDesc y, const NodeDesc z) {
@@ -1332,14 +1340,52 @@ namespace PT {
 
 
     // initialize tree from any std::IterableType containing edges, for example, std::vector<PT::Edge<>>
-    template<mstd::IterableType Edges, class... EmplacerArgs> requires (not PhylogenyType<Edges>)
-    explicit Phylogeny(Edges&& edges, EmplacerArgs&&... args) {
+    template<mstd::IterableType Edges, DataExtracterType Extracter_, MapsToNode OldToNewTranslation_, class... Args> 
+      requires (not PhylogenyType<Edges>)
+    explicit Phylogeny(Edges&& edges, Extracter_&& extract_data, OldToNewTranslation_&& old_to_new, Args&&... args) {
+      // if OldToNewTranslation is const, then remove both const and ref from it for the helper
+      using OldToNewTranslation = std::conditional_t<std::is_const_v<OldToNewTranslation_>, std::remove_cvref_t<OldToNewTranslation_>, OldToNewTranslation_>;
+      using Helper = EdgeEmplacementHelper<Phylogeny, true, OldToNewTranslation>;
+      using Extracter = std::remove_cvref_t<Extracter_>;
+        
+      build_from_edges(std::forward<Edges>(edges),
+          EdgeEmplacer<Helper, Extracter>{
+            std::forward<Extracter_>(extract_data),
+            *this,
+            std::forward<OldToNewTranslation_>(old_to_new),
+            std::forward<Args>(args)...
+          }
+        );
+      DEBUG3(print_summary(std::cout));
+    }
+    // if the user doesn't need access to the node-translation, then use a temporary one
+    template<mstd::IterableType Edges, DataExtracterType Extracter, class First, class... Args> 
+      requires (not PhylogenyType<Edges> and not MapsToNode<First>)
+    explicit Phylogeny(Edges&& edges, Extracter&& extract_data, First&& first, Args&&... args):
+      Phylogeny(std::forward<Edges>(edges), std::forward<Extracter>(extract_data), NodeTranslation{}, std::forward<First>(first), std::forward<Args>(args)...)
+    {}
+    template<mstd::IterableType Edges, DataExtracterType Extracter>
+      requires (not PhylogenyType<Edges>)
+    explicit Phylogeny(Edges&& edges, Extracter&& extract_data):
+      Phylogeny(std::forward<Edges>(edges), std::forward<Extracter>(extract_data), NodeTranslation{})
+    {}
+
+    // if the user didn't give an extracter, then try to guess the source phylogeny from the edges
+    // NOTE: node-data and labels will be lost since we have no chance of guessing that from the edges
+    template<mstd::IterableType Edges, class First, class... EmplacerArgs>
+      requires (not PhylogenyType<Edges> and not DataExtracterType<First>)
+    explicit Phylogeny(Edges&& edges, First&& first, EmplacerArgs&&... args) {
       using GivenEdge = mstd::value_type_of_t<Edges>;
       using SourcePhyloFromEdgeData = Phylogeny<PredStorage_, SuccStorage_, void, DataOf<GivenEdge>>;
         
-      build_from_edges(std::forward<Edges>(edges), EdgeEmplacers<true, SourcePhyloFromEdgeData>::make_emplacer(*this, std::forward<EmplacerArgs>(args)...));
+      build_from_edges(std::forward<Edges>(edges),
+          EdgeEmplacers<true, SourcePhyloFromEdgeData>::make_emplacer(*this, std::forward<First>(first), std::forward<EmplacerArgs>(args)...));
       DEBUG3(print_summary(std::cout));
     }
+    template<mstd::IterableType Edges> requires (not PhylogenyType<Edges>)
+    explicit Phylogeny(Edges&& edges):
+      Phylogeny(std::forward<Edges>(edges), NodeTranslation{})
+    {}
 
     // NOTE: construction from another (sub-)phylogeny largely depends on the data policy:
     // 1. "copy" (default)      - creates new nodes, copying/moving the data from the other nodes
@@ -1480,7 +1526,7 @@ namespace PT {
     // =================== i/o ======================
     std::string get_summary() const {
       std::ostringstream out;
-      out << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots --> reticulation number: " << 1u + num_edges() - _num_nodes << '\n';
+      out << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots --> reticulation number: " << reticulation_number() << '\n';
       out << "leaves: "<<leaves()<<"\n";
       out << Parent::num_nodes() << " nodes: "<<nodes()<<'\n';
       out << Parent::num_edges() << " edges: "<<edges()<<'\n';

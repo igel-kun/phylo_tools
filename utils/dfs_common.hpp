@@ -34,7 +34,8 @@ namespace PT {
   constexpr bool is_reverse_traversal(const TraversalType tt) { return tt & reverse_traversal; }
   constexpr bool is_node_traversal(const TraversalType tt) { return not (is_edge_traversal(tt)) and (not is_all_edge_traversal(tt)); }
 
-  constexpr auto& spell_out_traversal(const TraversalType tt, auto& os) {
+  auto spell_out_traversal(const TraversalType tt) {
+    std::ostringstream os;
     if(tt & reverse_traversal) os << "reverse ";
     if(tt & edge_traversal) os << "edge ";
     if(tt & all_edge_traversal) os << "all-edge ";
@@ -45,7 +46,7 @@ namespace PT {
     if(tt & preorder) os << "preorder ";
     if(tt & postorder) os << "postorder ";
     if(tt & inorder) os << "inorder ";
-    return os;
+    return std::move(os).str();
   }
 
 

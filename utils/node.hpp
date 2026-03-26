@@ -49,7 +49,7 @@ namespace PT{
     static constexpr StorageEnum PredStorage = PredStorage_;
     static constexpr bool is_defined_tree_node = (PredStorage == singleS);
     static constexpr bool has_edge_data = has_data<Adjacency>;
-    static constexpr bool unique_edges = unique_elements<PredStorage> && unique_elements<SuccStorage>;
+    static constexpr bool unique_edges = unique_elements<PredStorage> and unique_elements<SuccStorage>;
 
     using SuccContainer = StorageClass<SuccStorage, Adjacency>;
     using PredContainer = StorageClass<PredStorage, Adjacency>;
@@ -115,9 +115,9 @@ namespace PT{
     bool is_tree_node() const { if constexpr(is_defined_tree_node) return true; else return in_degree() < 2; }
     bool is_reti() const { return not is_tree_node(); }
     bool is_leaf() const { return successors().empty(); }
-    bool is_suppressible() const { return (in_degree() == 1) && (out_degree() == 1); }
+    bool is_suppressible() const { return (in_degree() == 1) and (out_degree() == 1); }
     bool is_inner_node() const { return !successors().empty(); }
-    bool is_isolated() const { return predecessors().empty() && successors().empty(); }
+    bool is_isolated() const { return predecessors().empty() and successors().empty(); }
     NodeTypeEnum type_of() const {
       switch(in_degree()) {
         case 2: return NODE_TYPE_INTERNAL_RETI;

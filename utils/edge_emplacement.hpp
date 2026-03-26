@@ -82,7 +82,7 @@ namespace PT {
 
     template<MapsToNode<mstd::TR_ConstRefPtrOK> OldToNew>
       requires (not std::is_void_v<OldToNewTranslation>)
-    EdgeEmplacementHelper(TargetPhylo& N_, EmplacerOptions opts, OldToNew&& old_to_new):
+    EdgeEmplacementHelper(TargetPhylo& N_, OldToNew&& old_to_new, EmplacerOptions opts):
       Parent(std::forward<OldToNew>(old_to_new)),
       N{&N_},
       options{opts}
@@ -91,7 +91,7 @@ namespace PT {
     template<MapsToNode<mstd::TR_ConstRefPtrOK> OldToNew>
       requires (not std::is_void_v<OldToNewTranslation>)
     EdgeEmplacementHelper(TargetPhylo& N_, OldToNew&& old_to_new):
-      EdgeEmplacementHelper(N_, EmplacerOptions{}, std::forward<OldToNew>(old_to_new))
+      EdgeEmplacementHelper(N_, std::forward<OldToNew>(old_to_new), EmplacerOptions{})
     {}
 
     EdgeEmplacementHelper(TargetPhylo& N_, EmplacerOptions opts):
@@ -488,10 +488,11 @@ namespace PT {
   // ... = data extracter functions as specified in <extract_data.hpp>
   template<bool track_roots, OptionalPhylogenyType SourcePhylo = void>
   struct EdgeEmplacers {
-    template<StrictPhylogenyType TargetPhylo, MapsToNode OldToNewTranslation, class... Args>
-    static auto make_emplacer(TargetPhylo& N, OldToNewTranslation&& old_to_new, Args&&... args) {
+    template<StrictPhylogenyType TargetPhylo, MapsToNode OldToNewTranslation_, class... Args>
+    static auto make_emplacer(TargetPhylo& N, OldToNewTranslation_&& old_to_new, Args&&... args) {
       // note that 'OldToNewTranslation' is an lvalue if old_to_new is an rvalue-ref and and lvalue-ref if old_to_new is an lvalue-ref...
       // thus, if an existing translation is passed, the helper will contain a reference to this translation, otherwise the helper has its own translation
+      using OldToNewTranslation = std::conditional_t<std::is_const_v<OldToNewTranslation_>, std::remove_cvref_t<OldToNewTranslation_>, OldToNewTranslation_>;
       using Helper = EdgeEmplacementHelper<TargetPhylo, track_roots, OldToNewTranslation>;
       using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<Args>(args)...));
       return EdgeEmplacer<Helper, Extracter>(
@@ -510,14 +511,14 @@ namespace PT {
           std::forward<Args>(args)...);
     }
 
-    template<StrictPhylogenyType TargetPhylo, class T, class... Args>
-      requires (not MapsToNode<T> and not EmplacementHelperType<T>)
-    static auto make_emplacer(TargetPhylo& N, T&& t, Args&&... args) {
+    template<StrictPhylogenyType TargetPhylo, class First, class... Args>
+      requires (not MapsToNode<First> and not EmplacementHelperType<First>)
+    static auto make_emplacer(TargetPhylo& N, First&& first, Args&&... args) {
       using Helper = EdgeEmplacementHelper<TargetPhylo, track_roots, NodeTranslation>;
-      using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<T>(t), std::forward<Args>(args)...));
+      using Extracter = decltype(make_data_extracter<SourcePhylo>(std::forward<First>(first), std::forward<Args>(args)...));
       return EdgeEmplacer<Helper, Extracter>(
           Helper{N},
-          std::forward<T>(t), std::forward<Args>(args)...);
+          std::forward<First>(first), std::forward<Args>(args)...);
     }
     template<StrictPhylogenyType TargetPhylo>
     static auto make_emplacer(TargetPhylo& N) {

@@ -18,9 +18,9 @@ namespace mstd {
     bool empty() const { return begin() == end(); }
     size_t size() const { return std::distance(begin(), end()); }
 
-    auto begin() const & { return get_iter(); }
-    auto begin() & { return get_iter(); }
-    auto begin() && { return get_iter(); }
+    Iterator begin() const & { return get_iter(); }
+    Iterator begin() & { return get_iter(); }
+    Iterator begin() && { return get_iter(); }
     auto end() const & { return get_end(); }
     auto end() & { return get_end(); }
     auto end() && { return get_end(); }

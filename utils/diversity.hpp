@@ -9,7 +9,7 @@
 
 #include "types.hpp"
 #include "subsets.hpp"
-#include "switchings.hpp"
+#include "switching_iter.hpp"
 #include "diversity_avg_tree.hpp"
 
 #ifdef DFSCORO

@@ -8,7 +8,8 @@
 //#include "utils/tc_preprocess.hpp" // preprocessing
 
 #include "utils/containment.hpp"
-#include "utils/switchings.hpp"
+#include "utils/switching_iter.hpp"
+#include "utils/isomorphism.hpp"
 
 using namespace PT;
 using namespace std::literals;
@@ -113,22 +114,45 @@ int main(const int argc, const char** argv) {
 
   const MyNet N = read_network<MyNet>(std::ifstream{options[""][0]});
 
+  const NodeSet cycle = N.get_cycle();
+  if(not cycle.empty()) cfail("Network contains a cycle on NodeSet " + std::to_string(cycle));
+
   if(mstd::test(options, "-v"))
     std::cout << "N:\n" << N << '\n' << get_extended_newick(N) << '\n' << N.get_summary();
 
   if(mstd::test(options, "-s")) {
     // list all switchings of N
-    using Switchings = SwitchingFactory<MyNet, NodeVec>;
-    using Switching = PT::Switching<MyNet>;
-    using TreeConstructor = typename Switching::DefaultTreeConstructor<MyTree>;
-
-    MyTree T;
-    const NodeVec leaves = N.leaves().to_container();
-    for(auto sw_iter = Switchings{leaves}.begin(); sw_iter.is_valid(); ++sw_iter) {
-      sw_iter.get_switching().fill_active_edges(TreeConstructor{T}, leaves);
+    using Switchings = SwitchingFactory<MyNet>;
+    for(auto sw: Switchings{N}) {
+      auto traversal = N.edges_below(N.roots(), sw); // TODO: turn this into a pre-order to cause less confusion for the poor edge-emplacer juggling the root
+      const MyTree T(traversal, DefaultDataExtracter<MyNet>{});
       std::cout << get_extended_newick(T) << '\n';
     }
   } else if(mstd::test(options, "-t")) {
+    using Switchings = SwitchingFactory<MyNet>;
+
+    // we'll store all previous trees in order to check isomorphism
+    std::vector<MyTree> previous_trees;
+    previous_trees.reserve(1 << N.reticulation_number());
+
+    const NodeVec leaves = N.leaves().to_container();
+    for(auto sw: Switchings{N}) {
+      auto traversal = N.edges_above(leaves, sw);
+      append(previous_trees, traversal, DefaultDataExtracter<MyNet>{});
+      MyTree& T = previous_trees.back();
+      NodeVec deg2 = T.nodes_with_preorder([](const NodeDesc x){ return MyTree::is_suppressible(x); }).to_container();
+      while(not deg2.empty())
+        T.contract_up(mstd::value_pop_back(deg2));
+      // check isomorphism
+      size_t i = previous_trees.size() - 1;
+      while(i > 0) {
+        --i;
+        IsomorphismMapper<MyTree, MyTree> M(previous_trees[i], T, FLAG_MAP_LEAF_LABELS);
+        if(M.check_isomorph()) break;
+      }
+#warning "TODO: check isomorphism against previous trees"
+      if(i == 0) std::cout << get_extended_newick(T) << '\n';
+    }
     // list all contained trees of N
   } else {
     const MyTree T = mstd::test(options, "-r") ? create_tree() :

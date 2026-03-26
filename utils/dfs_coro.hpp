@@ -201,17 +201,32 @@ namespace PT {
 
     bool top_is_invalid() const { return children.back().is_invalid(); }
 
-    auto& status(auto& os) const {
+    auto get_status() const {
+      std::ostringstream out;
+      out << "traversal type: " << spell_out_traversal(tt) << " with DFS-stack: " << stack_to_string() << "\n";
+      if(not children.empty()) {
+        if(children.size() > 1)
+          out << "tail on top: "<<tail_on_top();
+        if(children.back().is_valid()) {
+          out << " node on top: "<<node_on_top();
+          out << " edge on top: " << edge_on_top();
+        }
+      }
+      out << '\n';
+      return std::move(out).str();
+    }
+
+    auto stack_to_string() const {
+      std::ostringstream out;
       NodeDesc u = get_current_root();
-      os << "status: ";
       for(const auto& succ: children) {
         if(succ.is_valid()) {
           NodeDesc v = *succ;
-          os << (reverse ? NodePair{v, u} : NodePair{u, v}) << ' ';
+          out << (reverse ? NodePair{v, u} : NodePair{u, v}) << ' ';
           u = v;
-        } else os << "(inv) ";
+        } else out << "(inv) ";
       }
-      return os;
+      return std::move(out).str();
     }
 
     // some getters are necessary in order to construct non-owning iterators from owning iterators
@@ -227,13 +242,16 @@ namespace PT {
 
     // return a reason why we cannot visit the next node:
     //    0 = no reason, 1 = node is seen (or is not seen often enough if in DLS mode), 2 = node is forbidden, 3 = edge is forbidden
+    // NOTE: the order is important for the following: we first check if the next edge is forbidden, then if the next node is forbidden, then we check seen
     int may_not_visit_next() const {
+      DEBUG6(std::cout << "checking if we may visit the next node/edge\n");
       const NodeDesc x = node_on_top();
-      if(is_seen(x)) return 1;
+      if constexpr (has_forbidden_edges)
+        if(not children.empty()) // if we haven't put anyone on the stack yet, we're still going through the roots, so forbidden edges cannot occur here
+          if(is_forbidden(edge_on_top())) return 3;
       if constexpr (has_forbidden_nodes)
         if(is_forbidden(x)) return 2;
-      if constexpr (has_forbidden_edges)
-        if(is_forbidden(edge_on_top())) return 3;
+      if(is_seen(x)) return 1;
       return 0;
     }
     bool may_visit_next() const { return may_not_visit_next() == 0; }
@@ -284,7 +302,7 @@ resume_roots:
         }
         // step 2: go as deep as possible, yielding nodes/edges if in postorder
 descending_loop: // while(true) {
-          DEBUG6(status(std::cout) << '\n');
+          DEBUG6(std::cout << "\n------------------------------\nDFS STATUS: "<<get_status() << "----------------------------\n");
           // if the node_on_top has no more children, then take its adjacency iterator off the stack and go up to the parent
           if(top_is_invalid()) {
             // if we're in in-order mode and we are about to ascend, then output the parent iff we've had <2 successful children
@@ -308,9 +326,9 @@ resume_ascending:
               case 0: // we actually may visit node_on_top
                 if constexpr (is_preorder_traversal(tt)) return 3; // resume at &&resume_descending
                 goto resume_descending;
-              case 1: // node_on_top is seen
+              case 1: // node_on_top is seen, BUT NOT FORBIDDEN (since we check forbidden before checking seen)
                 if constexpr (is_all_edge_traversal(tt)) return 2; // resume at &&resume_descending_all_edge
-              default: break;
+              default: break; // node_on_top OR edge_on_top is forbidden
             }
           }
 resume_descending_all_edge:
@@ -339,7 +357,7 @@ resume_outer:
 
   public:
     void advance() {
-      DEBUG6(std::cout << "advancing a "; spell_out_traversal(tt, std::cout)<<'\n');
+      DEBUG6(std::cout << "advancing a " << spell_out_traversal(tt)<<'\n');
       resume_info.current_pos = iterate(resume_info.current_pos);
     }
 
@@ -361,7 +379,7 @@ resume_outer:
     void visit_next() {
       const NodeDesc x = node_on_top();
       children.emplace_back(get_adjacencies(x));
-      DEBUG6(std::cout << "adding children of "<<x<<" to the stack: "<<get_adjacencies(x) << "\n");
+      DEBUG6(std::cout << "adding children " << get_adjacencies(x) <<" of "<<x<<" to the stack: " << stack_to_string() << '\n');
     }
 
     // prepare to descent into a child node and return whether the parent should be output before
@@ -398,19 +416,20 @@ resume_outer:
     using IndirectRoots = std::conditional_t<Info::roots_indirect or std::is_same_v<Roots_, NodeDesc>, Roots_, std::add_pointer_t<const Roots_>>;
     using IndirectForbidden = std::conditional_t<Info::has_forbidden, std::add_pointer_t<const std::remove_pointer_t<Forbidden>>, void>;
     using IndirectSeen = std::conditional_t<Info::has_seen, std::add_pointer_t<std::remove_pointer_t<SeenSet>>, void>;
-    using NonOwningInfo = DFSInfo<IndirectRoots, IndirectForbidden, IndirectSeen>;
-    using NonOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, IndirectSeen>;
-    using CopiedOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, SeenSet_>;
     using OwningIter = Iter;
+    using CopiedOwningIter = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, SeenSet_>;
+    using NonOwningIter    = DFSIterator<tt, Network_, IndirectRoots, IndirectForbidden, IndirectSeen>;
 
     //Traversal() = default;
     INHERIT_ALL_CONSTRUCTORS(Traversal, Parent)
     INHERIT_ASSIGNMENT(Traversal, Parent)
 
     auto begin() const&  { return CopiedOwningIter(static_cast<const Iter&>(*this)); }
-    auto begin() & { return NonOwningIter(static_cast<Iter&>(*this)); }
+    auto begin() & { return CopiedOwningIter(static_cast<Iter&>(*this)); }
     auto begin() && { return OwningIter(static_cast<Iter&&>(*this)); }
 
+    // if you want to share the seen-set between the iterator and the traversal (why would someone want that?), then use this function
+    auto get_shared_iter() { return NonOwningIter(*this); }
   };
 
 #warning "TODO: make a 'robust traversal' with shared ownership of the seen- and forbidden set between the iterators and the traversal. Will need shared_ptr for that..."

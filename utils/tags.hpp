@@ -46,4 +46,11 @@ namespace PT {
 
   // extensions may be partial
   struct partial_extension_tag {};
+
+
+  // we allow construction from either roots or leaves, which can be determined by passing a tag
+  struct leaves_tag {};
+  struct roots_tag {};
+
+  template<class T> concept RootsOrLeavesTag = std::is_same_v<T, roots_tag> or std::is_same_v<T, leaves_tag>;
 }
