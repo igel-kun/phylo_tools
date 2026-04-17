@@ -500,7 +500,7 @@ namespace PT {
       const auto prob_of = [&](const auto& adj){ return Util::iprob(adj); };
       // we'll use the 'parent_select'-functor of the switching to select the most probable parent for each reticulation
       const auto most_probable_parent = [&](const NodeDesc r){ return std::ranges::max_element(Network::parents(r), std::ranges::less{}, prob_of); };
-      return Switching<Network>{}.get_active_edges(leaves, most_probable_parent);
+      return Switching<Network>(leaves_tag{}, leaves, most_probable_parent).get_active_edges();
 #endif
     }
     auto get_ML_switching(const Network& N) const { return get_ML_switching(N.leaves()); }

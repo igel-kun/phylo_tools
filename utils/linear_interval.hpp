@@ -240,7 +240,9 @@ namespace mstd {
   // ------- linear_interval: concepts ---------
   
   // ------- linear_interval: deduction guides ---------
-  
+  template<class T>
+  linear_interval(T, T) -> linear_interval<T>;
+
   // ------- linear_interval: defaults ---------
 
 }

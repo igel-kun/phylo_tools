@@ -437,12 +437,12 @@ namespace PT{
       typename DFSSupportSets<Forbidden_, SeenSet_>::ForbiddenRef,
       typename DFSSupportSets<Forbidden_, SeenSet_>::SeenSetRef>>
   {
-    using Helper = DFSSupportSets<Forbidden_, SeenSet_>;
+    using Supports = DFSSupportSets<Forbidden_, SeenSet_>;
     using Roots = std::conditional_t<std::is_same_v<Roots_, NodeDesc>, NodeSingleton, Roots_>;
-    using typename Helper::Forbidden;
-    using typename Helper::SeenSet;
-    using typename Helper::SeenSetRef;
-    using typename Helper::ForbiddenRef;
+    using typename Supports::Forbidden;
+    using typename Supports::SeenSet;
+    using typename Supports::SeenSetRef;
+    using typename Supports::ForbiddenRef;
 
     Roots roots;
 
@@ -451,7 +451,7 @@ namespace PT{
 
     template<class RootInit, class... Args>
     Traversal(RootInit&& root_init, Args&&... args):
-      Helper(std::forward<Args>(args)...),
+      Supports(std::forward<Args>(args)...),
       roots(std::forward<RootInit>(root_init))
     {}
     template<PhylogenyType Phylo>
@@ -472,23 +472,23 @@ namespace PT{
     // if we are traversing edges, then empty() means that there are no edges; to determine this, we have to check if all roots are leaves
     bool empty() const { return begin() == end(); }
 
-    auto begin() & { return Iter(roots, static_cast<Helper&>(*this)); }
+    auto begin() & { return Iter(roots, static_cast<Supports&>(*this)); }
     // if we have a seenset, we cannot expect the traversal to keep it constant...
     auto begin() const & requires (std::is_void_v<SeenSet> or std::is_pointer_v<SeenSet>)
     {
-      return Iter(roots, static_cast<const Helper&>(*this));
+      return Iter(roots, static_cast<const Supports&>(*this));
     }
     // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator
-    auto begin() && { return OwningIter(std::move(roots), static_cast<Helper&&>(*this)); }
+    auto begin() && { return OwningIter(std::move(roots), static_cast<Supports&&>(*this)); }
 
     static constexpr auto end() { return mstd::GenericEndIterator(); }
 
     // allow the user to play with the SeenSet and Forbiddeniacte at all times
     //NOTE: this gives you the power to change the SeenSet while the DFS is running, and with great power comes great responsibility ;] so be careful!
-    auto& seen_nodes() { return mstd::default_deref{}(Helper::template get<1>()); }
-    const auto& seen_nodes() const { return mstd::default_deref{}(Helper::template get<1>()); }
-    auto& get_forbidden() { return Helper::template get<0>(); }
-    const auto& get_forbidden() const { return Helper::template get<0>(); }
+    auto& seen_nodes() { return mstd::default_deref{}(Supports::template get<1>()); }
+    const auto& seen_nodes() const { return mstd::default_deref{}(Supports::template get<1>()); }
+    auto& get_forbidden() { return Supports::template get<0>(); }
+    const auto& get_forbidden() const { return Supports::template get<0>(); }
 
     template<mstd::ContainerType Container>
     Container& append_to(Container& c) { append(c, *this); return c; }
@@ -504,10 +504,10 @@ namespace PT{
   struct DFSSupportSets<tt, Network, Forbidden, SeenSet>:
     public ProtoDFSSupportSets<Forbidden, SeenSet>
   {
-    using Helper = ProtoDFSSupportSets<Forbidden, SeenSet>;
-    using typename Helper::Forbidden;
-    using typename Helper::SeenSetRef;
-    using typename Helper::ForbiddenRef;
+    using Supports = ProtoDFSSupportSets<Forbidden, SeenSet>;
+    using typename Supports::Forbidden;
+    using typename Supports::SeenSetRef;
+    using typename Supports::ForbiddenRef;
 
     // we'll give references to our seen set and the forbidden predicate to each sub-iterator
     using Iter = choose_iterator<tt, Network, ForbiddenRef, SeenSetRef>;
@@ -517,17 +517,17 @@ namespace PT{
 
     template<class... Args>
     DFSSupportSets(const NodeDesc _root, Args&&... args):
-      Helper(std::forward<Args>(args)...),
+      Supports(std::forward<Args>(args)...),
       root(_root)
     {}
     template<class... Args>
     DFSSupportSets(const NodeSingleton& _root, Args&&... args):
-      Helper(std::forward<Args>(args)...),
+      Supports(std::forward<Args>(args)...),
       root(_root.empty() ? NoNode : front(_root))
     {}
     template<class... Args>
     DFSSupportSets(const Network& N, Args&&... args):
-      Helper(std::forward<Args>(args)...),
+      Supports(std::forward<Args>(args)...),
       root(N.root())
     {}
 
@@ -537,7 +537,7 @@ namespace PT{
       else return root == NoNode;
     }
 
-    auto begin() & { return Iter(root, static_cast<Helper&>(*this)); }
+    auto begin() & { return Iter(root, static_cast<Supports&>(*this)); }
     // if we are const, then our seen-set is const and so, the iterator we create cannot reference our seen-set; thus, we'll have to copy it :/
     auto begin() const & { return OwningIter(root, static_cast<const Parent&>(*this)); }
     // if we are going out of scope (which will be most of the cases), then move our seen-set into the constructed iterator

@@ -134,7 +134,7 @@ namespace PT {
     // ------- methods: initialization --------
     
     // ------- methods: modification --------
-        // resets the use-counters of all result_table entries to 0
+    // resets the use-counters of all result_table entries to 0
     void reset_use_counts() {
       for(auto& [x, sol_with_counter]: result_table)
         sol_with_counter.second = 0;
@@ -210,29 +210,35 @@ namespace PT {
   // given a node x in a tree, this class can return the PD score of the highest-scoring leaf q below x
   //  as well as the outgoing edge one has to take to get to q
   // for each node, we store (child, weight)-pairs in a sorted_vector
-  // when a leaf is takes, all relevant pairs are updated
+  // when a leaf is taken, all relevant pairs are updated
+  // NOTE: the edge-weights are only looked-at in the setup; whenever we save a leaf, the stored sums are updated without checking the weights again
+  // NOTE: all leaves get an empty direction-vector
   template<StrictPhylogenyType Net, class Utility, class LeafTable = NoLeafTable<typename Utility::Weight>>
     requires (not std::is_reference_v<LeafTable> and not std::is_reference_v<Utility>)
   struct PDTreeScoreMap {
     // ------- static stuff --------
     using Weight = typename std::remove_pointer_t<LeafTable>::Weight;
     using Edge = typename Net::Edge;
+    using NodeHistogram = NodeMap<size_t>;
+    using SolutionAccu = mstd::SolutionAccumulator<NodeVec, Weight>;
+    using AccuTable = std::vector<SolutionAccu>;
+
     // each node is mapped to the additional score attainable by taking a leaf below it, and in which direction to go to find it
     using GetSecond = mstd::selector<1>;
     using SecondSmaller = mstd::PointwiseCompose<GetSecond, std::less<>>;
     using SecondGreater = mstd::PointwiseCompose<GetSecond, std::greater<>>;
+
+    // a set of nodes sorted by their score
     using NodesByScore = std::multiset<NodeWith<Weight>, SecondGreater>;
+    
     // NOTE: the directions sorted vectors will have the largest element last, so use back() and pop_back()
     using ScoredDirections = mstd::sorted_vector<NodeWith<Weight>, SecondSmaller>;
-    using SideScoreMap = NodeMap<ScoredDirections>;
-    using SolutionAccu = mstd::SolutionAccumulator<NodeVec, Weight>;
-    using AccuTable = std::vector<SolutionAccu>;
-    using NodeHistogram = NodeMap<size_t>;
+    using NodeScoreMap = NodeMap<ScoredDirections>;
 
     // ------- members --------
     [[ no_unique_address ]] Utility util;
     [[ no_unique_address ]] LeafTable leaf_table;
-    SideScoreMap scorable;
+    NodeScoreMap scorable;
 
     // ------- construction & desctruction ---------
     PDTreeScoreMap() = default;
@@ -253,8 +259,7 @@ namespace PT {
         
         for(const auto& y: Net::children(x)) {
           const auto weight = util.weight(Edge(x,y));
-          auto y_scorable = best_score(y);
-          y_scorable += weight;
+          const auto y_scorable = best_score(y) + weight;
           score_dir.emplace(y, y_scorable);
         }
         DEBUG4(std::cout << "set up direction vector of "<<x<<": "<<score_dir<<'\n');
@@ -276,10 +281,9 @@ namespace PT {
         const NodeDesc saved_leaf = save_best_leaf_below(v).first;
 
         // update the scorable diversity
-        // NOTE: we can no longer score uv, since it's been already collected now
         const auto v_new_score = best_score(v);
         DEBUG4(std::cout << "new score of "<<u<<" via "<<v<<" is "<<v_new_score<<'\n');
-        directions.emplace(v, v_new_score);
+        directions.emplace(v, v_new_score + 0); // we cannot score anything for the edge uv anymore, but maybe we can score something else below v
 
         // the result is the leaf we got from the recursion and the score we saved initially
         return {saved_leaf, score};
@@ -300,20 +304,15 @@ namespace PT {
 
     size_t num_solutions() const { return get_leaf_table().num_solutions; }
 
-    // return the best score below a node y in the network by following the scorable-pointers
+    // return the best score below a node y in the tree by following the scorable-pointers
     Weight best_score(const NodeDesc y) const {
       const auto y_it = scorable.find(y);
+      // if y is not in the map, then return -inf
       if(y_it == scorable.end()) return std::numeric_limits<Weight>::lowest();
+      // if y is a leaf, then return its score
       if(y_it->second.empty()) return get_leaf_table().best_score_below(y);
-      return y_it->second.back().second; // get the best score achievable below y
-    }
-
-    Weight best_score_for_node(const NodeDesc u) const {
-      const auto iter = scorable.find(u);
-      if(iter != scorable.end()) {
-        const auto& directions = iter->second;
-        return directions.empty() ? -1 : directions.back().second; 
-      } else return -1;
+      // otherwise return the weight associated with the best direction
+      return y_it->second.back().second;
     }
 
     friend std::ostream& operator<<(std::ostream& os, const PDTreeScoreMap& x) {

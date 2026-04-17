@@ -8,19 +8,24 @@
 namespace PT {
 
   // ========== Switching ==========
-  // describe what Switching does...
+  // A switching is a decision of a single incoming arc of each reticulation in a network.
+  // As such, each switching corresponds to a displayed tree, but multiple switchings might correspond to the same tree.
+  // The corresponding tree can be computed from the switching by exhaustive deletion of unlabelled leaves and suppression of deg-2 nodes.
 
   // ------- Switching: helpers ---------
  
   // ------- Switching: main class ---------
-  // NOTE: the switching can be used as a forbidden-predicate when traversing a network
+  // Internally, a Switching maps each reticulation to an iterator of the parent-set, representing the current parent.
+  // NOTE: operator(e) returns whether the edge e is switched OFF (that is, NOT in the switching),
+  //       so the switching can be used as a forbidden-predicate when traversing a network.
+  //       Thus, the switching can be traversed by traversing the network with the switching as forbidden-predicate.
   template<StrictPhylogenyType Net_>
   struct Switching {
     // ------- static stuff --------
     using Net = Net_;
     using ParentContainer = typename Net::ParentContainer;
     using ParentIter = mstd::iterator_of_t<ParentContainer>;
-    using Edge = Net::Edge;
+    using NetEdge = Net::Edge;
 
     // a parent selector that just selects the first parent; this is the default
     struct FirstParent {
@@ -61,7 +66,7 @@ namespace PT {
     // return true iff (u,v) is switched off (to be useed as 'forbidden' predicate)
     bool operator()(const NodeDesc x, const NodeDesc y) const { return is_switched_off(x, y); }
     bool operator()(const NodePair uv) const { return operator()(uv.first, uv.second); }
-    bool operator()(const EdgeOf<Net>& uv) const { return operator()(uv.as_pair()); }
+    bool operator()(const NetEdge& uv) const { return operator()(uv.as_pair()); }
     
     // ------- methods: initialization --------
     // ------- methods: query --------
@@ -77,6 +82,10 @@ namespace PT {
     bool is_switched_on(const NodeDesc x, const NodeDesc y) const { return not is_switched_off(x, y); }
     bool is_switched_on(const auto& uv) const { return not is_switched_off(uv.first, uv.second); }
 
+    template<EdgeContainerType Edges = std::vector<NetEdge>>
+    Edges get_active_edges() const {
+      return active_parent | std::ranges::views::transform([](const auto& vu_pair) { return NetEdge{reverse_edge_tag{}, vu_pair}; });
+    }
     // ------- methods: modification --------
   };
  

@@ -379,7 +379,7 @@ namespace mstd {
 		{ a.emplace(v).second } -> std::convertible_to<bool>;
 	};
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept SetType = apply_rune_v<T, rune> || is_setlike_v<apply_rune_t<T, rune>>;
+  concept SetType = apply_rune_v<T, rune> or is_setlike_v<apply_rune_t<T, rune>>;
   template<class T> concept StrictSetType = SetType<T, TR_Strict>;
   template<class T> concept OptionalSetType = SetType<T, TR_ConstRefVoidOK>;
 

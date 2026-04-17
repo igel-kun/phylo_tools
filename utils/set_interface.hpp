@@ -196,6 +196,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<class T> concept HasFront = requires(T x) { x.front(); };
   template<class T> concept HasBack = requires(T x) { x.back(); };
   template<class T> concept HasPopBack = requires(T x) { x.pop_back(); };
+  template<class T> concept HasPopFront = requires(T x) { x.pop_front(); };
+  template<class Q> concept HasValuePop = requires(Q q) { { q.value_pop() } -> std::convertible_to<value_type_of_t<Q>>; };
 
   template<IterableType T>
   constexpr decltype(auto) front(T&& c) {
@@ -289,19 +291,32 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
       c.pop();
     } else erase(c, mstd::rbegin(c));
   }
+  template<IterableType C>
+  void pop_front(C& c) {
+    if constexpr (HasPopFront<C>) {
+      c.pop_front();
+    } else if constexpr (QueueType<C>) {
+      c.pop();
+    } else erase(c, mstd::rbegin(c));
+  }
 
-  template<class T> concept is_poppable = requires(T t) { mstd::pop_back(t); };
+
+  template<class T> concept is_poppable = HasPopFront<T> or HasPopBack<T>;
+  template<class T> concept is_value_poppable = requires(T t) {  { value_pop(t) } -> std::convertible_to<value_type_of_t<T>>;  };
 
 
 
   // value-moving pop operations
-  template<VectorType Q>
+  template<StrictIterableType Q> requires value_poppable<Q>
+  auto value_pop_back(Q& q) { return q.value_pop(); }
+
+  template<VectorType Q> requires (not value_poppable<Q>)
   auto value_pop(Q& q) {
     auto result = std::move(q.back());
     q.pop_back();
     return result;
   }
-  template<ContainerType Q> requires (!VectorType<Q>)
+  template<ContainerType Q> requires (not VectorType<Q> and not value_poppable<Q>)
   auto value_pop(Q& q) {
     const auto iter = q.begin();
     value_type_of_t<Q> result = std::move(*iter);

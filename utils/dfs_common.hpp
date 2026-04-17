@@ -13,7 +13,7 @@ namespace PT {
   constexpr TraversalType postorder = 0x02; // postorder traversal will output a node after all its descendants
   constexpr TraversalType inorder = 0x04; // inorder traversal will output a node before *EVERY* child except the first and if there is no child
   constexpr TraversalType pre_and_post_order = preorder + postorder;
-  constexpr TraversalType reverse_traversal = 0x10;
+  constexpr TraversalType reverse_traversal = 0x10; // reverse traversals go bottom-up instead of top-down
   constexpr TraversalType edge_traversal = 0x20; // an edge traversal produces the edges of a DFS-tree
   constexpr TraversalType all_edge_traversal = 0x40; // an all-edge traversal produces all edges of the network
 
@@ -211,7 +211,9 @@ namespace PT {
     auto get_current_root() const {
       if constexpr (roots_indirect)
         return *get_roots();
-      else return mstd::back(get_roots());
+      else constexpr (HasBack<Roots> and HasPopBack<Roots>) {
+        return mstd::back(get_roots());
+      } else return mstd::front(get_roots());
     }
     bool roots_spent() const {
       if constexpr (roots_indirect)

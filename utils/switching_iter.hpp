@@ -21,7 +21,6 @@ namespace PT {
     using Net = Net_;
     using DefaultParent = DefaultParent_;
     using Traits = mstd::iter_traits_from_reference<Switching<Net>>;
-    using EdgeVec = NetEdgeVec<Net>;
     using AdjVec = NetAdjVec<Net>;
     using typename Traits::value_type;
     using typename Traits::pointer;
@@ -29,7 +28,7 @@ namespace PT {
     // ------- members --------
   protected:
     [[ no_unique_address ]] DefaultParent parent_select;
-    Switching<Net> sw;
+    Switching<Net> cache;
     bool valid = true;
 
     // ------- construction & desctruction ---------
@@ -39,22 +38,22 @@ namespace PT {
     template<class... Args> requires std::is_constructible_v<DefaultParent, Args&&...>
     SwitchingIter(const Net& N, Args&&... args):
       parent_select(std::forward<Args>(args)...),
-      sw(roots_tag{}, N.roots(), parent_select) {}
+      cache(roots_tag{}, N.roots(), parent_select) {}
 
     template<RootsOrLeavesTag Tag, NodeOrContainerType Nodes, class... Args> requires std::is_constructible_v<DefaultParent, Args&&...>
     SwitchingIter(const Tag t, const Nodes& X, Args&&... args):
       parent_select(std::forward<Args>(args)...),
-      sw(t, X, parent_select) {}
+      cache(t, X, parent_select) {}
 
     // ------- operators --------
-    auto& operator*() const { return sw; }
-    auto operator->() const { return &sw; }
+    auto& operator*() const { return cache; }
+    auto operator->() const { return &cache; }
 
     SwitchingIter& operator++() {
       DEBUG4(std::cout << "advancing switching iter, current active parents: ";
-        for(auto& [v, vp]: sw.active_parent) std::cout << "("<<v<<", "<<*vp<<")\n");
+        for(auto& [v, vp]: cache.active_parent) std::cout << "("<<v<<", "<<*vp<<")\n");
 
-      for(auto& [v, vp]: sw.active_parent) {
+      for(auto& [v, vp]: cache.active_parent) {
         if(++vp != Net::parents(v).end()) {
           return *this;
         } else vp = parent_select(v);
@@ -70,7 +69,7 @@ namespace PT {
     bool operator==(const SwitchingIter& other) const {
       if(is_valid()) {
         if(other.is_valid()) {
-          return sw == other.sw;
+          return cache == other.cache;
         } else return false;
       } else return not other.is_valid();
     }
@@ -80,8 +79,8 @@ namespace PT {
     bool is_invalid() const { return not is_valid(); }
     bool is_valid() const { return valid; }
 
-    const auto& get_active_parents() const { return sw.active_parent; }
-    const auto& get_switching() const { return sw; }
+    const auto& get_active_parents() const { return cache.active_parent; }
+    const auto& get_switching() const { return cache; }
 
     // ------- methods: modification --------
   };

@@ -1,7 +1,7 @@
 
 #pragma once
 
-// compute the generaotr of a network,
+// compute the generator of a network,
 // that is, the result of removing pendants and suppressing suppressible nodes
 // NOTE: this might contain multi-edges!
 
@@ -10,141 +10,169 @@
 
 namespace PT {
 
-  // our generator may want to know the node correspondance to the original network
-  struct GeneratorNodeInfo {
-    NodeDesc original_node;
-    bool has_leaf;
 
-    friend std::ostream& operator<<(std::ostream& os, const GeneratorNodeInfo& info) {
-      os << info.original_node;
-      if(info.has_leaf) os << 'L';
-      return os;
-    }
-  };
+  // an informed generator knows the following:
+  // (1) for each generator node gu:
+  //  (a) which node in the network is represented by gu
+  //  (b) does the represented node have paths to leaves avoiding generator sides? ("private leaves")
+  // (2) for each generator edge guv:
+  //  (a) the source-adjacency of the last edge on the side
+  //  (b) the target-adjacency of the first edge on the side
+  //  (c) whether any node on the side can reach a leaf with a path avoiding generator sides
+  namespace InformedGenerator {
+    // our generator may want to know the node correspondance to the original network
+    struct NodeInfo {
+      NodeDesc original_node = NoNode;
+      bool has_leaf = false;
 
-  template<class Adj>
-  struct GeneratorEdgeInfo {
-    Adj start_adj; // target of the first edge of the side
-    Adj end_adj;   // source of the last edge of the side
-    bool has_leaf; // does the side have any leaves?
-  };
+      friend std::ostream& operator<<(std::ostream& os, const NodeInfo& info) {
+        os << info.original_node;
+        if(info.has_leaf) os << 'L';
+        return os;
+      }
+    };
 
-  template<StrictPhylogenyType Net>
-  using GeneratorFor = Phylogeny<vecS, vecS, GeneratorNodeInfo, GeneratorEdgeInfo<typename Net::Adjacency>, void, Net::RootStorage>;
+    template<AdjacencyType Adj>
+    struct EdgeInfo {
+      Adj start_adj; // target of the first edge of the side
+      Adj end_adj;   // source of the last edge of the side
+      bool side_has_leaf = false; // does the side have any leaves?
+    };
 
+    template<AdjacencyType Adj>
+    struct Accu:
+      public NodeInfo, EdgeInfo<Adj>
+    {
+      // NOTE: this has side-effects on 'other': if u is a generator-node, then we update other's start_adjacency
+      void operator()(const auto& uv, Accu& other, const NodeDesc u_nearest_gen, const NodeDesc v_nearest_gen) {
+        const bool u_is_on_gen_side = (u_nearest_gen != NoNode);
+        const bool u_is_gen_node = (u_nearest_gen == uv.tail());
+        const bool v_is_on_gen_side = (v_nearest_gen != NoNode);
+        const bool v_is_gen_node = (v_nearest_gen == uv.head());
 
-  template<StrictPhylogenyType Net>
-  void treat_gen_side(const NodeDesc u, auto& gen_dp_table, auto& get_data, auto& emplacer) {
-    using Adjacency = typename Net::Adjacency;
-    using EdgeInfo = GeneratorEdgeInfo<Adjacency>;
-    using Edge = EdgeOf<Net>;
+        // bonus: update other's start-adjacency
+        if(u_is_gen_node and v_is_on_gen_side)
+          other.start_adj = uv.head();
+        if(v_is_gen_node)
+          other.end_adj = uv.get_reversed().head();
 
-    // track whether we have seen leaves below u
-    NodeDesc u_copy = NoNode;
-    bool u_has_leaves = false;
-    auto u_it = std::end(gen_dp_table);
-
-    // if u is a reti, then already register it in the generator
-    if(Net::in_degree(u) != 1) {
-      u_it = append(gen_dp_table, u).first; // register u as endpoint of a side
-      u_copy = emplacer.create_copy_of(u); // store the original u in the node data of the copy
-      static_cast<GeneratorNodeInfo&>(get_data(u_copy)) = GeneratorNodeInfo{u, false};
-    }
-
-    // then, go through the children of u, save the first generator side that u is one and, if u is on another side, u is also a generator-node
-    std::optional<EdgeInfo> first_info; // store the first edge on the path towards the first seen generator side
-    for(const Adjacency& v: Net::children(u)) {
-      const auto v_it = gen_dp_table.find(v.get_desc());
-      if(v_it != std::end(gen_dp_table)) {
-        auto [side_below_v, side_has_leaves] = v_it->second;
-
-        // if v is itself a generator-node, then...
-        if(not side_below_v.has_value()) {
-          side_below_v = Edge{u,v}; // ... its last edge needs to be fixed to u->v
-          side_has_leaves = false; // ... its leaves are NOT on the generator-side
+        // update NodeInfos and EdgeInfos
+        this->original_node = uv.tail();
+        if(u_is_on_gen_side) {
+          if(v_is_on_gen_side) {
+            if(not v_is_gen_node)
+              this->side_has_leaf |= other->side_has_leaf or other->has_leaf;
+          } else this->has_leaf = true;
         }
-        assert(emplacer.contains(side_below_v->head()));
-        
-        DEBUG4(std::cout << "found a side below "<<u<<" towards "<<v.get_desc()<<": "<<*side_below_v<<" & leaves: "<<side_has_leaves<<"\n");
+      }
+    }; // struct Accu
+  } // namespace InformedGenerator
 
-        // we will need this EdgeInfo
-        EdgeInfo tmp{v, side_below_v->tail_with_data(), side_has_leaves};
-        // if v has a generator node w below it, then either save it for the next time (if it's the first), or make u a generator node (otherwise)
-        if(u_it == std::end(gen_dp_table)) {
-          DEBUG4(std::cout << "it's the first side\n");
-          // if we haven't seen any generator-node below u, then register that the generator-node below v is also below u
-          u_it = append(gen_dp_table, u, side_below_v, side_has_leaves).first;
-          first_info = std::move(tmp);
-        } else {
-          // if we have already seen a generator-node below u, then make u a generator node and make generator_below[u] = u
-          if(u_copy == NoNode) {
-            assert(first_info.has_value());
-            assert(not emplacer.contains(u));
-            u_copy = emplacer.create_copy_of(u);
-            static_cast<GeneratorNodeInfo&>(get_data(u_copy)) = GeneratorNodeInfo{u, u_has_leaves};
-            // store the 2 adjacencies in the generator
-            const auto uv_adj_iter = emplacer.emplace_edge_translated(u, u_it->second.first->head()).first;
-            static_cast<EdgeInfo&>(get_data(u_copy, *uv_adj_iter)) = std::move(*first_info);
-            first_info.reset();
-            u_it->second.first.reset(); // mark u as being a generator node in the DP-table
+  using DefaultGenerator = Network<vecS, vecS>;
+
+  template<StrictPhylogenyType Net>
+  using InformedGeneratorFor = Phylogeny<vecS, vecS, InformedGenerator::NodeInfo, InformedGenerator::EdgeInfo<typename Net::Adjacency>, void, Net::RootStorage>;
+
+  // We're using 'DataAccu' to accumulate data from nodes and edges below each generator node:
+  // We default-initialize DataAccu at the leaves of the network and repeatedly call
+  //    operator()(Net::Edge, DataAccu, u's nearest gen node, v's nearest gen node)
+  // to accumulate, until we find a generator node u. At this point, u's NodeData is the result of casting the DataAccu to NodeData.
+  // The EdgeData of each edge outgoing from u is the result of casting the DataAccu to EdgeData when we encounter uv.
+  template<StrictPhylogenyType _Generator, class _DataAccu>
+  struct GeneratorMaker {
+    using Generator = _Generator;
+    using GeneratorEdge = typename Generator::Edge;
+    using GenNodeData = typename Generator::NodeData;
+    using GenEdgeData = typename Generator::EdgeData;
+    static constexpr bool has_node_data = Generator::has_node_data;
+    static constexpr bool has_edge_data = Generator::has_edge_data;
+
+    static constexpr bool has_data_accu = (has_node_data or has_edge_data) and not std::is_void_v<_DataAccu>;
+    using DataAccu = std::conditional_t<has_data_accu, _DataAccu, mstd::monostate>;
+    using DataAndNode = std::pair<DataAccu, NodeDesc>;
+
+    // construct the generator for the network N
+    // NOTE: generator node-data = result of accumulating data of all nodes between itself and other generator nodes
+    //       generator edge-data(uv) = result of accumulating all edge-data (in postorder) on paths starting with uv and avoiding generator nodes != u
+    // NOTE: we'll do a bottom-up traversal, accumulating node- and edge-data, sticking the results as node- and edge-data into the generator elements
+    template<StrictPhylogenyType Net, class... EmplacerArgs>
+    static Generator make_generator(const Net& N, const DataAccu& init_accu, EmplacerArgs&&... args) {
+      Generator G;
+      auto emplacer = EdgeEmplacers<true, Net>::make_emplacer(G, std::forward<EmplacerArgs>(args)...);
+      
+      assert(N.num_roots() == 1);
+      NodeSet seen;
+      construct_generator_below(N.root(), emplacer, seen, init_accu);
+    }
+    template<StrictPhylogenyType Net, class First, class... EmplacerArgs> requires (not mstd::is_same_v<First, DataAccu>)
+    static Generator make_generator(const Net& N, First&& first, EmplacerArgs&&... args) {
+      return make_generator(N, DataAccu{}, std::forward<First>(first), std::forward<EmplacerArgs>(args)...);
+    }
+    template<StrictPhylogenyType Net>
+    static Generator make_generator(const Net& N) { return make_generator(N, DataAccu{}); }
+
+
+  protected:
+    // treat the network below u
+    // return the accumulated NodeInfo and EdgeInfo below u
+    template<StrictPhylogenyType Net, EdgeEmplacerType Emplacer>
+    static auto construct_generator_below(const NodeDesc u, Emplacer& emplacer, NodeSet& seen, const DataAccu& init_accu) {
+      using NetworkEdge = typename Net::Edge;
+      
+      // NOTE: When we see the first child v of u that's on a generator side, we cannot immediately tell if u is a generator node.
+      //       Thus, we defer adding the state and data of v until we see a second generator side, or we treated all children
+      // NOTE: the "state" is simply the nearest generator node below, which might be NoNode
+      DataAndNode u_state{init_accu, NoNode};
+      std::vector<std::pair<NetworkEdge, DataAndNode>> child_states;
+      child_states.reserve(Net::out_degree(u));
+
+      // step 1: recurse for all children and find out whether u is a generator node
+      for(const auto uv: Net::out_edges(u)) {
+        const NodeDesc v = uv.head();
+        const bool v_unseen = append(seen, v).second;
+        if(v_unseen) {
+          // recurse for v and use v's state to update u's state
+          DataAndNode v_state = construct_generator_below(v, emplacer, seen, init_accu);
+
+          // update u's nearest generator node
+          if(v_state.second != NoNode) {
+            if(u_state.second != NoNode) {
+              u_state.second = u;
+            } else u_state.second = v_state.second;
           }
-          // store in the data: the adjacency (in N) leading to v, the adjacency coming from v, and whether the side has leaves
-          const auto uw_adj_iter = emplacer.emplace_edge_translated(u, side_below_v->head()).first;
-          static_cast<EdgeInfo&>(get_data(u_copy, *uw_adj_iter)) = std::move(tmp);
-        }
-      } else { 
-        // if v is no generator node and has no generator node below it, then it has leaves below it
-        u_has_leaves = true;
-        // tell the node-data in the generator that u has leaves
-        if(u_copy != NoNode)
-          static_cast<GeneratorNodeInfo&>(get_data(u_copy)).has_leaf = true;
-      } // if v has a generator node below it
-    } // foreach children(u)
-    // if u is on a generator side, but not on the generator, and u has leaves, then register that the side has leaves (those of u)
-    if(first_info.has_value() && u_has_leaves) {
-      DEBUG4(std::cout << "found leaves below "<<u<<" so updating the DP entry\n");
-      assert(u_copy == NoNode);
-      assert(u_it != std::end(gen_dp_table));
-      u_it->second.second = true;
+
+          // append the data to the child_states
+          child_states.append(std::move(uv), std::move(v_state));
+        } else child_states.append(std::move(uv), DataAndNode{DataAccu{}, v});
+      }
+
+      // step 3: accumulate the child_state data into u's data
+      if constexpr (has_data_accu)
+        for(auto& [uv, v_state]: child_states)
+          u_state.first(uv, v_state.first, u_state.second, v_state.second);
+
+      // step 4: if u is a generator node, then install the actual edges in the generator, using the DataAccus as EdgeData
+      if(u_state.second == u) {
+        // first, construct u in the generator
+        NodeDesc u_copy;
+        if constexpr (has_node_data and has_data_accu)
+          u_copy = emplacer.create_copy_of(u, static_cast<const GenNodeData&>(u_state));
+        else u_copy = emplacer.create_copy_of(u);
+
+        for(auto& [uv, v_state]: child_states) 
+          if(v_state.second != NoNode) {
+            const NodeDesc v = uv.head();
+            // if uv is on a generator-side, then construct this side in the generator
+            // NOTE: the edge-data is constructed by casting the DataAccumulator to EdgeData
+            if constexpr (has_edge_data and has_data_accu) {
+              emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v), static_cast<GenEdgeData&&>(v_state));
+            } else emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v));
+          }
+      }
+      return u_state;
     }
-  }
 
-  // compute the generator for the given network N
-  // NOTE: provide get_data to access data
-  //    if data is stored within the generator nodes & edges, then get_data(x) = Gen.data(x)
-  //    if data is stored externally in 2 maps, then get_data(x) = if constexpr (NodeDesc<x>) node_map[x] else edge_map[x]
-  template<StrictPhylogenyType Network, class GetData, EdgeEmplacerType Emplacer>
-    requires (std::is_invocable_v<std::remove_reference_t<GetData>, NodeDesc> &&
-              std::is_invocable_v<std::remove_reference_t<GetData>, NodeDesc, typename std::remove_cvref_t<Emplacer>::TargetPhylo::Adjacency>)
-  void compute_generator(Network& N, GetData&& get_data, Emplacer&& emplacer) {
-    // when first we see a generator node below v, store its information
-    // when we see a second generator node below v, then make v a generator node as well
-    using Edge = EdgeOf<Network>;
-    using DPInfo = std::pair<std::optional<Edge>, bool>; // in the bottom-up DP, store the last edge of the side, and whether the side has leaves
-    using SideMap = NodeMap<DPInfo>;
-    
-    SideMap gen_dp_table;
-    for(const NodeDesc u: N.nodes_postorder()) {
-      treat_gen_side<Network>(u, gen_dp_table, get_data, emplacer);
-    } // forall nodes in post-order
-  }
+  };
 
-  template<PhylogenyType Generator_ = void, class GetData_ = void>
-  auto compute_generator(auto&& N) requires (PhylogenyType<decltype(N)>) {
-    using Network = std::remove_reference_t<decltype(N)>;
-    using Generator = mstd::FirstNonVoid<Generator_, GeneratorFor<Network>>;
-    using EdgeInfo = GeneratorEdgeInfo<typename Network::Adjacency>;
-    static constexpr bool internal_possible = std::is_convertible_v<typename Generator::NodeData, GeneratorNodeInfo> &&
-                                              std::is_convertible_v<typename Generator::EdgeData, EdgeInfo>;
-    using MyGetData = std::conditional_t<internal_possible, InternalDataAccess<Generator>, ExternalDataAccess<GeneratorNodeInfo, EdgeInfo>>;
-    using GetData = mstd::FirstNonVoid<GetData_, MyGetData>;
-    static_assert(internal_possible || not std::is_void_v<Generator_>);
-    static_assert((not internal_possible) || std::is_invocable_v<GetData, NodeDesc>);
-    static_assert((not internal_possible) || std::is_invocable_v<GetData, NodeDesc, typename Generator::Adjacency>);
 
-    Generator G;
-    compute_generator(N, GetData{}, DefaultEdgeEmplacer<Generator>{G, EO_forbid_junctions + EO_forbid_non_binary});
-    DEBUG1(std::cout << "computed generator:\n" << ExtendedDisplay(G) << '\n');
-    return G;
-  }
 }

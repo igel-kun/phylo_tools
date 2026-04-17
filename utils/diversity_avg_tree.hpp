@@ -5,7 +5,7 @@
 #include "subsets.hpp"
 
 #include "net_generator.hpp"
-#include "switchings.hpp"
+#include "switching.hpp"
 #include "biconnected_comps.hpp"
 
 #ifdef DFSCORO
@@ -22,67 +22,98 @@ namespace PT {
   // This machinery can compute the weighted average tree-PD over all switchings (displayed trees).
   //
   // It consists of a DP wrt. #reticulations, and you can treat blobs individually.
-  // In order to treat blobss individually, we'll need to store tables in the leaves
-  // that can tell us for eahc number of leaves that we save below a bridge how much diversity
+  // In order to treat blobs individually, we'll need to store tables in the leaves
+  // that can tell us for each number of leaves that we save below a bridge how much diversity
   // we can score by saving that many leaves.
   // We use the infrastructure provided by the TreeDiversity class.
-  // However, we will need to modify the PDTreeScoreMap slightly...
-
+  // However, we will need to modify the PDTreeScoreMap slightly:
+  //    the score-map maps each NodeDesc x to a pair<NodeDesc, Weight>{y,w} indicating that we can score weight w if we save a leaf below the child y of x;
+  //    NOTE: herein, only children y of x within a tree-component are considered! If x has no children in the same tree-component, then score-dir(x) is empty
   template<StrictPhylogenyType Network, class Utility, class LeafTable = NoLeafTable<typename Utility::Weight>>
     requires (not std::is_reference_v<LeafTable> and not std::is_reference_v<Utility>)
-  struct PDGeneratorScoreMap:
+  struct PDScoreMapWithBaseScores:
     public PDTreeScoreMap<Network, Utility, LeafTable>
   {
     // ------- static stuff --------
     using Parent = PDTreeScoreMap<Network, Utility, LeafTable>;
     using Weight = typename Parent::Weight;
+    using Probability = typename Utility::Probability;
     using Edge = typename Parent::Edge;
     using ScoredDirections = typename Parent::ScoredDirections;
     using Parent::util;
 
     // ------- members --------
     // ------- construction & desctruction ---------
-    INHERIT_ALL_CONSTRUCTORS(PDGeneratorScoreMap, Parent)
+    INHERIT_ALL_CONSTRUCTORS(PDScoreMapWithBaseScores, Parent)
     
     // ------- operators --------
     // ------- methods: initialization --------
   
-    // setup the score map directly below x
-    // NOTE: if used on a generator side:
-    //          use 'forbidden' to indicate the bottom of the side and
-    //          use 'offset' to indicate the probability of the lowest edge of the side (due to saved leaves below)
-    void setup_scorable_at(const NodeDesc x, const auto& forbidden = NoNode,
-        NodeDesc* const current_bottom = nullptr, const Weight offset = 0)
-    {
-      ScoredDirections& score_dir = Parent::get_directions(x);
-      score_dir.reserve(Network::out_degree(x));
-      
-      for(const auto& y: Network::children(x)) {
-        if(not mstd::test(forbidden, y.get_desc())) {
-          const auto weight = util.weight(Edge(x,y));
-          auto y_scorable = Parent::best_score(y);
-          DEBUG4(std::cout << y << " scores "<<y_scorable<<" ("<<y<<" is bottom? "<<(current_bottom and (y == *current_bottom)) << '\n');
-          // if we see the end of the side, then we know the switching probability for the edge xy is vw_prob
-          if(current_bottom and (y == *current_bottom)) {
-            y_scorable += (1 - offset) * weight;
-            *current_bottom = x; // bottom is now x
-          } else y_scorable += weight;
-          // register that we can go to y to score y_scorable
-          score_dir.emplace(y, y_scorable);
-        } else if(current_bottom) *current_bottom = x;
+    // setup the scorable map for the tree-component given by its root
+    //    if register_score is true, then register the scores in Parent::scorable,
+    //    otherwise, we only compute the "free-score" and return it
+    // return the total base-score over all edges below v in a spanning-tree
+    // return the base-probability of u
+    // NOTE: base_proba maps nodes to known probabilities according to the current guess of which reticulations have leaves below them
+    auto setup_scorable_below(const NodeDesc u, const NodeMap<Probability>& base_proba, const bool register_score) {
+      // first check if u has a base-probability
+      const auto u_iter = base_proba.find(u);
+      const bool u_has_base_proba = (u_iter != base_proba.end());
+      std::pair<Weight, Probability> result = {0, u_has_base_proba ? u_iter->second : Probability{0}};
+
+      // in order to set up the scorable map, we're getting the entry concerning u and reserve some space
+      // NOTE: if u doesn't have a leaf in the same tree-component below it, then u will NOT get a score-dir;
+      //       this will lead to the PDTreeScoreMap returning -inf when asked for the best score!
+      ScoredDirections score_dir;
+      score_dir.reserve(Network::out_degree(u));
+
+      for(const auto uv: Network::out_edges(u)) {
+        const NodeDesc v = uv.head();
+        if(not Network::is_reti(v)) { // stay in the same tree-component!
+          // NOTE: if u doesn't have its own base-probability, u is guaranteed to only have 1 child leading to a node that has a base-probability!
+          const auto [weight_below_v, v_base_proba] = setup_scorable_below(v, base_proba, register_score);
+
+          // NOTE: the weight of uv is partitioned into (v_base_proba) parts for free and (1 - v_base_proba) parts if a leaf is saved below
+          const auto uv_weight = util.weight(uv);
+          const auto uv_weight_free = v_base_proba * uv_weight;
+          const auto uv_weight_payable = uv_weight - uv_weight_free;
+          
+          // step 1: update result
+          result.first += weight_below_v + uv_weight_free;
+          if(not u_has_base_proba and (v_base_proba > 0)) {
+            assert(result.second == 0);
+            result.second = v_base_proba;
+          }
+
+          // step 2: update score_dir of u
+          if(register_score) {
+            // if no leaf can be reached from v, then the Parent will return numeric_limits<Weight>::lowest()
+            const Weight v_best_score = Parent::best_score(v);
+            if(v_best_score != std::numeric_limits<Weight>::lowest())
+              append(score_dir, v, v_best_score + uv_weight_payable);
+          }
+
+        } else {
+          // v is a reticulation, implying that it has a base-probability
+          assert(Network::is_reti(v));
+          assert(test(base_proba, v));
+          // NOTE: we're not setting any scorable values for u in direction of v
+          // if u doesn't have its own base-probability, then we take v's base-probability and multiply by the probability of uv
+          const auto uv_proba = base_proba.at(v) * util.probability(uv);
+          if(not u_has_base_proba)
+            result.second = uv_proba;
+          // the weights of the edges below v have already been counted elsewhere (they are 0 for us now), so we only count the contribution of uv
+          result.first += uv_proba * util.weight(uv);
+        }
       }
-      DEBUG4(std::cout << "set up direction vector of "<<x<<": "<<score_dir<<'\n');
+      // finally register the score_dir with the parent scorable-map, unless the score_dir is empty...
+      // NOTE: if u is a leaf, then we'll allow emplacing an empty score_dir, indicating that the PDTreeScoreMap should forward this to the LeafTable
+      if(register_score and (Network::is_leaf(u) or not score_dir.empty()))
+        append(Parent::scorable, u, std::move(score_dir));
+
+      return result;
     }
-    void setup_scorable_below(const NodeDesc v, const auto& forbidden) {
-      // add the "non-side leaves" below v_in_N (leaves that are below v_in_N but not on any side of v)
-      // NOTE: we're using a custom node traversal that has no seenset and uses the constructed map as a forbidden set
-      //NodeTraversal<postorder, Net, NodeDesc, const NodeSet, void> traversal{v_in_N, forbidden};
-      Traversal<postorder, Network, NodeDesc, NodeSet, void> traversal{v, forbidden};
-      for(const NodeDesc x: std::move(traversal)) {
-        DEBUG4(std::cout << "next node in traversal: "<<x<<'\n');
-        setup_scorable_at(x, forbidden);
-      }
-    }
+    
 
     // ------- methods: modification --------
     // ------- methods: query --------
@@ -97,31 +128,44 @@ namespace PT {
     using Weight = typename Utility::Weight;
     using Probability = typename Utility::Probability;
     using NetAdjacency = typename Net::Adjacency;
-    using NodeInfo = GeneratorNodeInfo;
-   
-    // NOTE: GeneratorEdgeInfo stores the first adjacency into the generator side and whether it has leaves;
-    //       we'll also store the proportion of switchings in which it survives
-    struct EdgeInfo: public GeneratorEdgeInfo<NetAdjacency> { Probability prob = 0; };
-    // NOTE: we'll use the generator of N and all nodes referring to the generator are called g<something>, like gu, gx, gv, ...; non prefixed nodes are in N
-    using Generator = Phylogeny<vecS, vecS, NodeInfo, EdgeInfo, void, Net::RootStorage>;
- 
-    using ScoreMap = PDGeneratorScoreMap<Net, Utility, LeafTable>;
+
+    using ScoreMap = PDScoreMapWithBaseScores<Net, Utility, LeafTable>;
     using NodeHistogram = typename ScoreMap::NodeHistogram;
-   
-    // hilarious: STL priority queue doesn't allow updating priorities
-    //using NodesByScore = std::priority_queue<NodeWith<double>, std::vector<NodeWith<double>>, SecondSmaller>;
     using NodesByScore = typename ScoreMap::NodesByScore;
 
-
-    // return whether the given generator node or side has a leaf that is reachable outside the generator
-    template<class... Args>
-    static constexpr bool has_leaf(const Args&... args){ return Generator::data(args...).has_leaf; };
-    
-    // return whether the given generator node has a tree-path to a leaf (either direct, or via a generator edge)
-    static constexpr bool has_tree_path_to_leaf(const NodeDesc& gx) {
-      if(has_leaf(gx)) return true;
-      return std::ranges::any_of(Generator::children(gx), has_leaf<typename Generator::Adjacency>);
+    // NOTE: we need to know for each generator node
+    //        (a) the node in the network that it corresponds to
+    //        (b) whether it has tree-paths to bridges/leaves
+    struct GenNodeInfo {
+      NodeDesc original_node;
+      bool has_path_to_bridge = false;
     };
+    struct GenEdgeInfo {
+      // At some point, we will want to compute the tail's probability in a switching.
+      Probability i_prob;
+    };
+    // we need an accumulator implementing the interface described in net_get.hpp
+    struct GenNodeInfoAccu: public GenNodeInfo {
+      Utility* util = nullptr;
+
+      void operator()(const auto& uv, GenNodeInfoAccu& other, const NodeDesc u_nearest_gen, const NodeDesc v_nearest_gen) {
+        assert(util);
+        const NodeDesc v = uv.head();
+        const bool v_is_on_gen_side = (v_nearest_gen != NoNode);
+        const bool v_is_gen_node = (v_nearest_gen == v);
+        
+        this->original_node = uv.tail(); // our original node is u
+        if(v_is_on_gen_side) {
+          if(not Net::is_reti(v))
+            this->has_path_to_bridge |= other.has_path_to_bridge;
+          if(v_is_gen_node) {
+            this->i_prob = util->probability(uv);
+          } else this->i_prob = other.i_prob;
+        } else this->has_path_to_bridge = true;
+      }
+    };
+    using Generator = Phylogeny<vecS, vecS, GenNodeInfo, GenEdgeInfo, void, Net::RootStorage>;
+    using GenEdge = typename Generator::Edge;
 
     // map generator nodes to their corresponding nodes in the network
     static constexpr NodeDesc get_original_node(const NodeDesc gu) { return Generator::data(gu).original_node; }
@@ -139,160 +183,90 @@ namespace PT {
 
 
     // ------- members --------
+    // the score-map tells us for a node x, which leaf in the tree-component of x we should save in order to maximize diversity
     ScoreMap score_map;
-    Generator Gen;
-
 
     // ------- construction & desctruction ---------
     AveragePDEngine() = delete;
 
     template<class UtilInit, class... Args>
     AveragePDEngine(const Net& N, UtilInit&& util_init, Args&&... args):
-      score_map(std::forward<UtilInit>(util_init), std::forward<Args>(args)...),
-      Gen(PT::compute_generator<Generator>(N))
+      score_map(std::forward<UtilInit>(util_init), std::forward<Args>(args)...)
     {}
 
     // ------- operators --------
     // ------- methods: initialization --------
-    // get the best investment table for the generator sides and leaves directly below v, that is,
-    // the table entry at i equals the maximum diversity score_map on the sides below v with i leaves
-    // NOTE: this can be done by greedily selecting the heaviest leaves
-    // NOTE: the generator edges might already have some probability of a switching containing them, so this has to be taken into account
-    // NOTE: we assume that we are called in a top-down manner (we need the children in the generator to have no score_map entries)
-    void setup_score_map(const NodeDesc gv) {
-      const NodeDesc v_in_N = get_original_node(gv);
-      DEBUG4(std::cout << "setting up score map below "<<v_in_N<<" (generator: "<<gv<<")\n");
-      auto& v_score_dir = score_map.get_directions(v_in_N);
-      v_score_dir.clear(); // clear out anything that might remain from upper calls
-
-      // we produce the table by extending the tables bottom-up
-      NodeSet forbidden; // NOTE: remember the first nodes on the generator sides in N in order to forbid them from the traversal catching the other leaves
-      DEBUG4(std::cout << "direction vector of "<<v_in_N<<" before sides: "<<v_score_dir<<'\n');
-      for(const auto& gw: Generator::children(gv)) {
-        const auto gvw_prob = gw.data().prob; // probability of drawing a switching where the last edge of the generator side vw reaches a saved leaf
-        const auto& start = gw.data().start_adj; // the first node in N on the side gvw
-        append(forbidden, start); // recall the first node on the side to forbid going there later
-        const NodeDesc side_bottom = get_original_node(gw); // keep the top node on the spine of the side, since that one might have vw_prob != 0
-        if(side_bottom != start) { // only register this direction if it has more than 1 edge
-          NodeDesc current_bottom = side_bottom;
-          DEBUG4(std::cout << "generator side: "<<gv<<"-"<<gw<<" corresponding to path "<<v_in_N<<"-->"<<side_bottom<<" in N (free prob: "<<gvw_prob<<")\n");
-          for(const NodeDesc x: Net::nodes_below_postorder(start, NodeSingleton{side_bottom})) // mark side_bottom as forbidden
-            score_map.setup_scorable_at(x, side_bottom, &current_bottom, gvw_prob);
-          // treat the edge v->start
-          const auto weight = score_map.util.weight(start);
-          v_score_dir.emplace(start, score_map.best_score(start) + weight * (1 - gvw_prob));
-        }
-        DEBUG4(std::cout << "direction vector of "<<v_in_N<<" after side "<<gv<<'-'<<gw<<": "<<v_score_dir<<'\n');
-      } // for all sides vw of v
-
-      DEBUG4(std::cout << "score_map: "<<score_map<<'\n');
-      DEBUG4(std::cout << "forbidden: "<<forbidden<<'\n');
-
-      // finally setup for the tree-part below v_in_N that's not on any generator side
-      score_map.setup_scorable_below(v_in_N, forbidden);
-    }
-
-    NodesByScore compute_best_scores_map() const {
+    NodesByScore compute_best_scores_map(const NodeVec& active_retis) const {
       NodesByScore result;
-      for(const NodeDesc gu: Gen.nodes()) {
-        const NodeDesc u = get_original_node(gu);
-        const auto bs = score_map.best_score_for_node(u);
-        if(bs > 0) result.emplace(u, bs);
+      for(const NodeDesc u: active_retis) {
+        const Weight bs = score_map.best_score(u);
+        if(bs > 0) append(result, u, bs);
       }
       return result;
     }
 
 
     // ------- methods: query --------
-    NodeDesc get_root_in_N() const { return get_original_node(Gen.root()); }
+    Probability get_side_probabilty(const GenEdge& guv) { return Generator::data(guv).i_prob; }
     
-    // return the diversity obtained below u if we don't save any leaf reachable by a tree-path from u
-    Weight get_free_score(const NodeDesc gu) const {
-      DEBUG4(std::cout << "computing free score from the sides of "<<gu<<'\n');
-      Weight weight = 0;
-      for(const auto& gv: Generator::children(gu)) {
-        const auto* end_adj = &(gv.data().end_adj);
-        const auto guv_prob = gv.data().prob;
-
-        if(guv_prob > 0) {
-          while(true) {
-            DEBUG4(std::cout << "getting free score from "<<gv<<" upwards via "<<*end_adj<<" with probability factor "<<guv_prob<<'\n');
-            weight += guv_prob * score_map.util.weight(*end_adj);
-            if(*end_adj != get_original_node(gu)) {
-              assert(Net::in_degree(*end_adj) == 1);
-              end_adj = &mstd::front(Net::parents(*end_adj));
-            } else break;
-          }
-        } // uf uv survives in some switching
-      } // foreach child v of u
-      return weight;
-    }
-
-    // return the local probability of switching-on a side of the generator
-    // NOTE: if the lowest node of the side is a tree-node, then this is 1
-    //       if the lowest node of the side is a reticulation, then this is the inheritence probability on the reticulation edge
-    Probability get_side_probability(const auto& guv) const {
-      if(Generator::is_reti(guv.head())) {
-        return score_map.util.iprob(guv.data().end_adj);
-      } else return 1;
-    }
-
+    using NodeAndBool = std::pair<NodeDesc, bool>;
+    using ActiveNodes = std::vector<NodeAndBool>;
 
     // ------- methods: modification --------
-    // given that each side of the generator knows its probability and whether it takes a leaf,
-    // treat each side of the generator individually top to bottom
-    void optimize_diversity_for_sides(const NodeVec& gleaf_guess_preorder, const uint32_t k) {
+    // given that each tree-component knows its probability (base-proba, given as NodeMap) and
+    //    whether it's active (that is, it has a saved leaf), given as bool attached to the reticulation list
+    // 1. fulfill the promises to each tree-component
+    // 2. save additional leaves in the tree-components that already have saved leaves
+    void optimize_diversity_for_tree_components(const NodeDesc N_root, const ActiveNodes& retis, const NodeMap<Probability>& base_proba, const uint32_t k) {
       Weight global_score = 0; // score implied by the promised leaves
+      NodeVec active_retis; // store the active reticulations seperately
+      active_retis.reserve(retis.size()); // overestimated, but meh
      
-      // Step 1: setup the score_map map, but only for nodes that we want to save leaves below
+      // Step 1: setup the score_map, but only for nodes that we want to save leaves below
       DEBUG3(std::cout << "--- setting up score_map map ---\n");
       score_map.clear();
+      for(const auto [u, active]: retis) {
+        global_score += score_map.setup_scorable_below(u, base_proba, active).first;
+        if(active) append(active_retis, u);
+      }
 
-      for(const NodeDesc gu: gleaf_guess_preorder)  
-        setup_score_map(gu);
-
-      // Step 2: calculate free score for all sides
-      DEBUG3(std::cout << "--- getting free score ---\n");
-      for(const NodeDesc gu: Gen.nodes_preorder())
-        global_score += get_free_score(gu);
-      DEBUG4(std::cout << "free score from promises: " << global_score << '\n');
-
-      // now, score_map is filled, we can save the best scoring leaves with the remaining budget
+      // now, score_map is filled, so we can 
+      // (a) fulfill our promises to the active reticulations
+      // (b) save the best scoring leaves with the remaining budget
       // NOTE: only generator nodes that we promised to have saved leaves will have contributed to score_map,
-      //       so only those can get additional score
+      //       so only those can get additional score in step (b)
       NodeHistogram solution;
       size_t sol_size = 0;
 
-      // Step 3: fulfill our promises to the generator nodes
-      DEBUG4(std::cout << "--- fulfilling promises to "<<gleaf_guess_preorder<<" ---\n");
-      for(const NodeDesc gu: gleaf_guess_preorder) {
-        const auto [leaf, score] = score_map.save_best_leaf_below(get_original_node(gu));
+      // Step 2: fulfill our promises to the generator nodes
+      DEBUG4(std::cout << "--- fulfilling promises to " << active_retis << " ---\n");
+      for(const NodeDesc u: active_retis) {
+        const auto [leaf, score] = score_map.save_best_leaf_below(u);
         ++solution[leaf];
         ++sol_size;
         global_score += score;
         DEBUG4(std::cout << "saving leaf "<<leaf<<" (score "<<score<<", total: "<<global_score<<")\n");
       } 
-      DEBUG4(std::cout << "adding solution: "<<solution<<" with diversity "<<global_score<<'\n');
-      auto& accu_table = score_map.get_leaf_table().emplace_table(get_root_in_N(), k);
-      DEBUG4(std::cout << "got accus : "<<accu_table<<'\n');
-      accu_table[sol_size].add(score_map.get_leaf_table().accu_from_histogram(solution, global_score));
-     
+      DEBUG4(std::cout << "adding solution: "<<solution<<" with diversity "<<global_score<<" to the leaf-score-table\n");
+      auto& leaf_table = score_map.get_leaf_table();
+      auto& accu_table = leaf_table.emplace_table(N_root, k);
+      accu_table[sol_size].add(leaf_table.accu_from_histogram(solution, global_score));
+
+      // Step 3: take additional leaves while the budget lasts
       if(sol_size < k) {
-        DEBUG4(std::cout << "attainable scores: "<< score_map << "\n");
-        // Step 4: take additional leaves while the budget lasts
-        DEBUG3(std::cout << "--- preparing to save more leaves ---\n");
+        DEBUG3(std::cout << "--- saving "<< k - sol_size << " additional leaves ---\n");
         
         // generator nodes, sorted by their attainable score
-        NodesByScore best_scores = compute_best_scores_map();
+        DEBUG4(std::cout << "attainable scores: "<< score_map << "\n");
+        NodesByScore best_scores = compute_best_scores_map(active_retis);
         DEBUG4(std::cout << "best scores: "<< best_scores << '\n');
 
         if(not best_scores.empty()) {
-          DEBUG3(std::cout << "--- saving "<< k - sol_size << " additional leaves ---\n");
-          while((sol_size < k) && (mstd::front(best_scores).second > 0)) {
+          while((sol_size < k) and (mstd::front(best_scores).second > 0)) {
             const auto [u, score] = mstd::value_pop(best_scores);
             DEBUG4(std::cout << "\nsaving leaf below "<<u<<" (score "<<score<<")\n");
             const auto [leaf, score2] = score_map.save_best_leaf_below(u);
-            DEBUG4(std::cout << "score_map map says "<<u<<" has a path to leaf "<<leaf<<" with score "<<score2<<'\n');
+            DEBUG4(std::cout << "score map says "<<u<<" has a path to leaf "<<leaf<<" with score "<<score2<<'\n');
             assert(score == score2);
             append(best_scores, u, score_map.best_score(u)); // update best_scores[u]
             ++solution[leaf];
@@ -300,44 +274,47 @@ namespace PT {
             global_score += score;
 
             DEBUG4(std::cout << "adding solution: "<<solution<<" with diversity "<<global_score<<'\n');
-            accu_table[sol_size].add(score_map.get_leaf_table().accu_from_histogram(solution, global_score));
+            accu_table[sol_size].add(leaf_table.accu_from_histogram(solution, global_score));
           } // while we still have budget to save leaves
         } // if there are scores to attain
       } // if we still have budget to save leaves
     }
 
 
-    void optimize_diversity(const size_t k, const size_t lower_bnd = 1) {
-      // ==== step 2: produce the generator network: done at init
+    void optimize_diversity(const Net& N, const size_t k, const size_t lower_bnd = 1) {
+      // ==== step 2: produce the generator network
+      const Generator Gen = GeneratorMaker<Generator, GenNodeInfoAccu>::make_generator(N, GenNodeInfoAccu{&(score_map.util)});
 
-      // ==== step 3: guess at most k sides of the generator that contain selected leaves
-      // step 3.1: get all sides and nodes of the generator
-      // accumulate all nodes of the generator that can have tree-paths to leaves
-      const NodeVec gen_nodes_preorder = Gen.template nodes_with<preorder>(has_tree_path_to_leaf).template to_container<NodeVec>();
-      DEBUG3(std::cout << "generator nodes with tree-paths to leaves: "<<gen_nodes_preorder<<'\n');
+      // ==== step 3: guess at most k tree-components of N that contain saved leaves
+      // accumulate all retis of the generator that can have tree-paths to leaves
+      // return whether the given generator node has a tree-path to a leaf (either direct, or via a generator edge)
+      auto reti_with_path_to_bridge = [](const NodeDesc gx) { return (Generator::is_reti(gx)) ? Generator::data(gx).has_path_to_bridge : false; };
+      const NodeVec gvalid_retis_preorder = Gen.nodes_with_preorder(reti_with_path_to_bridge).template to_container<NodeVec>();
+      DEBUG3(std::cout << "retis with tree-paths to leaves: "<<gvalid_retis_preorder<<'\n');
 
-      // guess which at most k generator nodes have tree-paths to saved leaves
-      for(const auto gsaved_nodes_preorder: mstd::make_subset_factory(gen_nodes_preorder, lower_bnd, k)) {
-        DEBUG3(std::cout << "\n=== new guess! ===\n"<<gsaved_nodes_preorder.size() << " nodes with saved leaves below: "<<gsaved_nodes_preorder<<'\n');
-        
-        // clear the probabilities of the previous guess
-        for(const auto guv: Gen.edges())
-          guv.data().prob = 0;
-       
-        // ==== step 4: for each side S in the generator, compute proportion of switchings that the lowest edge of S is in
+      // guess which at most k retis of the generator have tree-paths to saved leaves
+      for(const auto gsaved_retis_preorder: mstd::make_subset_factory(gvalid_retis_preorder, lower_bnd, k)) {
+        DEBUG3(std::cout << "\n=== new guess! ===\n"<<gsaved_retis_preorder.size() << " retis with saved leaves below: "<<gsaved_retis_preorder<<'\n');
+
+        // ==== step 4: for each node x in the generator, compute proportion of switchings in which x has a path to a leaf, according to the reti-guess
+        // NOTE: for non-reticulations, this is just a lower bound and can be improved to 1 when saving additional leaves!
 #warning "TODO: improve this using a dominator tree: not all switchings need to be iterated in order to compute the proportions!"
-        for(const auto gswitching: SwitchingFactory<Generator, const NodeVec*>{&gsaved_nodes_preorder}) {
+        NodeMap<Probability> base_proba;
+        for(const auto gswitching: SwitchingFactory<Generator, const NodeVec*>{&gsaved_retis_preorder}) {
           Probability switching_prob = 1;
-          for(const auto guv: gswitching)
-            if(Generator::is_reti(guv.head()))
-              switching_prob *= get_side_probability(guv);
+          for(const auto guv: gswitching) {
+            assert(Generator::is_reti(guv.head()));
+            switching_prob *= get_side_probability(guv);
+          }
           DEBUG4(std::cout << "switching "<<gswitching<<" has probability "<<switching_prob<<'\n');
-          for(const auto guv: gswitching)
-            guv.data().prob += switching_prob;
+          // to enumerate the edges above 'gsaved_retis' in the switching, we use a special bottom-up traversal with the switching as forbidden-predicate
+          auto gtraversal = NodeTraversal<reverse_traversal, Generator, NodeVec, const Switching<Net>*>{gsaved_retis_preorder, &gswitching};
+          for(const NodeDesc gu: gtraversal)
+            base_proba[gu] += switching_prob;
         }
         
         // ==== step 5: treat each side individually (DP over the sides to maximize diversity with our k leaves)
-        optimize_diversity_for_sides(gsaved_nodes_preorder, k);
+        optimize_diversity_for_sides(N.root(), gsaved_retis_preorder, base_proba, k);
       }
     }
   };
@@ -369,8 +346,7 @@ namespace PT {
     DEBUG4(std::cout << "iterating biconnected components\n");
     for(auto& bcc: std::move(bc_components)) {
       assert(bcc.num_edges() > 1);
-      DEBUG4(std::cout << "found non-trivial biconnected comp ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n");
-      DEBUG4(bcc.print_summary(std::cout));
+      DEBUG4(std::cout << "found non-trivial biconnected comp ("<<bcc.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(bcc) <<"\n" << bcc.get_summary());
       AvgTreeEngine engine(bcc, std::forward<Utility>(util), &leaf_table);
       engine.optimize_diversity(k);
       DEBUG4(std::cout << "\nfinal tables: "<<leaf_table.result_table << "\n\n");

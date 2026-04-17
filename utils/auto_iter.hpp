@@ -11,8 +11,8 @@ namespace mstd {
   template<class Iterator, class EndIterator_ = CorrespondingEndIter<Iterator>>
   class _auto_iter: public InheritableIter<Iterator>
   {
-    static_assert(!VerifyableIter<Iterator>);
-    static_assert(!std::is_void_v<EndIterator_>);
+    static_assert(not VerifyableIter<Iterator>);
+    static_assert(not std::is_void_v<EndIterator_>);
 
     EndIterator_ end_it;
    public:
@@ -97,8 +97,16 @@ namespace mstd {
     }
 
     // --------------------- Query ---------------------------
+    void pop_front() { operator++(); }
+    auto value_pop() { auto result = front(); pop_front(); return result; }
+
+    // --------------------- Query ---------------------------
+    const decltype(auto) front() const { return get_iter().operator*(); }
+    decltype(auto) front() { return get_iter().operator*(); }
+
     bool is_valid() const { return get_iter() != end_it; }
-    bool is_invalid() const { return !is_valid(); }
+    bool is_invalid() const { return not is_valid(); }
+    bool empty() const { return is_invalid(); }
     explicit operator bool() const { return is_valid(); }
 
     Iterator& get_iter() & { return static_cast<Iterator&>(*this); }
@@ -147,7 +155,14 @@ namespace mstd {
     difference_type operator-(const _auto_iter& it) const { return operator-(static_cast<const Iterator&>(it)); }
     difference_type operator-(const Iterator& it) const { static_cast<const Iterator&>(*this) - it; }
 
+    // --------------------- Modification ---------------------------
+    void pop_front() { operator++(); }
+    auto value_pop() { auto result = front(); pop_front(); return result; }
+
     // --------------------- Query ---------------------------
+    const decltype(auto) front() const { return Iterator::operator*(); }
+    decltype(auto) front() { return Iterator::operator*(); }
+    bool empty() const { return Iterator::is_invalid(); }
     Iterator& get_iter() & { return *this; }
     const Iterator& get_iter() const &{ return *this; }
     Iterator&& get_iter() && { return *this; }
