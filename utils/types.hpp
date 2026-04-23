@@ -42,15 +42,12 @@ namespace PT{
   template<class Element> struct StorageClass_<hashsetS, Element> { using type = std::unordered_set<Element>; };
   template<class Element> struct StorageClass_<multisetS, Element>{ using type = std::unordered_multiset<Element>; };
   template<class Element> struct StorageClass_<vecsetS, Element>  { using type = mstd::vector_hash<Element>; };
-  template<mstd::PointerType Element> struct StorageClass_<singleS, Element>  {
-    using type = mstd::singleton_set<mstd::optional_by_invalid<Element, nullptr>>;
-  };
-  template<std::unsigned_integral Element> struct StorageClass_<singleS, Element>  {
-    using type = mstd::singleton_set<mstd::optional_by_invalid<Element>>;
-  };
-  template<class Element> struct StorageClass_<singleS, Element>  {
-    using type = mstd::singleton_set<std::optional<Element>>;
-  };
+  template<mstd::PointerType Element>
+  struct StorageClass_<singleS, Element>  { using type = mstd::singleton_set<mstd::optional_by_invalid<Element, nullptr>>; };
+  template<std::integral Element>
+  struct StorageClass_<singleS, Element>  { using type = mstd::singleton_set<mstd::optional_by_invalid<Element>>; };
+  template<class Element> requires (not std::integral<Element> and not mstd::PointerType<Element>)
+  struct StorageClass_<singleS, Element>  { using type = mstd::singleton_set<std::optional<Element>>; };
   template<StorageEnum storage, class Element> using StorageClass = typename StorageClass_<storage, Element>::type;
 
   template<StorageEnum storage>

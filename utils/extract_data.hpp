@@ -319,6 +319,7 @@ namespace PT {
   struct DataExtracter_<Network, void, ExtractEdgeData, ExtractNodeLabel>: public DataExtracter_ed_nl_<Network, ExtractEdgeData, ExtractNodeLabel> {
     using Parent = DataExtracter_ed_nl_<Network, ExtractEdgeData, ExtractNodeLabel>;
     using ExtractNodeData = void;
+    using SourcePhylogeny = Network;
     
     //DataExtracter_() = default;
     INHERIT_ALL_CONSTRUCTORS(DataExtracter_, Parent)

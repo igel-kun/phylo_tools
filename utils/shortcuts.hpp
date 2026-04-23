@@ -38,9 +38,10 @@ namespace PT {
     // ------- construction & desctruction ---------
   public:
 
-    Shortcuts(NodeVec&& leaves) {
+    template<NodeContainerType Nodes> requires (is_value_poppable<Nodes> and is_appendable_v<Nodes>)
+    Shortcuts(Nodes&& leaves) {
       DEBUG4(std::cout << "finding shortcuts...\n");
-      init(std::move(leaves));
+      init(std::forward<Nodes>(leaves));
       DEBUG4(std::cout << "found shortcuts:\n" << shortcuts << "\n");
     }
     
@@ -58,7 +59,8 @@ namespace PT {
     // ------- methods: initialization --------
   protected:
     // initialize the mappings
-    void init(NodeVec todo) {
+    template<NodeContainerType Nodes> requires (is_value_poppable<Nodes> and is_appendable_v<Nodes>)
+    void init(Nodes todo) {
       // we need a vertex-queue to contain the vertices that we still need to treat
       // we also need to keep track of how many children of v have been treated since we only add vertices to 'todo' whose all children have been treated
       NodeMap<Degree> children_done;

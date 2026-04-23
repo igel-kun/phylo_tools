@@ -29,7 +29,7 @@ namespace mstd {
 
   // std::is_arithmetic is false for pointers.... why?
   template<class T, TypeRune rune = TR_Strict> // NOTE: strict by default
-  constexpr bool is_really_arithmetic_v = mstd::is_arithmetic_v<T, rune> || mstd::is_pointer_v<T, rune>;
+  constexpr bool is_really_arithmetic_v = mstd::is_arithmetic_v<T, rune> or mstd::is_pointer_v<T, rune>;
 
   template<class T, TypeRune rune = TR_ConstRefOK>
   constexpr bool is_arithmetic_pair_v = PairType<T, rune> and
@@ -131,10 +131,10 @@ namespace mstd {
   template<class T> requires std::ranges::range<T> 
   struct _iterator_of<T> { using type = decltype(std::ranges::begin(std::declval<T&>())); };
 
-  template<class T> requires (!std::ranges::range<T> && std::is_const_v<T> && has_const_iterator<T>)
+  template<class T> requires (not std::ranges::range<T> and std::is_const_v<T> and has_const_iterator<T>)
   struct _iterator_of<T> { using type = typename T::const_iterator; };
 
-  template<class T> requires (!std::ranges::range<T> && has_iterator<T> && (!std::is_const_v<T> || !has_const_iterator<T>))
+  template<class T> requires (not std::ranges::range<T> and has_iterator<T> and not (std::is_const_v<T> and has_const_iterator<T>))
   struct _iterator_of<T> { using type = typename T::iterator; };
 
   template<class T> struct _iterator_of<T*> { using type = T*; };
@@ -166,19 +166,19 @@ namespace mstd {
     using correctT = copy_cv_t<TraitsConstness, T>;
     // copy constness of the container onto the reference
     using Ref = typename T::reference;
-    static constexpr bool returning_rvalue = !std::is_reference_v<Ref>;
+    static constexpr bool returning_rvalue = not std::is_reference_v<Ref>;
     using value_type = copy_cv_t<correctT, std::remove_reference_t<Ref>>;
     using type = std::conditional_t<returning_rvalue, value_type, std::add_lvalue_reference_t<value_type>>;
   };
 
-  template<class T> requires ((not has_reference<T>) && std::ranges::range<std::remove_const_t<T>>)
+  template<class T> requires ((not has_reference<T>) and std::ranges::range<std::remove_const_t<T>>)
   struct reference_of<T> {
     using _type = std::ranges::range_reference_t<std::remove_const_t<T>>;
     using type = copy_cv_t<T, _type>;
   };
-  template<class T> requires (not (has_reference<T> || std::ranges::range<std::remove_const_t<T>>) && HasBegin<T>)
+  template<class T> requires (not (has_reference<T> or std::ranges::range<std::remove_const_t<T>>) and HasBegin<T>)
   struct reference_of<T> { using type = decltype(std::begin(std::declval<T>())); };
-  template<class T> requires (not (has_reference<T> || std::ranges::range<std::remove_const_t<T>> || HasBegin<T>) && HasDeref<T>)
+  template<class T> requires (not (has_reference<T> or std::ranges::range<std::remove_const_t<T>> or HasBegin<T>) and HasDeref<T>)
   struct reference_of<T> { using type = decltype(*std::declval<T>()); };
 
   template<class T> using reference_of_t  = typename reference_of<std::remove_reference_t<T>>::type;
@@ -206,7 +206,7 @@ namespace mstd {
   // ---------------- iterator traits  -----------------
   template<class T> concept has_iter_traits = requires { typename std::iterator_traits<iterator_of_t<T>>::reference; };
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept HasIterTraits = apply_rune_v<T, rune> || has_iter_traits<apply_rune_t<T, rune>>;
+  concept HasIterTraits = apply_rune_v<T, rune> or has_iter_traits<apply_rune_t<T, rune>>;
 
   // not all std::iterator_traits of the STL provide "const_pointer" and "const_reference", so I'll do that for them
   template<typename T> requires HasIterTraits<T>
@@ -248,24 +248,24 @@ namespace mstd {
   template<class T, class A> struct is_vector<std::vector<T, A>> { static constexpr bool value = true; };
   template<class T> constexpr bool is_vector_v = is_vector<T>::value;
 
-  template<class T, TypeRune rune = TR_ConstRefOK> concept VectorType = apply_rune_v<T, rune> || is_vector_v<apply_rune_t<T, rune>>;
+  template<class T, TypeRune rune = TR_ConstRefOK> concept VectorType = apply_rune_v<T, rune> or is_vector_v<apply_rune_t<T, rune>>;
   template<class T> concept StrictVectorType = VectorType<T, TR_Strict>;
 
-  template<class T, TypeRune rune = TR_ConstRefOK> concept VectorOrStringType = VectorType<T, rune> || mstd::Stringlike<T, rune>;
+  template<class T, TypeRune rune = TR_ConstRefOK> concept VectorOrStringType = VectorType<T, rune> or mstd::Stringlike<T, rune>;
   template<class T> concept StrictVectorOrStringType = VectorOrStringType<T, TR_Strict>;
 
   template<class T> struct is_deque { static constexpr bool value = false; };
   template<class T, class A> struct is_deque<std::deque<T, A>> { static constexpr bool value = true; };
   template<class T> constexpr bool is_deque_v = is_deque<T>::value;
 
-  template<class T, TypeRune rune = TR_ConstRefOK> concept DequeType = apply_rune_v<T, rune> || is_deque_v<apply_rune_t<T, rune>>;
+  template<class T, TypeRune rune = TR_ConstRefOK> concept DequeType = apply_rune_v<T, rune> or is_deque_v<apply_rune_t<T, rune>>;
   template<class T> concept StrictDequeType = DequeType<T, TR_Strict>;
 
 
   template<class T, class I = size_t>
   concept is_indexible = requires (T& t, const I& i) { {t[i]}; };
   template<class T, class I = size_t, TypeRune rune = TR_ConstRefOK>
-  concept IndexibleType = apply_rune_v<T, rune> || is_indexible<apply_rune_t<T, rune>, I>;
+  concept IndexibleType = apply_rune_v<T, rune> or is_indexible<apply_rune_t<T, rune>, I>;
   template<class T, class I = size_t>
   concept StrictIndexibleType = IndexibleType<T, I, TR_Strict>;
 
@@ -276,18 +276,18 @@ namespace mstd {
 	};
 
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept IterableType = apply_rune_v<T, rune> || is_iterable<apply_rune_t<T, rune>>;
+  concept IterableType = apply_rune_v<T, rune> or is_iterable<apply_rune_t<T, rune>>;
   template<class T> concept StrictIterableType = IterableType<T, TR_Strict>;
   template<class T> concept OptionalIterableType = IterableType<T, TR_ConstRefOK + TR_VoidOK>;
 
   // if we need T to support reporting its size via T::size() 
   template <class T> 
-  concept is_iterable_with_size = is_iterable<T> && requires(T a) {
+  concept is_iterable_with_size = is_iterable<T> and requires(T a) {
     { a.size() }    -> std::same_as<typename T::size_type>;
     { a.empty() }   -> std::same_as<bool>;
 	};
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept IterableTypeWithSize = apply_rune_v<T, rune> || is_iterable_with_size<apply_rune_t<T, rune>>;
+  concept IterableTypeWithSize = apply_rune_v<T, rune> or is_iterable_with_size<apply_rune_t<T, rune>>;
   template <class T> concept StrictIterableTypeWithSize = IterableTypeWithSize<T, TR_Strict>;
   template <class T> concept OptionalIterableTypeWithSize = IterableTypeWithSize<T, TR_ConstRefVoidOK>;
 
@@ -333,23 +333,23 @@ namespace mstd {
   template<class Iter, class T>
   concept is_dereferencable_to = requires(Iter it) { { *it } -> std::convertible_to<T>; };
   template<class Iter, class T, TypeRune rune = TR_ConstRefOK>
-  concept DereferencableTo = apply_rune_v<Iter, rune> || is_dereferencable_to<apply_rune_t<Iter, rune>, T>;
+  concept DereferencableTo = apply_rune_v<Iter, rune> or is_dereferencable_to<apply_rune_t<Iter, rune>, T>;
 
 
   // NOTE: 
   // we do not need to store the end-iterator if the iterator type has "bool is_valid() const"
   // (for example, the _auto_iter itself -- imagine an _auto_iter of _auto_iters)
   template<class Iter>
-  concept is_verifyable_iter = HasIterTraits<Iter> && requires(const Iter i) {
+  concept is_verifyable_iter = HasIterTraits<Iter> and requires(const Iter i) {
     { i.is_valid() } -> std::convertible_to<bool>;
   };
   template<class Iter, TypeRune rune = TR_ConstRefOK>
-  concept VerifyableIter = apply_rune_v<Iter, rune> || is_verifyable_iter<apply_rune_t<Iter, rune>>;
+  concept VerifyableIter = apply_rune_v<Iter, rune> or is_verifyable_iter<apply_rune_t<Iter, rune>>;
 
 
   // concept checking for STL-style container (thanks to https://stackoverflow.com/questions/60449592 )
   template <class T> 
-  concept is_container = IterableTypeWithSize<T, TR_Strict> && requires(T a) {
+  concept is_container = IterableTypeWithSize<T, TR_Strict> and requires(T a) {
     requires std::destructible<typename std::remove_cvref_t<T>::value_type>;
     //requires std::same_as<typename std::remove_cvref_t<T>::reference, typename std::remove_cvref_t<T>::value_type &>;
     //requires std::same_as<typename std::remove_cvref_t<T>::const_reference, const typename std::remove_cvref_t<T>::value_type &>;
@@ -359,14 +359,14 @@ namespace mstd {
   };
 
   template<class C, TypeRune rune = TR_ConstRefOK>
-  concept ContainerType = apply_rune_v<C, rune> || is_container<apply_rune_t<C, rune>>;  
+  concept ContainerType = apply_rune_v<C, rune> or is_container<apply_rune_t<C, rune>>;  
   template<class T> concept StrictContainerType = ContainerType<T, TR_Strict>;
   template<class T> concept OptionalContainerType = ContainerType<T, TR_ConstRefOK + TR_VoidOK>;
 
   template<class T> concept has_hasher = requires { typename T::hasher; };
   
   template<class C, TypeRune rune = TR_ConstRefOK>
-  concept UnorderedContainerType = ContainerType<C, rune> && has_hasher<apply_rune_t<C, rune>>;
+  concept UnorderedContainerType = ContainerType<C, rune> and has_hasher<apply_rune_t<C, rune>>;
   template<class C> concept OptionalUnorderedContainerType = UnorderedContainerType<C, TR_ConstRefVoidOK>;
 
   template<class C, class Val, TypeRune rune = TR_ConstRefOK>
@@ -374,7 +374,7 @@ namespace mstd {
 
 	// a set is a container that supports count()
 	template<class T>
-	concept is_setlike_v = ContainerType<T, TR_Strict> && requires(T a, typename T::value_type v) {
+	concept is_setlike_v = ContainerType<T, TR_Strict> and requires(T a, typename T::value_type v) {
 		{ a.count(v) } -> std::convertible_to<size_t>;
 		{ a.emplace(v).second } -> std::convertible_to<bool>;
 	};
@@ -385,12 +385,12 @@ namespace mstd {
 
 
   template<class T>
-	concept is_multisetlike_v = ContainerType<T, TR_Strict> && requires(T a, typename T::value_type v) {
+	concept is_multisetlike_v = ContainerType<T, TR_Strict> and requires(T a, typename T::value_type v) {
 		{ a.count(v) } -> std::convertible_to<size_t>;
 		{ *(a.emplace(v)) } -> std::convertible_to<typename T::value_type>;
 	};
   template<class T, TypeRune rune = TR_ConstRefOK>
-  concept MultiSetType = apply_rune_v<T, rune> || is_multisetlike_v<apply_rune_t<T, rune>>;
+  concept MultiSetType = apply_rune_v<T, rune> or is_multisetlike_v<apply_rune_t<T, rune>>;
   template<class T> concept StrictMultiSetType = MultiSetType<T, TR_Strict>;
   template<class T> concept OptionalMultiSetType = MultiSetType<T, TR_ConstRefVoidOK>;
 
@@ -423,7 +423,7 @@ namespace mstd {
   //template<class T>
   //concept QueueType = StrictQueueType<std::remove_cvref_t<T>>;
   template<class T>
-  concept OptionalQueueType = std::is_void_v<T> || QueueType<T>;
+  concept OptionalQueueType = std::is_void_v<T> or QueueType<T>;
 
   template<typename T>
   concept Printable = requires(T t) {
@@ -464,10 +464,10 @@ namespace mstd {
       {   *i } -> STLReferenceable;
       {  ++i } -> std::same_as<I&>;
       { *i++ } -> STLReferenceable;
-  } && std::copyable<I>;
+  } and std::copyable<I>;
 
   template<class I>
-  concept STLLegacyInputIterator = STLLegacyIterator<I> && std::equality_comparable<I> && requires(I i) {
+  concept STLLegacyInputIterator = STLLegacyIterator<I> and std::equality_comparable<I> and requires(I i) {
     typename std::incrementable_traits<I>::difference_type;
     typename std::indirectly_readable_traits<I>::value_type;
     typename std::common_reference_t<std::iter_reference_t<I>&&, typename std::indirectly_readable_traits<I>::value_type&>;
@@ -490,6 +490,13 @@ namespace mstd {
     { t == other } -> std::convertible_to<bool>;
     { t != other } -> std::convertible_to<bool>;
   };
+
+  template<class T> concept HasFront = requires(T& x) { x.front(); };
+  template<class T> concept HasBack = requires(T& x) { x.back(); };
+  template<class T> concept HasPopBack = requires(T& x) { x.pop_back(); };
+  template<class T> concept HasPopFront = requires(T& x) { x.pop_front(); };
+  template<class Q> concept HasValuePop = requires(Q& q) { { q.value_pop() } -> std::convertible_to<value_type_of_t<Q>>; };
+  template<class T> concept HasReserve = requires(T& x) { x.reserve(10); };
 
 
 

@@ -102,7 +102,8 @@ namespace PT {
       
       assert(N.num_roots() == 1);
       NodeSet seen;
-      construct_generator_below(N.root(), emplacer, seen, init_accu);
+      construct_generator_below<Net>(N.root(), emplacer, seen, init_accu);
+      return G;
     }
     template<StrictPhylogenyType Net, class First, class... EmplacerArgs> requires (not mstd::is_same_v<First, DataAccu>)
     static Generator make_generator(const Net& N, First&& first, EmplacerArgs&&... args) {
@@ -112,11 +113,13 @@ namespace PT {
     static Generator make_generator(const Net& N) { return make_generator(N, DataAccu{}); }
 
 
-  protected:
+    static GenNodeData& to_node_data(DataAccu& data) { return static_cast<GenNodeData&>(data); }
+    static GenEdgeData& to_edge_data(DataAccu& data) { return static_cast<GenEdgeData&>(data); }
+
     // treat the network below u
     // return the accumulated NodeInfo and EdgeInfo below u
     template<StrictPhylogenyType Net, EdgeEmplacerType Emplacer>
-    static auto construct_generator_below(const NodeDesc u, Emplacer& emplacer, NodeSet& seen, const DataAccu& init_accu) {
+    static DataAndNode construct_generator_below(const NodeDesc u, Emplacer& emplacer, NodeSet& seen, const DataAccu& init_accu) {
       using NetworkEdge = typename Net::Edge;
       
       // NOTE: When we see the first child v of u that's on a generator side, we cannot immediately tell if u is a generator node.
@@ -132,7 +135,7 @@ namespace PT {
         const bool v_unseen = append(seen, v).second;
         if(v_unseen) {
           // recurse for v and use v's state to update u's state
-          DataAndNode v_state = construct_generator_below(v, emplacer, seen, init_accu);
+          auto v_state = construct_generator_below<Net>(v, emplacer, seen, init_accu);
 
           // update u's nearest generator node
           if(v_state.second != NoNode) {
@@ -142,8 +145,8 @@ namespace PT {
           }
 
           // append the data to the child_states
-          child_states.append(std::move(uv), std::move(v_state));
-        } else child_states.append(std::move(uv), DataAndNode{DataAccu{}, v});
+          append(child_states, std::move(uv), std::move(v_state));
+        } else append(child_states, std::move(uv), DataAndNode{DataAccu{}, v});
       }
 
       // step 3: accumulate the child_state data into u's data
@@ -156,7 +159,7 @@ namespace PT {
         // first, construct u in the generator
         NodeDesc u_copy;
         if constexpr (has_node_data and has_data_accu)
-          u_copy = emplacer.create_copy_of(u, static_cast<const GenNodeData&>(u_state));
+          u_copy = emplacer.create_copy_of(u, static_cast<const GenNodeData&>(to_node_data(u_state.first)));
         else u_copy = emplacer.create_copy_of(u);
 
         for(auto& [uv, v_state]: child_states) 
@@ -165,7 +168,7 @@ namespace PT {
             // if uv is on a generator-side, then construct this side in the generator
             // NOTE: the edge-data is constructed by casting the DataAccumulator to EdgeData
             if constexpr (has_edge_data and has_data_accu) {
-              emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v), static_cast<GenEdgeData&&>(v_state));
+              emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v), static_cast<GenEdgeData&&>(to_edge_data(v_state.first)));
             } else emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v));
           }
       }

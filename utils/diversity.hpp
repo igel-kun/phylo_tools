@@ -1,6 +1,7 @@
 
 #pragma once
 
+#ifdef DFSCORO
 #include <algorithm> // for max_element
 
 #include "platform.hpp"
@@ -12,7 +13,6 @@
 #include "switching_iter.hpp"
 #include "diversity_avg_tree.hpp"
 
-#ifdef DFSCORO
 #include "dfs_coro.hpp"
 
 namespace PT {
@@ -118,8 +118,8 @@ namespace PT {
         return _iprob(uv).iprob();
       }
     }
-    decltype(auto) operator()(const auto& uv) const { assert(mstd::linear_interval<Probability>(0,1).contains(iprob(uv))); return iprob(uv); }
-    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { assert(mstd::linear_interval<Probability>(0,1).contains(iprob(uv))); return iprob(uv); }
+    decltype(auto) operator()(const auto& uv) const { assert((mstd::linear_interval<Probability>{0,1}.contains(iprob(uv)))); return iprob(uv); }
+    decltype(auto) operator()(const pd_iprob_tag, const auto& uv) const { assert((mstd::linear_interval<Probability>{0,1}.contains(iprob(uv)))); return iprob(uv); }
 
     using Probability = std::remove_cvref_t<decltype(std::declval<pd_score_util_p>().iprob(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Probability>);
@@ -269,7 +269,7 @@ namespace PT {
       using Weight = decltype(score(std::declval<Switching>(), leaves_to_save));
       Weight result = 0;
       DEBUG4(size_t count = 0);
-      for(auto sw_iter = SwitchingFactory<Network, const Nodes*>{&leaves_to_save}.begin(); sw_iter.is_valid(); ++sw_iter) {
+      for(auto sw_iter = SwitchingFactory<Network>{leaves_tag{}, leaves_to_save}.begin(); sw_iter.is_valid(); ++sw_iter) {
         const Switching& sw = sw_iter.get_switching();
         const auto sw_prob = probability_of_switching(sw, leaves_to_save);
         const auto sw_score = score(sw, leaves_to_save);
@@ -335,6 +335,8 @@ namespace PT {
     using SolutionAccu = mstd::SolutionAccumulator<NodeVec, Weight>;
     using Helper = pd_switching_helper<Network, FuncIProb>;
     using typename Helper::Switching;
+    using typename Helper::Probability;
+    using ProbWeight = std::pair<Probability, Weight>;
 
     template<class... Args>
     static Score make_score(Args&&... args) {
@@ -348,7 +350,7 @@ namespace PT {
     Weight operator()(const Network& N, const Nodes& leaves_to_save) {
       Score::init(N, leaves_to_save);
       return Helper::score_for_leaf_set(leaves_to_save, [&](const Switching& sw, const auto& leaves) {
-        return std::ranges::fold_left(sw.get_active_edges(leaves), Weight{0},
+        return std::ranges::fold_left(sw.get_active_edges_above(leaves), Weight{0},
             [&](const Weight x, const auto& uv){ return x + Score::operator()(pd_weight_tag{}, uv); });
       });
     }

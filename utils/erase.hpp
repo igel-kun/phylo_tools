@@ -78,7 +78,7 @@ namespace mstd {
     C output;
     const size_t c_size = c.size();
     const size_t k_size = keys.size();
-    if constexpr (VectorType<C>)
+    if constexpr (HasReserve<C>)
       if(k_size < c_size) output.reserve(c_size - k_size);
     for(auto& x: c)
       if(!test(keys, x))

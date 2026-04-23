@@ -22,7 +22,8 @@ namespace PT {
       DEBUG4(std::cout << "SLOPE reduction on " << c << "\n");
       if(c.size() > 1) {
         Container result;
-        result.reserve(c.size());
+        if constexpr (HasReserve<Container>)
+          result.reserve(c.size());
         const auto end = c.end();
         auto iter = c.begin();
         auto max_q = result.emplace(result.end(), *(iter++));

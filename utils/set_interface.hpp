@@ -86,8 +86,16 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<class Index, class C> requires (std::invocable<C, Index> && !ContainerType<C>)
   decltype(auto) lookup(C&& c, Index&& index) { return c(index); }
 
+  // test if something evaluates to non-empty or true
+  template<class T, std::invocable<T> F>
+    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> or mstd::IterableType<std::invoke_result_t<F,T>>)
+  bool test(const F& f, const T& x) {
+    if constexpr (mstd::IterableType<std::invoke_result_t<F,T>>)
+      return not f(x).empty();
+    else return f(x);
+  }
   // test if something is in the set
-  template<SetType S>
+  template<class S> requires (SetType<S> or MultiSetType<S>)
   bool test(const S& _set, const value_type_of_t<S>& key) { return _set.count(key); }
   template<MapType M>
   bool test(const M& _map, const key_type_of_t<M>& key) { return _map.count(key); }
@@ -95,14 +103,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   bool test(const V& vec, const Key& key) { return mstd::find(vec, key) != std::end(vec); }
   template<class T>
   bool test(const T& x, const T& y) { return x == y; }
-
-  template<class T, std::invocable<T> F>
-    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> or mstd::IterableType<std::invoke_result_t<F,T>>)
-  bool test(const F& f, const T& x) {
-    if constexpr (mstd::IterableType<decltype(f(x))>)
-      return not f(x).empty();
-    else return f(x);
-  }
 
   template<class T, class Arg>
   concept is_testable = requires(T t, Arg arg) { mstd::test(t, arg); };
@@ -191,13 +191,6 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   auto rend(const std::unordered_set<Key, Hash, KE, A>& s) { return s.end(); }
   template<class Key, class Hash, class KE, class A>
   auto rbend(std::unordered_set<Key, Hash, KE, A>& s) { return s.end(); }
-
-
-  template<class T> concept HasFront = requires(T x) { x.front(); };
-  template<class T> concept HasBack = requires(T x) { x.back(); };
-  template<class T> concept HasPopBack = requires(T x) { x.pop_back(); };
-  template<class T> concept HasPopFront = requires(T x) { x.pop_front(); };
-  template<class Q> concept HasValuePop = requires(Q q) { { q.value_pop() } -> std::convertible_to<value_type_of_t<Q>>; };
 
   template<IterableType T>
   constexpr decltype(auto) front(T&& c) {
@@ -301,22 +294,21 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   }
 
 
-  template<class T> concept is_poppable = HasPopFront<T> or HasPopBack<T>;
-  template<class T> concept is_value_poppable = requires(T t) {  { value_pop(t) } -> std::convertible_to<value_type_of_t<T>>;  };
-
+  template<class T> constexpr bool is_poppable = HasPopFront<T> or HasPopBack<T>;
+  template<class T> concept Poppable = is_poppable<T>;
+  
+  template<class T> constexpr bool is_value_poppable = requires(T t) {  { value_pop(t) } -> std::convertible_to<value_type_of_t<T>>;  };
+  template<class T> concept ValuePoppable = is_value_poppable<T>;
 
 
   // value-moving pop operations
-  template<StrictIterableType Q> requires value_poppable<Q>
-  auto value_pop_back(Q& q) { return q.value_pop(); }
-
-  template<VectorType Q> requires (not value_poppable<Q>)
+  template<VectorType Q>
   auto value_pop(Q& q) {
     auto result = std::move(q.back());
     q.pop_back();
     return result;
   }
-  template<ContainerType Q> requires (not VectorType<Q> and not value_poppable<Q>)
+  template<ContainerType Q> requires (not VectorType<Q>)
   auto value_pop(Q& q) {
     const auto iter = q.begin();
     value_type_of_t<Q> result = std::move(*iter);

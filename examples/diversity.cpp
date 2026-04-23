@@ -331,10 +331,11 @@ auto translate_leaves(SolAccu&& accu, Translate&& translate) {
   }
   return Result(std::forward<SolAccu>(accu));
 }
-template<NodeContainerType Nodes, class Translate>
+template<NodeIterableType Nodes, class Translate>
 auto translate_leaves(Nodes&& nodes, Translate&& translate) {
   NodeVec result;
-  result.reserve(nodes.size());
+  if constexpr (mstd::HasReserve<Nodes>)
+    result.reserve(nodes.size());
   for(const NodeDesc x: nodes)
     mstd::append(result, mstd::access(translate, x));
   return result;

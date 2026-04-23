@@ -37,27 +37,30 @@ namespace PT {
 
 
     // ------- construction & desctruction ---------
-    // NOTE: we allow construction by either roots or leaves, which is autodetected by checking whether the first one has children
     Switching() = default;
 
-    template<NodeOrContainerType Nodes, class DefaultParent>
+    // NOTE: we allow construction by either roots or leaves, indicated by the passed tag
+    template<NodeOrIterableType Nodes, class DefaultParent>
     Switching(const roots_tag, const Nodes& X, DefaultParent&& parent_select) {
-      for(const NodeDesc r: Net::retis_below(X))
+      for(const NodeDesc r: Net::retis_below(&X))
         append(active_parent, r, parent_select(r));
     }
-    template<NodeOrContainerType Nodes, class DefaultParent>
+    template<NodeOrIterableType Nodes, class DefaultParent>
     Switching(const leaves_tag, const Nodes& X, DefaultParent&& parent_select) {
-      for(const NodeDesc r: Net::retis_above(X))
+      for(const NodeDesc r: Net::retis_above(&X))
         append(active_parent, r, parent_select(r));
     }
 
     template<class DefaultParent>
-    Switching(const Net& N, DefaultParent&& parent_select): Switching(roots_tag{}, N.roots(), std::forward<DefaultParent>(parent_select)) {}
+    Switching(const Net& N, DefaultParent&& parent_select):
+      Switching(roots_tag{}, N.roots(), std::forward<DefaultParent>(parent_select)) {}
 
-    template<RootsOrLeavesTag Tag, NodeOrContainerType Nodes>
-    Switching(const Tag t, const Nodes& X): Switching(t, X, FirstParent{}) {}
+    template<RootsOrLeavesTag Tag, NodeOrIterableType Nodes>
+    Switching(const Tag t, const Nodes& X):
+      Switching(t, X, FirstParent{}) {}
 
-    Switching(const Net& N): Switching(N, FirstParent{}) {}
+    Switching(const Net& N):
+      Switching(N, FirstParent{}) {}
 
 
     // ------- operators --------
@@ -66,7 +69,7 @@ namespace PT {
     // return true iff (u,v) is switched off (to be useed as 'forbidden' predicate)
     bool operator()(const NodeDesc x, const NodeDesc y) const { return is_switched_off(x, y); }
     bool operator()(const NodePair uv) const { return operator()(uv.first, uv.second); }
-    bool operator()(const NetEdge& uv) const { return operator()(uv.as_pair()); }
+    bool operator()(const EdgeType auto& uv) const { return operator()(uv.as_pair()); }
     
     // ------- methods: initialization --------
     // ------- methods: query --------
@@ -84,8 +87,24 @@ namespace PT {
 
     template<EdgeContainerType Edges = std::vector<NetEdge>>
     Edges get_active_edges() const {
-      return active_parent | std::ranges::views::transform([](const auto& vu_pair) { return NetEdge{reverse_edge_tag{}, vu_pair}; });
+      Edges result;
+      if constexpr (mstd::HasReserve<Edges>)
+        result.reserve(active_parent.size());
+      for(auto uv: active_parent | std::ranges::views::transform([](const auto& vu_pair) { return NetEdge{reverse_edge_tag{}, vu_pair}; }))
+        append(result, std::move(uv));
+      return result;
     }
+    template<EdgeContainerType Edges = std::vector<NetEdge>, NodeOrIterableType Nodes>
+    Edges get_active_edges_above(const Nodes& X) const {
+      Edges result;
+      for(const auto& v: Net::nodes_above(&X)) {
+        const auto iter = active_parent.find(v);
+        if(iter != active_parent.end())
+          append(result, iter->second, v);
+      }
+      return result;
+    }
+
     // ------- methods: modification --------
   };
  

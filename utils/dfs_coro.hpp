@@ -132,10 +132,14 @@ namespace PT {
       advance();
     }
 
-    template<NodeOrIterableType RootsInit, class... Args>
+    template<NodeOrIterableType<mstd::TR_PtrOK> RootsInit, class... Args>
     DFSIterator(RootsInit&& _roots, Args&&... args): 
       Info(std::forward<RootsInit>(_roots), std::forward<Args>(args)...)
-    { advance(); }
+    {
+      // if our Roots is a (heavy) container, then flag the copy that is made here
+      static_assert(not mstd::ContainerType<Roots> or mstd::SingletonSetType<Roots> or std::is_same_v<RootsInit, Roots>);
+      advance();
+    }
 
     // ------- operators --------
   public:

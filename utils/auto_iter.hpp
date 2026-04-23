@@ -41,6 +41,10 @@ namespace mstd {
     constexpr _auto_iter(Container&& c, Args&&... args) requires (reverse):
       _auto_iter(mstd::rbegin(std::forward<Container>(c)), std::rend(c), std::forward<Args>(args)...)
     {}
+    template<IterableType Container, class... Args>
+    constexpr _auto_iter(Container* c, Args&&... args):
+      _auto_iter(*c, std::forward<Args>(args)...)
+    {}
 
     // construct from two iterators (begin and end)
     template<class Iterator_, class EndIter_, class... Args>
@@ -101,7 +105,7 @@ namespace mstd {
     auto value_pop() { auto result = front(); pop_front(); return result; }
 
     // --------------------- Query ---------------------------
-    const decltype(auto) front() const { return get_iter().operator*(); }
+    decltype(auto) front() const { return get_iter().operator*(); }
     decltype(auto) front() { return get_iter().operator*(); }
 
     bool is_valid() const { return get_iter() != end_it; }
@@ -160,7 +164,7 @@ namespace mstd {
     auto value_pop() { auto result = front(); pop_front(); return result; }
 
     // --------------------- Query ---------------------------
-    const decltype(auto) front() const { return Iterator::operator*(); }
+    decltype(auto) front() const { return Iterator::operator*(); }
     decltype(auto) front() { return Iterator::operator*(); }
     bool empty() const { return Iterator::is_invalid(); }
     Iterator& get_iter() & { return *this; }

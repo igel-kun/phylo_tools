@@ -124,7 +124,7 @@ int main(const int argc, const char** argv) {
     // list all switchings of N
     using Switchings = SwitchingFactory<MyNet>;
     for(auto sw: Switchings{N}) {
-      auto traversal = N.edges_below(N.roots(), sw); // TODO: turn this into a pre-order to cause less confusion for the poor edge-emplacer juggling the root
+      auto traversal = N.edges(sw); // TODO: turn this into a pre-order to cause less confusion for the poor edge-emplacer juggling the root
       const MyTree T(traversal, DefaultDataExtracter<MyNet>{});
       std::cout << get_extended_newick(T) << '\n';
     }

@@ -199,26 +199,26 @@ namespace mstd {
   public:
     iterable_bitset() noexcept = default;
 
-    iterable_bitset(const size_t _num_bits, const bool _set_all):
+    explicit iterable_bitset(const size_t _num_bits, const bool _set_all):
       _capacity(_num_bits), storage()
     {
       if(_set_all) set_all();
     }
 
-    iterable_bitset(const size_t _num_bits):
+    explicit iterable_bitset(const size_t _num_bits):
       iterable_bitset(_num_bits, false)
     {}
     
     // construct with some items
     template<IterableType C>
-    iterable_bitset(C&& init, const size_t _num_bits = 0):
+    explicit iterable_bitset(C&& init, const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {
       for(const auto& x: init) set(x);
     }
 
     template<IterableType InitSet_>
-    iterable_bitset(const typename InitSet_::const_iterator _begin, const typename InitSet_::const_iterator _end, const size_t _num_bits = 0):
+    explicit iterable_bitset(const typename InitSet_::const_iterator _begin, const typename InitSet_::const_iterator _end, const size_t _num_bits = 0):
       iterable_bitset(_num_bits, 0)
     {
       for(typename InitSet_::const_iterator i = _begin; i != _end; ++i) set(*i);
@@ -562,6 +562,7 @@ namespace mstd {
       }
       _capacity = new_capacity;
     }
+    void reserve(const size_t new_capacity) { set_capacity(new_capacity); }
   };
 
 
@@ -583,7 +584,7 @@ namespace mstd {
     // ------- construction & desctruction ---------
     using Parent::Parent;
 
-    ordered_bitset(const size_t _num_bits, const bool _set_all = 0):
+    explicit ordered_bitset(const size_t _num_bits, const bool _set_all = 0):
       Parent(_num_bits, 0)
     {
       storage.resize(bucket_of(_num_bits - 1) + 1, _set_all * full_bucket);
@@ -786,6 +787,7 @@ namespace mstd {
       }
       _capacity = new_capacity;
     }
+    void reserve(const size_t new_capacity) { set_capacity(new_capacity); }
 
 
     //! flip bits starting from x upwards until k'th zero encountered

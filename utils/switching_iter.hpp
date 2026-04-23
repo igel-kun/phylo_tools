@@ -14,6 +14,7 @@ namespace PT {
   // ------- SwitchingIter: main class ---------
   // NOTE: we can pass a set of leaves, in which case only the partial switchings of reticulations above those leaves will be iterated
   template<StrictPhylogenyType Net_, class DefaultParent_ = typename Switching<Net_>::FirstParent>
+    requires (std::is_invocable_v<DefaultParent_, const NodeDesc>)
   struct SwitchingIter:
     public mstd::iter_traits_from_reference<Switching<Net_>>
   {
@@ -87,6 +88,7 @@ namespace PT {
   
   // ------- SwitchingIter: factories ---------
   template<StrictPhylogenyType Net, class DefaultParent = typename Switching<Net>::FirstParent>
+    requires (std::is_invocable_v<DefaultParent, const NodeDesc>)
   using SwitchingFactory = mstd::IterFactory<SwitchingIter<Net, DefaultParent>>;
  
   // ------- SwitchingIter: concepts ---------

@@ -83,15 +83,28 @@ namespace PT {
 	using DefaultSeenSet = std::conditional_t<is_depth_last_traversal(tt),
         typename DefaultSeenMap_<std::remove_cvref_t<T>, tt>::type, typename DefaultSeenSet_<T, tt>::type>;
 
-  // the root storage is either a non-owning reverse auto_iter if we don't own the roots, or a poppable root container
+  // the root storage is either a non-owning auto_iter if we don't own the roots, or a poppable root container if we do
+  // NOTE: const root containers are not allowed! You should pass them as pointer to indicate that the traversal DOES NOT own the roots!
   template<class Roots>  struct ProtoDFSRootStorage {};
-  template<mstd::IterableType<mstd::TR_ConstOK> Roots>  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<mstd::RBeginType<Roots>>; };
-  template<mstd::IterableType<mstd::TR_Strict> Roots>  struct ProtoDFSRootStorage<Roots> { using type = Roots; };
+  // pointer
+  template<mstd::IterableType<mstd::TR_ConstOK> Roots>
+  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<Roots>; };
+  // container
+  template<mstd::ContainerType<mstd::TR_Strict> Roots> requires mstd::is_poppable<Roots>
+  struct ProtoDFSRootStorage<Roots> { using type = Roots; };
+  // non-container iterables
+  template<mstd::IterableType<mstd::TR_Strict> Roots> requires (not mstd::ContainerType<Roots, mstd::TR_Strict> or not mstd::is_poppable<Roots>)
+  struct ProtoDFSRootStorage<Roots> { using type = mstd::IterFactory<Roots>; };
+  // nodes
   template<> struct ProtoDFSRootStorage<NodeDesc> { using type = NodeSingleton; };
   template<> struct ProtoDFSRootStorage<NodeDesc*> { using type = mstd::IterFactory<NodeDesc*>; };
-  
+
   template<NodeOrIterableType<mstd::TR_PtrOK> Roots>
   using DFSRootStorage = typename ProtoDFSRootStorage<Roots>::type;
+
+
+
+
 
   // store roots, forbidden and seen
   template<NodeOrIterableType<mstd::TR_PtrOK> Roots_,
@@ -102,9 +115,6 @@ namespace PT {
     public mstd::optional_tuple<Forbidden_, SeenSet_>
   {
     // ------- static stuff --------
-    using Roots = DFSRootStorage<Roots_>;
-    static_assert(mstd::IterableType<Roots>);
-    static_assert(not std::is_pointer_v<Roots_> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
     using Forbidden = Forbidden_;
     using SeenSet = SeenSet_;
     using Parent = mstd::optional_tuple<Forbidden, SeenSet>;
@@ -117,8 +127,13 @@ namespace PT {
     static constexpr bool forbidden_indirect = std::is_pointer_v<Forbidden>;
     static constexpr bool seen_indirect = std::is_pointer_v<SeenSet>;
 
+    using Roots = DFSRootStorage<Roots_>;
+    static_assert(mstd::IterableType<Roots>);
+    static_assert(not std::is_const_v<Roots>);
+    static_assert(not std::is_pointer_v<Roots_> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
+
     // ------- members --------
-    DFSRootStorage<Roots_> roots;
+    Roots roots;
 
 
     // ------- construction & desctruction ---------
@@ -209,14 +224,14 @@ namespace PT {
     }
 
     auto get_current_root() const {
-      if constexpr (roots_indirect)
+      if constexpr (roots_indirect) {
         return *get_roots();
-      else constexpr (HasBack<Roots> and HasPopBack<Roots>) {
+      } else if constexpr (mstd::HasBack<Roots> and mstd::HasPopBack<Roots>) {
         return mstd::back(get_roots());
       } else return mstd::front(get_roots());
     }
     bool roots_spent() const {
-      if constexpr (roots_indirect)
+      if constexpr (roots_indirect or mstd::VerifyableIter<Roots>)
         return get_roots().is_invalid();
       else return get_roots().empty();
     }

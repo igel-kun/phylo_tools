@@ -237,6 +237,7 @@ namespace PT {
 		using Parent::count_edge;
     using Parent::has_edge_data;
     using Parent::create_node;
+    using Parent::has_unique_root;
 
     // ------- members --------
     // ------- construction & desctruction ---------
@@ -973,7 +974,12 @@ namespace PT {
         return nodes_below<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
       else return nodes_above<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
-    template<TraversalType o = postorder> auto nodes() const { return nodes<o>(below_tag{}, _roots); }
+    template<TraversalType o = postorder>
+    auto nodes() const {
+      if constexpr (has_unique_root)
+        return nodes<o>(below_tag{}, _roots);
+      else return nodes<o>(below_tag{}, &_roots);
+    }
 
     // --------------- node traversals (with pred) ------------------
     // NOTE: this cannot be static since we may need to grab the _roots of the current network
@@ -1002,11 +1008,17 @@ namespace PT {
     }
 
     // -------------- preorder -----------------
-    auto nodes_preorder() const  { return nodes_below<preorder>(_roots); }
+    auto nodes_preorder() const  {
+      if constexpr (has_unique_root)
+        return nodes_below<preorder>(_roots);
+      else return nodes_below<preorder>(&_roots);
+    }
     
     template<class First, class... Args> requires (not DirectionTag<First>)
     auto nodes_preorder(First&& first, Args&&... args) const  {
-      return nodes_below<preorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+      if constexpr (has_unique_root)
+        return nodes_below<preorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+      else return nodes_below<preorder>(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
     }
     
     template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
@@ -1032,11 +1044,17 @@ namespace PT {
     */
 
     // -------------- postorder -----------------
-    auto nodes_postorder() const  { return nodes_below<postorder>(_roots); }
+    auto nodes_postorder() const  {
+      if constexpr (has_unique_root)
+        return nodes_below<postorder>(_roots);
+      else return nodes_below<postorder>(&_roots);
+    }
 
     template<class First, class... Args> requires (not DirectionTag<First>)
     auto nodes_postorder(First&& first, Args&&... args) const {
-      return nodes_below<postorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+      if constexpr (has_unique_root)
+        return nodes_below<postorder>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+      else return nodes_below<postorder>(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
     }
     
     template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
@@ -1051,10 +1069,18 @@ namespace PT {
     static auto leaves_below(Args&&... args) { return nodes_with_below(is_leaf, std::forward<Args>(args)...); }
     // there are no "leaves_above" ^^
 
-    auto leaves() const  { return leaves_below(_roots); }
+    auto leaves() const  {
+      if constexpr (has_unique_root)
+        return leaves_below(_roots);
+      else return leaves_below(&_roots);
+    }
 
     template<class First, class... Args> requires (not DirectionTag<First>)
-    auto leaves(First&& first, Args&&... args) const  { return leaves_below(_roots, std::forward<First>(first), std::forward<Args>(args)...); }
+    auto leaves(First&& first, Args&&... args) const  { 
+      if constexpr (has_unique_root)
+        return leaves_below(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+      else return leaves_below(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
+    }
     
     template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
     static auto leaves(const DIR_tag dt, Roots&& rt, Args&&... args) {
@@ -1069,10 +1095,18 @@ namespace PT {
     template<TraversalType o = preorder, class... Args>
     static auto retis_above(Args&&... args) { return nodes_with_above<o>(is_reti, std::forward<Args>(args)...); }
 
-    template<TraversalType o = preorder> auto retis() const  { return retis_below<o>(_roots); }
+    template<TraversalType o = preorder> auto retis() const  {
+      if constexpr (has_unique_root)
+        return retis_below<o>(_roots);
+      else return retis_below<o>(&_roots);
+    }
 
     template<TraversalType o = preorder, class First, class... Args> requires (not DirectionTag<First>)
-    auto retis(First&& first, Args&&... args) const  { return retis_below<o>(_roots, std::forward<First>(first), std::forward<Args>(args)...); }
+    auto retis(First&& first, Args&&... args) const  {
+      if constexpr (has_unique_root)
+        return retis_below<o>(_roots, std::forward<First>(first), std::forward<Args>(args)...);
+      else return retis_below<o>(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
+    }
 
     template<TraversalType o = preorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
     static auto retis(const DIR_tag dt, Roots&& rt, Args&&... args) {
@@ -1112,11 +1146,18 @@ namespace PT {
     }
 
     template<TraversalType o = postorder, mstd::movable Forbidden>
-    auto edges(Forbidden&& forbidden) const { return edges_below<o>(_roots, std::forward<Forbidden>(forbidden)); }
+    auto edges(Forbidden&& forbidden) const {
+      if constexpr (has_unique_root)
+        return edges_below<o>(_roots, std::forward<Forbidden>(forbidden));
+      else return edges_below<o>(&_roots, std::forward<Forbidden>(forbidden));
+    }
     
     template<TraversalType o = postorder>
-    auto edges() const { return edges_below<o>(_roots); }
-
+    auto edges() const {
+      if constexpr (has_unique_root)
+        return edges_below<o>(_roots); 
+      else return edges_below<o>(&_roots); 
+    }
 
     template<class... Args> auto edges_preorder(Args&&... args) const  { return edges<preorder>(std::forward<Args>(args)...); }
     //template<class... Args> auto edges_inorder(Args&&... args) const   { return edges<inorder>(std::forward<Args>(args)...); }
