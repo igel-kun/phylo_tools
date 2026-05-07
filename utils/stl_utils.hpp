@@ -21,6 +21,7 @@
 #   include<charconv> // for from_chars
 #endif
 
+#include "platform.hpp"
 #include "config.hpp"
 #include "hash_utils.hpp"
 #include "stl_concepts.hpp"

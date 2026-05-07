@@ -594,8 +594,7 @@ void test_dominators() {
   
   {
     const MyNetwork N = parse_newick<MyNetwork>(random_net, Ex_edge_data{}, mstd::AnythingFromString<uint32_t>{});
-    N.print_summary(std::cout);
-    std::cout << ExtendedDisplay(N) << '\n';
+    std::cout << ExtendedDisplay(N) << '\n' << N.get_summary(true) << '\n';
 
     NaiveDominatorOracle dom_oracle(N);
     // NOTE: remember to extract the NodeDesc in the Network as NodeData

@@ -141,6 +141,7 @@ namespace PT {
     class ExtractNodeLabel = void>
   struct DataExtracter_ed_nl_: public DataExtracter_nl_<Network, ExtractNodeLabel> {
     using Parent = DataExtracter_nl_<Network, ExtractNodeLabel>;
+    using NetEdge = typename Network::Edge;
     using ExtractEdgeData = ExtractEdgeData_;
     using Parent::custom_node_label_maker;
     using Parent::operator();
@@ -197,14 +198,14 @@ namespace PT {
     decltype(auto) operator()(const Ex_edge_data, Adj&& v) {
       if constexpr (std::is_invocable_v<ExtractEdgeData, Adj&&>){
         return get_edge_data(std::forward<Adj>(v));
-      } else return get_edge_data(Network::Edge(NoNode, std::forward<Adj>(v)));
+      } else return get_edge_data(NetEdge{NoNode, std::forward<Adj>(v)});
     }
 
     template<AdjacencyType Adj>
     decltype(auto) operator()(const Ex_edge_data, Adj&& v) const {
       if constexpr (std::is_invocable_v<ExtractEdgeData, Adj&&>){
         return get_edge_data(std::forward<Adj>(v));
-      } else return get_edge_data(Network::Edge(NoNode, std::forward<Adj>(v)));
+      } else return get_edge_data(NetEdge{NoNode, std::forward<Adj>(v)});
     }
 
     template<EdgeType Edge> // NOTE: if get_edge_data is not invocable with an Edge, we'll extract the edge's adjacency
@@ -425,7 +426,7 @@ namespace PT {
 
   //! In order to allow passing a pre-made data extracter to the make_emplacer helper functions, we allow passing one here
   template<OptionalPhylogenyType SourcePhylo, DataExtracterType PremadeExtracter>
-  auto make_data_extracter(PremadeExtracter&& extracter) { return extracter; }
+  decltype(auto) make_data_extracter(PremadeExtracter&& extracter) { return std::forward<PremadeExtracter>(extracter); }
 
 
   template<class T> struct DefaultDataExtracter_{};

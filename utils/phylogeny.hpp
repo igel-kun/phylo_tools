@@ -940,14 +940,14 @@ namespace PT {
 
     // --------------- relative node traversals (below) ------------------
     // list all nodes below u in order _o (default: postorder)
-    template<TraversalType o = postorder, NodeOrIterableType Roots, class Forbidden> 
+    template<TraversalType o = postorder, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class Forbidden> 
     static auto nodes_below(Roots&& R, Forbidden&& forbidden) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
         return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
       else return NodeTraversal<o, Phylogeny, RootSet, Forbidden>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
-    template<TraversalType o = postorder, NodeOrIterableType Roots> 
+    template<TraversalType o = postorder, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots> 
     static auto nodes_below(Roots&& R) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       if constexpr (std::is_void_v<DefaultSeen>)
@@ -968,7 +968,7 @@ namespace PT {
     template<class... Args> static auto nodes_above_postorder(Args&&... args) { return nodes_above<postorder>(std::forward<Args>(args)...); }
 
     // --------------- absolute node traversals (below (default) or above roots) ------------------
-    template<TraversalType o = postorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = postorder, DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto nodes(const DIR_tag dt, Roots&& rt, Args&&...args) {
       if constexpr (mstd::is_convertible_v<DIR_tag, below_tag>)
         return nodes_below<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
@@ -991,18 +991,18 @@ namespace PT {
       return mstd::make_filtered_factory(nodes<o>(std::forward<First>(first), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
     }
     // NOTE: however, if we are given a root-set, then we can be static
-    template<TraversalType o = preorder, NodePredicateType Predicate, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, NodePredicateType Predicate, DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto nodes_with(Predicate&& pred, const DIR_tag dt, Roots&& rt, Args&&... args) {
       return mstd::make_filtered_factory(
           nodes<o>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
     }
 
-    template<TraversalType o = preorder, NodePredicateType Predicate, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, NodePredicateType Predicate, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto nodes_with_below(Predicate&& pred, Roots&& rt, Args&&... args) {
       return nodes_with<o>(std::forward<Predicate>(pred), below_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
-    template<TraversalType o = preorder, NodePredicateType Predicate, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, NodePredicateType Predicate, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto nodes_with_above(Predicate&& pred, Roots&& rt, Args&&... args) {
       return nodes_with<o>(std::forward<Predicate>(pred), above_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
@@ -1021,7 +1021,7 @@ namespace PT {
       else return nodes_below<preorder>(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
     }
     
-    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto nodes_preorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes<preorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
@@ -1057,7 +1057,7 @@ namespace PT {
       else return nodes_below<postorder>(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
     }
     
-    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto nodes_postorder(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes<postorder>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
@@ -1082,7 +1082,7 @@ namespace PT {
       else return leaves_below(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
     }
     
-    template<DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto leaves(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes_with<postorder>(is_leaf, dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
@@ -1108,19 +1108,19 @@ namespace PT {
       else return retis_below<o>(&_roots, std::forward<First>(first), std::forward<Args>(args)...);
     }
 
-    template<TraversalType o = preorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto retis(const DIR_tag dt, Roots&& rt, Args&&... args) {
       return nodes_with<o>(is_reti, dt, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
 
     // --------------- relative edge traversals (below) ------------------
-    template<TraversalType o = postorder, NodeOrIterableType Roots, mstd::movable Forbidden>
+    template<TraversalType o = postorder, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, mstd::movable Forbidden>
     static auto edges_below(Roots&& R, Forbidden&& forbidden) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       return AllEdgesTraversal<o, Phylogeny, RootSet, std::remove_cvref_t<Forbidden>>(std::forward<Roots>(R), std::forward<Forbidden>(forbidden));
     }
-    template<TraversalType o = postorder, NodeOrIterableType Roots>
+    template<TraversalType o = postorder, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots>
     static auto edges_below(Roots&& R) {
       using RootSet = std::conditional_t<AdjacencyType<Roots>, NodeDesc, std::remove_cvref_t<Roots>>;
       return AllEdgesTraversal<o, Phylogeny, RootSet>(std::forward<Roots>(R));
@@ -1138,7 +1138,7 @@ namespace PT {
     template<class... Args> static auto edges_above_postorder(Args&&... args) { return edges_above<postorder>(std::forward<Args>(args)...); }
 
     // --------------- absolute edge traversals (below (default) or above roots) ------------------
-    template<TraversalType o = postorder, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = postorder, DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     auto edges(const DIR_tag dt, Roots&& rt, Args&&...args) const {
       if constexpr (mstd::is_convertible_v<DIR_tag, below_tag>)
         return edges_below<o>(std::forward<Roots>(rt), std::forward<Args>(args)...);
@@ -1173,18 +1173,18 @@ namespace PT {
       return mstd::make_filtered_factory(edges<o>(std::forward<First>(first), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
     }
     // NOTE: however, if we are given a root-set, then we can be static
-    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, DirectionTag DIR_tag, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, DirectionTag DIR_tag, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto edges_with(Predicate&& pred, const DIR_tag dt, Roots&& rt, Args&&... args) {
       return mstd::make_filtered_factory(
           edges<o>(dt, std::forward<Roots>(rt), std::forward<Args>(args)...).begin(), std::forward<Predicate>(pred));
     }
 
-    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto edges_with_below(Predicate&& pred, Roots&& rt, Args&&... args) {
       return edges_with<o>(std::forward<Predicate>(pred), below_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
 
-    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, NodeOrIterableType Roots, class... Args>
+    template<TraversalType o = preorder, EdgePredicateType<Phylogeny> Predicate, NodeOrIterableType<mstd::TR_ConstRefPtrOK> Roots, class... Args>
     static auto edges_with_above(Predicate&& pred, Roots&& rt, Args&&... args) {
       return edges_with<o>(std::forward<Predicate>(pred), above_tag{}, std::forward<Roots>(rt), std::forward<Args>(args)...);
     }
@@ -1397,7 +1397,7 @@ namespace PT {
             std::forward<Args>(args)...
           }
         );
-      DEBUG3(print_summary(std::cout));
+      DEBUG3(std::cout << get_summary(true) << '\n');
     }
     // if the user doesn't need access to the node-translation, then use a temporary one
     template<mstd::IterableType Edges, DataExtracterType Extracter, class First, class... Args> 
@@ -1421,7 +1421,7 @@ namespace PT {
         
       build_from_edges(std::forward<Edges>(edges),
           EdgeEmplacers<true, SourcePhyloFromEdgeData>::make_emplacer(*this, std::forward<First>(first), std::forward<EmplacerArgs>(args)...));
-      DEBUG3(print_summary(std::cout));
+      DEBUG3(std::cout << get_summary(true) << '\n');
     }
     template<mstd::IterableType Edges> requires (not PhylogenyType<Edges>)
     explicit Phylogeny(Edges&& edges):
@@ -1454,7 +1454,7 @@ namespace PT {
           DEBUG4(std::cout << "marking roots: "<<some_nodes<<"\n");
           emplacer.mark_roots(some_nodes);
         }
-        DEBUG2(print_summary(std::cout));
+        DEBUG2(std::cout << get_summary(true) << '\n');
       }
     }
     // "copy" construction without root (using all roots of N)
@@ -1565,20 +1565,16 @@ namespace PT {
 
 
     // =================== i/o ======================
-    std::string get_summary() const {
+    std::string get_summary(const bool with_adjacencies = false) const {
       std::ostringstream out;
       out << "network has "<< num_edges() <<" edges, "<< _num_nodes <<" nodes, "<<num_roots()<<" roots --> reticulation number: " << reticulation_number() << '\n';
       out << "leaves: "<<leaves()<<"\n";
       out << Parent::num_nodes() << " nodes: "<<nodes()<<'\n';
       out << Parent::num_edges() << " edges: "<<edges()<<'\n';
+      if(with_adjacencies)
+        for(const NodeDesc u: nodes())
+          out << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
       return std::move(out).str();
-    }
-
-    std::ostream& print_summary(std::ostream& os) const {
-      DEBUG3(os << get_summary() << '\n');
-      for(const NodeDesc u: nodes())
-        os << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
-      return os << "End Summary\n";
     }
 
     template<class NodeDataToString = mstd::IgnoreFunction<std::string>>

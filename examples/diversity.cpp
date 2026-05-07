@@ -356,7 +356,7 @@ auto LSA_based_diversity(const MyNetwork& N, First&& first, Args&&... args) {
   const bool expected_weights = conf.summary == 1;
   NodeTranslation net_to_lsa;
   const LSATree lsa_tree = get_lsa_tree(N, expected_weights, net_to_lsa);
-  DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n'; lsa_tree.print_summary(std::cout); std::cout << '\n';);
+  DEBUG3(std::cout << "constructed LSA-tree:\n" << ExtendedDisplay(lsa_tree) << '\n' << lsa_tree.get_summary(true) << '\n';);
   if(conf.score == 1) { // tree diversity
     if(conf.verbose) std::cout << "SCORE: tree-diversity of LSA-tree with " << (expected_weights ? "expected"sv : "max-likelihood"sv) << " weights\n";
     return translate_leaves<LSATree>(pd_tree_diversity<LSATree>()(
@@ -448,8 +448,7 @@ void phylo_diversity_subsystem() {
 
   if(conf.verbose) {
     std::cout << "N ("<<N.num_nodes()<<" nodes, "<<N.num_edges()<<" edges -> reti num:" << N.num_edges()-N.num_nodes()+1<<"):" << std::endl;
-    std::cout << ExtendedDisplay(N) << std::endl;
-    N.print_summary(std::cout);
+    std::cout << ExtendedDisplay(N) << '\n' << N.get_summary(true) << '\n';
   }
 
   if(conf.all_leaves) {
@@ -486,9 +485,11 @@ void phylo_diversity_subsystem() {
               " vs. " + std::to_string(bf_score) + " by brute-force\n");
       }
     }
-    for(const auto& [sol, score]: solutions) {
-      std::cout << std::fixed << std::setprecision(2)<< "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
-    }
+    if(not solutions.empty()) {
+      for(const auto& [sol, score]: solutions) {
+        std::cout << std::fixed << std::setprecision(2)<< "solution with diversity "<<score<<": " << (sol | rv::transform([&](const NodeDesc u){ return N[u].label();})) <<"\n";
+      }
+    } else std::cout << "no solution\n";
   }
 }
 

@@ -50,7 +50,7 @@
 #endif
 
 #ifdef __clang__
-#   define CLANG_VERSION (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevelL__)
+#   define CLANG_VERSION (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevel__)
 #else
 #   define CLANG_VERSION 0
 #endif

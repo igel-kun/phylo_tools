@@ -94,10 +94,11 @@ namespace PT{
   
     // construct a biconnected component containing the arc uv and store it in 'output'
     //NOTE: remember to set the root of the output component after calling this!
+#warning "this seems odd -- why would we not just construct top-down?"
     void make_component_along(const NodeDesc rt, const NodeDesc v) const {
       if(append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v << " (root "<<rt<<")\n");
-        auto& v_node = node_of<Network>(v); // NOTE: make_data.second may want to change the edge-data of the v_node, so we cannot pass it as const
+        auto& v_node = node_of<Network>(v); 
         for(auto uv: v_node.in_edges())
           output_emplacer.emplace_edge_translated(uv);
         for(const NodeDesc u: v_node.parents()) 
@@ -256,7 +257,7 @@ namespace PT{
            class... ExtracterArgs>
   auto get_biconnected_components(const Network& N, OldToNewTranslation&& old_to_new = OldToNewTranslation(), ExtracterArgs&&... ex_args) {
     using Component = mstd::FirstNonVoid<Component_, Network>;
-    using Extracter = decltype(make_data_extracter<Network>(std::forward<ExtracterArgs>(ex_args)...));
+    using Extracter = std::remove_reference_t<decltype(make_data_extracter<Network>(std::forward<ExtracterArgs>(ex_args)...))>;
     return BiconnectedComponents<Network, Component, allow_trivial, OldToNewTranslation, Extracter>(
         N,
         std::forward<OldToNewTranslation>(old_to_new),
@@ -268,10 +269,10 @@ namespace PT{
            StrictPhylogenyType Network,
            class First,
            class... ExtracterArgs>
-             requires (!NodeTranslationType<First>)
+             requires (not NodeTranslationType<First>)
   auto get_biconnected_components(const Network& N, First&& first, ExtracterArgs&&... ex_args) {
     using Component = mstd::FirstNonVoid<Component_, Network>;
-    using Extracter = decltype(make_data_extracter<Network>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...));
+    using Extracter = std::remove_reference_t<decltype(make_data_extracter<Network>(std::forward<First>(first), std::forward<ExtracterArgs>(ex_args)...))>;
     return BiconnectedComponents<Network, Component, allow_trivial, NodeTranslation, Extracter>(
         N,
         std::forward<First>(first),

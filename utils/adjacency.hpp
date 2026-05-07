@@ -5,6 +5,11 @@
 
 namespace PT {
 
+  // ========== Adjacency ==========
+  // an adjacency is a NodeDesc with (or without) data
+  // It'll tell whether is has data with the static constexpr bool has_data
+
+  // ------- Adjacency: helpers ---------
   struct ProtoAdjacency {
     NodeDesc nd = NoNode;
 
@@ -12,22 +17,31 @@ namespace PT {
     operator const NodeDesc&() const { return nd; }  // one should never change the node of an adjacency
     bool operator==(const ProtoAdjacency& other) const { return nd == other.nd; }
     bool operator==(const NodeDesc other) const { return nd == other; }
+    
+    friend std::ostream& operator<<(std::ostream& os, const ProtoAdjacency& a) { return os << a.get_desc(); }
   };
 
   template<class EdgeData> struct Edge;
 
+ 
+  // ------- Adjacency: main class ---------
+  
   // an adjacency is a node-description with edgedata
   // NOTE: the adjacency's edge data can be either constructed from arguments (new() will be called by the constructor) or from another adjacency (shallow copy of the pointer)
   template<class EdgeData_>
   struct Adjacency: public ProtoAdjacency {
+    // ------- static stuff --------
     using Parent = ProtoAdjacency;
     using EdgeData = EdgeData_;
     using Edge = PT::Edge<EdgeData_>;
     static constexpr bool has_data = true;
-  
+
+    // ------- members --------
   protected:
 #warning "TODO: check if shared_ptr performs"
     std::shared_ptr<EdgeData> data_ptr = nullptr;
+
+    // ------- construction & desctruction ---------
   public:
     Adjacency() requires (mstd::is_constructible_v<EdgeData>):
       Parent{NoNode}, data_ptr(std::make_shared<EdgeData>()) {}
@@ -65,15 +79,21 @@ namespace PT {
       Parent{_nd}, data_ptr{std::make_shared<EdgeData>()}
     {}
 
+    // ------- operators --------
+    // ------- methods: initialization --------
+    // ------- methods: query --------
     EdgeData& data() const { assert(data_ptr); return *data_ptr; }
+    
+    // ------- methods: modification --------
 
+    // ------- friends --------
     friend std::ostream& operator<<(std::ostream& os, const Adjacency& a) {
       if constexpr (mstd::Printable<EdgeData_>) {
         if(a.data_ptr)
-          return os << a.nd << '[' << *(a.data_ptr) << ']';
+          return os << a.get_desc() << '[' << *(a.data_ptr) << ']';
         else
-          return os << a.nd << "[@NULL]";
-      } else return os << a.nd << '[' << '@' << a.data_ptr << ']';
+          return os << a.get_desc() << "[@NULL]";
+      } else return os << a.get_desc() << '[' << '@' << a.data_ptr << ']';
     }
 
     // NodeAccess must be able to construct invalid adjacencies in order to report failure when trying to find an edge given by its endpoints
@@ -87,26 +107,69 @@ namespace PT {
     static constexpr bool has_data = false;
 
     Adjacency() = default;
-
+/*
     // make from an iterator to an adjacency
     template<class AdjIter> requires requires(AdjIter i) { { *i } -> std::convertible_to<Adjacency>; }
     Adjacency(const AdjIter& iter): Adjacency(*iter) {}
-
+*/
     template<class... Args>
     Adjacency(const NodeDesc _nd, Args&&... args): Parent{_nd} {}
-
-    friend std::ostream& operator<<(std::ostream& os, const Adjacency<void>& a) { return os << a.get_desc(); }
   };
+
+
+  // ------- Adjacency: factories ---------
+  
+  // ------- Adjacency: concepts ---------  
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyOnlyType = mstd::is_derived_from_v<A, ProtoAdjacency>;
+
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyType = mstd::is_same_v<A, NodeDesc, rune> or AdjacencyOnlyType<A, rune>;
+
+  template<class A> concept StrictAdjacencyType = AdjacencyType<A, mstd::TR_Strict>;
+
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept HasAdjacencyValue = AdjacencyType<typename mstd::value_type_of_t<A>, rune>;
+
+  template<class A, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjacencyContainerType = mstd::ContainerType<A, rune> and HasAdjacencyValue<A, rune>;
+
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept AdjPairType = (mstd::apply_rune_v<T, rune> or
+    (StrictAdjacencyType<typename mstd::apply_rune_t<T, rune>::first_type> and
+     StrictAdjacencyType<typename mstd::apply_rune_t<T, rune>::second_type>));
+
+
+  template<PhylogenyType Network>
+  using AdjacencyOf = typename std::remove_reference_t<Network>::Adjacency;
+  template<PhylogenyType Network>
+  using NetAdjVec = std::vector<AdjacencyOf<Network>>;
+  template<PhylogenyType Network>
+  using NetAdjSet = HashSet<AdjacencyOf<Network>>;
+
+  template<class F, class Net, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept EdgePredicateType = mstd::predicate<F, rune, EdgeOf<Net>> or
+                              mstd::predicate<F, rune, NodeDesc, AdjacencyOf<Net>> or
+                              mstd::predicate<F, rune, AdjacencyOf<Net>, NodeDesc>;
+
+
+
 
   // NOTE: an AdjAdapter can be used to merge edge-data when contracting edges
   //       for example, if we contract an edge uv, and v has a child w,
   //       then the data of uv is "merged with" the data of vw via an AdjAdapter
   template<class T, class Adj, class Phylo>
   concept AdjAdapterType = std::invocable<T, const Adj&, typename Phylo::Adjacency&>;
+
+  // ------- Adjacency: deduction guides ---------
+  
+  // ------- Adjacency: defaults ---------
+
+
 }
 
 namespace std{
-  template<class EdgeData> requires (!std::is_void_v<EdgeData>)
+  template<class EdgeData> requires (not std::is_void_v<EdgeData>)
   struct hash<PT::Adjacency<EdgeData>> {
     hash<PT::NodeDesc> node_hash;
     size_t operator()(const PT::Adjacency<EdgeData>& adj) const { return node_hash(adj.get_desc()); }

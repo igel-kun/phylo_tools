@@ -448,9 +448,8 @@ namespace mstd {
   template <class T, template <class...> class C>
   using is_derived_from_template = decltype(is_derived_from_template_impl<C>(std::declval<T*>()));
   
-  template <class T, template <class...> class C>
-  static constexpr bool is_derived_from_template_v = is_derived_from_template<T, C>::value;
-
+  template <class T, template <class...> class C, TypeRune rune = TR_ConstRefOK>
+  static constexpr bool is_derived_from_template_v = apply_rune_v<T, rune> or is_derived_from_template<apply_rune_t<T, rune>, C>::value;
 
   // ---------------- Iterators ----------------------------
   // for reasons that escape me, std::iterator_traits depend on satisfaction of the followign concepts, but it's not defined by the STL...

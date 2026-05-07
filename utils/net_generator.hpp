@@ -105,11 +105,12 @@ namespace PT {
       construct_generator_below<Net>(N.root(), emplacer, seen, init_accu);
       return G;
     }
-    template<StrictPhylogenyType Net, class First, class... EmplacerArgs> requires (not mstd::is_same_v<First, DataAccu>)
+    template<StrictPhylogenyType Net, class First, class... EmplacerArgs>
+      requires (not mstd::is_same_v<First, DataAccu> and std::is_default_constructible_v<DataAccu>)
     static Generator make_generator(const Net& N, First&& first, EmplacerArgs&&... args) {
       return make_generator(N, DataAccu{}, std::forward<First>(first), std::forward<EmplacerArgs>(args)...);
     }
-    template<StrictPhylogenyType Net>
+    template<StrictPhylogenyType Net> requires (std::is_default_constructible_v<DataAccu>)
     static Generator make_generator(const Net& N) { return make_generator(N, DataAccu{}); }
 
 
@@ -125,53 +126,60 @@ namespace PT {
       // NOTE: When we see the first child v of u that's on a generator side, we cannot immediately tell if u is a generator node.
       //       Thus, we defer adding the state and data of v until we see a second generator side, or we treated all children
       // NOTE: the "state" is simply the nearest generator node below, which might be NoNode
-      DataAndNode u_state{init_accu, NoNode};
+      DataAndNode u_state{init_accu, Net::in_degree(u) > 1 ? u : NoNode};
       std::vector<std::pair<NetworkEdge, DataAndNode>> child_states;
       child_states.reserve(Net::out_degree(u));
 
+      DEBUG3(std::cout << "constructing generator below node "<<u << ", seen so far: "<<seen<<'\n');
       // step 1: recurse for all children and find out whether u is a generator node
       for(const auto uv: Net::out_edges(u)) {
         const NodeDesc v = uv.head();
+        DataAndNode v_state{init_accu, NoNode};
         const bool v_unseen = append(seen, v).second;
         if(v_unseen) {
           // recurse for v and use v's state to update u's state
-          auto v_state = construct_generator_below<Net>(v, emplacer, seen, init_accu);
-
-          // update u's nearest generator node
-          if(v_state.second != NoNode) {
-            if(u_state.second != NoNode) {
-              u_state.second = u;
-            } else u_state.second = v_state.second;
-          }
-
+          v_state = construct_generator_below<Net>(v, emplacer, seen, init_accu);
           // append the data to the child_states
-          append(child_states, std::move(uv), std::move(v_state));
-        } else append(child_states, std::move(uv), DataAndNode{DataAccu{}, v});
+        } else v_state.second = v;
+        // update u's nearest generator node
+        if(v_state.second != NoNode) {
+          if(u_state.second != NoNode) {
+            u_state.second = u;
+          } else u_state.second = v_state.second;
+        }
+        append(child_states, std::move(uv), std::move(v_state));
       }
 
       // step 3: accumulate the child_state data into u's data
       if constexpr (has_data_accu)
         for(auto& [uv, v_state]: child_states)
           u_state.first(uv, v_state.first, u_state.second, v_state.second);
+      
+      DEBUG3(std::cout << "found out about "<<u<<":\n\tnode-info: " << static_cast<const GenNodeData&>(to_node_data(u_state.first)) << "\n\tedge-info: " << static_cast<const GenEdgeData&>(to_edge_data(u_state.first)) << "\n\tnearest gen node: "<<u_state.second<<'\n');
 
       // step 4: if u is a generator node, then install the actual edges in the generator, using the DataAccus as EdgeData
       if(u_state.second == u) {
         // first, construct u in the generator
         NodeDesc u_copy;
-        if constexpr (has_node_data and has_data_accu)
+        if constexpr (has_node_data and has_data_accu) {
+          static_assert(std::is_constructible_v<typename Emplacer::TargetPhylo::NodeData, const GenNodeData&>);
           u_copy = emplacer.create_copy_of(u, static_cast<const GenNodeData&>(to_node_data(u_state.first)));
-        else u_copy = emplacer.create_copy_of(u);
+        } else u_copy = emplacer.create_copy_of(u);
 
-        for(auto& [uv, v_state]: child_states) 
-          if(v_state.second != NoNode) {
-            const NodeDesc v = uv.head();
+        for(auto& [uv, v_state]: child_states) {
+          const NodeDesc gen_below_v = v_state.second;
+          if(gen_below_v != NoNode) {
             // if uv is on a generator-side, then construct this side in the generator
             // NOTE: the edge-data is constructed by casting the DataAccumulator to EdgeData
+            const NodeDesc v_copy = emplacer.helper.old_to_new().at(gen_below_v);
             if constexpr (has_edge_data and has_data_accu) {
-              emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v), static_cast<GenEdgeData&&>(to_edge_data(v_state.first)));
-            } else emplacer.emplace_edge_raw(u_copy, emplacer.create_copy_of(v));
+              emplacer.emplace_edge_raw(u_copy, v_copy, static_cast<GenEdgeData&&>(to_edge_data(v_state.first)));
+            } else emplacer.emplace_edge_raw(u_copy, v_copy);
           }
+        }
       }
+
+      DEBUG4(std::cout << "final verdict for "<<u<<"'s state: "<<u_state<<'\n');
       return u_state;
     }
 

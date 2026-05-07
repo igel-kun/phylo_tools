@@ -86,6 +86,7 @@ namespace PT {
       root_table.reserve(sol_size + 1);
       while(root_table.size() <= sol_size)
         root_table.emplace_back(num_solutions);
+      DEBUG4(std::cout << "emplaced NoLeafTable for node "<<x<<" with "<<sol_size<<" entries, each storing the first "<<num_solutions<<" solutions\n");
       return root_table;
     }
     const AccuTable& get_accu_table(const NodeDesc) const { return root_table; }
@@ -152,11 +153,16 @@ namespace PT {
 
     // return the accumulator-vector for x (create if necessary)
     AccuTable& emplace_table(const NodeDesc x, const size_t sol_size, const bool translate_x = true) {
-      return mstd::append(result_table, translate_x ? translate(x) : x,
+      AccuTable& result = mstd::append(result_table, translate_x ? translate(x) : x,
           std::piecewise_construct, std::tuple{sol_size + 1, num_solutions}, std::tuple{0}).first->second.first;
+      DEBUG4(std::cout << "emplaced AccuTable for node "<<x<<" with entries [0, "<<sol_size<<"], each storing the first "<<num_solutions<<" solutions\n");
+      return result;
     }
     const AccuTable& get_table(const NodeDesc x, const bool translate_x = true) const {
-      return result_table.at(translate_x ? translate(x) : x);
+      return result_table.at(translate_x ? translate(x) : x).first;
+    }
+    AccuTable& get_table(const NodeDesc x, const bool translate_x = true) {
+      return result_table.at(translate_x ? translate(x) : x).first;
     }
 
     template<class Table, bool use_leaf = not std::is_const_v<Table>>

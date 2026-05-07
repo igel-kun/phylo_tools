@@ -155,7 +155,7 @@ namespace mstd {
 
 
     friend std::ostream& operator<<(std::ostream& os, const SolutionAccumulator& accu) {
-      return os << "[Accu ("<<accu.num_solutions<<"): "<<accu.solutions<<']';
+      return os << "[Accu("<<accu.num_solutions<<"): "<<accu.solutions<<']';
     }
   };
 

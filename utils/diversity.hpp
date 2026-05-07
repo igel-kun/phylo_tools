@@ -79,17 +79,20 @@ namespace PT {
 
     [[ no_unique_address ]] FuncWeight _weight = {};
 
-    decltype(auto) weight(const auto& uv) const {
+    template<EdgeOrAdjType Edge>
+    decltype(auto) weight(Edge&& uv) const {
       if constexpr (mstd::is_arithmetic_v<weight_result>) {
-        return _weight(uv);
+        return _weight(std::forward<Edge>(uv));
       } else if constexpr (has_weight<weight_result>) {
-        return _weight(uv).weight;
+        return _weight(std::forward<Edge>(uv)).weight;
       } else if constexpr (has_weight_func<weight_result, EdgeData>) {
-        return _weight(uv).weight();
+        return _weight(std::forward<Edge>(uv)).weight();
       }
     }
-    decltype(auto) operator()(const auto& uv) const { return weight(uv); }
-    decltype(auto) operator()(const pd_weight_tag, const auto& uv) const { return weight(uv); }
+    template<EdgeOrAdjType Edge>
+    decltype(auto) operator()(Edge&& uv) const { return weight(std::forward<Edge>(uv)); }
+    template<EdgeOrAdjType Edge>
+    decltype(auto) operator()(const pd_weight_tag, Edge&& uv) const { return weight(std::forward<Edge>(uv)); }
 
     using Weight = std::remove_cvref_t<decltype(std::declval<pd_score_util_w>().weight(std::declval<Edge<EdgeData>>()))>;
     static_assert(mstd::is_arithmetic_v<Weight>);

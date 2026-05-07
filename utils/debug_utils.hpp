@@ -89,7 +89,7 @@ struct verbose_construct {
 #include <string>
 namespace mstd {
   // thanks @ https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c/56766138#56766138
-  template <typename T>
+  template<class... Args>
   constexpr std::string_view type_name() {
     std::string_view name, prefix, suffix;
 #ifdef __clang__

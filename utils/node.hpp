@@ -48,7 +48,7 @@ namespace PT{
     static constexpr StorageEnum SuccStorage = SuccStorage_;
     static constexpr StorageEnum PredStorage = PredStorage_;
     static constexpr bool is_defined_tree_node = (PredStorage == singleS);
-    static constexpr bool has_edge_data = has_data<Adjacency>;
+    static constexpr bool has_edge_data = HasData<Adjacency>;
     static constexpr bool unique_edges = unique_elements<PredStorage> and unique_elements<SuccStorage>;
 
     using SuccContainer = StorageClass<SuccStorage, Adjacency>;

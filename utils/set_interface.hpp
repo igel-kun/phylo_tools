@@ -87,12 +87,13 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   decltype(auto) lookup(C&& c, Index&& index) { return c(index); }
 
   // test if something evaluates to non-empty or true
-  template<class T, std::invocable<T> F>
-    requires (std::is_convertible_v<std::invoke_result_t<F,T>, bool> or mstd::IterableType<std::invoke_result_t<F,T>>)
-  bool test(const F& f, const T& x) {
-    if constexpr (mstd::IterableType<std::invoke_result_t<F,T>>)
-      return not f(x).empty();
-    else return f(x);
+  template<class F, class... Args>
+    requires (std::is_invocable_v<F, Args&&...> and
+        (std::is_convertible_v<std::invoke_result_t<F, Args&&...>, bool> or mstd::IterableType<std::invoke_result_t<F, Args&&...>>))
+  bool test(F& f, Args&&... args) {
+    if constexpr (mstd::IterableType<std::invoke_result_t<F, Args&&...>>)
+      return not f(std::forward<Args>(args)...).empty();
+    else return f(std::forward<Args>(args)...);
   }
   // test if something is in the set
   template<class S> requires (SetType<S> or MultiSetType<S>)
@@ -104,8 +105,8 @@ namespace mstd { // since it was the job of STL to provide for it and they faile
   template<class T>
   bool test(const T& x, const T& y) { return x == y; }
 
-  template<class T, class Arg>
-  concept is_testable = requires(T t, Arg arg) { mstd::test(t, arg); };
+  template<class F, class... Args>
+  concept is_testable = requires(F& f, Args&&... args) { mstd::test(f, std::forward<Args>(args)...); };
 
 
 

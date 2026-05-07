@@ -9,6 +9,7 @@ namespace mstd {
   // a forward iterator that knows the end of the container & converts to false if it's at the end
   //NOTE: this also supports that the end iterator has a different type than the iterator, as long as they can be compared with "!="
   template<class Iterator, class EndIterator_ = CorrespondingEndIter<Iterator>>
+    requires HasIterCategory<Iterator>
   class _auto_iter: public InheritableIter<Iterator>
   {
     static_assert(not VerifyableIter<Iterator>);
@@ -45,6 +46,21 @@ namespace mstd {
     constexpr _auto_iter(Container* c, Args&&... args):
       _auto_iter(*c, std::forward<Args>(args)...)
     {}
+    
+    // construct from another auto_iter over a non-const container, even if we are over a const container, casting their iterators to const_iterators
+    template<class OtherIter, class OtherEndIter>
+      requires (std::is_convertible_v<OtherIter, Iterator> and std::is_convertible_v<OtherEndIter, EndIterator> and not std::is_same_v<OtherIter, Iterator>)
+    constexpr _auto_iter(const _auto_iter<OtherIter, OtherEndIter>& other):
+      Parent{static_cast<OtherIter>(other)},
+      end_it{other.get_end()}
+    {}
+    template<class OtherIter, class OtherEndIter>
+      requires (std::is_convertible_v<OtherIter, Iterator> and std::is_convertible_v<OtherEndIter, EndIterator> and not std::is_same_v<OtherIter, Iterator>)
+    constexpr _auto_iter(_auto_iter<OtherIter, OtherEndIter>&& other):
+      Parent{static_cast<OtherIter&&>(other)},
+      end_it{other.get_end()}
+    {}
+
 
     // construct from two iterators (begin and end)
     template<class Iterator_, class EndIter_, class... Args>
@@ -129,6 +145,14 @@ namespace mstd {
 
     template<ContainerType Container_> requires std::is_convertible_v<value_type_of_t<Iterator>, value_type_of_t<Container_>>
     explicit operator Container_() const { return to_container<Container_>(); }
+
+    friend std::ostream& operator<<(std::ostream& os, const _auto_iter& iter) {
+      _auto_iter tmp = iter;
+      os << "[";
+      if(tmp.is_valid()) { os << *tmp; ++tmp; }
+      while(tmp.is_valid()) { os << ", " << *tmp;  ++tmp; }
+      return os << ']';
+    }
   };
 
 
@@ -190,11 +214,14 @@ namespace mstd {
   // forbid making auto_iters of auto_iters
   //template<class Iter, class End> struct proto_auto_iter<_auto_iter<Iter, End>> { using type = _auto_iter<Iter, End>; };
   template<HasIterCategory Iter, class... Args> requires (is_derived_from_template_v<Iter, _auto_iter>)
-  struct proto_auto_iter<Iter, Args...> { using type = Iter; };
+  struct proto_auto_iter<Iter, Args...> { using type = std::remove_const_t<Iter>; };
 
   // auto_iter for containers
-  template<IterableType<TR_ConstRefOK> Container, class... Args> requires (not HasIterCategory<Container, TR_ConstRefOK>)
+  template<IterableType Container, class... Args> requires (not HasIterCategory<Container>)
   struct proto_auto_iter<Container, Args...> { using type = _auto_iter<mstd::iterator_of_t<std::remove_reference_t<Container>>>; };
+  // auto_iter for indirect containers
+  template<IterableType Container, class... Args> requires (not HasIterCategory<Container>)
+  struct proto_auto_iter<Container*, Args...> { using type = _auto_iter<mstd::iterator_of_t<std::remove_reference_t<Container>>>; };
 
   template<class... Args> 
   using auto_iter = proto_auto_iter<Args...>::type;

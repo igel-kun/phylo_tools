@@ -32,7 +32,7 @@ namespace PT {
   constexpr bool is_edge_traversal(const TraversalType tt) { return tt & edge_traversal; }
   constexpr bool is_all_edge_traversal(const TraversalType tt) { return tt & all_edge_traversal; }
   constexpr bool is_reverse_traversal(const TraversalType tt) { return tt & reverse_traversal; }
-  constexpr bool is_node_traversal(const TraversalType tt) { return not (is_edge_traversal(tt)) and (not is_all_edge_traversal(tt)); }
+  constexpr bool is_node_traversal(const TraversalType tt) { return not is_edge_traversal(tt) and not is_all_edge_traversal(tt); }
 
   auto spell_out_traversal(const TraversalType tt) {
     std::ostringstream os;
@@ -88,18 +88,18 @@ namespace PT {
   template<class Roots>  struct ProtoDFSRootStorage {};
   // pointer
   template<mstd::IterableType<mstd::TR_ConstOK> Roots>
-  struct ProtoDFSRootStorage<Roots*> { using type = mstd::IterFactory<Roots>; };
+  struct ProtoDFSRootStorage<Roots*> { using type = mstd::auto_iter<Roots>; };
   // container
   template<mstd::ContainerType<mstd::TR_Strict> Roots> requires mstd::is_poppable<Roots>
   struct ProtoDFSRootStorage<Roots> { using type = Roots; };
   // non-container iterables
   template<mstd::IterableType<mstd::TR_Strict> Roots> requires (not mstd::ContainerType<Roots, mstd::TR_Strict> or not mstd::is_poppable<Roots>)
-  struct ProtoDFSRootStorage<Roots> { using type = mstd::IterFactory<Roots>; };
+  struct ProtoDFSRootStorage<Roots> { using type = mstd::auto_iter<Roots>; };
   // nodes
   template<> struct ProtoDFSRootStorage<NodeDesc> { using type = NodeSingleton; };
-  template<> struct ProtoDFSRootStorage<NodeDesc*> { using type = mstd::IterFactory<NodeDesc*>; };
+  template<> struct ProtoDFSRootStorage<NodeDesc*> { using type = NodeSingleton; };
 
-  template<NodeOrIterableType<mstd::TR_PtrOK> Roots>
+  template<NodeOrIterableType<mstd::TR_PtrOK + mstd::TR_ConstOK> Roots>
   using DFSRootStorage = typename ProtoDFSRootStorage<Roots>::type;
 
 
@@ -128,9 +128,8 @@ namespace PT {
     static constexpr bool seen_indirect = std::is_pointer_v<SeenSet>;
 
     using Roots = DFSRootStorage<Roots_>;
-    static_assert(mstd::IterableType<Roots>);
     static_assert(not std::is_const_v<Roots>);
-    static_assert(not std::is_pointer_v<Roots_> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
+    static_assert(mstd::IterableType<Roots> or mstd::is_derived_from_template_v<Roots, mstd::_auto_iter>);
 
     // ------- members --------
     Roots roots;
@@ -150,6 +149,13 @@ namespace PT {
       Parent{std::forward<Args>(args)...},
       roots(std::forward<RootsInit>(_roots))
     {}
+    // (smart) pointers will be dereferenced to form the root container/auto_iter
+    template<NodeOrIterableType<mstd::TR_PtrOK> RootsInit, class... Args> 
+      requires (not NodeOrIterableType<RootsInit> and not mstd::is_same_v<Roots_, NodeDesc*>)
+    DFSInfo(const RootsInit& _roots, Args&&... args):
+      Parent{std::forward<Args>(args)...},
+      roots(*_roots)
+    {}
 
     // if our root storage is just a NodeDesc*, then we'll only accept a NodeDesc* and we'll set the end of the auto_iter to one after _roots
     template<class... Args> requires (mstd::is_same_v<Roots_, NodeDesc*>)
@@ -160,7 +166,7 @@ namespace PT {
 
     // initialization of indirections from containers is already implemented in mstd::optional_tuple,
     // and we'll forbid initializing containers from indirections (for now)
-    template<NodeOrIterableType<mstd::TR_PtrOK> OtherRoots_,
+    template<NodeOrIterableType<mstd::TR_ConstRefPtrOK> OtherRoots_,
             class OtherForbidden_,
             DFSSeenType OtherSeenSet_>
       requires (not std::is_same_v<DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>, DFSInfo> and
@@ -171,7 +177,7 @@ namespace PT {
       Parent(static_cast<const typename DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>::Parent&>(other)),
       roots(other.roots)
     {}
-    template<NodeOrIterableType<mstd::TR_PtrOK> OtherRoots_,
+    template<NodeOrIterableType<mstd::TR_ConstRefPtrOK> OtherRoots_,
             class OtherForbidden_,
             DFSSeenType OtherSeenSet_>
       requires (not std::is_same_v<DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>, DFSInfo> and
@@ -183,7 +189,7 @@ namespace PT {
       roots(other.roots)
     {}
 
-    template<NodeOrIterableType<mstd::TR_PtrOK> OtherRoots_,
+    template<NodeOrIterableType<mstd::TR_ConstRefPtrOK> OtherRoots_,
             class OtherForbidden_,
             DFSSeenType OtherSeenSet_>
       requires (not std::is_same_v<DFSInfo<OtherRoots_, OtherForbidden_, OtherSeenSet_>, DFSInfo> and
@@ -211,9 +217,10 @@ namespace PT {
     auto& get_forbidden() requires (has_forbidden) { return mstd::access(this->template get<0>()); }
     const auto& get_seen() const requires (has_seen) { return mstd::access(this->template get<1>()); }
 
-    bool is_forbidden(const auto x) const {
+    template<class... Args>
+    bool is_forbidden(Args&&... args) const {
       if constexpr (has_forbidden) {
-        return mstd::test(get_forbidden(), x);
+        return mstd::test(get_forbidden(), std::forward<Args>(args)...);
       } else return false;
     }
     
@@ -223,17 +230,17 @@ namespace PT {
       } else return false;
     }
 
-    auto get_current_root() const {
+    NodeDesc get_current_root() const {
       if constexpr (roots_indirect) {
-        return *get_roots();
+        return *roots;
       } else if constexpr (mstd::HasBack<Roots> and mstd::HasPopBack<Roots>) {
-        return mstd::back(get_roots());
-      } else return mstd::front(get_roots());
+        assert(not roots.empty());
+        return mstd::back(roots);
+      } else return mstd::front(roots);
     }
     bool roots_spent() const {
-      if constexpr (roots_indirect or mstd::VerifyableIter<Roots>)
-        return get_roots().is_invalid();
-      else return get_roots().empty();
+      DEBUG6(if(roots.empty()) std::cout << "roots are spent\n");
+      return roots.empty();
     }
 
   protected:
@@ -246,14 +253,17 @@ namespace PT {
     void mark_seen(const NodeDesc u, Args&&... args) { 
       if constexpr (has_seen) {
         mstd::append(get_seen(), u, std::forward<Args>(args)...);
-        DEBUG6(std::cout << "seen: "<< get_seen() << '\n');
+        DEBUG6(std::cout << "marked "<<u<<" as seen, seenset is now: "<< get_seen() << '\n');
       }
     }
 
     void pop_root() {
-      if constexpr (roots_indirect) // if our roots are indirect, then we have an auto_iter onto the container, so advance that one
+      if constexpr (roots_indirect) { // if our roots are indirect, then we have an auto_iter onto the container, so advance that one
         ++get_roots();
-      else mstd::pop_back(get_roots()); // if our roots are direct, then pop the last root
+      } else if constexpr (mstd::HasBack<Roots> and mstd::HasPopBack<Roots>) {
+        assert(not get_roots().empty());
+        return mstd::pop_back(get_roots());
+      } else return mstd::pop_front(get_roots());
     }
   };
 

@@ -316,21 +316,21 @@ namespace PT {
         static_assert(TargetPhylo::has_node_data);
         if constexpr (std::is_invocable_v<Extracter, Ex_node_data, Args&&...>) {
           // first: try to call data_extracter with Args
-          DEBUG6(std::cout << "creating node with argument-extracted data\n");
+          DEBUG5(std::cout << "creating node with argument-extracted data\n");
           return helper.create_node(Ex_node_label{}, std::forward<Label>(label), Ex_node_data{}, data_extracter(Ex_node_data{}, std::forward<Args>(args)...));
         } else {
           // second: construct data with data created by the extracter
-          DEBUG6(std::cout << "creating node with default-extracted data\n");
+          DEBUG5(std::cout << "creating node with default-extracted data\n");
           return helper.create_node(Ex_node_label{}, std::forward<Label>(label), Ex_node_data{}, data_extracter(Ex_node_data{}));
         }
       } else {
         if constexpr (std::is_constructible_v<typename TargetPhylo::NodeData, Args&&...>) {
           // third: try to call the Node-constructor with Args
-          DEBUG6(std::cout << "creating node directly with passed arguments\n");
+          DEBUG5(std::cout << "creating node directly with passed arguments\n");
           return helper.create_node(Ex_node_label{}, std::forward<Label>(label), Ex_node_data{}, std::forward<Args>(args)...);
         } else {
           // fourth: just default-construct the data
-          DEBUG6(std::cout << "creating node with default-constructed data\n");
+          DEBUG5(std::cout << "creating node with default-constructed data\n");
           return helper.create_node(Ex_node_label{}, std::forward<Label>(label));
         }
       }
@@ -339,27 +339,23 @@ namespace PT {
     template<class... Args>
       requires ((sizeof...(Args) == 0) or not mstd::is_same_v<mstd::FirstTypeOf<Args...>, Ex_node_data>)
     NodeDesc create_node_no_label(Args&&... args) {
-      if constexpr (extract_node_data) {
-        static_assert(TargetPhylo::has_node_data);
-        if constexpr (std::is_invocable_v<Extracter, Ex_node_data, Args&&...>) {
-          // first: try to call data_extracter with Args
-          DEBUG6(std::cout << "creating node with argument-extracted data\n");
-          return helper.create_node(Ex_node_data{}, data_extracter(Ex_node_data{}, std::forward<Args>(args)...));
-        } else {
-          // second: construct data with data created by the extracter
-          DEBUG6(std::cout << "creating node with default-extracted data\n");
-          return helper.create_node(Ex_node_data{}, data_extracter(Ex_node_data{}));
-        }
+      using NodeData = typename TargetPhylo::NodeData;
+      if constexpr (extract_node_data and std::is_invocable_v<Extracter, Ex_node_data, Args&&...>) {
+        // first: try to call data_extracter with Args
+        DEBUG5(std::cout << "creating node with argument-extracted data"<< mstd::type_name<NodeData>() <<"\n");
+        return helper.create_node(Ex_node_data{}, data_extracter(Ex_node_data{}, std::forward<Args>(args)...));
+      } else if constexpr (std::is_constructible_v<NodeData, Args&&...>) {
+        // second: try to call the Node-constructor with Args
+        DEBUG5(std::cout << "creating node directly with passed arguments"<< mstd::type_name<NodeData>() <<"\n");
+        return helper.create_node(Ex_node_data{}, std::forward<Args>(args)...);
+      } else if constexpr (extract_node_data) {
+        // third: construct default-data by the extracter
+        DEBUG5(std::cout << "creating node with default-extracted data "<< mstd::type_name<NodeData>() << "\n");
+        return helper.create_node(Ex_node_data{}, data_extracter(Ex_node_data{}));
       } else {
-        if constexpr (std::is_constructible_v<typename TargetPhylo::NodeData, Args&&...>) {
-          // third: try to call the Node-constructor with Args
-          DEBUG6(std::cout << "creating node directly with passed arguments\n");
-          return helper.create_node(Ex_node_data{}, std::forward<Args>(args)...);
-        } else {
-          // fourth: just default-construct the data
-          DEBUG6(std::cout << "creating node with default-constructed data\n");
-          return helper.create_node();
-        }
+        // fourth: just default-construct the data
+        DEBUG5(std::cout << "creating node with default-constructed data "<< mstd::type_name<NodeData>() <<'\n');
+        return helper.create_node();
       }
     }
 
@@ -369,17 +365,16 @@ namespace PT {
 
     template<class... Args>
     NodeDesc create_node(Args&&... args) {
-      if constexpr (extract_node_label) {
-        static_assert(TargetPhylo::has_node_labels);
+      if constexpr (extract_node_label and TargetPhylo::has_node_labels) {
         if constexpr (std::is_invocable_v<Extracter, Ex_node_label, Args&&...>) {
-          DEBUG6(std::cout << "creating node-label with argument-extracted label\n");
+          DEBUG5(std::cout << "creating node-label with argument-extracted label\n");
           return create_node_with_label(data_extracter(Ex_node_label{}, args...), std::forward<Args>(args)...);
         } else {
-          DEBUG6(std::cout << "creating node-label with default-extracted label\n");
+          DEBUG5(std::cout << "creating node-label with default-extracted label\n");
           return create_node_with_label(data_extracter(Ex_node_label{}), std::forward<Args>(args)...);
         }
       } else {
-        DEBUG6(std::cout << "using default-constructed node-label\n");
+        DEBUG5(std::cout << "creating node with no explicitly constructed label\n");
         return create_node_no_label(std::forward<Args>(args)...);
       }
     }
@@ -396,12 +391,18 @@ namespace PT {
     // call to create a copy of the node other_u and either extract its data & label, or pass the data and ignore the label (set it yourself later)
     template<class... Args> requires (Helper::translating)
     NodeDesc create_copy_of(const auto& other_u, Args&&... args) {
-      DEBUG6(std::cout << "creating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new())<<'\n');
+      using NodeData = typename TargetPhylo::NodeData;
+      DEBUG5(std::cout << "creating a copy of "<<other_u<<" in translation @"<<&(helper.old_to_new())<<'\n');
       // check if other_u is known to the translation
       const auto [u_iter, u_success] = helper.register_node(other_u);
       NodeDesc& u_copy = u_iter->second;
       if(u_success) {
-        u_copy = create_node(other_u, std::forward<Args>(args)...);
+        // pass the original node 'other_u' if its possible to construct a new node that way
+        if constexpr (extract_node_data and std::is_invocable_v<Extracter, Ex_node_data, const NodeDesc&, Args&&...>) {
+          u_copy = create_node(other_u, std::forward<Args>(args)...);
+        } else if constexpr (std::is_constructible_v<NodeData, const NodeDesc&, Args&&...>) {
+          u_copy = create_node(other_u, std::forward<Args>(args)...);
+        } else u_copy = create_node(std::forward<Args>(args)...);
         DEBUG4(std::cout << "created copy " << u_copy << " of "<< other_u<<"\n");
       }
       return u_copy;
@@ -409,19 +410,26 @@ namespace PT {
 
     
     // --------------- edges --------------------
-    template<class... MoreArgs>
-    auto emplace_edge_raw(const NodeDesc u, const NodeDesc v, MoreArgs&&... args) {
-      DEBUG6(std::cout << "only adding edge "<< u <<" ----> "<< v <<"\n");
+    template<AdjacencyType Adj, class... MoreArgs>
+    auto emplace_edge_raw(const NodeDesc u, const Adj& v, MoreArgs&&... args) {
+      DEBUG5(std::cout << "adding edge "<< u <<" ----> "<< v <<" (data from "<< sizeof...(MoreArgs)<<" arguments: "<<mstd::type_name<MoreArgs...>()<<")\n");
       // if the data-extracter can be called with MoreArgs, then use it to make data, otherwise, just pass MoreArgs to the edge creation
-      if constexpr (extract_edge_data and (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>)) {
-        return helper.add_an_edge(u, v, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
+      if constexpr (extract_edge_data) {
+        static_assert((std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>) or (std::is_invocable_v<Extracter, Ex_edge_data, const Adj&>));
+        if constexpr (std::is_invocable_v<Extracter, Ex_edge_data, MoreArgs&&...>) {
+          return helper.add_an_edge(u, v, data_extracter(Ex_edge_data{}, std::forward<MoreArgs>(args)...));
+        } else if constexpr (std::is_invocable_v<Extracter, Ex_edge_data, const Adj&>) {
+          return helper.add_an_edge(u, v, data_extracter(Ex_edge_data{}, v));
+        }
       } else return helper.add_an_edge(u, v, std::forward<MoreArgs>(args)...);
     }
 
-    template<class... MoreArgs>
-    auto emplace_edge_translated(const auto& other_u, const auto& other_v, MoreArgs&&... args) {
-      DEBUG5(std::cout << "treating ("<<other_u<<" "<<other_v<<")\n");
-      return emplace_edge_raw(create_copy_of(other_u), create_copy_of(other_v), std::forward<MoreArgs>(args)...);
+    template<AdjacencyType Adj, class... MoreArgs>
+    auto emplace_edge_translated(const NodeDesc other_u, const Adj& other_v, MoreArgs&&... args) {
+      DEBUG5(std::cout << "treating ("<<other_u<<" "<<other_v<<") -- extracting data? "<<extract_edge_data<<"\n");
+      if constexpr (extract_edge_data and AdjacencyOnlyType<Adj> and (sizeof...(MoreArgs) == 0)) {
+        return emplace_edge_raw(create_copy_of(other_u), create_copy_of(other_v), other_v);
+      } else return emplace_edge_raw(create_copy_of(other_u), create_copy_of(other_v), std::forward<MoreArgs>(args)...);
     }
 
     template<class P, class Q, class... MoreArgs>

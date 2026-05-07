@@ -69,6 +69,9 @@ namespace PT{
   template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept EdgeType = mstd::apply_rune_v<T, rune> or StrictEdgeType<mstd::apply_rune_t<T, rune>>;
 
+  template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
+  concept EdgeOrAdjType = EdgeType<T, rune> or AdjacencyOnlyType<T, rune>;
+
   // a 'loose' edge type is either an edge or a pair of AdjacencyTypes
   template<class T, mstd::TypeRune rune = mstd::TR_ConstRefOK>
   concept LooseEdgeType = EdgeType<T, rune> or AdjPairType<T, rune>;

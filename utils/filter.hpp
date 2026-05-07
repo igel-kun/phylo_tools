@@ -53,9 +53,11 @@ namespace mstd {
     // make a filtered iterator
     //NOTE: this will always fix the index (doing nothing if _i == _first_invalid),
     //      if you're sure this isn't necessary, call with do_not_fix_index as first argument (see below)
-    template<class ParentInit, class PredInit = Predicate>
-      requires (not mstd::is_any_of<ParentInit, _filtered_iterator, std::piecewise_construct_t, do_not_fix_index_tag, filter_only_tag>)
-    _filtered_iterator(ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
+    template<class ParentInit, class PredInit>
+      requires (not mstd::is_any_of<ParentInit, _filtered_iterator, std::piecewise_construct_t, do_not_fix_index_tag, filter_only_tag> and
+          std::is_constructible_v<Parent, ParentInit&&> and
+          std::is_constructible_v<Predicate, PredInit&&>)
+    _filtered_iterator(ParentInit&& parent_init, PredInit&& pred_init):
       Parent(std::forward<ParentInit>(parent_init)),
       pred{std::forward<PredInit>(pred_init)}
     {
@@ -63,25 +65,58 @@ namespace mstd {
       fix_index();
     }
 
-    template<class ParentInit, class PredInit = Predicate>
-      requires (not mstd::is_same_v<ParentInit, std::piecewise_construct_t>)
-    _filtered_iterator(const do_not_fix_index_tag, ParentInit&& parent_init, PredInit&& pred_init = PredInit()):
+    template<class ParentInit>
+      requires (not mstd::is_any_of<ParentInit, _filtered_iterator, std::piecewise_construct_t, do_not_fix_index_tag, filter_only_tag> and
+          std::is_constructible_v<Parent, ParentInit&&> and
+          std::is_default_constructible_v<Predicate>)
+    _filtered_iterator(ParentInit&& parent_init):
+      Parent(std::forward<ParentInit>(parent_init)), pred{}
+    {
+      DEBUG6(std::cout << "____________ created filtered-iter with default predicate and parent "<<type_name<Parent>()<<"\n");
+      fix_index();
+    }
+
+    template<class ParentInit, class PredInit>
+      requires (not mstd::is_same_v<ParentInit, std::piecewise_construct_t> and
+          std::is_constructible_v<Parent, ParentInit&&> and
+          std::is_constructible_v<Predicate, PredInit&&>)
+    _filtered_iterator(const do_not_fix_index_tag, ParentInit&& parent_init, PredInit&& pred_init):
       Parent(std::forward<ParentInit>(parent_init)),
       pred{std::forward<PredInit>(pred_init)}
     {}
 
-    template<class PredInit = Predicate>
-    _filtered_iterator(const filter_only_tag, PredInit&& pred_init = PredInit()):
-      Parent{},
-      pred{std::forward<PredInit>(pred_init)}
+    template<class ParentInit, class PredInit = Predicate>
+      requires (not mstd::is_same_v<ParentInit, std::piecewise_construct_t> and
+          std::is_constructible_v<Parent, ParentInit&&> and
+          std::is_default_constructible_v<Predicate>)
+    _filtered_iterator(const do_not_fix_index_tag, ParentInit&& parent_init):
+      Parent(std::forward<ParentInit>(parent_init)), pred{}
     {}
 
+
+    template<class PredInit> requires (std::is_default_constructible_v<Parent> and std::is_constructible_v<Predicate, PredInit&&>)
+    _filtered_iterator(const filter_only_tag, PredInit&& pred_init):
+      Parent{}, pred{std::forward<PredInit>(pred_init)}
+    {}
+    template<class PredInit> requires (std::is_default_constructible_v<Parent> and std::is_default_constructible_v<Predicate>)
+    _filtered_iterator(const filter_only_tag):
+      Parent{}, pred{}
+    {}
+
+
     // piecewise construction of the auto_iter and the predicate
-    template<class ParentTuple, class PredicateTuple = std::tuple<>>
-    constexpr _filtered_iterator(const std::piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init = PredicateTuple()):
+    template<TupleType ParentTuple, TupleType PredicateTuple>
+    constexpr _filtered_iterator(const std::piecewise_construct_t, ParentTuple&& parent_init, PredicateTuple&& pred_init):
       Parent(std::make_from_tuple<Parent>(std::forward<ParentTuple>(parent_init))),
       pred{std::make_from_tuple<Predicate>(std::forward<PredicateTuple>(pred_init))}
     { fix_index(); }
+
+    template<TupleType ParentTuple>
+    constexpr _filtered_iterator(const std::piecewise_construct_t, ParentTuple&& parent_init):
+      Parent(std::make_from_tuple<Parent>(std::forward<ParentTuple>(parent_init))),
+      pred{}
+    { fix_index(); }
+
 
     template<class ParentTuple, class PredicateTuple = std::tuple<>>
     constexpr _filtered_iterator(const do_not_fix_index_tag,

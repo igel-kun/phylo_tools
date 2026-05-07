@@ -178,7 +178,7 @@ namespace mstd {
       DEBUG4(std::cout << "constructing SubsetIterator for partial subsets of sizes "<<low<<" -- "<<high<<'\n');
       DEBUG6(std::cout << "input container: "<<type_name<Container>() <<'\n');
       DEBUG6(std::cout << "output container: "<<type_name<OutputContainer>() <<'\n');
-      DEBUG6(std::cout << "SubsetState: "<<type_name<SubsetState>() << " (storing iters: "<<store_iters<<")\n");
+      DEBUG6(std::cout << "SubsetState: "<<type_name<Parent>() << " (storing iters: "<<store_iters<<")\n");
       const auto& gs = access(ground_set);
       const uint32_t ground_size = gs.size();
 
