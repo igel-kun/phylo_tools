@@ -71,7 +71,7 @@ namespace PT {
     static constexpr bool has_forbidden_iters = reverse ? has_forbidden_iters_rev : has_forbidden_iters_fwd;
     static constexpr bool has_forbidden_edges = has_forbidden_iters or has_forbidden_edges_edge or has_forbidden_edges_nodepair or has_forbidden_edges_twonodes;
 
-    // NOTE: if the user wants to use a custom 'forbidden'-set, then it should forbid nodes or edges (ot both)
+    // NOTE: if the user wants to use a custom 'forbidden'-set, then it should forbid nodes or edges (or both)
     static_assert(has_forbidden_edges or has_forbidden_nodes or not has_forbidden);
 
     static auto& get_adjacencies(const NodeDesc u) {

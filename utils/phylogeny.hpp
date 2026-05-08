@@ -1572,8 +1572,10 @@ namespace PT {
       out << Parent::num_nodes() << " nodes: "<<nodes()<<'\n';
       out << Parent::num_edges() << " edges: "<<edges()<<'\n';
       if(with_adjacencies)
-        for(const NodeDesc u: nodes())
-          out << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
+        for(const NodeDesc u: nodes()) {
+          const auto& u_node = node_of(u);
+          out << '@' << &u_node << '\t' << u << ":" << "\tIN: "<< in_edges(u) << "\tOUT: "<< out_edges(u) << '\n';
+        }
       return std::move(out).str();
     }
 

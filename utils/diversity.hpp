@@ -269,15 +269,18 @@ namespace PT {
     // we require a NodeContainer here since we will iterate ALOT over the leaves
     template<NodeContainerType Nodes, class ScoreFunc>
     constexpr auto score_for_leaf_set(const Nodes& leaves_to_save, ScoreFunc&& score) const {
-      using Weight = decltype(score(std::declval<Switching>(), leaves_to_save));
+      using Weight = std::invoke_result_t<ScoreFunc, const Switching&, const Nodes&>;
       Weight result = 0;
       DEBUG4(size_t count = 0);
-      for(auto sw_iter = SwitchingFactory<Network>{leaves_tag{}, leaves_to_save}.begin(); sw_iter.is_valid(); ++sw_iter) {
-        const Switching& sw = sw_iter.get_switching();
-        const auto sw_prob = probability_of_switching(sw, leaves_to_save);
-        const auto sw_score = score(sw, leaves_to_save);
-        result += sw_prob * sw_score;
-        DEBUG4(++count);
+      if(not leaves_to_save.empty()) {
+        for(auto sw_iter = SwitchingFactory<Network>{leaves_tag{}, leaves_to_save}.begin(); sw_iter.is_valid(); ++sw_iter) {
+          const Switching& sw = sw_iter.get_switching();
+          const auto sw_prob = probability_of_switching(sw, leaves_to_save);
+          const auto sw_score = score(sw, leaves_to_save);
+          DEBUG3(std::cout << "switching has weight "<<sw_score<<" and prob "<<sw_prob<<'\n');
+          result += sw_prob * sw_score;
+          DEBUG4(++count);
+        }
       }
       DEBUG4(std::cout << count << " switchings; total score: "<<result<<'\n');
       return result;
@@ -353,7 +356,7 @@ namespace PT {
     Weight operator()(const Network& N, const Nodes& leaves_to_save) {
       Score::init(N, leaves_to_save);
       return Helper::score_for_leaf_set(leaves_to_save, [&](const Switching& sw, const auto& leaves) {
-        return std::ranges::fold_left(sw.get_active_edges_above(leaves), Weight{0},
+        return std::ranges::fold_left(sw.get_all_edges_above(leaves), Weight{0},
             [&](const Weight x, const auto& uv){ return x + Score::operator()(pd_weight_tag{}, uv); });
       });
     }
@@ -505,7 +508,7 @@ namespace PT {
       const auto prob_of = [&](const auto& adj){ return Util::iprob(adj); };
       // we'll use the 'parent_select'-functor of the switching to select the most probable parent for each reticulation
       const auto most_probable_parent = [&](const NodeDesc r){ return std::ranges::max_element(Network::parents(r), std::ranges::less{}, prob_of); };
-      return Switching<Network>(leaves_tag{}, leaves, most_probable_parent).get_active_edges();
+      return Switching<Network>(leaves_tag{}, leaves, most_probable_parent);
 #endif
     }
     auto get_ML_switching(const Network& N) const { return get_ML_switching(N.leaves()); }

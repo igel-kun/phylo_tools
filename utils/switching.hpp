@@ -41,21 +41,24 @@ namespace PT {
 
     // NOTE: we allow construction by either roots or leaves, indicated by the passed tag
     template<NodeOrIterableType Nodes, class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
     Switching(const roots_tag, const Nodes& X, DefaultParent&& parent_select) {
+      DEBUG4(std::cout << "constructing switching below "<<X<<"\n");
       for(const NodeDesc r: Net::retis_below(&X))
         append(active_parent, r, parent_select(r));
     }
 
     template<NodeOrIterableType Nodes, class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
     Switching(const leaves_tag, const Nodes& X, DefaultParent&& parent_select) {
       DEBUG4(std::cout << "constructing switching above "<<X<<"\n");
-      for(const NodeDesc r: Net::nodes_above(&X)) {
+      for(const NodeDesc r: Net::nodes_above(&X))
         if(Net::is_reti(r))
           append(active_parent, r, parent_select(r));
-      }
     }
 
     template<class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
     Switching(const Net& N, DefaultParent&& parent_select):
       Switching(roots_tag{}, N.roots(), std::forward<DefaultParent>(parent_select)) {}
 
@@ -69,7 +72,11 @@ namespace PT {
 
     // ------- operators --------
     bool operator==(const Switching& other) { return active_parent == other.active_parent; }
-   
+
+    template<class Edge> requires (EdgeType<Edge> or mstd::is_same_v<Edge, NodePair>)
+    bool operator()(const Edge& uv) const { return is_switched_off(uv); }
+    bool operator()(const NodeDesc u, const NodeDesc v) const { return is_switched_off(u, v); }
+
     // ------- methods: initialization --------
     // ------- methods: query --------
     template<class First> requires mstd::is_any_of<First, NodeDesc, ParentIter>
@@ -103,6 +110,16 @@ namespace PT {
         const auto iter = active_parent.find(v);
         if(iter != active_parent.end())
           append(result, iter->second, v);
+      }
+      return result;
+    }
+    template<EdgeContainerType Edges = std::vector<NetEdge>, NodeOrIterableType Nodes>
+    Edges get_all_edges_above(const Nodes& X) const {
+      Edges result;
+      DEBUG4(std::cout << "switching edges\n");
+      for(const auto uv: Net::edges_above(&X, *this)) {
+        DEBUG4(std::cout << uv << '\n');
+        append(result, std::move(uv));
       }
       return result;
     }

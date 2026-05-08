@@ -75,7 +75,7 @@ namespace PT {
         const NodeDesc v = uv.head();
         if(not Network::is_reti(v)) { // stay in the same tree-component!
           // NOTE: if u doesn't have its own base-probability, then u is guaranteed to have at most 1 child leading to a node that has a base-probability!
-          const auto [weight_below_v, v_base_proba] = setup_scorable_below(v, base_proba, register_score);
+          const auto [v_base_proba, weight_below_v] = setup_scorable_below(v, base_proba, register_score);
 
           // NOTE: the weight of uv is partitioned into (v_base_proba) parts for free and (1 - v_base_proba) parts if a leaf is saved below
           const auto uv_weight = util.weight(uv);
@@ -116,6 +116,8 @@ namespace PT {
       // NOTE: if u is a leaf, then we'll allow emplacing an empty score_dir, indicating that the PDTreeScoreMap should forward this to the LeafTable
       if(register_score and (Network::is_leaf(u) or not score_dir.empty()))
         append(Parent::scorable, u, std::move(score_dir));
+      
+      DEBUG4(std::cout << "probability and weight below "<<u<<": "<<result<<'\n');
 
       return result;
     }
@@ -152,7 +154,7 @@ namespace PT {
       // At some point, we will want to compute the tail's probability in a switching.
       Probability i_prob;
       
-      friend std::ostream& operator<<(std::ostream& os, const GenEdgeInfo& info) { return os << "i-prob: " << mstd::type_name<Probability>() << ' ' << info.i_prob; }
+      friend std::ostream& operator<<(std::ostream& os, const GenEdgeInfo& info) { return os << "i-prob: " << info.i_prob; }
     };
     // we need an accumulator implementing the interface described in net_get.hpp
     struct GenNodeInfoAccu:
@@ -281,7 +283,8 @@ namespace PT {
         const NodeDesc gu = g_all_retis[i];
         const NodeDesc u = get_original_node(gu);
         const bool gu_active = test(g_current_retis.subset, i);
-        global_score += score_map.setup_scorable_below(u, base_proba, gu_active).first;
+        const auto local_score = score_map.setup_scorable_below(u, base_proba, gu_active).second;
+        global_score += local_score;
       }
       DEBUG4(std::cout << "--- computed score map: " << static_cast<const typename ScoreMap::Parent&>(score_map) << '\n');
 
@@ -382,7 +385,7 @@ namespace PT {
       } else { // generator is empty, so N is the tree sitting on top of our network
         // we basically perfom a light version of optimize_diversity_for_tree_components here, where the only "reticulation" is N.root()
         const NodeMap<Probability> base_proba{std::make_pair(N.root(), 1)};
-        Weight global_score = score_map.setup_scorable_below(N.root(), base_proba, true).first;
+        Weight global_score = score_map.setup_scorable_below(N.root(), base_proba, true).second;
         NodeHistogram solution;
 
         for(size_t sol_size = 0; sol_size < k;) {
@@ -444,7 +447,7 @@ namespace PT {
       // to get the tree component of the root, we run a DFS in which it is forbidden to enter nodes whose parents have an accu_table
       auto root_edges = N.edges(HasTable{&leaf_table}).to_container();
       DEBUG4(std::cout << "building root component with edges "<<root_edges<<'\n');
-      BCComponent root_comp(root_edges, Ex_node_data{}, mstd::IdentityFunction<NodeDesc>());
+      BCComponent root_comp(root_edges, Extracter{});
       DEBUG4(std::cout << "\nROOT component ("<<root_comp.num_nodes()<<" nodes):\n"; std::cout << ExtendedDisplay(root_comp) <<"\n");
       DEBUG4(std::cout << root_comp.get_summary(true) << '\n');
       AvgTreeEngine engine(std::forward<Utility>(util), &leaf_table);

@@ -30,7 +30,7 @@ namespace PT{
 
   // ------------- STEP 3: filter the children that, with their cut-node, form a BCC-starting edge ------------
   template<StrictPhylogenyType Network, bool allow_trivial = true>
-  struct BCCStartEdge {
+  struct IsBCCStartEdge {
     using Iterator = CutNodeChildrenIterator<Network>;
     using BasicIter = BasicBCCIter<Network>;
 
@@ -46,7 +46,7 @@ namespace PT{
     }
   };
   template<StrictPhylogenyType Network, bool allow_trivial = true>
-  using BCCStartingCutNodeChildIterator = mstd::filtered_iterator<CutNodeChildrenIterator<Network>, BCCStartEdge<Network, allow_trivial>, true>;
+  using BCCStartingCutNodeChildIterator = mstd::filtered_iterator<CutNodeChildrenIterator<Network>, IsBCCStartEdge<Network, allow_trivial>, true>;
 
 
   // ------------------- STEP 5: transform the filtered child-nodes into biconnected components using a BCCmaker ----------------
@@ -92,19 +92,23 @@ namespace PT{
       output_emplacer.helper.N = &output;
     }
   
-    // construct a biconnected component containing the arc uv and store it in 'output'
-    //NOTE: remember to set the root of the output component after calling this!
-#warning "this seems odd -- why would we not just construct top-down?"
+    // construct a biconnected component rooted at rt and containing v; construct it using the output_emplacer
+    // NOTE: initially, (rt,v) is one of the top-edges of the component
+    // NOTE: rt might be the root of many different biconnected components, so passing v is essential!
+    // NOTE: other outgoing arcs of rt might also be in the same BCC, so we have to explore both upwards and downwards from v
+    // NOTE: remember to set the root of the output component after calling this!
     void make_component_along(const NodeDesc rt, const NodeDesc v) const {
       if(append(seen, v).second){
         DEBUG4(std::cout << "BCC: making component along " << v << " (root "<<rt<<")\n");
-        auto& v_node = node_of<Network>(v); 
-        for(auto uv: v_node.in_edges())
+        // step 1: emplace all in-edges of v
+        for(auto uv: Network::in_edges(v))
           output_emplacer.emplace_edge_translated(uv);
-        for(const NodeDesc u: v_node.parents()) 
+        // step 2: recurse for all non-root parents of v
+        for(const NodeDesc u: Network::parents(v)) 
           if(u != rt)
             make_component_along(rt, u);
-        for(const NodeDesc w: v_node.children())
+        // step 3: recurse for all children of v
+        for(const NodeDesc w: Network::children(v))
           make_component_along(rt, w);
       }
     }

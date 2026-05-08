@@ -155,7 +155,7 @@ namespace PT {
     AccuTable& emplace_table(const NodeDesc x, const size_t sol_size, const bool translate_x = true) {
       AccuTable& result = mstd::append(result_table, translate_x ? translate(x) : x,
           std::piecewise_construct, std::tuple{sol_size + 1, num_solutions}, std::tuple{0}).first->second.first;
-      DEBUG4(std::cout << "emplaced AccuTable for node "<<x<<" with entries [0, "<<sol_size<<"], each storing the first "<<num_solutions<<" solutions\n");
+      DEBUG4(std::cout << "emplaced AccuTable for node "<<x<<" with entries [0..."<<sol_size<<"], each storing the first "<<num_solutions<<" solutions\n");
       return result;
     }
     const AccuTable& get_table(const NodeDesc x, const bool translate_x = true) const {

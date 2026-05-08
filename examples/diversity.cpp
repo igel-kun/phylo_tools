@@ -398,9 +398,10 @@ auto switching_based_diversity(const MyNetwork& N, First&& first, Args&&... args
   } else if(conf.summary == 2) { // value for the most likely switching
     using MLSwitching = Tree<vecS, NodeDesc, Weight>;
     NodeTranslation net_to_ml;
+    const NodeVec leaves = N.leaves().to_container();
     // make the ML-tree from the maximum-probability switching edgelist
     // NOTE: the diversity measures require all leaves to be selectable, so we remove all dangling leaves from the switching
-    MLSwitching ml_switching(pd_ML<MyNetwork>().get_ML_switching(N), net_to_ml,
+    MLSwitching ml_switching(pd_ML<MyNetwork>().get_ML_switching(leaves).get_all_edges_above(leaves), net_to_ml,
               Ex_node_data{}, mstd::IdentityFunction<NodeDesc>{}, // nodes store their original node in the network
               Ex_edge_data{}, pd_score_util_w<EdgeDataOf<MyNetwork>>()); // edges store the weight of the original edge
     DEBUG3(std::cout << "constructed ML-switching:\n" << ExtendedDisplay(ml_switching) << '\n');
@@ -444,7 +445,7 @@ auto pd_engine(const MyNetwork& N, Args&&... args) {
 
 void phylo_diversity_subsystem() {
   std::cout << "reading network...\n";
-  MyNetwork N(read_network(options[""][0]));
+  const MyNetwork N(read_network(options[""][0]));
 
   if(conf.verbose) {
     std::cout << "N ("<<N.num_nodes()<<" nodes, "<<N.num_edges()<<" edges -> reti num:" << N.num_edges()-N.num_nodes()+1<<"):" << std::endl;
@@ -473,10 +474,13 @@ void phylo_diversity_subsystem() {
     const auto before = mstd::get_time();
     const auto solutions = pd_engine(N, k, conf.num_solutions).solutions;
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
-    std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
+    const auto default_precision{std::cout.precision()};
+    std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n" << std::setprecision(default_precision);
     // 
     if(conf.verify) { // verify against brute-force
       DEBUG4(std::cout << "let's check solutions against brute-force...\n");
+
+      DEBUG4(std::cout << "N is still:\n" << ExtendedDisplay(N) << '\n' << N.get_summary(true) << '\n');
       for(const auto& sol: solutions) {
         const double score = sol.second;
         const double bf_score = pd_average_tree<MyNetwork>{}(N, sol.first);
