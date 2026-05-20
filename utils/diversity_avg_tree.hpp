@@ -63,19 +63,22 @@ namespace PT {
       const bool u_has_base_proba = (u_iter != base_proba.end());
       ProbWeight result{u_has_base_proba ? u_iter->second : Probability{0}, 0};
 
+      assert(result.first <= 1);
+
       // in order to set up the scorable map, we're getting the entry concerning u and reserve some space
       // NOTE: if u doesn't have a leaf in the same tree-component below it, then u will NOT get a score-dir;
       //       this will lead to the PDTreeScoreMap returning -inf when asked for the best score!
       ScoredDirections score_dir;
       score_dir.reserve(Network::out_degree(u));
 
-      DEBUG4(std::cout << "setting up scorable map below "<<u);
-      DEBUG4(if(u_has_base_proba) std::cout << " (base_proba(u) = "<<u_iter->second<<")\n"; else std::cout << '\n');
+      DEBUG4(std::cout << "** setting up scorable map below "<< u);
+      DEBUG4(if(u_has_base_proba) std::cout << " (base_proba("<<u<<") = "<<u_iter->second<<") **\n"; else std::cout << " **\n");
       for(const auto uv: Network::out_edges(u)) {
         const NodeDesc v = uv.head();
         if(not Network::is_reti(v)) { // stay in the same tree-component!
           // NOTE: if u doesn't have its own base-probability, then u is guaranteed to have at most 1 child leading to a node that has a base-probability!
           const auto [v_base_proba, weight_below_v] = setup_scorable_below(v, base_proba, register_score);
+          assert(v_base_proba <= 1);
 
           // NOTE: the weight of uv is partitioned into (v_base_proba) parts for free and (1 - v_base_proba) parts if a leaf is saved below
           const auto uv_weight = util.weight(uv);
@@ -152,7 +155,7 @@ namespace PT {
     };
     struct GenEdgeInfo {
       // At some point, we will want to compute the tail's probability in a switching.
-      Probability i_prob;
+      Probability i_prob = 0;
       
       friend std::ostream& operator<<(std::ostream& os, const GenEdgeInfo& info) { return os << "i-prob: " << info.i_prob; }
     };
@@ -169,17 +172,19 @@ namespace PT {
 
       void operator()(const auto& uv, GenNodeInfoAccu& other, const NodeDesc u_nearest_gen, const NodeDesc v_nearest_gen) {
         assert(util);
-        const NodeDesc v = uv.head();
+        const auto [u,v] = static_cast<const NodePair>(uv);
         const bool v_is_on_gen_side = (v_nearest_gen != NoNode);
         const bool v_is_gen_node = (v_nearest_gen == v);
+        const bool u_is_gen_node = (u_nearest_gen == u);
         
-        this->original_node = uv.tail(); // our original node is u
+        this->original_node = u;
         if(v_is_on_gen_side) {
           if(not Net::is_reti(v))
             this->has_path_to_bridge |= other.has_path_to_bridge;
-          if(v_is_gen_node) {
-            this->i_prob = util->iprob(uv);
-          } else this->i_prob = other.i_prob;
+          if(v_is_gen_node)
+            other.i_prob = util->iprob(uv);
+          if(not u_is_gen_node)
+            this->i_prob = other.i_prob;
         } else this->has_path_to_bridge = true;
         DEBUG4(std::cout << "updated node-info along "<<uv<<" (nearest generator-nodes: "<<u_nearest_gen<<" & "<<v_nearest_gen<<"): "<<*this << '\n');
       }
@@ -272,7 +277,8 @@ namespace PT {
                                                 const NodeVec& g_retis_with_promises,
                                                 const NodeMap<Probability>& base_proba,
                                                 auto& accumulator_table,
-                                                const uint32_t k) {
+                                                const uint32_t k)
+    {
       Weight global_score = 0; // score implied by the promised leaves
       const auto& g_all_retis = g_current_retis.get_ground_set();
      
@@ -284,6 +290,7 @@ namespace PT {
         const NodeDesc u = get_original_node(gu);
         const bool gu_active = test(g_current_retis.subset, i);
         const auto local_score = score_map.setup_scorable_below(u, base_proba, gu_active).second;
+        DEBUG4(std::cout << "scoring "<<local_score<<" for free below "<<u<<" -- global score now "<<global_score + local_score <<'\n');
         global_score += local_score;
       }
       DEBUG4(std::cout << "--- computed score map: " << static_cast<const typename ScoreMap::Parent&>(score_map) << '\n');
@@ -346,6 +353,7 @@ namespace PT {
       // if the root of the network is not in a biconnected component, then the generator is empty, so we'll just adapt the child-table
       if(not Gen.empty()) {
         DEBUG4(std::cout << "computed generator:\n" << ExtendedDisplay(Gen) << '\n');
+        DEBUG4(std::cout << "SUMMARY: " << Gen.get_summary(true) << '\n');
 
         // ==== step 3: guess at most k tree-components of N that contain saved leaves
         // accumulate all retis of the generator that can have tree-paths to leaves
@@ -360,21 +368,24 @@ namespace PT {
         // guess which at most k retis of the generator have tree-paths to saved leaves
         for(auto gactive_retis_it = mstd::SubsetIterator(std::as_const(gvalid_retis_preorder), lower_bnd, k); gactive_retis_it.is_valid(); ++gactive_retis_it) {
           const NodeVec gactive_retis = *gactive_retis_it;
-          DEBUG3(std::cout << "\n=== new guess! ===\n"<<gactive_retis.size() << " retis with saved leaves below: "<< gactive_retis<< '\n');
+          DEBUG3(std::cout << "\n=== new guess (with k = "<<k<<")! ===\n"<<gactive_retis.size() << " retis with saved leaves below: "<< gactive_retis<< '\n');
 
           // ==== step 4: for each node x in the generator, compute proportion of switchings in which x has a path to a leaf, according to the reti-guess
           // NOTE: for non-reticulations, this is just a lower bound and can be improved to 1 when saving additional leaves!
 #warning "TODO: improve this using a dominator tree: not all switchings need to be iterated in order to compute the proportions!"
           NodeMap<Probability> base_proba;
           for(const auto gswitching: SwitchingFactory<Generator>{leaves_tag{}, gactive_retis}) {
-            DEBUG3(std::cout << "next switching (in generator): "<<gswitching.active_parent << ")\n");
             const Probability switching_prob = get_switching_probability(gswitching);
+            DEBUG3(std::cout << "next switching (in generator): "<<gswitching.active_parent << ", probability: "<<switching_prob<<'\n');
             // to enumerate the edges above 'gactive_retis' in the switching,
             // we use a special bottom-up ("reverse") traversal with the SwitchedOffPredicate as forbidden-predicate
             using GenTraversal = NodeTraversal<reverse_traversal + postorder, Generator, const NodeVec*, SwitchedOffPredicate<Generator, expose_parent_iter>>;
             GenTraversal gtraversal{&gactive_retis, &gswitching};
             for(const NodeDesc gu: gtraversal) {
-              base_proba[get_original_node(gu)] += switching_prob;
+              const NodeDesc u = get_original_node(gu);
+              base_proba[u] += switching_prob;
+              DEBUG4(std::cout << "increased base-proba of "<< u <<" to "<< base_proba.at(u)<<'\n');
+              assert(base_proba.at(u) <= 1);
             }
           }
           

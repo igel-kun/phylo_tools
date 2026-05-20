@@ -171,6 +171,7 @@ namespace PT {
       const auto iter = tab.find(x);
       if(iter != tab.end()) {
         auto& [x_table, saved_so_far] = iter->second;
+        DEBUG4(std::cout << "leaf-table of "<<x<<" is "<<x_table<<" (saved "<<saved_so_far<<" leaves so far)\n");
         if(x_table.size() > saved_so_far + 1) {
           const auto& next_sols = x_table[saved_so_far + 1];
           const auto& current_sols = x_table[saved_so_far];
@@ -281,6 +282,7 @@ namespace PT {
       assert(iter != scorable.end());
       ScoredDirections& directions = iter->second;
       if(not directions.empty()) {
+        DEBUG4(std::cout << "getting best direction among "<<directions<<'\n');
         // recurse to the best node we know
         const auto [v, score] = mstd::value_pop_back(directions);
         DEBUG4(std::cout << "best score is below "<<v<<": score "<<score<<'\n');
@@ -312,6 +314,7 @@ namespace PT {
 
     // return the best score below a node y in the tree by following the scorable-pointers
     Weight best_score(const NodeDesc y) const {
+      DEBUG4(std::cout << "getting best score of "<<y<<" from "<<scorable<<"\n");
       const auto y_it = scorable.find(y);
       // if y is not in the map, then return -inf
       if(y_it == scorable.end()) return std::numeric_limits<Weight>::lowest();

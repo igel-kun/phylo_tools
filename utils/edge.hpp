@@ -37,6 +37,8 @@ namespace PT{
     NodeDesc tail() const { return this->first; }
     NodePair as_pair() const { return { this->first, this->second }; }
     bool is_invalid() const { return tail() == NoNode; }
+    
+    explicit operator NodePair() const { return as_pair(); }
 
     ProtoEdge get_reversed() const { return ProtoEdge{reverse_edge_tag{}, Parent::first, Parent::second}; }
     Adjacency tail_with_data() const { return Adjacency{Parent::first, Parent::second}; }

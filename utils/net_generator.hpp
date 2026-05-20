@@ -139,7 +139,6 @@ namespace PT {
         if(v_unseen) {
           // recurse for v and use v's state to update u's state
           v_state = construct_generator_below<Net>(v, emplacer, seen, init_accu);
-          // append the data to the child_states
         } else v_state.second = v;
         // update u's nearest generator node
         if(v_state.second != NoNode) {
@@ -147,15 +146,18 @@ namespace PT {
             u_state.second = u;
           } else u_state.second = v_state.second;
         }
+        // append the data to the child_states
         append(child_states, std::move(uv), std::move(v_state));
       }
 
       // step 3: accumulate the child_state data into u's data
       if constexpr (has_data_accu)
-        for(auto& [uv, v_state]: child_states)
+        for(auto& [uv, v_state]: child_states) {
+          DEBUG4(std::cout << "updating "<<u<<"'s state with the edge "<<uv<<" whose state is "<<v_state<<'\n');
           u_state.first(uv, v_state.first, u_state.second, v_state.second);
+        }
       
-      DEBUG3(std::cout << "found out about "<<u<<":\n\tnode-info: " << static_cast<const GenNodeData&>(to_node_data(u_state.first)) << "\n\tedge-info: " << static_cast<const GenEdgeData&>(to_edge_data(u_state.first)) << "\n\tnearest gen node: "<<u_state.second<<'\n');
+      DEBUG4(std::cout << "found out about "<<u<<":\n\tnode-info: " << static_cast<const GenNodeData&>(to_node_data(u_state.first)) << "\n\tedge-info: " << static_cast<const GenEdgeData&>(to_edge_data(u_state.first)) << "\n\tnearest gen node: "<<u_state.second<<'\n');
 
       // step 4: if u is a generator node, then install the actual edges in the generator, using the DataAccus as EdgeData
       if(u_state.second == u) {
@@ -173,6 +175,7 @@ namespace PT {
             // NOTE: the edge-data is constructed by casting the DataAccumulator to EdgeData
             const NodeDesc v_copy = emplacer.helper.old_to_new().at(gen_below_v);
             if constexpr (has_edge_data and has_data_accu) {
+              DEBUG4(std::cout << "constructing generator edge "<<u_copy<<" -> "<<v_copy <<" with data "<<to_edge_data(v_state.first) << '\n');
               emplacer.emplace_edge_raw(u_copy, v_copy, static_cast<GenEdgeData&&>(to_edge_data(v_state.first)));
             } else emplacer.emplace_edge_raw(u_copy, v_copy);
           }
