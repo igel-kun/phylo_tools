@@ -1,8 +1,18 @@
-cmake_minimum_required(VERSION 2.8...9999.9)
-project (phylo_tools)
+cmake_minimum_required(VERSION 3.12)
+project (phylo_tools CXX)
 # The version number.
 set (phylo_tools_VERSION_MAJOR 1)
 set (phylo_tools_VERSION_MINOR 0)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+list(APPEND CMAKE_MODULE_PATH
+  "${CMAKE_SOURCE_DIR}/cmake"
+)
+
+include(CheckRanges)
 
 #if(POLICY CMP0012)
 #  CMAKE_POLICY(SET CMP0012 NEW)
