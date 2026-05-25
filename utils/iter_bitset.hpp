@@ -515,11 +515,12 @@ namespace mstd {
     }
         
 
-    friend std::ostream& operator<<(std::ostream& os, const iterable_bitset& bs) {
-      for(size_t i = bs.capacity(); i != 0;) os << (bs.test(--i) ? '1' : '0');
-      return os << " ("<<bs.num_buckets()<<" buckets, "<<bs.capacity()<<" bits, "<<bs.count()<<" set)";
+    void print(std::ostream& os) const {
+      for(size_t i = capacity(); i != 0;) os << (test(--i) ? '1' : '0');
+      return os << " ("<<num_buckets()<<" buckets, "<<capacity()<<" bits, "<<count()<<" set)";
     }
 
+    friend std::ostream& operator<<(std::ostream& os, const iterable_bitset& bs) { bs.print(os); return os; }
   };
 
 

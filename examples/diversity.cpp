@@ -442,7 +442,6 @@ auto pd_engine(const MyNetwork& N, Args&&... args) {
   throw mstd::Unimplemented{"Selected diversity measure"};
 }
 
-
 void phylo_diversity_subsystem() {
   std::cout << "reading network...\n";
   const MyNetwork N(read_network(options[""][0]));
@@ -466,7 +465,8 @@ void phylo_diversity_subsystem() {
     const auto before = mstd::get_time();
     const auto score = pd_engine(N, leaves);
     const auto elapsed = mstd::ms_between(before, mstd::get_time());
-    std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n";
+    const auto default_precision{std::cout.precision()};
+    std::cout << std::fixed << std::setprecision(0) << "("<<elapsed<<"ms)\n" << std::setprecision(default_precision);
     std::cout << "score = "<<score<<'\n';
   } else {
     const size_t k = parse_k(N.num_leaves(), options[""][1]);

@@ -39,7 +39,7 @@ namespace mstd {
     //    unless that would set a bit outside the range of the bitset, in which case set bits to contain the first |bits|+1 bits,
     //    unless that's over upper_bound, in which case return false
     static bool advance(ordered_bitset& bits, const uint32_t upper_bound) {
-      DEBUG5(std::cout << "advancing (bitset mode)\n");
+      DEBUG5(std::cout << "advancing (bitset mode) "; bits.print(std::cout); std::cout << "\n");
       if(not bits.empty()) {
         const size_t trailing_zeros = bits.num_trailing_zeros();
         // NOTE: flip_upwards will also flip (and count!) the 0 to the left to the 1s-block, unless there is none(!)
@@ -186,7 +186,13 @@ namespace mstd {
       if(low <= ground_size) {
         if(high > ground_size) high = ground_size;
         upper_bound = high;
-        subset.reserve(upper_bound);
+        
+        // NOTE: if the subset is a vector of iters, we need upper_bound many entries
+        //       if the subset is an ordered_bitset, then we need groundset.size() many entries
+        if constexpr (store_iters) {
+          subset.reserve(upper_bound);
+        } else subset.reserve(gs.size());
+
         assert(low <= gs.size());
         if constexpr (store_iters) {
           for(auto it = std::begin(gs); low-- != 0; ++it)
