@@ -354,6 +354,7 @@ namespace PT {
       if(not Gen.empty()) {
         DEBUG4(std::cout << "computed generator:\n" << ExtendedDisplay(Gen) << '\n');
         DEBUG4(std::cout << "SUMMARY: " << Gen.get_summary(true) << '\n');
+        STAT(size_t sw_num = 0);
 
         // ==== step 3: guess at most k tree-components of N that contain saved leaves
         // accumulate all retis of the generator that can have tree-paths to leaves
@@ -365,33 +366,52 @@ namespace PT {
           append(gvalid_retis_preorder, Gen.root());
         DEBUG3(std::cout << "retis with tree-paths to leaves: "<<gvalid_retis_preorder<<'\n');
 
+        // prepare the sets for the traversal
+        NodeSet seen; seen.reserve(Gen.num_nodes());
+        NodeMap<Probability> base_proba; base_proba.reserve(Gen.num_nodes());
+
         // guess which at most k retis of the generator have tree-paths to saved leaves
+        STAT(const auto before = mstd::get_time());
         for(auto gactive_retis_it = mstd::SubsetIterator(std::as_const(gvalid_retis_preorder), lower_bnd, k); gactive_retis_it.is_valid(); ++gactive_retis_it) {
           const NodeVec gactive_retis = *gactive_retis_it;
-          DEBUG3(std::cout << "\n=== new guess (with k = "<<k<<")! ===\n"<<gactive_retis.size() << " retis with saved leaves below: "<< gactive_retis<< '\n');
+          DEBUG2(std::cout << "\n=== new guess (with k = "<<k<<")! ===\n"<<gactive_retis.size() << " retis with saved leaves below: "<< gactive_retis<< '\n');
+          STAT(const auto elapsed = mstd::ms_between(before, mstd::get_time()));
+          STAT(std::cout << sw_num << " switchings considered in "<< elapsed <<"ms = "<< sw_num / elapsed << "sw/ms\n");
 
           // ==== step 4: for each node x in the generator, compute proportion of switchings in which x has a path to a leaf, according to the reti-guess
           // NOTE: for non-reticulations, this is just a lower bound and can be improved to 1 when saving additional leaves!
 #warning "TODO: improve this using a dominator tree: not all switchings need to be iterated in order to compute the proportions!"
-          NodeMap<Probability> base_proba;
           for(const auto gswitching: SwitchingFactory<Generator>{leaves_tag{}, gactive_retis}) {
             const Probability switching_prob = get_switching_probability(gswitching);
-            DEBUG3(std::cout << "next switching (in generator): "<<gswitching.active_parent << ", probability: "<<switching_prob<<'\n');
-            // to enumerate the edges above 'gactive_retis' in the switching,
-            // we use a special bottom-up ("reverse") traversal with the SwitchedOffPredicate as forbidden-predicate
-            using GenTraversal = NodeTraversal<reverse_traversal + postorder, Generator, const NodeVec*, SwitchedOffPredicate<Generator, expose_parent_iter>>;
-            GenTraversal gtraversal{&gactive_retis, &gswitching};
-            for(const NodeDesc gu: gtraversal) {
-              const NodeDesc u = get_original_node(gu);
-              base_proba[u] += switching_prob;
-              DEBUG4(std::cout << "increased base-proba of "<< u <<" to "<< base_proba.at(u)<<'\n');
-              assert(base_proba.at(u) <= 1);
+            STAT(++sw_num);
+            DEBUG3(std::cout << " sw (in generator): "<<gswitching.active_parent << ", (size: "<<gswitching.active_parent.size()<<") probability: "<<switching_prob<<'\n');
+
+            for(NodeDesc gu: gactive_retis) {
+              while(seen.emplace(gu).second) {
+                // first, increase the base-proba of u
+                const NodeDesc u = get_original_node(gu);
+                Probability& u_proba = base_proba[u]; //.emplace(u, 0).first->second;
+                u_proba += switching_prob;
+                DEBUG4(std::cout << "increased base-proba of "<< u <<" to "<< u_proba <<'\n');
+                assert(u_proba <= 1);
+              
+                // second, climb in the generator
+                const auto& gparents = Generator::parents(gu);
+                if(LIKELY(gparents.size() == 1)) {
+                  gu = mstd::front(gparents);
+                } else if(gparents.size() > 1) {
+                  const auto gparent_iter = gswitching.active_parent.find(gu);
+                  assert(gparent_iter != gswitching.active_parent.end()); // if gu is a reticulation, then gu HAS TO BE switched
+                  gu = *(gparent_iter->second);
+                } else break;
+              }
             }
+            seen.clear();
           }
-          
           // ==== step 5: treat each side individually (DP over the sides to maximize diversity with our k leaves)
           // NOTE: we use the iterator here, since it can be converted to its SetWithSubset base-class
           optimize_diversity_for_tree_components(gactive_retis_it, gactive_retis, base_proba, accu_table, k);
+          base_proba.clear();
         }
       } else { // generator is empty, so N is the tree sitting on top of our network
         // we basically perfom a light version of optimize_diversity_for_tree_components here, where the only "reticulation" is N.root()
