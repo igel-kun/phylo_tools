@@ -13,15 +13,15 @@ namespace PT {
  
   // ------- SwitchingIter: main class ---------
   // NOTE: we can pass a set of leaves, in which case only the partial switchings of reticulations above those leaves will be iterated
-  template<StrictPhylogenyType Net_, class DefaultParent_ = typename Switching<Net_>::FirstParent>
+  template<StrictPhylogenyType Net_, StorageEnum active_parent_storage = hashsetS, class DefaultParent_ = typename Switching<Net_>::FirstParent>
     requires (std::is_invocable_v<DefaultParent_, const NodeDesc>)
   struct SwitchingIter:
-    public mstd::iter_traits_from_reference<Switching<Net_>>
+    public mstd::iter_traits_from_reference<Switching<Net_, active_parent_storage>>
   {
     // ------- static stuff --------
     using Net = Net_;
     using DefaultParent = DefaultParent_;
-    using Traits = mstd::iter_traits_from_reference<Switching<Net>>;
+    using Traits = mstd::iter_traits_from_reference<Switching<Net, active_parent_storage>>;
     using AdjVec = NetAdjVec<Net>;
     using typename Traits::value_type;
     using typename Traits::pointer;
@@ -29,7 +29,7 @@ namespace PT {
     // ------- members --------
   protected:
     [[ no_unique_address ]] DefaultParent parent_select;
-    Switching<Net> cache;
+    Switching<Net, active_parent_storage> cache;
     bool valid = true;
 
     // ------- construction & desctruction ---------
@@ -84,12 +84,48 @@ namespace PT {
     const auto& get_switching() const { return cache; }
 
     // ------- methods: modification --------
+    // advance to the next switching
+    // calling this repeatedly iterates more efficiently through the switchings above a set of leaves
+    // return whether the iterator is still valid
+    // NOTE: if the switching is empty, then we scan the network above 'nodes'
+    template<NodeOrIterableType Nodes, class... Args> requires (active_parent_storage == vecS)
+    bool advance_above(const Nodes& nodes, const bool mark_invalid_if_empty, Args&&... args) {
+      static_assert(mstd::VectorType<decltype(cache.active_parent)>);
+      // step 1: advance the switching
+      if(valid) {
+        DEBUG5(std::cout << "advancing switching "<<cache.active_parent<<" over nodes "<<nodes<<'\n');
+        if(not cache.active_parent.empty()) {
+          while(true) {
+            auto& [v, vp] = cache.active_parent.back();
+            if(++vp == Net::parents(v).end()) {
+              DEBUG5(std::cout << "increased active parent of "<<v<<" beyond bounds, erasing...\n");
+              cache.active_parent.pop_back();
+              if(cache.active_parent.empty()) {
+                // if we went over all switchings, mark the iterator as invalid
+                valid = false;
+                return false;
+              }
+            } else {
+              DEBUG5(std::cout << "changed active parent of "<<v<<" to "<<*vp<<'\n');
+              break;
+            }
+          } // while true
+        } // if cache is not empty
+        // step 2: discover new reticulations
+        cache.discover_above(nodes, std::forward<Args>(args)...);
+        if(mark_invalid_if_empty and cache.active_parent.empty()) valid = false;
+      }
+      return valid;
+    }
+    template<NodeOrIterableType Nodes, class... Args> requires (active_parent_storage == vecS)
+    bool advance_above(const Nodes& nodes, Args&&... args) { return advance_above(nodes, false, std::forward<Args>(args)...); }
+
   };
   
   // ------- SwitchingIter: factories ---------
-  template<StrictPhylogenyType Net, class DefaultParent = typename Switching<Net>::FirstParent>
+  template<StrictPhylogenyType Net, StorageEnum active_parent_storage = hashsetS, class DefaultParent = typename Switching<Net>::FirstParent>
     requires (std::is_invocable_v<DefaultParent, const NodeDesc>)
-  using SwitchingFactory = mstd::IterFactory<SwitchingIter<Net, DefaultParent>>;
+  using SwitchingFactory = mstd::IterFactory<SwitchingIter<Net, active_parent_storage, DefaultParent>>;
  
   // ------- SwitchingIter: concepts ---------
   

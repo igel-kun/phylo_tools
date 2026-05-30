@@ -19,7 +19,7 @@ namespace PT {
   // NOTE: operator(e) returns whether the edge e is switched OFF (that is, NOT in the switching),
   //       so the switching can be used as a forbidden-predicate when traversing a network.
   //       Thus, the switching can be traversed by traversing the network with the switching as forbidden-predicate.
-  template<StrictPhylogenyType Net_>
+  template<StrictPhylogenyType Net_, StorageEnum active_parent_storage = hashsetS>
   struct Switching {
     // ------- static stuff --------
     using Net = Net_;
@@ -32,8 +32,12 @@ namespace PT {
       auto operator()(const NodeDesc r) const { return Net::parents(r).begin(); }
     };
 
+#warning "TODO: implement other storages for switchings"
+    static constexpr bool vector_storage = active_parent_storage == vecS;
+    using ActiveParentContainer = std::conditional_t<vector_storage, std::vector<std::pair<NodeDesc, ParentIter>>, NodeMap<ParentIter>>;
+
     // ------- members --------
-    NodeMap<ParentIter> active_parent;
+    ActiveParentContainer active_parent;
 
 
     // ------- construction & desctruction ---------
@@ -52,9 +56,8 @@ namespace PT {
       requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
     Switching(const leaves_tag, const Nodes& X, DefaultParent&& parent_select) {
       DEBUG4(std::cout << "constructing switching above "<<X<<"\n");
-      for(const NodeDesc r: Net::nodes_above(&X))
-        if(Net::is_reti(r))
-          append(active_parent, r, parent_select(r));
+      for(const NodeDesc r: Net::retis_above(&X))
+        append(active_parent, r, parent_select(r));
     }
 
     template<class DefaultParent>
@@ -78,10 +81,68 @@ namespace PT {
     bool operator()(const NodeDesc u, const NodeDesc v) const { return is_switched_off(u, v); }
 
     // ------- methods: initialization --------
+    template<pred::PredicateType<NodeDesc> RegisterNode, class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
+    void discover_above(NodeDesc u, RegisterNode&& register_node, DefaultParent&& parent_select) {
+      while(register_node(u)) {
+        const auto& parents = Net::parents(u);
+        switch(parents.size()) {
+          case 0: return;
+          case 1: u = mstd::front(parents); break;
+          default:
+            DEBUG5(std::cout << "discovered reticulation "<<u<<'\n');
+            auto iter = find_active_parent(u);
+            if(iter == active_parent.end()) {
+              iter = append(active_parent, u, parent_select(u)).first;
+            }
+            u = *(iter->second);
+        }
+      }
+    }
+    template<class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
+    void discover_above(NodeDesc u, DefaultParent&& parent_select) {
+      discover_above(u, pred::TruePredicate{}, std::forward<DefaultParent>(parent_select));
+    }
+    template<class RegisterNode>
+    void discover_above(NodeDesc u, RegisterNode&& register_node) {
+      discover_above(u, std::forward<RegisterNode>(register_node), FirstParent{});
+    }
+    void discover_above(NodeDesc u) { discover_above(u, pred::TruePredicate{}, FirstParent{}); }
+
+
+
+    template<NodeIterableType Nodes, pred::PredicateType<NodeDesc> RegisterNode, class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
+    void discover_above(const Nodes& nodes, RegisterNode&& register_node, DefaultParent&& default_parent) {  
+      for(const NodeDesc u: nodes)
+        discover_above(u, register_node, default_parent);
+    }
+    template<NodeIterableType Nodes, class DefaultParent>
+      requires (std::is_convertible_v<std::invoke_result_t<DefaultParent, NodeDesc>, ParentIter>)
+    void discover_above(const Nodes& nodes, DefaultParent&& default_parent) {
+      discover_above(nodes, pred::UnseenPredicate<NodeSet>{}, std::forward<DefaultParent>(default_parent));
+    }
+    template<NodeIterableType Nodes, pred::PredicateType<NodeDesc> RegisterNode>
+    void discover_above(const Nodes& nodes, RegisterNode&& register_node) {
+      discover_above(nodes, std::forward<RegisterNode>(register_node), FirstParent{});
+    }
+    template<NodeIterableType Nodes>
+    void discover_above(const Nodes& nodes) { discover_above(nodes, FirstParent{}); }
+
     // ------- methods: query --------
+    // return iterator to the active parent entry of a node x
+    auto find_active_parent(const NodeDesc x) const {
+      if constexpr (vector_storage) {
+        for(auto iter = active_parent.begin(); iter != active_parent.end(); ++iter)
+          if(iter->first == x) return iter;
+        return active_parent.end();
+      } else return active_parent.find(x);
+    }
+
     template<class First> requires mstd::is_any_of<First, NodeDesc, ParentIter>
     bool is_switched_off(const First x, const NodeDesc y) const {
-      const auto iter = active_parent.find(y);
+      const auto iter = find_active_parent(y);
       if(iter != active_parent.end()) {
         const ParentIter vp = iter->second;
         assert(vp != Net::parents(y).end());
@@ -99,7 +160,7 @@ namespace PT {
       Edges result;
       if constexpr (mstd::HasReserve<Edges>)
         result.reserve(active_parent.size());
-      for(auto uv: active_parent | std::ranges::views::transform([](const auto& vu_pair) { return NetEdge{reverse_edge_tag{}, vu_pair}; }))
+      for(auto uv: active_parent | std::ranges::views::transform([](const auto& vu_pair) { return NetEdge{reverse_edge_tag{}, vu_pair.first, *(vu_pair.second)}; }))
         append(result, std::move(uv));
       return result;
     }
@@ -107,7 +168,7 @@ namespace PT {
     Edges get_active_edges_above(const Nodes& X) const {
       Edges result;
       for(const auto& v: Net::nodes_above(&X)) {
-        const auto iter = active_parent.find(v);
+        const auto iter = find_active_parent(v);
         if(iter != active_parent.end())
           append(result, iter->second, v);
       }
@@ -126,6 +187,10 @@ namespace PT {
 
     // ------- methods: modification --------
   };
+
+
+
+
 
 
   // This is a predicate that returns true iff an edge/node-pair/parent-iter is switched off in the given switching.

@@ -32,6 +32,7 @@ namespace pred {
     static constexpr bool is_indirect = std::is_pointer_v<Container>;
 
     Container c;
+    constexpr ContainmentPredicate() = default;
     constexpr ContainmentPredicate(const Container& _c): c(_c) {}
     constexpr ContainmentPredicate(Container&& _c): c(std::move(_c)) {}
     constexpr ContainmentPredicate(const Storage& _c) requires (is_indirect): c(&_c) {}
@@ -41,6 +42,26 @@ namespace pred {
       return mstd::test(mstd::access(c), x) != invert;
     }
   };
+
+  // a predicate indicating whether items have not been seen before
+  template<mstd::IterableType<mstd::TR_PtrOK> Container_, bool invert = false>
+  struct UnseenPredicate:
+    public ContainmentPredicate<Container_, invert>
+  {
+    using Parent = ContainmentPredicate<Container_, invert>;
+    using typename Parent::Storage;
+    using Parent::c;
+
+    INHERIT_ALL_CONSTRUCTORS(UnseenPredicate, Parent)
+
+    template<class... Args> requires mstd::is_appendable_v<Storage, Args&&...>
+    constexpr bool operator()(Args&&... args) {
+      return mstd::append(mstd::access(c), std::forward<Args>(args)...).second != invert;
+    }
+  };
+
+
+
 
   // if P is iterable, get its containment predicate
   template<class P> struct AsContainmentPred_ { using type = P; };
