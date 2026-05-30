@@ -385,40 +385,24 @@ namespace PT {
           STAT(size_t local_sw_num = 0);
           // the main switching-iterator, tracking reticulation-switches above gactive_retis;
           // We advance this using advance_above, which ONLY tracks reticulations reachable from gactive_retis! This saves ALOT of time!
-          pred::UnseenPredicate<NodeSet> seen_pred;
+          pred::UnseenPredicate<NodeSet> gseen_pred;
           auto gsw_iter = GenSwitchingIter{};
-          gsw_iter.advance_above(gactive_retis, seen_pred);
+          gsw_iter.advance_above(gactive_retis, gseen_pred);
           do {
             const auto& gswitching = gsw_iter.get_switching();
             const Probability switching_prob = get_switching_probability(gswitching);
             STAT(++local_sw_num);
             DEBUG3(std::cout << " sw (in generator): "<<gswitching.active_parent << ", (size: "<<gswitching.active_parent.size()<<") probability: "<<switching_prob<<'\n');
 
-            for(NodeDesc gu: gactive_retis) {
-              while(seen.emplace(gu).second) {
-                // first, increase the base-proba of u
-                const NodeDesc u = get_original_node(gu);
-                Probability& u_proba = base_proba[u]; //.emplace(u, 0).first->second;
-                u_proba += switching_prob;
-                DEBUG4(std::cout << "increased base-proba of "<< u <<" to "<< u_proba <<'\n');
-                assert(u_proba <= 1);
-              
-                // second, climb in the generator
-                const auto& gparents = Generator::parents(gu);
-                if(LIKELY(gparents.size() == 1)) {
-                  gu = mstd::front(gparents);
-                } else if(gparents.size() > 1) {
-                  const auto gparent_iter = gswitching.find_active_parent(gu);
-                  assert(gparent_iter != gswitching.active_parent.end()); // if gu is a reticulation, then gu HAS TO BE switched
-                  gu = *(gparent_iter->second);
-                } else break;
-              }
+            for(NodeDesc gu: gseen_pred.c) {
+              const NodeDesc u = get_original_node(gu);
+              Probability& u_proba = base_proba[u]; //.emplace(u, 0).first->second;
+              u_proba += switching_prob;
+              DEBUG4(std::cout << "increased base-proba of "<< u <<" to "<< u_proba <<'\n');
+              assert(u_proba <= 1);
             }
-//            std::cout << "seen "<<seen <<"\nseep "<<seen_pred.c<<'\n';
-//            assert(seen == seen_pred.c);
-            seen.clear();
-            seen_pred.c.clear();
-          } while(gsw_iter.advance_above(gactive_retis, true, seen_pred)); // NOTE: we mark gsw_iter as invalid if it's empty in order to catch the root component case
+            gseen_pred.c.clear();
+          } while(gsw_iter.advance_above(gactive_retis, true, gseen_pred)); // NOTE: we mark gsw_iter as invalid if it's empty in order to catch the root component case
 
           STAT(sw_num += local_sw_num);
           STAT(std::cout << gactive_retis << ":\t" << local_sw_num << " switchings\n");
