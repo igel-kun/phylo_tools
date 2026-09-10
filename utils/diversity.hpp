@@ -155,7 +155,7 @@ namespace PT {
     [[ no_unique_address ]] Switching sw;
   };
 
-  // score module for gamma-scoring (normal PD)
+  // score module for gamma-scoring (network PD)
   template<class NetOrSwitch,
     class FuncWeight = GetEdgeData,
     class FuncIProb = GetEdgeData>
@@ -170,6 +170,7 @@ namespace PT {
     using Util = pd_score_util_wp<EdgeData, FuncWeight, FuncIProb>;
     using typename Util::Weight;
     using Util::weight;
+    using typename Util::Probability;
 
     // cache the gamma for the in-edge of v if v is a tree-node, or the out-edge of v if v is a reticulation
     mutable NodeMap<Weight> gamma_cache;
@@ -179,14 +180,15 @@ namespace PT {
       if(success) {
         Weight& tmp = iter->second;
         if(not Network::is_leaf(v)) {
-          for(const auto w: Network::children(v)) {
+          for(const auto& w: Network::children(v)) {
             if constexpr (Parent::switching_mode)
               if(Parent::sw->is_switched_off(v, w)) continue;
             tmp *= 1 - gamma(w) * Util::operator()(pd_iprob_tag{}, w);
             if(tmp == 0) break;
           }
           tmp = 1 - tmp;
-        } // if v is an unsaved leaf, it's gamma-value is 0, as initialized
+          DEBUG5(std::cout << "computed gamma "<<tmp<<" for node " << v << '\n');
+        } else tmp = 0; // if v is a leaf but we haven't registered it as safe, then v dies out so it gets gamma zero
       }
       return iter->second;
     }
@@ -200,8 +202,17 @@ namespace PT {
         mstd::append(gamma_cache, x, 1);
     }
 
-    Weight operator()(const pd_weight_tag, const Adjacency<EdgeData>& v) const { return weight(v) * gamma(v); }
-    Weight operator()(const pd_weight_tag, const Edge<EdgeData>& uv) const { return weight(uv) * gamma(uv.head()); }
+    Weight operator()(const pd_weight_tag, const Adjacency<EdgeData>& v) const {
+      const Probability i_prob = Network::is_reti(v) ? Util::operator()(pd_iprob_tag{}, v) : Probability{1};
+      DEBUG5(std::cout << "n-score for "<<v<<": "<<weight(v)*gamma(v)*i_prob<<'\n');
+      return weight(v) * gamma(v) * i_prob;
+    }
+    Weight operator()(const pd_weight_tag, const Edge<EdgeData>& uv) const {
+      const NodeDesc v = uv.head();
+      const Probability i_prob = Network::is_reti(v) ? Util::operator()(pd_iprob_tag{}, uv) : Probability{1};
+      DEBUG5(std::cout << "e-score for "<<uv<<": "<<weight(uv)*gamma(v)*i_prob<<'\n');
+      return weight(uv) * gamma(v) * i_prob;
+    }
   };
 
   // score module for Shapley scoring
